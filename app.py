@@ -318,20 +318,32 @@ def modulo5():
     sesiones = supabase.table('sesiones').select('*, estudiantes(*)').eq('estado', 'Realizado').order('fecha', desc=True).execute()
     pagos = []
     total = 0
+    consolidado = {}
+    
     for s in (sesiones.data or []):
         horas = s.get('horas', 0) or 0
         valor = s.get('valor_total', 0) or 0
         tipo = s.get('tipo_sesion', 'clase')
-        # Pago a docentes: $7/hora para clases, 35% para psicólogos
+        profesor = s.get('profesor_terapeuta', 'Desconocido')
+        
         pago = horas * 7 if tipo in ['clase', 'preuniversitario'] else valor * 0.35
         total += pago
+        
         est = s.get('estudiantes', {})
         pagos.append({
-            'fecha': s['fecha'], 'profesor': s.get('profesor_terapeuta', ''),
+            'fecha': s['fecha'], 'profesor': profesor,
             'estudiante': f"{est.get('apellidos', '')} {est.get('nombres', '')}",
             'tipo': tipo, 'horas': horas, 'valor_total': valor, 'pago_docente': pago
         })
-    return render_template('modulo5.html', pagos=pagos, total_adeudado=total)
+        
+        # Consolidado
+        if profesor not in consolidado:
+            consolidado[profesor] = {'sesiones': 0, 'horas': 0, 'pago': 0}
+        consolidado[profesor]['sesiones'] += 1
+        consolidado[profesor]['horas'] += horas
+        consolidado[profesor]['pago'] += pago
+    
+    return render_template('modulo5.html', pagos=pagos, total_adeudado=total, consolidado=consolidado)
 
 # ============================================
 # REPORTES
