@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Usuarios - Atlas{% endblock %}
+
+{% block content %}
+<h3>👥 Gestión de Usuarios</h3>
+
+<div class="row">
+    <div class="col-md-4 mb-4">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <strong>Nuevo Usuario (Admin)</strong>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="mb-2">
+                        <label class="form-label">Nombre *</label>
+                        <input type="text" name="nombre" class="form-control" required>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Email *</label>
+                        <input type="email" name="email" class="form-control" required>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Contraseña *</label>
+                        <input type="password" name="password" class="form-control" required>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Rol *</label>
+                        <select name="rol" class="form-select">
+                            <option value="admin">Administrador</option>
+                            <option value="profesor">Profesor</option>
+                            <option value="psicologo">Psicólogo</option>
+                            <option value="socio">Socio</option>
+                            <option value="estudiante">Estudiante</option>
+                        </select>
+                    </div>
+                    <button type="submit" name="accion" value="crear" class="btn btn-primary w-100">
+                        Crear Usuario
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header bg-info text-white">
+                <strong>Lista de Usuarios</strong>
+                <span class="badge bg-warning text-dark float-end" id="pendientesCount"></span>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped table-sm">
+                        <thead>
+                            <tr>
+                                <th>Nombre</th>
+                                <th>Email</th>
+                                <th>Rol</th>
+                                <th>Activo</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for u in usuarios %}
+                            <tr>
+                                <td>{{ u['nombre'] }}</td>
+                                <td>{{ u['email'] }}</td>
+                                <td><span class="badge bg-secondary">{{ u['rol'] }}</span></td>
+                                <td>
+                                    {% if u['activo'] %}
+                                    <span class="text-success">✅</span>
+                                    {% else %}
+                                    <span class="text-danger">⏳ Pendiente</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if not u['activo'] %}
+                                    <form method="POST" style="display:inline;">
+                                        <input type="hidden" name="usuario_id" value="{{ u['id'] }}">
+                                        <button type="submit" name="accion" value="aprobar" 
+                                                class="btn btn-success btn-sm">✅ Aprobar</button>
+                                        <button type="submit" name="accion" value="rechazar" 
+                                                class="btn btn-danger btn-sm">❌ Rechazar</button>
+                                    </form>
+                                    {% else %}
+                                    <small class="text-muted">Aprobado</small>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

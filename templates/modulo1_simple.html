@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Planificación - Atlas{% endblock %}
+
+{% block content %}
+<h3>📋 Planificar Sesión</h3>
+
+<div class="card shadow">
+    <div class="card-body">
+        <form method="POST">
+            <div class="mb-2">
+                <label class="form-label">Estudiante *</label>
+                <select name="estudiante_id" class="form-select" required>
+                    <option value="">Seleccionar...</option>
+                    {% for e in estudiantes %}
+                    <option value="{{ e['id'] }}">{{ e['apellidos'] }} {{ e['nombres'] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="mb-2">
+                <label class="form-label">Tipo *</label>
+                <select name="tipo" class="form-select" required>
+                    <option value="clase">📚 Clase</option>
+                    <option value="terapia">🧠 Terapia</option>
+                </select>
+            </div>
+            <div class="mb-2">
+                <label class="form-label">Asignatura</label>
+                <input type="text" name="asignatura" class="form-control" value="Test">
+            </div>
+            <div class="mb-2">
+                <label class="form-label">Profesor *</label>
+                <input type="text" name="profesor" class="form-control" value="Profesor Test" required>
+            </div>
+            <div class="row">
+                <div class="col-md-4 mb-2">
+                    <label class="form-label">Fecha *</label>
+                    <input type="date" name="fecha" class="form-control" value="{{ today }}" required>
+                </div>
+                <div class="col-md-4 mb-2">
+                    <label class="form-label">Inicio *</label>
+                    <input type="time" name="hora_inicio" class="form-control" value="10:00" required>
+                </div>
+                <div class="col-md-4 mb-2">
+                    <label class="form-label">Fin *</label>
+                    <input type="time" name="hora_fin" class="form-control" value="11:00" required>
+                </div>
+            </div>
+            <div class="mb-2">
+                <label class="form-label">Precio/Hora</label>
+                <input type="number" name="precio" class="form-control" value="10">
+            </div>
+            <button type="submit" class="btn btn-primary w-100">✅ Planificar</button>
+        </form>
+    </div>
+</div>
+<div class="mt-4 d-flex flex-wrap justify-content-between">
+    <a href="/modulo1" class="btn btn-outline-primary mb-1">M1: Planificar</a>
+    <a href="/modulo2" class="btn btn-outline-success mb-1">M2: Calendario</a>
+    <a href="/modulo3" class="btn btn-outline-info mb-1">M3: Pagos</a>
+    <a href="/modulo4" class="btn btn-outline-warning mb-1">M4: Público</a>
+    <a href="/modulo5" class="btn btn-outline-danger mb-1">M5: Docentes</a>
+</div>
+{% endblock %}

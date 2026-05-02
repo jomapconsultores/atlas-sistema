@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Calendario - Atlas{% endblock %}
+
+{% block content %}
+<h3>📅 Calendario de Sesiones</h3>
+
+<div class="mb-3">
+    <a href="/modulo2" class="btn btn-outline-primary">
+        <i class="bi bi-list"></i> Ver Lista
+    </a>
+</div>
+
+<div class="card shadow">
+    <div class="card-body">
+        <div id="calendar"></div>
+    </div>
+</div>
+
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/locales/es.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var calendarEl = document.getElementById('calendar');
+    var calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'dayGridMonth',
+        locale: 'es',
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek,listWeek'
+        },
+        events: '/api/sesiones/calendario',
+        eventClick: function(info) {
+            alert(
+                'Estudiante: ' + info.event.extendedProps.estudiante + '\n' +
+                'Tipo: ' + info.event.extendedProps.tipo + '\n' +
+                'Profesor: ' + info.event.extendedProps.profesor + '\n' +
+                'Estado: ' + info.event.extendedProps.estado + '\n' +
+                'Valor: $' + info.event.extendedProps.valor.toFixed(2)
+            );
+        }
+    });
+    calendar.render();
+});
+</script>
+<div class="mt-4 d-flex flex-wrap justify-content-between">
+    <a href="/modulo1" class="btn btn-outline-primary mb-1">M1: Planificar</a>
+    <a href="/modulo2" class="btn btn-outline-success mb-1">M2: Calendario</a>
+    <a href="/modulo3" class="btn btn-outline-info mb-1">M3: Pagos</a>
+    <a href="/modulo4" class="btn btn-outline-warning mb-1">M4: Público</a>
+    <a href="/modulo5" class="btn btn-outline-danger mb-1">M5: Docentes</a>
+</div>
+{% endblock %}

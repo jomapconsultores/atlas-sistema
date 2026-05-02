@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% block title %}Planificación - Atlas{% endblock %}
+
+{% block content %}
+<h3>📋 Planificación de Sesiones</h3>
+
+<div class="card shadow mb-4">
+    <div class="card-header bg-primary text-white"><strong>Nueva Planificación</strong></div>
+    <div class="card-body">
+        <form method="POST" id="formPlanificar">
+            
+            <div class="mb-2">
+                <label class="form-label">Número de Estudiantes *</label>
+                <select name="num_estudiantes" id="numEstudiantes" class="form-select" onchange="mostrarEstudiantes()">
+                    {% for i in range(1, 11) %}
+                    <option value="{{ i }}">{{ i }} estudiante(s)</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div id="contenedorEstudiantes"></div>
+            
+            <div class="mb-2">
+                <label class="form-label">Tipo de Sesión *</label>
+                <select name="tipo_sesion" id="tipoSesion" class="form-select" required onchange="mostrarCampos()">
+                    <option value="">Seleccionar...</option>
+                    <option value="clase">📚 Clase</option>
+                    <option value="terapia">🧠 Atención Psicológica</option>
+                    <option value="ambos">📚🧠 Ambos</option>
+                    <option value="preuniversitario">🎓 Pre Universitario</option>
+                </select>
+            </div>
+            
+            <div id="camposClase" style="display:none;">
+                <div class="mb-2">
+                    <label class="form-label">Asignatura *</label>
+                    <select name="asignatura" class="form-select">
+                        <option value="">Seleccionar...</option>
+                        {% for a in asignaturas %}
+                        <option value="{{ a }}">{{ a }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            
+            <div id="camposTerapia" style="display:none;">
+                <div class="mb-2">
+                    <label class="form-label">Tipo de Atención *</label>
+                    <select name="atencion_psicologica" class="form-select">
+                        <option value="">Seleccionar...</option>
+                        {% for item in atencion_psicologica %}
+                        <option value="{{ item['nombre'] }}" data-precio="{{ item['precio'] }}">
+                            {{ item['nombre'] }} - ${{ item['precio'] }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            
+            <div id="camposPrecio" class="mb-2">
+                <label class="form-label">Precio por Hora *</label>
+                <select name="precio_hora" class="form-select">
+                    <optgroup label="Clases">
+                        {% for pr in precios_clase %}<option value="{{ pr }}">${{ pr }}</option>{% endfor %}
+                    </optgroup>
+                    <optgroup label="Matrícula Pre">
+                        {% for pr in precios_matricula %}<option value="{{ pr }}">${{ pr }}</option>{% endfor %}
+                    </optgroup>
+                    <optgroup label="Pensión Pre">
+                        {% for pr in precios_pension %}<option value="{{ pr }}">${{ pr }}</option>{% endfor %}
+                    </optgroup>
+                </select>
+            </div>
+            
+            <div class="mb-2">
+                <label class="form-label">Número de Sesiones *</label>
+                <select name="num_sesiones" id="numSesiones" class="form-select" onchange="mostrarFechas()">
+                    {% for i in range(1, 11) %}
+                    <option value="{{ i }}">{{ i }} sesión(es)</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div id="contenedorFechas"></div>
+            
+            <button type="submit" class="btn btn-primary btn-lg w-100 mt-3">✅ Planificar</button>
+        </form>
+    </div>
+</div>
+
+<script>
+const ESTUDIANTES = [{% for e in estudiantes %}{id:{{ e['id'] }}, nombre:"{{ e['apellidos'] }} {{ e['nombres'] }}"},{% endfor %}];
+const PROFESORES = [{% for p in profesores %}"{{ p }}",{% endfor %}];
+const ENCARGADOS = [{% for e in encargados %}"{{ e }}",{% endfor %}];
+
+function mostrarEstudiantes() {
+    const num = parseInt(document.getElementById('numEstudiantes').value);
+    let html = '';
+    for (let i = 1; i <= num; i++) {
+        html += `
+        <div class="border rounded p-2 mb-2">
+            <strong>Estudiante ${i}</strong>
+            <select name="estudiante_id_${i}" id="estSelect_${i}" class="form-select mb-1" onchange="toggleNuevo(${i}, this.value)">
+                <option value="">Seleccionar existente o crear nuevo...</option>
+                ${ESTUDIANTES.map(e => `<option value="${e.id}">${e.nombre}</option>`).join('')}
+                <option value="nuevo">➕ Crear nuevo estudiante</option>
+            </select>
+            <div id="nuevoEstudiante_${i}" style="display:none;">
+                <div class="row">
+                    <div class="col-md-6"><input type="text" id="nuevo_nombre_${i}" class="form-control mb-1" placeholder="Nombres *"></div>
+                    <div class="col-md-6"><input type="text" id="nuevo_apellido_${i}" class="form-control mb-1" placeholder="Apellidos *"></div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6"><input type="text" id="nuevo_nivel_${i}" class="form-control mb-1" placeholder="Nivel/Curso"></div>
+                    <div class="col-md-6"><input type="text" id="nuevo_procedencia_${i}" class="form-control mb-1" placeholder="Institución"></div>
+                </div>
+                <input type="text" id="nuevo_padre_${i}" class="form-control mb-2" placeholder="Padre (opcional)">
+                <button type="button" class="btn btn-success btn-sm" onclick="crearEstudianteAPI(${i})">✅ Crear Estudiante</button>
+            </div>
+        </div>`;
+    }
+    document.getElementById('contenedorEstudiantes').innerHTML = html;
+}
+
+function toggleNuevo(num, val) {
+    document.getElementById('nuevoEstudiante_' + num).style.display = (val === 'nuevo') ? 'block' : 'none';
+}
+
+async function crearEstudianteAPI(num) {
+    const nombre = document.getElementById('nuevo_nombre_' + num).value.trim();
+    const apellido = document.getElementById('nuevo_apellido_' + num).value.trim();
+    if (!nombre || !apellido) { alert('❌ Nombres y apellidos obligatorios'); return; }
+    
+    try {
+        const resp = await fetch('/api/crear_estudiante', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                nombres: nombre, apellidos: apellido,
+                nivel_curso: document.getElementById('nuevo_nivel_' + num).value.trim(),
+                procedencia: document.getElementById('nuevo_procedencia_' + num).value.trim(),
+                padre_nombre: document.getElementById('nuevo_padre_' + num).value.trim()
+            })
+        });
+        const result = await resp.json();
+        if (result.success) {
+            const select = document.getElementById('estSelect_' + num);
+            const option = document.createElement('option');
+            option.value = result.id; option.textContent = result.nombre; option.selected = true;
+            select.insertBefore(option, select.lastChild);
+            document.getElementById('nuevoEstudiante_' + num).style.display = 'none';
+            alert('✅ Estudiante creado: ' + result.nombre);
+        }
+    } catch (e) { alert('❌ Error de conexión'); }
+}
+
+function mostrarCampos() {
+    const tipo = document.getElementById('tipoSesion').value;
+    document.getElementById('camposClase').style.display = (tipo === 'clase' || tipo === 'ambos' || tipo === 'preuniversitario') ? 'block' : 'none';
+    document.getElementById('camposTerapia').style.display = (tipo === 'terapia' || tipo === 'ambos') ? 'block' : 'none';
+    document.getElementById('camposPrecio').style.display = (tipo === 'terapia') ? 'none' : 'block';
+}
+
+function mostrarFechas() {
+    const num = parseInt(document.getElementById('numSesiones').value);
+    let html = '';
+    for (let i = 1; i <= num; i++) {
+        html += `
+        <div class="border rounded p-2 mb-2">
+            <strong>Sesión ${i}</strong>
+            <div class="row">
+                <div class="col-md-3"><label class="small">Fecha</label><input type="date" name="fecha_${i}" class="form-control" value="{{ today }}" required></div>
+                <div class="col-md-3"><label class="small">Inicio</label><input type="time" name="hora_inicio_${i}" class="form-control" required></div>
+                <div class="col-md-3"><label class="small">Fin</label><input type="time" name="hora_fin_${i}" class="form-control" required></div>
+                <div class="col-md-3">
+                    <label class="small">Profesor</label>
+                    <select name="profesor_${i}" class="form-select" onchange="toggleNuevoProf(${i}, this.value)">
+                        ${PROFESORES.map(p => `<option value="${p}">${p}</option>`).join('')}
+                        <option value="nuevo">➕ Nuevo</option>
+                    </select>
+                    <input type="text" name="nuevo_profesor_${i}" class="form-control mt-1" placeholder="Nombre" style="display:none;" id="nuevoProfInput_${i}">
+                </div>
+            </div>
+            <div class="row mt-1">
+                <div class="col-md-6">
+                    <label class="small">Encargado Apertura</label>
+                    <select name="encargado_${i}" class="form-select">
+                        <option value="">Seleccionar...</option>
+                        ${ENCARGADOS.map(e => `<option value="${e}">${e}</option>`).join('')}
+                    </select>
+                </div>
+            </div>
+        </div>`;
+    }
+    document.getElementById('contenedorFechas').innerHTML = html;
+}
+
+function toggleNuevoProf(num, val) {
+    document.getElementById('nuevoProfInput_' + num).style.display = (val === 'nuevo') ? 'block' : 'none';
+}
+
+mostrarEstudiantes();
+mostrarFechas();
+</script>
+{% endblock %}

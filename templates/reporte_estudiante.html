@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Reporte - {{ estudiante.nombre_completo }}{% endblock %}
+
+{% block content %}
+<a href="/reportes" class="btn btn-outline-primary mb-3">← Volver</a>
+
+<h3>📊 Reporte: {{ estudiante.nombre_completo }}</h3>
+<p>
+    <strong>Padre:</strong> {{ estudiante.padre.nombre_completo }}<br>
+    <strong>Tipo:</strong> {{ estudiante.tipo_servicio }}<br>
+    <strong>Valor Clase:</strong> ${{ "%.2f"|format(estudiante.valor_hora_clase) }} | 
+    <strong>Valor Terapia:</strong> ${{ "%.2f"|format(estudiante.valor_hora_terapia) }}
+</p>
+
+<div class="row mb-4">
+    <div class="col-md-3 col-6">
+        <div class="card bg-primary text-white text-center p-3">
+            <h4>${{ "%.2f"|format(total_cobrar) }}</h4>
+            <small>Total Cobrar</small>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card bg-success text-white text-center p-3">
+            <h4>${{ "%.2f"|format(total_pagado) }}</h4>
+            <small>Total Pagado</small>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card bg-{{ 'danger' if saldo > 0 else 'success' }} text-white text-center p-3">
+            <h4>${{ "%.2f"|format(saldo|abs) }}</h4>
+            <small>{{ 'Saldo Pendiente' if saldo > 0 else 'Saldo a Favor' }}</small>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card bg-info text-white text-center p-3">
+            <h4>{{ sesiones|selectattr('estado', 'equalto', 'Realizado')|list|length }}</h4>
+            <small>Sesiones Realizadas</small>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <strong>📚 Sesiones</strong>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Tipo</th>
+                            <th>Detalle</th>
+                            <th>Valor</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for s in sesiones %}
+                        <tr>
+                            <td>{{ s.fecha.strftime('%d/%m') }}</td>
+                            <td>{{ s.tipo_sesion }}</td>
+                            <td>{{ s.asignatura or s.tema_terapia or '-' }}</td>
+                            <td>${{ "%.2f"|format(s.valor_total) }}</td>
+                            <td>
+                                <span class="badge bg-{{ 'success' if s.estado == 'Realizado' else 'warning' }}">
+                                    {{ s.estado }}
+                                </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card shadow">
+            <div class="card-header bg-success text-white">
+                <strong>💰 Pagos</strong>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Monto</th>
+                            <th>Tipo</th>
+                            <th>Concepto</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in pagos %}
+                        <tr>
+                            <td>{{ p.fecha_pago.strftime('%d/%m') }}</td>
+                            <td>${{ "%.2f"|format(p.monto) }}</td>
+                            <td>{{ p.tipo_pago }}</td>
+                            <td>{{ p.concepto or '-' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

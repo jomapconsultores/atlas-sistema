@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Reportes - Atlas{% endblock %}
+
+{% block content %}
+<h3>📊 Reportes Generales</h3>
+
+<div class="row mb-4">
+    <div class="col-md-3"><div class="card bg-primary text-white text-center p-3"><h4>${{ "%.2f"|format(total_cobrar) }}</h4><small>Total a Cobrar</small></div></div>
+    <div class="col-md-3"><div class="card bg-success text-white text-center p-3"><h4>${{ "%.2f"|format(total_pagado) }}</h4><small>Total Pagado</small></div></div>
+    <div class="col-md-3"><div class="card bg-warning text-white text-center p-3"><h4>{{ total_horas }}</h4><small>Total Horas</small></div></div>
+    <div class="col-md-3"><div class="card bg-info text-white text-center p-3"><h4>{{ datos|length }}</h4><small>Estudiantes</small></div></div>
+</div>
+
+<div class="card shadow">
+    <div class="card-header bg-info text-white"><strong>Detalle por Estudiante</strong></div>
+    <div class="card-body">
+        {% for d in datos %}
+        <div class="border rounded p-3 mb-3">
+            <h5>{{ d['estudiante'] }} <small class="text-muted">{{ d.get('nivel', '') }} - {{ d.get('procedencia', '') }}</small></h5>
+            <p><strong>Total horas:</strong> {{ d['total_horas'] }} | <strong>Cobrar:</strong> ${{ "%.2f"|format(d['cobrar']) }} | <strong>Pagado:</strong> ${{ "%.2f"|format(d['pagado']) }} | <strong>Saldo:</strong> <span class="{{ 'text-danger' if d['saldo'] > 0 else 'text-success' }}">${{ "%.2f"|format(d['saldo']) }}</span></p>
+            <table class="table table-sm">
+                <thead><tr><th>Asignatura</th><th>Horas</th><th>Fechas</th></tr></thead>
+                <tbody>
+                    {% for asig, info in d['asignaturas'].items() %}
+                    <tr>
+                        <td>{{ asig }}</td>
+                        <td>{{ info['horas'] }}</td>
+                        <td>{{ info['fechas']|join(', ') }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Calendario Público - Atlas{% endblock %}
+
+{% block content %}
+<h3>📅 Calendario Público de Clases</h3>
+<div class="card shadow">
+    <div class="card-body">
+        {% if sesiones %}
+        <table class="table table-striped">
+            <thead><tr><th>Fecha</th><th>Hora</th><th>Estudiante</th><th>Tipo</th><th>Asignatura</th><th>Profesor</th></tr></thead>
+            <tbody>
+                {% for s in sesiones %}
+                <tr>
+                    <td>{{ s['fecha'] }}</td>
+                    <td>{{ s['hora_inicio'] }} - {{ s['hora_fin'] }}</td>
+                    <td>{{ s['estudiantes']['apellidos'] }} {{ s['estudiantes']['nombres'] }}</td>
+                    <td>{{ s['tipo_sesion'] }}</td>
+                    <td>{{ s.get('asignatura') or s.get('tema_terapia') or '-' }}</td>
+                    <td>{{ s['profesor_terapeuta'] }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted">No hay sesiones programadas.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Registro - Atlas{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-4">
+    <div class="col-md-6">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">📝 Registro de Usuario</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small">Tu cuenta quedará pendiente de aprobación por el administrador.</p>
+                <form method="POST">
+                    <div class="mb-3">
+                        <label class="form-label">Nombre completo *</label>
+                        <input type="text" name="nombre" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email *</label>
+                        <input type="email" name="email" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Contraseña *</label>
+                        <input type="password" name="password" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Rol *</label>
+                        <select name="rol" class="form-select" required>
+                            <option value="">Seleccionar...</option>
+                            <option value="profesor">Profesor</option>
+                            <option value="psicologo">Psicólogo</option>
+                            <option value="estudiante">Estudiante</option>
+                            <option value="socio">Socio</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        ✅ Solicitar Registro
+                    </button>
+                </form>
+                <div class="text-center mt-3">
+                    <a href="/login">¿Ya tienes cuenta? Inicia sesión</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

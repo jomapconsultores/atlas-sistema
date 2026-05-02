@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Calendario - Atlas{% endblock %}
+
+{% block content %}
+<h3>📅 Calendario de Clases</h3>
+
+<form class="mb-3">
+    <input type="date" name="fecha" value="{{ fecha }}" class="form-control d-inline w-auto" onchange="this.form.submit()">
+    <a href="/modulo2" class="btn btn-outline-secondary btn-sm">Ver todas las fechas</a>
+</form>
+
+<div class="card shadow">
+    <div class="card-header bg-success text-white"><strong>Sesiones del {{ fecha }}</strong></div>
+    <div class="card-body">
+        {% if sesiones %}
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Hora</th>
+                        <th>Estudiante</th>
+                        <th>Tipo</th>
+                        <th>Asignatura</th>
+                        <th>Profesor</th>
+                        <th>Estado</th>
+                        <th>Valor</th>
+                        <th>✅ Realizada</th>
+                        <th>❌ No realizada</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in sesiones %}
+                    <tr>
+                        <td>{{ s['fecha'] }}</td>
+                        <td>{{ s['hora_inicio'] }} - {{ s['hora_fin'] }}</td>
+                        <td>
+                            {% if s.get('estudiantes') %}
+                            {{ s['estudiantes']['apellidos'] }} {{ s['estudiantes']['nombres'] }}
+                            {% else %}ID: {{ s['estudiante_id'] }}{% endif %}
+                        </td>
+                        <td>{{ s['tipo_sesion'] }}</td>
+                        <td>{{ s.get('asignatura') or s.get('tema_terapia') or '-' }}</td>
+                        <td>{{ s['profesor_terapeuta'] }}</td>
+                        <td>
+                            <span class="badge bg-{{ 'success' if s['estado'] == 'Realizado' else 'danger' if s['estado'] == 'Cancelado' else 'warning' }}">
+                                {{ s['estado'] }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if s['estado'] == 'Realizado' %}
+                            ${{ "%.2f"|format(s.get('valor_total', 0) or 0) }}
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            <input type="radio" name="estado_{{ s['id'] }}" class="radio-sesion" 
+                                   data-id="{{ s['id'] }}" data-estado="Realizado"
+                                   {{ 'checked' if s['estado'] == 'Realizado' }}>
+                        </td>
+                        <td class="text-center">
+                            <input type="radio" name="estado_{{ s['id'] }}" class="radio-sesion" 
+                                   data-id="{{ s['id'] }}" data-estado="Cancelado"
+                                   {{ 'checked' if s['estado'] == 'Cancelado' }}>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <p class="small text-muted mt-2">
+            💡 <strong>✅ Realizada:</strong> Se calcula el valor y se envía a Pagos.<br>
+            💡 <strong>❌ No realizada:</strong> Se cancela la sesión sin costo.
+        </p>
+        {% else %}
+        <p class="text-muted">No hay sesiones para esta fecha. <a href="/modulo1">¿Planificar una?</a></p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Navegación entre módulos -->
+<div class="mt-4 d-flex flex-wrap justify-content-between">
+    <a href="/modulo1" class="btn btn-outline-primary mb-1">← M1: Planificar</a>
+    <a href="/modulo3" class="btn btn-outline-success mb-1">M3: Pagos →</a>
+    <a href="/modulo4" class="btn btn-outline-info mb-1">M4: Calendario Público</a>
+    <a href="/modulo5" class="btn btn-outline-warning mb-1">M5: Docentes</a>
+</div>
+
+<script>
+document.querySelectorAll('.radio-sesion').forEach(radio => {
+    radio.addEventListener('change', function() {
+        if (!this.checked) return;
+        
+        const id = this.dataset.id;
+        const estado = this.dataset.estado;
+        
+        fetch('/api/sesion/' + id + '/toggle', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({estado: estado})
+        })
+        .then(r => r.json())
+        .then(() => location.reload());
+    });
+});
+</script>
+{% endblock %}

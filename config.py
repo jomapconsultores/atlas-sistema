@@ -1,0 +1,6 @@
+import os
+
+class Config:
+    SECRET_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5hdWJkZGN6b2hlZHZ0eXdtbW15Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc2ODc3NTMsImV4cCI6MjA5MzI2Mzc1M30.wWaCU5YvJdFKDL_dDObPOHCUylevNMVk_hCXuEtOEk8'
+    SQLALCHEMY_DATABASE_URI = 'https://naubddczohedvtywmmmy.supabase.co'
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
