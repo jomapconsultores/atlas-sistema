@@ -5,8 +5,7 @@
 <h3>📅 Calendario Público de Clases</h3>
 
 <div class="row">
-    <!-- Tabla de sesiones -->
-    <div class="col-md-8">
+    <div class="col-md-9">
         <div class="card shadow mb-4">
             <div class="card-header bg-info text-white"><strong>Próximas Sesiones</strong></div>
             <div class="card-body">
@@ -21,7 +20,8 @@
                             <th>Asignatura</th>
                             <th>Profesor</th>
                             <th>Estado</th>
-                            <th>Acciones</th>
+                            <th>✏️</th>
+                            <th>🗑️</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -34,8 +34,8 @@
                             <td>
                                 <span class="hora-texto">{{ s['hora_inicio'] }} - {{ s['hora_fin'] }}</span>
                                 <div class="hora-input" style="display:none;">
-                                    <input type="time" class="form-control form-control-sm hora-inicio-input" value="{{ s['hora_inicio'] }}" style="width:100px;" data-id="{{ s['id'] }}">
-                                    <input type="time" class="form-control form-control-sm hora-fin-input" value="{{ s['hora_fin'] }}" style="width:100px;" data-id="{{ s['id'] }}">
+                                    <input type="time" class="form-control form-control-sm hora-inicio-input" value="{{ s['hora_inicio'] }}" style="width:100px;">
+                                    <input type="time" class="form-control form-control-sm hora-fin-input" value="{{ s['hora_fin'] }}" style="width:100px;">
                                 </div>
                             </td>
                             <td>{{ s['estudiantes']['apellidos'] }} {{ s['estudiantes']['nombres'] }}</td>
@@ -48,16 +48,17 @@
                                 </span>
                             </td>
                             <td>
-                                <button class="btn btn-warning btn-sm me-1" onclick="modificarSesion({{ s['id'] }})" title="Modificar fecha/hora">✏️</button>
-                                <button class="btn btn-success btn-sm me-1 guardar-btn" style="display:none;" onclick="guardarCambios({{ s['id'] }})" title="Guardar cambios">✅</button>
-                                <button class="btn btn-secondary btn-sm me-1 cancelar-btn" style="display:none;" onclick="cancelarEdicion({{ s['id'] }})" title="Cancelar">❌</button>
-                                <input type="checkbox" class="form-check-input check-eliminar" data-id="{{ s['id'] }}">
+                                <button class="btn btn-warning btn-sm editar-btn" onclick="modificarSesion({{ s['id'] }})" title="Modificar">✏️</button>
+                                <button class="btn btn-success btn-sm guardar-btn" style="display:none;" onclick="guardarCambios({{ s['id'] }})" title="Guardar">✅</button>
+                                <button class="btn btn-secondary btn-sm cancelar-btn" style="display:none;" onclick="cancelarEdicion()" title="Cancelar">❌</button>
+                            </td>
+                            <td>
+                                <button class="btn btn-danger btn-sm" onclick="eliminarSesion({{ s['id'] }})" title="Eliminar">🗑️</button>
                             </td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
-                <button class="btn btn-danger mt-2" onclick="eliminarSeleccionadas()">🗑️ Eliminar Seleccionadas</button>
                 {% else %}
                 <p class="text-muted">No hay sesiones programadas.</p>
                 {% endif %}
@@ -65,14 +66,12 @@
         </div>
     </div>
 
-    <!-- Panel de ayuda -->
-    <div class="col-md-4">
+    <div class="col-md-3">
         <div class="card shadow">
             <div class="card-header bg-dark text-white"><strong>⚡ Acciones</strong></div>
             <div class="card-body">
-                <p><strong>✏️ Modificar:</strong> Cambia fecha y hora de una sesión.</p>
-                <p><strong>☑️ Seleccionar:</strong> Marca una o varias sesiones.</p>
-                <p><strong>🗑️ Eliminar:</strong> Borra las sesiones marcadas.</p>
+                <p><strong>✏️ Modificar:</strong> Cambia fecha y hora.</p>
+                <p><strong>🗑️ Eliminar:</strong> Borra la sesión.</p>
                 <hr>
                 <a href="/modulo1" class="btn btn-primary w-100 mb-2">➕ Nueva Planificación</a>
                 <a href="/modulo2" class="btn btn-success w-100">📅 Ver Calendario</a>
@@ -81,7 +80,6 @@
     </div>
 </div>
 
-<!-- Navegación -->
 <div class="mt-4 d-flex flex-wrap justify-content-between">
     <a href="/modulo1" class="btn btn-outline-primary mb-1">M1: Planificar</a>
     <a href="/modulo2" class="btn btn-outline-success mb-1">M2: Calendario</a>
@@ -90,74 +88,63 @@
 </div>
 
 <script>
-// MODIFICAR SESIÓN
 function modificarSesion(id) {
     const fila = document.getElementById('fila-' + id);
     fila.querySelector('.fecha-texto').style.display = 'none';
     fila.querySelector('.fecha-input').style.display = 'block';
     fila.querySelector('.hora-texto').style.display = 'none';
     fila.querySelector('.hora-input').style.display = 'block';
-    fila.querySelector('.btn-warning').style.display = 'none';
+    fila.querySelector('.editar-btn').style.display = 'none';
     fila.querySelector('.guardar-btn').style.display = 'inline-block';
     fila.querySelector('.cancelar-btn').style.display = 'inline-block';
 }
 
-function cancelarEdicion(id) {
+function cancelarEdicion() {
     location.reload();
 }
 
-function guardarCambios(id) {
+async function guardarCambios(id) {
     const fila = document.getElementById('fila-' + id);
     const fecha = fila.querySelector('.fecha-input').value;
     const hIni = fila.querySelector('.hora-inicio-input').value;
     const hFin = fila.querySelector('.hora-fin-input').value;
     
-    if (!fecha || !hIni || !hFin) {
-        alert('Completa todos los campos');
-        return;
-    }
+    if (!fecha || !hIni || !hFin) { alert('Completa todos los campos'); return; }
     
-    fetch('/api/sesion/' + id + '/modificar', {
+    const resp = await fetch('/api/sesion/' + id + '/modificar', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            fecha: fecha,
-            hora_inicio: hIni,
-            hora_fin: hFin
-        })
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) {
-            alert('✅ Sesión actualizada');
-            location.reload();
-        } else {
-            alert('❌ Error: ' + (data.error || 'Desconocido'));
-        }
+        body: JSON.stringify({fecha: fecha, hora_inicio: hIni, hora_fin: hFin})
     });
+    const data = await resp.json();
+    
+    if (data.success) {
+        location.reload();
+    } else {
+        alert('❌ Error: ' + (data.error || 'Desconocido'));
+    }
 }
 
-// ELIMINAR SELECCIONADAS
-function eliminarSeleccionadas() {
-    const checks = document.querySelectorAll('.check-eliminar:checked');
-    if (checks.length === 0) {
-        alert('Selecciona al menos una sesión');
-        return;
-    }
-    if (!confirm(`¿Eliminar ${checks.length} sesión(es) definitivamente?`)) return;
+async function eliminarSesion(id) {
+    if (!confirm('¿Eliminar esta sesión definitivamente?')) return;
     
-    checks.forEach(cb => {
-        const id = cb.dataset.id;
-        fetch('/api/sesion/' + id + '/eliminar', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'}
-        }).then(r => r.json());
+    const resp = await fetch('/api/sesion/' + id + '/eliminar', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
     });
+    const data = await resp.json();
     
-    setTimeout(() => {
-        alert('✅ Sesiones eliminadas');
-        location.reload();
-    }, 1000);
+    if (data.success) {
+        // Quitar la fila sin recargar
+        const fila = document.getElementById('fila-' + id);
+        if (fila) fila.remove();
+        
+        // Si no quedan filas, recargar para mostrar "No hay sesiones"
+        const filas = document.querySelectorAll('tbody tr');
+        if (filas.length === 0) location.reload();
+    } else {
+        alert('❌ Error al eliminar');
+    }
 }
 </script>
 {% endblock %}
