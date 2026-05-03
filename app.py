@@ -434,7 +434,11 @@ def api_estudiante(id):
         'cobrar': sum(s.get('valor_total', 0) or 0 for s in (ses.data or [])),
         'pagado': sum(p.get('monto', 0) or 0 for p in (pag.data or []))
     })
-
+@app.route('/test_calendar')
+def test_calendar():
+    import os
+    google_var = os.environ.get('GOOGLE_SERVICE_ACCOUNT', 'NO ENCONTRADA')
+    return f"<pre>GOOGLE_SERVICE_ACCOUNT: {google_var[:100]}...</pre>"
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
