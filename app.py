@@ -265,16 +265,22 @@ def toggle_sesion(id):
 @login_required
 def eliminar_sesion(id):
     try:
-        # Obtener evento_calendar_id antes de eliminar
-        sesion = supabase.table('sesiones').select('*').eq('id', id).execute()
-        
-        # Eliminar de Supabase
-        supabase.table('sesiones').delete().eq('id', id).execute()
-        
-        # Eliminar de Google Calendar
+        # 1. OBTENER el evento_calendar_id ANTES de eliminar
+        sesion = supabase.table('sesiones').select('evento_calendar_id').eq('id', id).execute()
+        evento_id = None
         if sesion.data and sesion.data[0].get('evento_calendar_id'):
-            if eliminar_evento_calendar:
-                eliminar_evento_calendar(sesion.data[0]['evento_calendar_id'])
+            evento_id = sesion.data[0]['evento_calendar_id']
+        
+        # 2. Eliminar de Google Calendar PRIMERO
+        if evento_id and eliminar_evento_calendar:
+            try:
+                eliminar_evento_calendar(evento_id)
+                print(f'✅ Eliminado de Google Calendar: {evento_id}')
+            except Exception as e:
+                print(f'⚠️ Error Google Calendar: {e}')
+        
+        # 3. Luego eliminar de Supabase
+        supabase.table('sesiones').delete().eq('id', id).execute()
         
         return jsonify({'success': True})
     except Exception as e:
