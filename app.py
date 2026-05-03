@@ -291,12 +291,23 @@ def eliminar_sesion(id):
 def modificar_sesion(id):
     try:
         data = request.get_json()
-        inicio = datetime.strptime(f"{data['fecha']} {data['hora_inicio']}", '%Y-%m-%d %H:%M')
-        fin = datetime.strptime(f"{data['fecha']} {data['hora_fin']}", '%Y-%m-%d %H:%M')
+        fecha = data['fecha']
+        h_ini = data['hora_inicio']
+        h_fin = data['hora_fin']
+        
+        # Asegurar que las horas tengan formato HH:MM
+        if len(h_ini) > 5:
+            h_ini = h_ini[:5]
+        if len(h_fin) > 5:
+            h_fin = h_fin[:5]
+        
+        inicio = datetime.strptime(f"{fecha} {h_ini}", '%Y-%m-%d %H:%M')
+        fin = datetime.strptime(f"{fecha} {h_fin}", '%Y-%m-%d %H:%M')
+        
         updates = {
-            'fecha': data['fecha'],
-            'hora_inicio': data['hora_inicio'],
-            'hora_fin': data['hora_fin'],
+            'fecha': fecha,
+            'hora_inicio': h_ini,
+            'hora_fin': h_fin,
             'horas': round((fin - inicio).total_seconds() / 3600, 2)
         }
         supabase.table('sesiones').update(updates).eq('id', id).execute()
