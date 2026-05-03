@@ -490,6 +490,27 @@ def api_estudiantes():
     est = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
     return jsonify([{'id': e['id'], 'nombre': f"{e['apellidos']} {e['nombres']}"} for e in (est.data or [])])
 
+@app.route('/api/sesiones/pendientes')
+@login_required
+def api_sesiones_pendientes():
+    sesiones = supabase.table('sesiones').select('*, estudiantes(*)').eq('estado', 'Planificado').order('fecha').order('hora_inicio').execute()
+    resultado = []
+    for s in (sesiones.data or []):
+        est = s.get('estudiantes', {})
+        resultado.append({
+            'id': s['id'],
+            'fecha': s['fecha'],
+            'hora_inicio': s['hora_inicio'],
+            'hora_fin': s['hora_fin'],
+            'estudiante': f"{est.get('apellidos', '')} {est.get('nombres', '')}",
+            'estudiante_id': s['estudiante_id'],
+            'tipo_sesion': s['tipo_sesion'],
+            'asignatura': s.get('asignatura', ''),
+            'tema_terapia': s.get('tema_terapia', ''),
+            'profesor_terapeuta': s['profesor_terapeuta']
+        })
+    return jsonify(resultado)
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
