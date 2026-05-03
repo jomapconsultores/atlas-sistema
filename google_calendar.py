@@ -27,7 +27,12 @@ def crear_evento_calendar(datos):
         if not service:
             return None
         evento = {
-            'summary': f"📚 {datos.get('asignatura', 'Sesión')} - {datos.get('profesor', '')}",
+            'summary': f"🔑 {datos.get('encargado_apertura', '')} | 📚 {datos.get('asignatura', 'Sesión')}",
+            'description': (
+                f"👨‍🎓 Estudiante: {datos.get('estudiantes', '')}\n"
+                f"👨‍🏫 Profesor: {datos.get('profesor', '')}\n"
+                f"🕐 {datos['hora_inicio']} - {datos['hora_fin']}"
+            ),
             'start': {
                 'dateTime': f"{datos['fecha']}T{datos['hora_inicio']}:00",
                 'timeZone': 'America/Guayaquil',
