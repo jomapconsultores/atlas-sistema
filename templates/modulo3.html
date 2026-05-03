@@ -19,8 +19,14 @@
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="mb-2"><label class="form-label">Monto *</label><input type="number" name="monto" class="form-control" step="0.01" required></div>
-                    <div class="mb-2"><label class="form-label">Fecha *</label><input type="date" name="fecha_pago" class="form-control" value="{{ today }}" required></div>
+                    <div class="mb-2">
+                        <label class="form-label">Monto *</label>
+                        <input type="number" name="monto" class="form-control" step="0.01" required>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Fecha *</label>
+                        <input type="date" name="fecha_pago" class="form-control" value="{{ today }}" required>
+                    </div>
                     <div class="mb-2">
                         <label class="form-label">Tipo</label>
                         <select name="tipo_pago" class="form-select">
@@ -29,7 +35,10 @@
                             <option value="deposito">📥 Depósito</option>
                         </select>
                     </div>
-                    <div class="mb-2"><label class="form-label">Concepto</label><textarea name="concepto" class="form-control" rows="2"></textarea></div>
+                    <div class="mb-2">
+                        <label class="form-label">Concepto</label>
+                        <textarea name="concepto" class="form-control" rows="2"></textarea>
+                    </div>
                     <button type="submit" class="btn btn-success w-100">✅ Registrar Pago</button>
                 </form>
             </div>
@@ -37,45 +46,33 @@
     </div>
 
     <div class="col-md-7">
-        <!-- Estado de Cuentas -->
-        <div class="card shadow mb-4">
+        <div class="card shadow">
             <div class="card-header bg-info text-white"><strong>Estado de Cuentas</strong></div>
             <div class="card-body">
-                <table class="table table-striped table-sm">
-                    <thead><tr><th>Estudiante</th><th>Cobrar</th><th>Pagado</th><th>Saldo</th></tr></thead>
-                    <tbody>
-                        {% for e in estudiantes %}
-                        <tr>
-                            <td>{{ e['nombre'] }}</td>
-                            <td>${{ "%.2f"|format(e['cobrar']) }}</td>
-                            <td>${{ "%.2f"|format(e['pagado']) }}</td>
-                            <td class="{{ 'text-danger fw-bold' if e['saldo'] > 0 else 'text-success' }}">${{ "%.2f"|format(e['saldo']) }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Sesiones realizadas (con opción de eliminar) -->
-        <div class="card shadow">
-            <div class="card-header bg-warning text-dark"><strong>🗑️ Eliminar Sesiones Realizadas</strong></div>
-            <div class="card-body">
-                <p class="small text-muted">Selecciona las sesiones que deseas eliminar definitivamente.</p>
-                <div id="listaSesionesEliminar">
-                    <p class="text-muted">Selecciona un estudiante para ver sus sesiones.</p>
+                <div class="table-responsive">
+                    <table class="table table-striped table-sm">
+                        <thead>
+                            <tr>
+                                <th>Estudiante</th>
+                                <th>Cobrar</th>
+                                <th>Pagado</th>
+                                <th>Saldo</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for e in estudiantes %}
+                            <tr>
+                                <td>{{ e['nombre'] }}</td>
+                                <td>${{ "%.2f"|format(e['cobrar']) }}</td>
+                                <td>${{ "%.2f"|format(e['pagado']) }}</td>
+                                <td class="{{ 'text-danger fw-bold' if e['saldo'] > 0 else 'text-success' }}">
+                                    ${{ "%.2f"|format(e['saldo']) }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
-                <div class="mb-2">
-                    <label class="form-label">Estudiante</label>
-                    <select id="estudianteEliminar" class="form-select" onchange="cargarSesionesEliminar()">
-                        <option value="">Seleccionar estudiante...</option>
-                        {% for e in estudiantes %}
-                        <option value="{{ e['id'] }}">{{ e['nombre'] }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div id="sesionesChecklist"></div>
-                <button class="btn btn-danger w-100 mt-2" onclick="eliminarSeleccionadas()">🗑️ Eliminar Seleccionadas</button>
             </div>
         </div>
     </div>
@@ -85,50 +82,7 @@
 <div class="mt-4 d-flex flex-wrap justify-content-between">
     <a href="/modulo1" class="btn btn-outline-primary mb-1">M1: Planificar</a>
     <a href="/modulo2" class="btn btn-outline-success mb-1">M2: Calendario</a>
-    <a href="/modulo4" class="btn btn-outline-info mb-1">M4: Público</a>
+    <a href="/modulo4" class="btn btn-outline-info mb-1">M4: Calendario Público</a>
     <a href="/modulo5" class="btn btn-outline-warning mb-1">M5: Docentes</a>
 </div>
-
-<script>
-function cargarSesionesEliminar() {
-    const id = document.getElementById('estudianteEliminar').value;
-    if (!id) { document.getElementById('sesionesChecklist').innerHTML = ''; return; }
-    
-    fetch('/api/estudiante/' + id)
-        .then(r => r.json())
-        .then(d => {
-            let html = '<table class="table table-sm"><thead><tr><th>🗑️</th><th>Fecha</th><th>Tipo</th><th>Asignatura</th><th>Valor</th></tr></thead><tbody>';
-            d.sesiones.forEach(s => {
-                html += `<tr>
-                    <td><input type="checkbox" class="check-eliminar" data-id="${s.id || ''}" value="${s.fecha}"></td>
-                    <td>${s.fecha}</td>
-                    <td>${s.tipo}</td>
-                    <td>${s.asignatura || '-'}</td>
-                    <td>$${(s.valor || 0).toFixed(2)}</td>
-                </tr>`;
-            });
-            html += '</tbody></table>';
-            document.getElementById('sesionesChecklist').innerHTML = html;
-        });
-}
-
-function eliminarSeleccionadas() {
-    const checks = document.querySelectorAll('.check-eliminar:checked');
-    if (checks.length === 0) { alert('Selecciona al menos una sesión'); return; }
-    if (!confirm(`¿Eliminar ${checks.length} sesión(es) definitivamente?`)) return;
-    
-    let eliminadas = 0;
-    checks.forEach(cb => {
-        const id = cb.dataset.id;
-        fetch('/api/sesion/' + id + '/eliminar', { method: 'POST', headers: {'Content-Type': 'application/json'} })
-            .then(r => r.json())
-            .then(data => { if (data.success) eliminadas++; });
-    });
-    
-    setTimeout(() => {
-        alert(`✅ ${eliminadas} sesión(es) eliminadas`);
-        location.reload();
-    }, 1000);
-}
-</script>
 {% endblock %}

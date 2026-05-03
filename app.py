@@ -186,7 +186,7 @@ def modulo1():
                             'usuario_id': int(current_user.id)
                         }).execute()
 
-            # Sincronizar con Google Calendar
+            # Google Calendar
             if crear_evento_calendar and primera_fecha:
                 try:
                     estudiantes_nombres = []
@@ -427,6 +427,9 @@ def gestion_usuarios():
     usuarios = supabase.table('usuarios').select('*').order('fecha_registro', desc=True).execute()
     return render_template('usuarios.html', usuarios=usuarios.data or [])
 
+# ============================================
+# APIs
+# ============================================
 @app.route('/api/estudiante/<int:id>')
 @login_required
 def api_estudiante(id):
@@ -434,8 +437,16 @@ def api_estudiante(id):
     pag = supabase.table('pagos').select('*').eq('estudiante_id', id).execute()
     return jsonify({
         'cobrar': sum(s.get('valor_total', 0) or 0 for s in (ses.data or [])),
-        'pagado': sum(p.get('monto', 0) or 0 for p in (pag.data or []))
+        'pagado': sum(p.get('monto', 0) or 0 for p in (pag.data or [])),
+        'sesiones': [{'id': s['id'], 'fecha': s['fecha'], 'tipo': s['tipo_sesion'], 'asignatura': s.get('asignatura', ''), 'valor': s.get('valor_total', 0)} for s in (ses.data or [])],
+        'pagos': [{'fecha': p['fecha_pago'], 'monto': p['monto']} for p in (pag.data or [])]
     })
+
+@app.route('/api/estudiantes')
+@login_required
+def api_estudiantes():
+    est = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
+    return jsonify([{'id': e['id'], 'nombre': f"{e['apellidos']} {e['nombres']}"} for e in (est.data or [])])
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

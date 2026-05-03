@@ -27,6 +27,7 @@
                         <th>Valor</th>
                         <th>✅ Realizada</th>
                         <th>❌ No realizada</th>
+                        <th>🗑️ Eliminar</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -50,9 +51,7 @@
                         <td>
                             {% if s['estado'] == 'Realizado' %}
                             ${{ "%.2f"|format(s.get('valor_total', 0) or 0) }}
-                            {% else %}
-                            -
-                            {% endif %}
+                            {% else %}-{% endif %}
                         </td>
                         <td class="text-center">
                             <input type="radio" name="estado_{{ s['id'] }}" class="radio-sesion" 
@@ -64,6 +63,9 @@
                                    data-id="{{ s['id'] }}" data-estado="Cancelado"
                                    {{ 'checked' if s['estado'] == 'Cancelado' }}>
                         </td>
+                        <td class="text-center">
+                            <button class="btn btn-danger btn-sm" onclick="eliminarSesion({{ s['id'] }})" title="Eliminar definitivamente">🗑️</button>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -71,7 +73,8 @@
         </div>
         <p class="small text-muted mt-2">
             💡 <strong>✅ Realizada:</strong> Se calcula el valor y se envía a Pagos.<br>
-            💡 <strong>❌ No realizada:</strong> Se cancela la sesión sin costo.
+            💡 <strong>❌ No realizada:</strong> Se cancela la sesión sin costo.<br>
+            💡 <strong>🗑️ Eliminar:</strong> Borra la sesión definitivamente del sistema.
         </p>
         {% else %}
         <p class="text-muted">No hay sesiones para esta fecha. <a href="/modulo1">¿Planificar una?</a></p>
@@ -88,21 +91,35 @@
 </div>
 
 <script>
+// Radio buttons para cambiar estado
 document.querySelectorAll('.radio-sesion').forEach(radio => {
     radio.addEventListener('change', function() {
         if (!this.checked) return;
-        
         const id = this.dataset.id;
         const estado = this.dataset.estado;
-        
         fetch('/api/sesion/' + id + '/toggle', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({estado: estado})
-        })
-        .then(r => r.json())
-        .then(() => location.reload());
+        }).then(r => r.json()).then(() => location.reload());
     });
 });
+
+// Función para eliminar sesión
+function eliminarSesion(id) {
+    if (!confirm('¿Eliminar esta sesión definitivamente? Se borrará también del calendario.')) return;
+    fetch('/api/sesion/' + id + '/eliminar', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Error al eliminar: ' + (data.error || 'Desconocido'));
+        }
+    });
+}
 </script>
 {% endblock %}

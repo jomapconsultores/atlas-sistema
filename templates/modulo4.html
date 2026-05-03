@@ -3,27 +3,129 @@
 
 {% block content %}
 <h3>📅 Calendario Público de Clases</h3>
-<div class="card shadow">
-    <div class="card-body">
-        {% if sesiones %}
-        <table class="table table-striped">
-            <thead><tr><th>Fecha</th><th>Hora</th><th>Estudiante</th><th>Tipo</th><th>Asignatura</th><th>Profesor</th></tr></thead>
-            <tbody>
-                {% for s in sesiones %}
-                <tr>
-                    <td>{{ s['fecha'] }}</td>
-                    <td>{{ s['hora_inicio'] }} - {{ s['hora_fin'] }}</td>
-                    <td>{{ s['estudiantes']['apellidos'] }} {{ s['estudiantes']['nombres'] }}</td>
-                    <td>{{ s['tipo_sesion'] }}</td>
-                    <td>{{ s.get('asignatura') or s.get('tema_terapia') or '-' }}</td>
-                    <td>{{ s['profesor_terapeuta'] }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <p class="text-muted">No hay sesiones programadas.</p>
-        {% endif %}
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card shadow mb-4">
+            <div class="card-header bg-info text-white"><strong>Próximas Sesiones</strong></div>
+            <div class="card-body">
+                {% if sesiones %}
+                <table class="table table-striped table-sm">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Hora</th>
+                            <th>Estudiante</th>
+                            <th>Tipo</th>
+                            <th>Asignatura</th>
+                            <th>Profesor</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for s in sesiones %}
+                        <tr>
+                            <td>{{ s['fecha'] }}</td>
+                            <td>{{ s['hora_inicio'] }} - {{ s['hora_fin'] }}</td>
+                            <td>{{ s['estudiantes']['apellidos'] }} {{ s['estudiantes']['nombres'] }}</td>
+                            <td>{{ s['tipo_sesion'] }}</td>
+                            <td>{{ s.get('asignatura') or s.get('tema_terapia') or '-' }}</td>
+                            <td>{{ s['profesor_terapeuta'] }}</td>
+                            <td>
+                                <span class="badge bg-{{ 'success' if s['estado'] == 'Realizado' else 'danger' if s['estado'] == 'Cancelado' else 'warning' }}">
+                                    {{ s['estado'] }}
+                                </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="text-muted">No hay sesiones programadas.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <!-- Eliminar sesiones -->
+        <div class="card shadow mb-4">
+            <div class="card-header bg-danger text-white"><strong>🗑️ Eliminar Sesiones</strong></div>
+            <div class="card-body">
+                <p class="small text-muted">Selecciona un estudiante y marca las sesiones a eliminar.</p>
+                <div class="mb-2">
+                    <label class="form-label">Estudiante</label>
+                    <select id="estudianteEliminar" class="form-select" onchange="cargarSesionesEliminar()">
+                        <option value="">Seleccionar...</option>
+                    </select>
+                </div>
+                <div id="sesionesChecklist"></div>
+                <button class="btn btn-danger w-100 mt-2" onclick="eliminarSeleccionadas()">🗑️ Eliminar Seleccionadas</button>
+            </div>
+        </div>
     </div>
 </div>
+
+<!-- Navegación -->
+<div class="mt-4 d-flex flex-wrap justify-content-between">
+    <a href="/modulo1" class="btn btn-outline-primary mb-1">M1: Planificar</a>
+    <a href="/modulo2" class="btn btn-outline-success mb-1">M2: Calendario</a>
+    <a href="/modulo3" class="btn btn-outline-info mb-1">M3: Pagos</a>
+    <a href="/modulo5" class="btn btn-outline-warning mb-1">M5: Docentes</a>
+</div>
+
+<script>
+// Cargar estudiantes al iniciar
+fetch('/api/estudiantes')
+    .then(r => r.json())
+    .then(data => {
+        let html = '<option value="">Seleccionar...</option>';
+        data.forEach(e => {
+            html += `<option value="${e.id}">${e.nombre}</option>`;
+        });
+        document.getElementById('estudianteEliminar').innerHTML = html;
+    });
+
+function cargarSesionesEliminar() {
+    const id = document.getElementById('estudianteEliminar').value;
+    if (!id) { document.getElementById('sesionesChecklist').innerHTML = ''; return; }
+    
+    fetch('/api/estudiante/' + id)
+        .then(r => r.json())
+        .then(d => {
+            let html = '<table class="table table-sm"><thead><tr><th>🗑️</th><th>Fecha</th><th>Tipo</th><th>Valor</th></tr></thead><tbody>';
+            if (d.sesiones && d.sesiones.length > 0) {
+                d.sesiones.forEach(s => {
+                    html += `<tr>
+                        <td><input type="checkbox" class="check-eliminar" data-id="${s.id || ''}"></td>
+                        <td>${s.fecha}</td>
+                        <td>${s.tipo}</td>
+                        <td>$${(s.valor || 0).toFixed(2)}</td>
+                    </tr>`;
+                });
+            } else {
+                html += '<tr><td colspan="4" class="text-muted">Sin sesiones</td></tr>';
+            }
+            html += '</tbody></table>';
+            document.getElementById('sesionesChecklist').innerHTML = html;
+        });
+}
+
+function eliminarSeleccionadas() {
+    const checks = document.querySelectorAll('.check-eliminar:checked');
+    if (checks.length === 0) { alert('Selecciona al menos una sesión'); return; }
+    if (!confirm(`¿Eliminar ${checks.length} sesión(es) definitivamente?`)) return;
+    
+    checks.forEach(cb => {
+        const id = cb.dataset.id;
+        fetch('/api/sesion/' + id + '/eliminar', { method: 'POST', headers: {'Content-Type': 'application/json'} })
+            .then(r => r.json());
+    });
+    
+    setTimeout(() => {
+        alert('✅ Sesiones eliminadas');
+        location.reload();
+    }, 1000);
+}
+</script>
 {% endblock %}
