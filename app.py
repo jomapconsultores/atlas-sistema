@@ -265,6 +265,25 @@ def toggle_sesion(id):
     return jsonify({'success': True})
 
 @app.route('/api/sesion/<int:id>/eliminar', methods=['POST'])
+@app.route('/api/sesion/<int:id>/modificar', methods=['POST'])
+@login_required
+def modificar_sesion(id):
+    try:
+        data = request.get_json()
+        updates = {
+            'fecha': data['fecha'],
+            'hora_inicio': data['hora_inicio'],
+            'hora_fin': data['hora_fin']
+        }
+        # Recalcular horas
+        inicio = datetime.strptime(f"{data['fecha']} {data['hora_inicio']}", '%Y-%m-%d %H:%M')
+        fin = datetime.strptime(f"{data['fecha']} {data['hora_fin']}", '%Y-%m-%d %H:%M')
+        updates['horas'] = round((fin - inicio).total_seconds() / 3600, 2)
+        
+        supabase.table('sesiones').update(updates).eq('id', id).execute()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 @login_required
 def eliminar_sesion(id):
     try:

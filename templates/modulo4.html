@@ -5,6 +5,7 @@
 <h3>📅 Calendario Público de Clases</h3>
 
 <div class="row">
+    <!-- Tabla de sesiones -->
     <div class="col-md-8">
         <div class="card shadow mb-4">
             <div class="card-header bg-info text-white"><strong>Próximas Sesiones</strong></div>
@@ -20,13 +21,23 @@
                             <th>Asignatura</th>
                             <th>Profesor</th>
                             <th>Estado</th>
+                            <th>Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for s in sesiones %}
-                        <tr>
-                            <td>{{ s['fecha'] }}</td>
-                            <td>{{ s['hora_inicio'] }} - {{ s['hora_fin'] }}</td>
+                        <tr id="fila-{{ s['id'] }}">
+                            <td>
+                                <span class="fecha-texto">{{ s['fecha'] }}</span>
+                                <input type="date" class="form-control form-control-sm fecha-input" value="{{ s['fecha'] }}" style="display:none; width:130px;" data-id="{{ s['id'] }}">
+                            </td>
+                            <td>
+                                <span class="hora-texto">{{ s['hora_inicio'] }} - {{ s['hora_fin'] }}</span>
+                                <div class="hora-input" style="display:none;">
+                                    <input type="time" class="form-control form-control-sm hora-inicio-input" value="{{ s['hora_inicio'] }}" style="width:100px;" data-id="{{ s['id'] }}">
+                                    <input type="time" class="form-control form-control-sm hora-fin-input" value="{{ s['hora_fin'] }}" style="width:100px;" data-id="{{ s['id'] }}">
+                                </div>
+                            </td>
                             <td>{{ s['estudiantes']['apellidos'] }} {{ s['estudiantes']['nombres'] }}</td>
                             <td>{{ s['tipo_sesion'] }}</td>
                             <td>{{ s.get('asignatura') or s.get('tema_terapia') or '-' }}</td>
@@ -36,10 +47,17 @@
                                     {{ s['estado'] }}
                                 </span>
                             </td>
+                            <td>
+                                <button class="btn btn-warning btn-sm me-1" onclick="modificarSesion({{ s['id'] }})" title="Modificar fecha/hora">✏️</button>
+                                <button class="btn btn-success btn-sm me-1 guardar-btn" style="display:none;" onclick="guardarCambios({{ s['id'] }})" title="Guardar cambios">✅</button>
+                                <button class="btn btn-secondary btn-sm me-1 cancelar-btn" style="display:none;" onclick="cancelarEdicion({{ s['id'] }})" title="Cancelar">❌</button>
+                                <input type="checkbox" class="form-check-input check-eliminar" data-id="{{ s['id'] }}">
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
+                <button class="btn btn-danger mt-2" onclick="eliminarSeleccionadas()">🗑️ Eliminar Seleccionadas</button>
                 {% else %}
                 <p class="text-muted">No hay sesiones programadas.</p>
                 {% endif %}
@@ -47,20 +65,17 @@
         </div>
     </div>
 
+    <!-- Panel de ayuda -->
     <div class="col-md-4">
-        <!-- Eliminar sesiones -->
-        <div class="card shadow mb-4">
-            <div class="card-header bg-danger text-white"><strong>🗑️ Eliminar Sesiones</strong></div>
+        <div class="card shadow">
+            <div class="card-header bg-dark text-white"><strong>⚡ Acciones</strong></div>
             <div class="card-body">
-                <p class="small text-muted">Selecciona un estudiante y marca las sesiones a eliminar.</p>
-                <div class="mb-2">
-                    <label class="form-label">Estudiante</label>
-                    <select id="estudianteEliminar" class="form-select" onchange="cargarSesionesEliminar()">
-                        <option value="">Seleccionar...</option>
-                    </select>
-                </div>
-                <div id="sesionesChecklist"></div>
-                <button class="btn btn-danger w-100 mt-2" onclick="eliminarSeleccionadas()">🗑️ Eliminar Seleccionadas</button>
+                <p><strong>✏️ Modificar:</strong> Cambia fecha y hora de una sesión.</p>
+                <p><strong>☑️ Seleccionar:</strong> Marca una o varias sesiones.</p>
+                <p><strong>🗑️ Eliminar:</strong> Borra las sesiones marcadas.</p>
+                <hr>
+                <a href="/modulo1" class="btn btn-primary w-100 mb-2">➕ Nueva Planificación</a>
+                <a href="/modulo2" class="btn btn-success w-100">📅 Ver Calendario</a>
             </div>
         </div>
     </div>
@@ -75,51 +90,68 @@
 </div>
 
 <script>
-// Cargar estudiantes al iniciar
-fetch('/api/estudiantes')
-    .then(r => r.json())
-    .then(data => {
-        let html = '<option value="">Seleccionar...</option>';
-        data.forEach(e => {
-            html += `<option value="${e.id}">${e.nombre}</option>`;
-        });
-        document.getElementById('estudianteEliminar').innerHTML = html;
-    });
-
-function cargarSesionesEliminar() {
-    const id = document.getElementById('estudianteEliminar').value;
-    if (!id) { document.getElementById('sesionesChecklist').innerHTML = ''; return; }
-    
-    fetch('/api/estudiante/' + id)
-        .then(r => r.json())
-        .then(d => {
-            let html = '<table class="table table-sm"><thead><tr><th>🗑️</th><th>Fecha</th><th>Tipo</th><th>Valor</th></tr></thead><tbody>';
-            if (d.sesiones && d.sesiones.length > 0) {
-                d.sesiones.forEach(s => {
-                    html += `<tr>
-                        <td><input type="checkbox" class="check-eliminar" data-id="${s.id || ''}"></td>
-                        <td>${s.fecha}</td>
-                        <td>${s.tipo}</td>
-                        <td>$${(s.valor || 0).toFixed(2)}</td>
-                    </tr>`;
-                });
-            } else {
-                html += '<tr><td colspan="4" class="text-muted">Sin sesiones</td></tr>';
-            }
-            html += '</tbody></table>';
-            document.getElementById('sesionesChecklist').innerHTML = html;
-        });
+// MODIFICAR SESIÓN
+function modificarSesion(id) {
+    const fila = document.getElementById('fila-' + id);
+    fila.querySelector('.fecha-texto').style.display = 'none';
+    fila.querySelector('.fecha-input').style.display = 'block';
+    fila.querySelector('.hora-texto').style.display = 'none';
+    fila.querySelector('.hora-input').style.display = 'block';
+    fila.querySelector('.btn-warning').style.display = 'none';
+    fila.querySelector('.guardar-btn').style.display = 'inline-block';
+    fila.querySelector('.cancelar-btn').style.display = 'inline-block';
 }
 
+function cancelarEdicion(id) {
+    location.reload();
+}
+
+function guardarCambios(id) {
+    const fila = document.getElementById('fila-' + id);
+    const fecha = fila.querySelector('.fecha-input').value;
+    const hIni = fila.querySelector('.hora-inicio-input').value;
+    const hFin = fila.querySelector('.hora-fin-input').value;
+    
+    if (!fecha || !hIni || !hFin) {
+        alert('Completa todos los campos');
+        return;
+    }
+    
+    fetch('/api/sesion/' + id + '/modificar', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            fecha: fecha,
+            hora_inicio: hIni,
+            hora_fin: hFin
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert('✅ Sesión actualizada');
+            location.reload();
+        } else {
+            alert('❌ Error: ' + (data.error || 'Desconocido'));
+        }
+    });
+}
+
+// ELIMINAR SELECCIONADAS
 function eliminarSeleccionadas() {
     const checks = document.querySelectorAll('.check-eliminar:checked');
-    if (checks.length === 0) { alert('Selecciona al menos una sesión'); return; }
+    if (checks.length === 0) {
+        alert('Selecciona al menos una sesión');
+        return;
+    }
     if (!confirm(`¿Eliminar ${checks.length} sesión(es) definitivamente?`)) return;
     
     checks.forEach(cb => {
         const id = cb.dataset.id;
-        fetch('/api/sesion/' + id + '/eliminar', { method: 'POST', headers: {'Content-Type': 'application/json'} })
-            .then(r => r.json());
+        fetch('/api/sesion/' + id + '/eliminar', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        }).then(r => r.json());
     });
     
     setTimeout(() => {
