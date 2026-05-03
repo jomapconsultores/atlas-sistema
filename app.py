@@ -126,7 +126,7 @@ def modulo1():
             num_sesiones = int(request.form.get('num_sesiones', 1))
             num_estudiantes = int(request.form.get('num_estudiantes', 1))
             primera_fecha = None
-            
+
             for sesion_num in range(1, num_sesiones + 1):
                 fecha = request.form.get(f'fecha_{sesion_num}')
                 h_ini = request.form.get(f'hora_inicio_{sesion_num}')
@@ -134,25 +134,22 @@ def modulo1():
                 profesor = request.form.get(f'profesor_{sesion_num}', '')
                 nuevo_prof = request.form.get(f'nuevo_profesor_{sesion_num}', '')
                 encargado = request.form.get(f'encargado_{sesion_num}', '')
-                
+
                 if nuevo_prof and profesor == 'nuevo':
                     profesor = nuevo_prof
-                
+
                 if not fecha or not h_ini or not h_fin:
                     continue
-                
+
                 if not primera_fecha:
                     primera_fecha = fecha
-                
+
                 inicio = datetime.strptime(f"{fecha} {h_ini}", '%Y-%m-%d %H:%M')
                 fin = datetime.strptime(f"{fecha} {h_fin}", '%Y-%m-%d %H:%M')
                 horas = round((fin - inicio).total_seconds() / 3600, 2)
-                
-                # LÓGICA DE PRECIO:
-                # - Terapia/Atención psicológica: se cobra por SESIÓN (precio fijo)
-                # - Clase/Pre: se cobra por HORA
+
                 es_terapia = tipo in ['terapia', 'ambos']
-                
+
                 if es_terapia:
                     tema = request.form.get('atencion_psicologica', '')
                     asignatura = request.form.get('asignatura', '') if tipo == 'ambos' else ''
@@ -161,15 +158,13 @@ def modulo1():
                         if item['nombre'] == tema:
                             precio = item['precio']
                             break
-                    # Terapia: valor_total = precio de la sesión (no se multiplica por horas)
                     valor_inicial = precio
                 else:
                     asignatura = request.form.get('asignatura', '')
                     tema = ''
                     precio = float(request.form.get('precio_hora', 10))
-                    # Clase: valor_total se calcula al marcar como realizado (horas * precio)
                     valor_inicial = 0
-                
+
                 for est_num in range(1, num_estudiantes + 1):
                     eid = request.form.get(f'estudiante_id_{est_num}', '')
                     if eid and eid != 'nuevo':
@@ -190,8 +185,7 @@ def modulo1():
                             'estudiante_id': int(eid),
                             'usuario_id': int(current_user.id)
                         }).execute()
-            
-            flash(f'✅ {num_sesiones} sesión(es) para {num_estudiantes} estudiante(s)', 'success')
+
             # Sincronizar con Google Calendar
             if crear_evento_calendar and primera_fecha:
                 try:
@@ -202,7 +196,7 @@ def modulo1():
                             est = supabase.table('estudiantes').select('*').eq('id', int(eid)).execute()
                             if est.data:
                                 estudiantes_nombres.append(f"{est.data[0]['apellidos']} {est.data[0]['nombres']}")
-                    
+
                     for sesion_num in range(1, num_sesiones + 1):
                         fecha_cal = request.form.get(f'fecha_{sesion_num}')
                         h_ini_cal = request.form.get(f'hora_inicio_{sesion_num}')
@@ -219,12 +213,14 @@ def modulo1():
                             })
                 except Exception as e:
                     print(f'⚠️ Error Google Calendar: {e}')
+
+            flash(f'✅ {num_sesiones} sesión(es) para {num_estudiantes} estudiante(s)', 'success')
             return redirect(url_for('modulo2', fecha=primera_fecha or str(date.today())))
-            
+
         except Exception as e:
             flash(f'❌ Error: {str(e)}', 'error')
         return redirect(url_for('modulo1'))
-    
+
     estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
     return render_template('modulo1.html',
                          estudiantes=estudiantes.data or [],
@@ -253,22 +249,29 @@ def toggle_sesion(id):
     data = request.get_json()
     estado = data.get('estado', 'Realizado')
     updates = {'estado': estado}
-    
+
     if estado == 'Realizado':
         s = supabase.table('sesiones').select('*').eq('id', id).execute()
         if s.data:
             sd = s.data[0]
-            # Si es terapia: cobro por sesión (precio fijo, no por hora)
             if sd.get('cobro_por_sesion') or sd.get('tipo_sesion') in ['terapia', 'ambos']:
                 updates['valor_total'] = sd.get('precio_hora', 40) or 40
             else:
-                # Clase: cobro por hora
                 updates['valor_total'] = round((sd.get('horas', 1) or 1) * (sd.get('precio_hora', 10) or 10), 2)
     elif estado == 'Cancelado':
         updates['valor_total'] = 0
-    
+
     supabase.table('sesiones').update(updates).eq('id', id).execute()
     return jsonify({'success': True})
+
+@app.route('/api/sesion/<int:id>/eliminar', methods=['POST'])
+@login_required
+def eliminar_sesion(id):
+    try:
+        supabase.table('sesiones').delete().eq('id', id).execute()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 # ============================================
 # MÓDULO 3 - PAGOS
@@ -288,7 +291,7 @@ def modulo3():
         }).execute()
         flash('✅ Pago registrado', 'success')
         return redirect(url_for('modulo3'))
-    
+
     estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
     datos = []
     for e in (estudiantes.data or []):
@@ -319,30 +322,29 @@ def modulo5():
     pagos = []
     total = 0
     consolidado = {}
-    
+
     for s in (sesiones.data or []):
         horas = s.get('horas', 0) or 0
         valor = s.get('valor_total', 0) or 0
         tipo = s.get('tipo_sesion', 'clase')
         profesor = s.get('profesor_terapeuta', 'Desconocido')
-        
+
         pago = horas * 7 if tipo in ['clase', 'preuniversitario'] else valor * 0.35
         total += pago
-        
+
         est = s.get('estudiantes', {})
         pagos.append({
             'fecha': s['fecha'], 'profesor': profesor,
             'estudiante': f"{est.get('apellidos', '')} {est.get('nombres', '')}",
             'tipo': tipo, 'horas': horas, 'valor_total': valor, 'pago_docente': pago
         })
-        
-        # Consolidado
+
         if profesor not in consolidado:
             consolidado[profesor] = {'sesiones': 0, 'horas': 0, 'pago': 0}
         consolidado[profesor]['sesiones'] += 1
         consolidado[profesor]['horas'] += horas
         consolidado[profesor]['pago'] += pago
-    
+
     return render_template('modulo5.html', pagos=pagos, total_adeudado=total, consolidado=consolidado)
 
 # ============================================
@@ -434,11 +436,7 @@ def api_estudiante(id):
         'cobrar': sum(s.get('valor_total', 0) or 0 for s in (ses.data or [])),
         'pagado': sum(p.get('monto', 0) or 0 for p in (pag.data or []))
     })
-@app.route('/test_calendar')
-def test_calendar():
-    import os
-    google_var = os.environ.get('GOOGLE_SERVICE_ACCOUNT', 'NO ENCONTRADA')
-    return f"<pre>GOOGLE_SERVICE_ACCOUNT: {google_var[:100]}...</pre>"
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
