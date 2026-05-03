@@ -50,4 +50,21 @@ def crear_evento_calendar(datos):
         return event['id']
     except Exception as e:
         print(f'⚠️ Google Calendar: {e}')
+def eliminar_evento_calendar(evento_id):
+    """Elimina un evento de Google Calendar"""
+    if not evento_id:
+        return False
+    try:
+        service = get_calendar_service()
+        if not service:
+            return False
+        service.events().delete(
+            calendarId='atlas.cenest@gmail.com',
+            eventId=evento_id
+        ).execute()
+        print('✅ Evento eliminado de Google Calendar')
+        return True
+    except Exception as e:
+        print(f'⚠️ Error al eliminar de Google Calendar: {e}')
+        return False
         return None

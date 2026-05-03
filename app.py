@@ -5,9 +5,10 @@ from config import Config
 from models import check_password, Usuario
 from supabase_client import supabase
 try:
-    from google_calendar import crear_evento_calendar
+    from google_calendar import crear_evento_calendar, eliminar_evento_calendar
 except ImportError:
     crear_evento_calendar = None
+    eliminar_evento_calendar = None
 from datetime import datetime, date
 from functools import wraps
 
@@ -168,7 +169,7 @@ def modulo1():
                 for est_num in range(1, num_estudiantes + 1):
                     eid = request.form.get(f'estudiante_id_{est_num}', '')
                     if eid and eid != 'nuevo':
-                        supabase.table('sesiones').insert({
+                        result = supabase.table('sesiones').insert({
                             'tipo_sesion': tipo,
                             'asignatura': asignatura,
                             'tema_terapia': tema,
@@ -185,34 +186,30 @@ def modulo1():
                             'estudiante_id': int(eid),
                             'usuario_id': int(current_user.id)
                         }).execute()
-
-            # Google Calendar
-            if crear_evento_calendar and primera_fecha:
-                try:
-                    estudiantes_nombres = []
-                    for est_num in range(1, num_estudiantes + 1):
-                        eid = request.form.get(f'estudiante_id_{est_num}', '')
-                        if eid and eid != 'nuevo':
-                            est = supabase.table('estudiantes').select('*').eq('id', int(eid)).execute()
-                            if est.data:
-                                estudiantes_nombres.append(f"{est.data[0]['apellidos']} {est.data[0]['nombres']}")
-
-                    for sesion_num in range(1, num_sesiones + 1):
-                        fecha_cal = request.form.get(f'fecha_{sesion_num}')
-                        h_ini_cal = request.form.get(f'hora_inicio_{sesion_num}')
-                        h_fin_cal = request.form.get(f'hora_fin_{sesion_num}')
-                        if fecha_cal and h_ini_cal and h_fin_cal:
-                            crear_evento_calendar({
-                                'asignatura': request.form.get('asignatura', 'Sesión'),
-                                'profesor': request.form.get(f'profesor_{sesion_num}', ''),
-                                'estudiantes': ', '.join(estudiantes_nombres),
-                                'fecha': fecha_cal,
-                                'hora_inicio': h_ini_cal,
-                                'hora_fin': h_fin_cal,
-                                'encargado_apertura': request.form.get(f'encargado_{sesion_num}', '')
-                            })
-                except Exception as e:
-                    print(f'⚠️ Error Google Calendar: {e}')
+                        
+                        # Google Calendar
+                        if crear_evento_calendar and result.data:
+                            try:
+                                estudiantes_nombres = []
+                                est = supabase.table('estudiantes').select('*').eq('id', int(eid)).execute()
+                                if est.data:
+                                    estudiantes_nombres.append(f"{est.data[0]['apellidos']} {est.data[0]['nombres']}")
+                                
+                                evento_id = crear_evento_calendar({
+                                    'asignatura': asignatura or 'Sesión',
+                                    'profesor': profesor,
+                                    'estudiantes': ', '.join(estudiantes_nombres),
+                                    'fecha': fecha,
+                                    'hora_inicio': h_ini,
+                                    'hora_fin': h_fin,
+                                    'encargado_apertura': encargado
+                                })
+                                if evento_id:
+                                    supabase.table('sesiones').update({
+                                        'evento_calendar_id': evento_id
+                                    }).eq('id', result.data[0]['id']).execute()
+                            except Exception as e:
+                                print(f'⚠️ Google Calendar: {e}')
 
             flash(f'✅ {num_sesiones} sesión(es) para {num_estudiantes} estudiante(s)', 'success')
             return redirect(url_for('modulo2', fecha=primera_fecha or str(date.today())))
@@ -268,7 +265,17 @@ def toggle_sesion(id):
 @login_required
 def eliminar_sesion(id):
     try:
+        # Obtener evento_calendar_id antes de eliminar
+        sesion = supabase.table('sesiones').select('*').eq('id', id).execute()
+        
+        # Eliminar de Supabase
         supabase.table('sesiones').delete().eq('id', id).execute()
+        
+        # Eliminar de Google Calendar
+        if sesion.data and sesion.data[0].get('evento_calendar_id'):
+            if eliminar_evento_calendar:
+                eliminar_evento_calendar(sesion.data[0]['evento_calendar_id'])
+        
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
