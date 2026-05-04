@@ -7,17 +7,54 @@
 <div class="row">
     <div class="col-md-5 mb-4">
         <div class="card shadow">
-            <div class="card-header bg-primary text-white"><strong>Nueva Reunión</strong></div>
+            <div class="card-header bg-dark text-white"><strong>Nueva Reunión</strong></div>
             <div class="card-body">
                 <form method="POST">
-                    <div class="mb-2"><label class="form-label">Título *</label><input type="text" name="titulo" class="form-control" required></div>
-                    <div class="mb-2"><label class="form-label">Fecha *</label><input type="date" name="fecha" class="form-control" value="{{ today }}" required></div>
-                    <div class="row"><div class="col-6 mb-2"><label class="form-label">Inicio *</label><input type="time" name="hora_inicio" class="form-control" required></div>
-                    <div class="col-6 mb-2"><label class="form-label">Fin *</label><input type="time" name="hora_fin" class="form-control" required></div></div>
-                    <div class="mb-2"><label class="form-label">Asistentes</label><textarea name="asistentes" class="form-control" rows="2"></textarea></div>
-                    <div class="mb-2"><label class="form-label">Tema</label><input type="text" name="tema" class="form-control"></div>
-                    <div class="mb-2"><label class="form-label">Encargado</label><input type="text" name="encargado" class="form-control" value="{{ current_user.nombre }}"></div>
-                    <button type="submit" class="btn btn-primary w-100">✅ Programar Reunión</button>
+                    <div class="mb-2">
+                        <label class="form-label">Título *</label>
+                        <input type="text" name="titulo" id="titulo" class="form-control" required 
+                               list="listaTitulos" autocomplete="off"
+                               oninput="aprender('titulos', this.value)">
+                        <datalist id="listaTitulos"></datalist>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Fecha *</label>
+                        <input type="date" name="fecha" class="form-control" value="{{ today }}" required>
+                    </div>
+                    <div class="row">
+                        <div class="col-6 mb-2">
+                            <label class="form-label">Inicio *</label>
+                            <input type="time" name="hora_inicio" class="form-control" required>
+                        </div>
+                        <div class="col-6 mb-2">
+                            <label class="form-label">Fin *</label>
+                            <input type="time" name="hora_fin" class="form-control" required>
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Asistentes *</label>
+                        <input type="text" name="asistentes" id="asistentes" class="form-control" required
+                               list="listaAsistentes" autocomplete="off" placeholder="Nombres y apellidos"
+                               oninput="aprender('asistentes', this.value)">
+                        <datalist id="listaAsistentes"></datalist>
+                        <small class="text-muted">Escribe nombres completos. Se guardarán para sugerencias futuras.</small>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Tema</label>
+                        <input type="text" name="tema" id="tema" class="form-control"
+                               list="listaTemas" autocomplete="off"
+                               oninput="aprender('temas', this.value)">
+                        <datalist id="listaTemas"></datalist>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Encargado</label>
+                        <input type="text" name="encargado" id="encargado" class="form-control"
+                               value="{{ current_user.nombre }}"
+                               list="listaEncargados" autocomplete="off"
+                               oninput="aprender('encargados', this.value)">
+                        <datalist id="listaEncargados"></datalist>
+                    </div>
+                    <button type="submit" class="btn btn-dark w-100">✅ Programar Reunión</button>
                 </form>
             </div>
         </div>
@@ -27,29 +64,67 @@
             <div class="card-header bg-info text-white"><strong>Reuniones Programadas</strong></div>
             <div class="card-body">
                 {% if reuniones %}
-                <table class="table table-striped table-sm">
-                    <thead><tr><th>Fecha</th><th>Hora</th><th>Título</th><th>Encargado</th><th>🗑️</th></tr></thead>
-                    <tbody>
-                        {% for r in reuniones %}
-                        <tr>
-                            <td>{{ r['fecha'] }}</td><td>{{ r['hora_inicio'] }} - {{ r['hora_fin'] }}</td>
-                            <td>{{ r['titulo'] }}</td><td>{{ r['encargado'] }}</td>
-                            <td><button class="btn btn-danger btn-sm" onclick="eliminarReunion({{ r['id'] }})">🗑️</button></td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                <div class="table-responsive">
+                    <table class="table table-striped table-sm">
+                        <thead><tr><th>Fecha</th><th>Hora</th><th>Título</th><th>Asistentes</th><th>Encargado</th><th>🗑️</th></tr></thead>
+                        <tbody>
+                            {% for r in reuniones %}
+                            <tr>
+                                <td>{{ r['fecha'] }}</td>
+                                <td>{{ r['hora_inicio'] }} - {{ r['hora_fin'] }}</td>
+                                <td>{{ r['titulo'] }}</td>
+                                <td>{{ r.get('asistentes', '') }}</td>
+                                <td>{{ r['encargado'] }}</td>
+                                <td><button class="btn btn-danger btn-sm" onclick="eliminarReunion({{ r['id'] }})">🗑️</button></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
                 {% else %}<p class="text-muted">No hay reuniones programadas.</p>{% endif %}
             </div>
         </div>
     </div>
 </div>
 
+<!-- Navegación -->
+<div class="mt-4 d-flex flex-wrap justify-content-between">
+    <a href="/modulo1" class="btn btn-outline-primary mb-1">M1: Planificar</a>
+    <a href="/modulo2" class="btn btn-outline-success mb-1">M2: Calendario</a>
+    <a href="/modulo3" class="btn btn-outline-info mb-1">M3: Pagos</a>
+    <a href="/modulo4" class="btn btn-outline-warning mb-1">M4: Público</a>
+    <a href="/modulo5" class="btn btn-outline-secondary mb-1">M5: Docentes</a>
+</div>
+
 <script>
+// Base de datos local de sugerencias
+const DB_KEY = 'atlas_reuniones_db';
+let db = JSON.parse(localStorage.getItem(DB_KEY) || '{"titulos":[],"asistentes":[],"temas":[],"encargados":[]}');
+
+function cargarSugerencias() {
+    ['titulos', 'asistentes', 'temas', 'encargados'].forEach(tipo => {
+        const datalist = document.getElementById('lista' + tipo.charAt(0).toUpperCase() + tipo.slice(1));
+        if (datalist) {
+            datalist.innerHTML = db[tipo].map(v => `<option value="${v}">`).join('');
+        }
+    });
+}
+
+function aprender(tipo, valor) {
+    if (valor && valor.length >= 3 && !db[tipo].includes(valor)) {
+        db[tipo].push(valor);
+        if (db[tipo].length > 20) db[tipo].shift();
+        localStorage.setItem(DB_KEY, JSON.stringify(db));
+        cargarSugerencias();
+    }
+}
+
 async function eliminarReunion(id) {
     if (!confirm('¿Eliminar esta reunión?')) return;
     await fetch('/api/reunion/' + id + '/eliminar', {method: 'POST', headers: {'Content-Type': 'application/json'}});
     location.reload();
 }
+
+cargarSugerencias();
 </script>
 {% endblock %}
