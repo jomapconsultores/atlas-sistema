@@ -116,7 +116,7 @@ def api_crear_estudiante():
     return jsonify({'success': False}), 400
 
 # ============================================
-# MÓDULO 1 - PLANIFICACIÓN (CORREGIDO)
+# MÓDULO 1 - PLANIFICACIÓN
 # ============================================
 @app.route('/modulo1', methods=['GET', 'POST'])
 @login_required
@@ -169,7 +169,6 @@ def modulo1():
                             'estudiante_id': int(eid), 'usuario_id': int(current_user.id)
                         }).execute()
                         
-                        # Google Calendar (una vez por sesión, no por estudiante)
                         if crear_evento_calendar and result.data and est_num == 1:
                             try:
                                 evento_id = crear_evento_calendar({
@@ -286,14 +285,11 @@ def modulo3():
             cambiado_por = request.form['cambiado_por']
             motivo = request.form['motivo']
             
-            # Obtener monto anterior
             pago_anterior = supabase.table('pagos').select('monto').eq('id', pago_id).execute()
             monto_anterior = pago_anterior.data[0]['monto'] if pago_anterior.data else 0
             
-            # Actualizar pago
             supabase.table('pagos').update({'monto': nuevo_monto}).eq('id', pago_id).execute()
             
-            # Registrar corrección
             supabase.table('correcciones_pagos').insert({
                 'pago_id': pago_id,
                 'monto_anterior': monto_anterior,
@@ -349,7 +345,7 @@ def modulo5():
     return render_template('modulo5.html', pagos=pagos, total_adeudado=total, consolidado=consolidado)
 
 # ============================================
-# MÓDULO 6 - REUNIONES (NUEVO)
+# MÓDULO 6 - REUNIONES
 # ============================================
 @app.route('/modulo6', methods=['GET', 'POST'])
 @login_required
@@ -369,11 +365,9 @@ def modulo6():
             }
             
             if edit_id:
-                # Editar reunión existente
                 supabase.table('reuniones').update(datos).eq('id', int(edit_id)).execute()
                 flash('✅ Reunión actualizada', 'success')
             else:
-                # Nueva reunión
                 result = supabase.table('reuniones').insert(datos).execute()
                 if crear_evento_calendar and result.data:
                     crear_evento_calendar({
@@ -392,6 +386,18 @@ def modulo6():
     
     reuniones = supabase.table('reuniones').select('*').gte('fecha', str(date.today())).order('fecha').execute()
     return render_template('modulo6.html', reuniones=reuniones.data or [], today=date.today())
+
+@app.route('/api/reunion/<int:id>/eliminar', methods=['POST'])
+@login_required
+def eliminar_reunion(id):
+    try:
+        r = supabase.table('reuniones').select('evento_calendar_id').eq('id', id).execute()
+        if r.data and r.data[0].get('evento_calendar_id') and eliminar_evento_calendar:
+            eliminar_evento_calendar(r.data[0]['evento_calendar_id'])
+        supabase.table('reuniones').delete().eq('id', id).execute()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 # ============================================
 # REPORTES
@@ -478,12 +484,12 @@ def gestion_usuarios():
 @login_required
 def api_estudiante(id):
     ses = supabase.table('sesiones').select('*').eq('estudiante_id', id).eq('estado', 'Realizado').execute()
-    pag = supabase.table('pagos').select('*').eq('estudiante_id', id).execute()
+    pag = supabase.table('pagos').select('*').eq('estudiante_id', id).order('fecha_pago', desc=True).execute()
     return jsonify({
         'cobrar': sum(s.get('valor_total', 0) or 0 for s in (ses.data or [])),
         'pagado': sum(p.get('monto', 0) or 0 for p in (pag.data or [])),
         'sesiones': [{'id': s['id'], 'fecha': s['fecha'], 'tipo': s['tipo_sesion'], 'asignatura': s.get('asignatura', ''), 'valor': s.get('valor_total', 0)} for s in (ses.data or [])],
-        'pagos': [{'fecha': p['fecha_pago'], 'monto': p['monto']} for p in (pag.data or [])]
+        'pagos': [{'id': p['id'], 'fecha': p['fecha_pago'], 'monto': p['monto'], 'tipo': p.get('tipo_pago', '')} for p in (pag.data or [])]
     })
 
 @app.route('/api/estudiantes')

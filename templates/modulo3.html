@@ -36,71 +36,68 @@
                 </form>
             </div>
         </div>
-        
-        <!-- CORREGIR PAGO -->
-        <div class="card shadow mt-3">
-            <div class="card-header bg-warning text-dark"><strong>🔧 Corregir Pago</strong></div>
-            <div class="card-body">
-                <form method="POST" onsubmit="return validarCorreccion()">
-                    <input type="hidden" name="accion" value="corregir">
-                    <div class="mb-2">
-                        <label class="form-label">Estudiante *</label>
-                        <select name="estudiante_id" id="estudianteCorregir" class="form-select" required onchange="cargarPagosEstudiante()">
-                            <option value="">Seleccionar...</option>
-                            {% for e in estudiantes %}
-                            <option value="{{ e['id'] }}">{{ e['nombre'] }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label">Pago a corregir *</label>
-                        <select name="pago_id" id="pagoCorregir" class="form-select" required onchange="cargarMontoActual()">
-                            <option value="">Primero selecciona un estudiante...</option>
-                        </select>
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label">Monto actual:</label>
-                        <strong id="montoActual">-</strong>
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label">Nuevo monto *</label>
-                        <input type="number" name="nuevo_monto" class="form-control" step="0.01" required>
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label">Tu nombre * (quién corrige)</label>
-                        <input type="text" name="cambiado_por" class="form-control" value="{{ current_user.nombre }}" required>
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label">Motivo del cambio *</label>
-                        <textarea name="motivo" class="form-control" rows="2" required placeholder="Explica por qué se corrige este pago..."></textarea>
-                    </div>
-                    <button type="submit" class="btn btn-warning w-100">🔧 Corregir Pago</button>
-                </form>
-            </div>
-        </div>
     </div>
 
-    <!-- ESTADO DE CUENTAS -->
+    <!-- ESTADO DE CUENTAS (CON PAGOS EDITABLES) -->
     <div class="col-md-7">
         <div class="card shadow">
             <div class="card-header bg-info text-white"><strong>Estado de Cuentas</strong></div>
             <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-striped table-sm">
-                        <thead><tr><th>Estudiante</th><th>Cobrar</th><th>Pagado</th><th>Saldo</th></tr></thead>
-                        <tbody>
-                            {% for e in estudiantes %}
-                            <tr>
-                                <td>{{ e['nombre'] }}</td>
-                                <td>${{ "%.2f"|format(e['cobrar']) }}</td>
-                                <td>${{ "%.2f"|format(e['pagado']) }}</td>
-                                <td class="{{ 'text-danger fw-bold' if e['saldo'] > 0 else 'text-success' }}">${{ "%.2f"|format(e['saldo']) }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                {% if estudiantes %}
+                {% for e in estudiantes %}
+                <div class="border rounded p-2 mb-2">
+                    <strong>{{ e['nombre'] }}</strong> | 
+                    Cobrar: <strong>${{ "%.2f"|format(e['cobrar']) }}</strong> | 
+                    Pagado: <strong>${{ "%.2f"|format(e['pagado']) }}</strong> | 
+                    Saldo: <strong class="{{ 'text-danger' if e['saldo'] > 0 else 'text-success' }}">${{ "%.2f"|format(e['saldo']) }}</strong>
+                    
+                    <div class="mt-2 small">
+                        <strong>Pagos registrados:</strong>
+                        <ul class="list-unstyled" id="pagos-{{ e['id'] }}">
+                            <li class="text-muted">Cargando...</li>
+                        </ul>
+                    </div>
                 </div>
+                {% endfor %}
+                {% else %}
+                <p class="text-muted">No hay estudiantes con movimientos.</p>
+                {% endif %}
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL DE CORRECCIÓN -->
+<div class="modal fade" id="modalCorreccion" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" onsubmit="return validarCorreccion()">
+                <input type="hidden" name="accion" value="corregir">
+                <input type="hidden" name="pago_id" id="modalPagoId">
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title">🔧 Corregir Pago</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Monto actual: <strong id="modalMontoActual">$0.00</strong></p>
+                    <div class="mb-2">
+                        <label class="form-label">Nuevo monto *</label>
+                        <input type="number" name="nuevo_monto" id="modalNuevoMonto" class="form-control" step="0.01" required>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">¿Quién corrige? *</label>
+                        <input type="text" name="cambiado_por" id="modalQuien" class="form-control" value="{{ current_user.nombre }}" required>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Motivo del cambio *</label>
+                        <textarea name="motivo" id="modalMotivo" class="form-control" rows="2" required placeholder="Explica por qué se corrige..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-warning">🔧 Guardar Corrección</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -113,50 +110,58 @@
 </div>
 
 <script>
-async function cargarPagosEstudiante() {
-    const id = document.getElementById('estudianteCorregir').value;
-    const select = document.getElementById('pagoCorregir');
-    select.innerHTML = '<option value="">Cargando...</option>';
-    document.getElementById('montoActual').textContent = '-';
-    
-    if (!id) {
-        select.innerHTML = '<option value="">Primero selecciona un estudiante...</option>';
-        return;
-    }
-    
-    const resp = await fetch('/api/estudiante/' + id);
+// Cargar pagos de cada estudiante
+document.addEventListener('DOMContentLoaded', function() {
+    {% for e in estudiantes %}
+    cargarPagosEstudiante({{ e['id'] }});
+    {% endfor %}
+});
+
+async function cargarPagosEstudiante(estudianteId) {
+    const resp = await fetch('/api/estudiante/' + estudianteId);
     const data = await resp.json();
+    const container = document.getElementById('pagos-' + estudianteId);
     
-    let html = '<option value="">Seleccionar pago...</option>';
+    if (!container) return;
+    
     if (data.pagos && data.pagos.length > 0) {
-        data.pagos.forEach(p => {
-            html += `<option value="${p.id || ''}" data-monto="${p.monto}">${p.fecha} - $${p.monto.toFixed(2)}</option>`;
+        let html = '';
+        data.pagos.forEach((p, index) => {
+            const pagoId = p.id || ('pago_' + index);
+            html += `
+                <li class="mb-1">
+                    <span class="badge bg-secondary">${p.fecha}</span> 
+                    <span class="editable-monto" id="monto-${pagoId}" style="cursor:pointer; border-bottom:1px dashed #999;" 
+                          onclick="abrirCorreccion('${pagoId}', ${p.monto})" 
+                          title="Click para corregir">
+                        $${p.monto.toFixed(2)}
+                    </span>
+                    <small class="text-muted">${p.tipo || ''}</small>
+                </li>`;
         });
+        container.innerHTML = html;
     } else {
-        html = '<option value="">Sin pagos registrados</option>';
+        container.innerHTML = '<li class="text-muted">Sin pagos registrados</li>';
     }
-    select.innerHTML = html;
 }
 
-function cargarMontoActual() {
-    const select = document.getElementById('pagoCorregir');
-    const option = select.options[select.selectedIndex];
-    const monto = option.dataset.monto;
-    document.getElementById('montoActual').textContent = monto ? '$' + parseFloat(monto).toFixed(2) : '-';
+function abrirCorreccion(pagoId, montoActual) {
+    document.getElementById('modalPagoId').value = pagoId;
+    document.getElementById('modalMontoActual').textContent = '$' + montoActual.toFixed(2);
+    document.getElementById('modalNuevoMonto').value = montoActual;
+    document.getElementById('modalQuien').value = '{{ current_user.nombre }}';
+    document.getElementById('modalMotivo').value = '';
+    
+    new bootstrap.Modal(document.getElementById('modalCorreccion')).show();
 }
 
 function validarCorreccion() {
-    const monto = document.getElementById('montoActual').textContent;
-    if (monto === '-' || monto === '$0.00') {
-        alert('Selecciona un pago válido para corregir');
-        return false;
-    }
-    const motivo = document.querySelector('[name="motivo"]').value.trim();
-    const quien = document.querySelector('[name="cambiado_por"]').value.trim();
-    if (!motivo || !quien) {
-        alert('Debes indicar quién corrige y el motivo');
-        return false;
-    }
+    const quien = document.getElementById('modalQuien').value.trim();
+    const motivo = document.getElementById('modalMotivo').value.trim();
+    
+    if (!quien) { alert('Debes indicar quién hace la corrección'); return false; }
+    if (!motivo) { alert('Debes indicar el motivo del cambio'); return false; }
+    
     return confirm('¿Confirmas la corrección de este pago?');
 }
 </script>
