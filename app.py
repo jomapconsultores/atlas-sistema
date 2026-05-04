@@ -116,7 +116,7 @@ def api_crear_estudiante():
     return jsonify({'success': False}), 400
 
 # ============================================
-# MÓDULO 1 - PLANIFICACIÓN
+# MÓDULO 1 - PLANIFICACIÓN (CORREGIDO)
 # ============================================
 @app.route('/modulo1', methods=['GET', 'POST'])
 @login_required
@@ -136,29 +136,19 @@ def modulo1():
                 nuevo_prof = request.form.get(f'nuevo_profesor_{sesion_num}', '')
                 encargado = request.form.get(f'encargado_{sesion_num}', '')
 
-                if nuevo_prof and profesor == 'nuevo':
-                    profesor = nuevo_prof
-
-                if not fecha or not h_ini or not h_fin:
-                    continue
-
-                if not primera_fecha:
-                    primera_fecha = fecha
+                if nuevo_prof and profesor == 'nuevo': profesor = nuevo_prof
+                if not fecha or not h_ini or not h_fin: continue
+                if not primera_fecha: primera_fecha = fecha
 
                 inicio = datetime.strptime(f"{fecha} {h_ini}", '%Y-%m-%d %H:%M')
                 fin = datetime.strptime(f"{fecha} {h_fin}", '%Y-%m-%d %H:%M')
                 horas = round((fin - inicio).total_seconds() / 3600, 2)
 
                 es_terapia = tipo in ['terapia', 'ambos']
-
                 if es_terapia:
                     tema = request.form.get('atencion_psicologica', '')
                     asignatura = request.form.get('asignatura', '') if tipo == 'ambos' else ''
-                    precio = 40
-                    for item in ATENCION_PSICOLOGICA:
-                        if item['nombre'] == tema:
-                            precio = item['precio']
-                            break
+                    precio = next((item['precio'] for item in ATENCION_PSICOLOGICA if item['nombre'] == tema), 40)
                     valor_inicial = precio
                 else:
                     asignatura = request.form.get('asignatura', '')
@@ -170,41 +160,28 @@ def modulo1():
                     eid = request.form.get(f'estudiante_id_{est_num}', '')
                     if eid and eid != 'nuevo':
                         result = supabase.table('sesiones').insert({
-                            'tipo_sesion': tipo,
-                            'asignatura': asignatura,
-                            'tema_terapia': tema,
-                            'profesor_terapeuta': profesor,
-                            'fecha': fecha,
-                            'hora_inicio': h_ini,
-                            'hora_fin': h_fin,
-                            'horas': horas,
-                            'estado': 'Planificado',
-                            'encargado_apertura': encargado,
-                            'precio_hora': precio,
-                            'valor_total': valor_inicial,
-                            'cobro_por_sesion': es_terapia,
-                            'estudiante_id': int(eid),
-                            'usuario_id': int(current_user.id)
+                            'tipo_sesion': tipo, 'asignatura': asignatura,
+                            'tema_terapia': tema, 'profesor_terapeuta': profesor,
+                            'fecha': fecha, 'hora_inicio': h_ini, 'hora_fin': h_fin,
+                            'horas': horas, 'estado': 'Planificado',
+                            'encargado_apertura': encargado, 'precio_hora': precio,
+                            'valor_total': valor_inicial, 'cobro_por_sesion': es_terapia,
+                            'estudiante_id': int(eid), 'usuario_id': int(current_user.id)
                         }).execute()
                         
-                        # Google Calendar
-                        if crear_evento_calendar and result.data:
+                        # Google Calendar (una vez por sesión, no por estudiante)
+                        if crear_evento_calendar and result.data and est_num == 1:
                             try:
-                                estudiantes_nombres = []
-                                est = supabase.table('estudiantes').select('*').eq('id', int(eid)).execute()
-                                if est.data:
-                                    estudiantes_nombres.append(f"{est.data[0]['apellidos']} {est.data[0]['nombres']}")
-                                
                                 evento_id = crear_evento_calendar({
                                     'asignatura': asignatura or 'Sesión',
                                     'profesor': profesor,
-                                    'estudiantes': ', '.join(estudiantes_nombres),
+                                    'estudiantes': 'Varios' if num_estudiantes > 1 else f"Estudiante {eid}",
                                     'fecha': fecha,
                                     'hora_inicio': h_ini,
                                     'hora_fin': h_fin,
                                     'encargado_apertura': encargado
                                 })
-                                if evento_id:
+                                if evento_id and result.data:
                                     supabase.table('sesiones').update({
                                         'evento_calendar_id': evento_id
                                     }).eq('id', result.data[0]['id']).execute()
@@ -213,22 +190,16 @@ def modulo1():
 
             flash(f'✅ {num_sesiones} sesión(es) para {num_estudiantes} estudiante(s)', 'success')
             return redirect(url_for('modulo2', fecha=primera_fecha or str(date.today())))
-
         except Exception as e:
             flash(f'❌ Error: {str(e)}', 'error')
         return redirect(url_for('modulo1'))
 
     estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
-    return render_template('modulo1.html',
-                         estudiantes=estudiantes.data or [],
-                         asignaturas=ASIGNATURAS,
-                         atencion_psicologica=ATENCION_PSICOLOGICA,
-                         precios_clase=PRECIOS_CLASE,
-                         precios_matricula=PRECIOS_MATRICULA,
-                         precios_pension=PRECIOS_PENSION,
-                         profesores=PROFESORES,
-                         encargados=ENCARGADOS,
-                         today=date.today())
+    return render_template('modulo1.html', estudiantes=estudiantes.data or [],
+                         asignaturas=ASIGNATURAS, atencion_psicologica=ATENCION_PSICOLOGICA,
+                         precios_clase=PRECIOS_CLASE, precios_matricula=PRECIOS_MATRICULA,
+                         precios_pension=PRECIOS_PENSION, profesores=PROFESORES,
+                         encargados=ENCARGADOS, today=date.today())
 
 # ============================================
 # MÓDULO 2 - CALENDARIO
@@ -246,7 +217,6 @@ def toggle_sesion(id):
     data = request.get_json()
     estado = data.get('estado', 'Realizado')
     updates = {'estado': estado}
-
     if estado == 'Realizado':
         s = supabase.table('sesiones').select('*').eq('id', id).execute()
         if s.data:
@@ -257,7 +227,6 @@ def toggle_sesion(id):
                 updates['valor_total'] = round((sd.get('horas', 1) or 1) * (sd.get('precio_hora', 10) or 10), 2)
     elif estado == 'Cancelado':
         updates['valor_total'] = 0
-
     supabase.table('sesiones').update(updates).eq('id', id).execute()
     return jsonify({'success': True})
 
@@ -265,23 +234,11 @@ def toggle_sesion(id):
 @login_required
 def eliminar_sesion(id):
     try:
-        # 1. OBTENER el evento_calendar_id ANTES de eliminar
         sesion = supabase.table('sesiones').select('evento_calendar_id').eq('id', id).execute()
-        evento_id = None
-        if sesion.data and sesion.data[0].get('evento_calendar_id'):
-            evento_id = sesion.data[0]['evento_calendar_id']
-        
-        # 2. Eliminar de Google Calendar PRIMERO
+        evento_id = sesion.data[0].get('evento_calendar_id') if sesion.data else None
         if evento_id and eliminar_evento_calendar:
-            try:
-                eliminar_evento_calendar(evento_id)
-                print(f'✅ Eliminado de Google Calendar: {evento_id}')
-            except Exception as e:
-                print(f'⚠️ Error Google Calendar: {e}')
-        
-        # 3. Luego eliminar de Supabase
+            eliminar_evento_calendar(evento_id)
         supabase.table('sesiones').delete().eq('id', id).execute()
-        
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
@@ -291,26 +248,13 @@ def eliminar_sesion(id):
 def modificar_sesion(id):
     try:
         data = request.get_json()
-        fecha = data['fecha']
-        h_ini = data['hora_inicio']
-        h_fin = data['hora_fin']
-        
-        # Asegurar que las horas tengan formato HH:MM
-        if len(h_ini) > 5:
-            h_ini = h_ini[:5]
-        if len(h_fin) > 5:
-            h_fin = h_fin[:5]
-        
+        fecha, h_ini, h_fin = data['fecha'], data['hora_inicio'][:5], data['hora_fin'][:5]
         inicio = datetime.strptime(f"{fecha} {h_ini}", '%Y-%m-%d %H:%M')
         fin = datetime.strptime(f"{fecha} {h_fin}", '%Y-%m-%d %H:%M')
-        
-        updates = {
-            'fecha': fecha,
-            'hora_inicio': h_ini,
-            'hora_fin': h_fin,
+        supabase.table('sesiones').update({
+            'fecha': fecha, 'hora_inicio': h_ini, 'hora_fin': h_fin,
             'horas': round((fin - inicio).total_seconds() / 3600, 2)
-        }
-        supabase.table('sesiones').update(updates).eq('id', id).execute()
+        }).eq('id', id).execute()
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
@@ -324,16 +268,13 @@ def modificar_sesion(id):
 def modulo3():
     if request.method == 'POST':
         supabase.table('pagos').insert({
-            'fecha_pago': request.form['fecha_pago'],
-            'monto': float(request.form['monto']),
+            'fecha_pago': request.form['fecha_pago'], 'monto': float(request.form['monto']),
             'tipo_pago': request.form.get('tipo_pago', 'efectivo'),
             'concepto': request.form.get('concepto', ''),
-            'estudiante_id': int(request.form['estudiante_id']),
-            'usuario_id': int(current_user.id)
+            'estudiante_id': int(request.form['estudiante_id']), 'usuario_id': int(current_user.id)
         }).execute()
         flash('✅ Pago registrado', 'success')
         return redirect(url_for('modulo3'))
-
     estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
     datos = []
     for e in (estudiantes.data or []):
@@ -361,33 +302,70 @@ def modulo4():
 @socio_admin_required
 def modulo5():
     sesiones = supabase.table('sesiones').select('*, estudiantes(*)').eq('estado', 'Realizado').order('fecha', desc=True).execute()
-    pagos = []
-    total = 0
-    consolidado = {}
-
+    pagos, total, consolidado = [], 0, {}
     for s in (sesiones.data or []):
-        horas = s.get('horas', 0) or 0
-        valor = s.get('valor_total', 0) or 0
-        tipo = s.get('tipo_sesion', 'clase')
+        horas, valor, tipo = s.get('horas', 0) or 0, s.get('valor_total', 0) or 0, s.get('tipo_sesion', 'clase')
         profesor = s.get('profesor_terapeuta', 'Desconocido')
-
         pago = horas * 7 if tipo in ['clase', 'preuniversitario'] else valor * 0.35
         total += pago
-
         est = s.get('estudiantes', {})
-        pagos.append({
-            'fecha': s['fecha'], 'profesor': profesor,
-            'estudiante': f"{est.get('apellidos', '')} {est.get('nombres', '')}",
-            'tipo': tipo, 'horas': horas, 'valor_total': valor, 'pago_docente': pago
-        })
-
-        if profesor not in consolidado:
-            consolidado[profesor] = {'sesiones': 0, 'horas': 0, 'pago': 0}
+        pagos.append({'fecha': s['fecha'], 'profesor': profesor, 'estudiante': f"{est.get('apellidos', '')} {est.get('nombres', '')}",
+                     'tipo': tipo, 'horas': horas, 'valor_total': valor, 'pago_docente': pago})
+        if profesor not in consolidado: consolidado[profesor] = {'sesiones': 0, 'horas': 0, 'pago': 0}
         consolidado[profesor]['sesiones'] += 1
         consolidado[profesor]['horas'] += horas
         consolidado[profesor]['pago'] += pago
-
     return render_template('modulo5.html', pagos=pagos, total_adeudado=total, consolidado=consolidado)
+
+# ============================================
+# MÓDULO 6 - REUNIONES (NUEVO)
+# ============================================
+@app.route('/modulo6', methods=['GET', 'POST'])
+@login_required
+def modulo6():
+    if request.method == 'POST':
+        try:
+            result = supabase.table('reuniones').insert({
+                'titulo': request.form['titulo'],
+                'fecha': request.form['fecha'],
+                'hora_inicio': request.form['hora_inicio'],
+                'hora_fin': request.form['hora_fin'],
+                'asistentes': request.form.get('asistentes', ''),
+                'tema': request.form.get('tema', ''),
+                'encargado': request.form.get('encargado', current_user.nombre),
+                'usuario_id': int(current_user.id)
+            }).execute()
+            
+            if crear_evento_calendar and result.data:
+                crear_evento_calendar({
+                    'asignatura': f"📋 Reunión: {request.form['titulo']}",
+                    'profesor': request.form.get('encargado', current_user.nombre),
+                    'estudiantes': request.form.get('asistentes', ''),
+                    'fecha': request.form['fecha'],
+                    'hora_inicio': request.form['hora_inicio'],
+                    'hora_fin': request.form['hora_fin'],
+                    'encargado_apertura': request.form.get('encargado', '')
+                })
+            
+            flash('✅ Reunión programada', 'success')
+        except Exception as e:
+            flash(f'❌ Error: {e}', 'error')
+        return redirect(url_for('modulo6'))
+    
+    reuniones = supabase.table('reuniones').select('*').gte('fecha', str(date.today())).order('fecha').execute()
+    return render_template('modulo6.html', reuniones=reuniones.data or [], today=date.today())
+
+@app.route('/api/reunion/<int:id>/eliminar', methods=['POST'])
+@login_required
+def eliminar_reunion(id):
+    try:
+        r = supabase.table('reuniones').select('evento_calendar_id').eq('id', id).execute()
+        if r.data and r.data[0].get('evento_calendar_id') and eliminar_evento_calendar:
+            eliminar_evento_calendar(r.data[0]['evento_calendar_id'])
+        supabase.table('reuniones').delete().eq('id', id).execute()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 # ============================================
 # REPORTES
@@ -397,13 +375,11 @@ def modulo5():
 @socio_admin_required
 def reportes():
     estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
-    datos = []
-    tc = tp = th = 0
+    datos, tc, tp, th = [], 0, 0, 0
     for e in (estudiantes.data or []):
         ses = supabase.table('sesiones').select('*').eq('estudiante_id', e['id']).eq('estado', 'Realizado').execute()
         pag = supabase.table('pagos').select('*').eq('estudiante_id', e['id']).execute()
-        asignaturas = {}
-        horas = 0
+        asignaturas, horas = {}, 0
         for s in (ses.data or []):
             asig = s.get('asignatura') or s.get('tema_terapia') or 'Sin registro'
             if asig not in asignaturas: asignaturas[asig] = {'horas': 0, 'fechas': []}
@@ -498,15 +474,10 @@ def api_sesiones_pendientes():
     for s in (sesiones.data or []):
         est = s.get('estudiantes', {})
         resultado.append({
-            'id': s['id'],
-            'fecha': s['fecha'],
-            'hora_inicio': s['hora_inicio'],
-            'hora_fin': s['hora_fin'],
+            'id': s['id'], 'fecha': s['fecha'], 'hora_inicio': s['hora_inicio'], 'hora_fin': s['hora_fin'],
             'estudiante': f"{est.get('apellidos', '')} {est.get('nombres', '')}",
-            'estudiante_id': s['estudiante_id'],
-            'tipo_sesion': s['tipo_sesion'],
-            'asignatura': s.get('asignatura', ''),
-            'tema_terapia': s.get('tema_terapia', ''),
+            'estudiante_id': s['estudiante_id'], 'tipo_sesion': s['tipo_sesion'],
+            'asignatura': s.get('asignatura', ''), 'tema_terapia': s.get('tema_terapia', ''),
             'profesor_terapeuta': s['profesor_terapeuta']
         })
     return jsonify(resultado)
