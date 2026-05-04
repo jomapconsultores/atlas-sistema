@@ -267,14 +267,45 @@ def modificar_sesion(id):
 @socio_admin_required
 def modulo3():
     if request.method == 'POST':
-        supabase.table('pagos').insert({
-            'fecha_pago': request.form['fecha_pago'], 'monto': float(request.form['monto']),
-            'tipo_pago': request.form.get('tipo_pago', 'efectivo'),
-            'concepto': request.form.get('concepto', ''),
-            'estudiante_id': int(request.form['estudiante_id']), 'usuario_id': int(current_user.id)
-        }).execute()
-        flash('✅ Pago registrado', 'success')
+        accion = request.form.get('accion', 'pagar')
+        
+        if accion == 'pagar':
+            supabase.table('pagos').insert({
+                'fecha_pago': request.form['fecha_pago'],
+                'monto': float(request.form['monto']),
+                'tipo_pago': request.form.get('tipo_pago', 'efectivo'),
+                'concepto': request.form.get('concepto', ''),
+                'estudiante_id': int(request.form['estudiante_id']),
+                'usuario_id': int(current_user.id)
+            }).execute()
+            flash('✅ Pago registrado', 'success')
+        
+        elif accion == 'corregir':
+            pago_id = int(request.form['pago_id'])
+            nuevo_monto = float(request.form['nuevo_monto'])
+            cambiado_por = request.form['cambiado_por']
+            motivo = request.form['motivo']
+            
+            # Obtener monto anterior
+            pago_anterior = supabase.table('pagos').select('monto').eq('id', pago_id).execute()
+            monto_anterior = pago_anterior.data[0]['monto'] if pago_anterior.data else 0
+            
+            # Actualizar pago
+            supabase.table('pagos').update({'monto': nuevo_monto}).eq('id', pago_id).execute()
+            
+            # Registrar corrección
+            supabase.table('correcciones_pagos').insert({
+                'pago_id': pago_id,
+                'monto_anterior': monto_anterior,
+                'monto_nuevo': nuevo_monto,
+                'cambiado_por': cambiado_por,
+                'motivo': motivo
+            }).execute()
+            
+            flash(f'✅ Pago corregido de ${monto_anterior:.2f} a ${nuevo_monto:.2f}', 'success')
+        
         return redirect(url_for('modulo3'))
+    
     estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
     datos = []
     for e in (estudiantes.data or []):
