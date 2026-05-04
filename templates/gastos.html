@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Gastos - Atlas{% endblock %}
+
+{% block content %}
+<h3>📉 Registro de Gastos</h3>
+
+<div class="row">
+    <div class="col-md-4 mb-4">
+        <div class="card shadow">
+            <div class="card-header bg-danger text-white"><strong>Nuevo Gasto</strong></div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="mb-2"><label class="form-label">Concepto *</label><input type="text" name="concepto" class="form-control" required></div>
+                    <div class="mb-2"><label class="form-label">Monto *</label><input type="number" name="monto" class="form-control" step="0.01" required></div>
+                    <div class="mb-2"><label class="form-label">Fecha *</label><input type="date" name="fecha" class="form-control" value="{{ today }}" required></div>
+                    <div class="mb-2"><label class="form-label">Categoría</label><input type="text" name="categoria" class="form-control" placeholder="Ej: Servicios, Materiales..."></div>
+                    <button type="submit" class="btn btn-danger w-100">✅ Registrar Gasto</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header bg-info text-white"><strong>Gastos del Mes {{ mes }}/{{ anio }}</strong></div>
+            <div class="card-body">
+                <form class="mb-2"><input type="number" name="mes" value="{{ mes }}" min="1" max="12" class="form-control d-inline w-auto">/<input type="number" name="anio" value="{{ anio }}" class="form-control d-inline w-auto"><button type="submit" class="btn btn-primary btn-sm">Ver</button></form>
+                <table class="table table-sm"><thead><tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Monto</th><th>🗑️</th></tr></thead>
+                <tbody>{% for g in gastos %}<tr><td>{{ g['fecha'] }}</td><td>{{ g['concepto'] }}</td><td>{{ g.get('categoria','') }}</td><td>${{ "%.2f"|format(g['monto']) }}</td><td><button class="btn btn-danger btn-sm" onclick="eliminarGasto({{ g['id'] }})">🗑️</button></td></tr>{% endfor %}</tbody>
+                <tfoot><tr><th colspan="3">Total</th><th>${{ "%.2f"|format(total) }}</th></tr></tfoot></table>
+            </div>
+        </div>
+    </div>
+</div>
+<script>async function eliminarGasto(id){if(confirm('¿Eliminar?')){await fetch('/api/gasto/'+id+'/eliminar',{method:'POST'});location.reload();}}</script>
+{% endblock %}

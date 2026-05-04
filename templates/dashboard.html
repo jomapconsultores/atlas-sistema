@@ -89,13 +89,24 @@
 </div>
 
 <div class="row mt-3">
-    <div class="col-md-3 mb-2"><a href="/estudiantes" class="btn btn-outline-primary w-100">🎓 Estudiantes</a></div>
+    <div class="col-md-3 mb-2">
+        <a href="/estudiantes" class="btn btn-outline-primary w-100">🎓 Estudiantes</a>
+    </div>
     {% if current_user.rol in ['admin', 'socio'] %}
-    <div class="col-md-3 mb-2"><a href="/padres" class="btn btn-outline-primary w-100">👨‍👩‍👧 Padres</a></div>
-    <div class="col-md-3 mb-2"><a href="/reportes" class="btn btn-outline-info w-100">📊 Reportes</a></div>
+    <div class="col-md-3 mb-2">
+        <a href="/padres" class="btn btn-outline-primary w-100">👨‍👩‍👧 Padres</a>
+    </div>
+    <div class="col-md-3 mb-2">
+        <a href="/gastos" class="btn btn-outline-danger w-100">📉 Gastos</a>
+    </div>
+    <div class="col-md-3 mb-2">
+        <a href="/reportes" class="btn btn-outline-info w-100">📊 Reportes</a>
+    </div>
     {% endif %}
     {% if current_user.rol == 'admin' %}
-    <div class="col-md-3 mb-2"><a href="/usuarios" class="btn btn-outline-danger w-100">👥 Usuarios</a></div>
+    <div class="col-md-3 mb-2">
+        <a href="/usuarios" class="btn btn-outline-danger w-100">👥 Usuarios</a>
+    </div>
     {% endif %}
 </div>
 {% endblock %}
