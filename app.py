@@ -325,7 +325,8 @@ def modulo5():
 def modulo6():
     if request.method == 'POST':
         try:
-            result = supabase.table('reuniones').insert({
+            edit_id = request.form.get('edit_id', '')
+            datos = {
                 'titulo': request.form['titulo'],
                 'fecha': request.form['fecha'],
                 'hora_inicio': request.form['hora_inicio'],
@@ -334,38 +335,32 @@ def modulo6():
                 'tema': request.form.get('tema', ''),
                 'encargado': request.form.get('encargado', current_user.nombre),
                 'usuario_id': int(current_user.id)
-            }).execute()
+            }
             
-            if crear_evento_calendar and result.data:
-                crear_evento_calendar({
-                    'asignatura': f"📋 Reunión: {request.form['titulo']}",
-                    'profesor': request.form.get('encargado', current_user.nombre),
-                    'estudiantes': request.form.get('asistentes', ''),
-                    'fecha': request.form['fecha'],
-                    'hora_inicio': request.form['hora_inicio'],
-                    'hora_fin': request.form['hora_fin'],
-                    'encargado_apertura': request.form.get('encargado', '')
-                })
-            
-            flash('✅ Reunión programada', 'success')
+            if edit_id:
+                # Editar reunión existente
+                supabase.table('reuniones').update(datos).eq('id', int(edit_id)).execute()
+                flash('✅ Reunión actualizada', 'success')
+            else:
+                # Nueva reunión
+                result = supabase.table('reuniones').insert(datos).execute()
+                if crear_evento_calendar and result.data:
+                    crear_evento_calendar({
+                        'asignatura': f"📋 Reunión: {request.form['titulo']}",
+                        'profesor': request.form.get('encargado', current_user.nombre),
+                        'estudiantes': request.form.get('asistentes', ''),
+                        'fecha': request.form['fecha'],
+                        'hora_inicio': request.form['hora_inicio'],
+                        'hora_fin': request.form['hora_fin'],
+                        'encargado_apertura': request.form.get('encargado', '')
+                    })
+                flash('✅ Reunión programada', 'success')
         except Exception as e:
             flash(f'❌ Error: {e}', 'error')
         return redirect(url_for('modulo6'))
     
     reuniones = supabase.table('reuniones').select('*').gte('fecha', str(date.today())).order('fecha').execute()
     return render_template('modulo6.html', reuniones=reuniones.data or [], today=date.today())
-
-@app.route('/api/reunion/<int:id>/eliminar', methods=['POST'])
-@login_required
-def eliminar_reunion(id):
-    try:
-        r = supabase.table('reuniones').select('evento_calendar_id').eq('id', id).execute()
-        if r.data and r.data[0].get('evento_calendar_id') and eliminar_evento_calendar:
-            eliminar_evento_calendar(r.data[0]['evento_calendar_id'])
-        supabase.table('reuniones').delete().eq('id', id).execute()
-        return jsonify({'success': True})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
 
 # ============================================
 # REPORTES
