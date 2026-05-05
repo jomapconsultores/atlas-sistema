@@ -679,15 +679,45 @@ def api_estudiantes():
 def api_sesiones_pendientes():
     query = supabase.table('sesiones').select('*, estudiantes(*)').eq('estado', 'Planificado')
     
+    nombre_usuario = current_user.nombre.strip().lower()
+    palabras_usuario = nombre_usuario.split()
+    
     if current_user.rol in ['profesor', 'psicologo']:
-        nombre_usuario = current_user.nombre.strip().lower()
         todas = query.order('fecha').order('hora_inicio').execute()
         sesiones_filtradas = []
         for s in (todas.data or []):
             profesor = (s.get('profesor_terapeuta') or '').strip().lower()
             if nombre_usuario in profesor or profesor in nombre_usuario:
                 sesiones_filtradas.append(s)
+            else:
+                for palabra in palabras_usuario:
+                    if len(palabra) >= 3 and palabra in profesor:
+                        sesiones_filtradas.append(s)
+                        break
         sesiones_data = sesiones_filtradas
+    
+    elif current_user.rol in ['estudiante', 'padre']:
+        todas = query.order('fecha').order('hora_inicio').execute()
+        sesiones_filtradas = []
+        for s in (todas.data or []):
+            est = s.get('estudiantes', {})
+            nombre_est = f"{est.get('apellidos', '')} {est.get('nombres', '')}".strip().lower()
+            apellidos_est = (est.get('apellidos', '') or '').strip().lower()
+            nombres_est = (est.get('nombres', '') or '').strip().lower()
+            
+            coincide = False
+            if nombre_usuario in nombre_est or nombre_est in nombre_usuario:
+                coincide = True
+            else:
+                for palabra in palabras_usuario:
+                    if len(palabra) >= 3:
+                        if palabra in apellidos_est or palabra in nombres_est:
+                            coincide = True
+                            break
+            if coincide:
+                sesiones_filtradas.append(s)
+        sesiones_data = sesiones_filtradas
+    
     else:
         sesiones = query.order('fecha').order('hora_inicio').execute()
         sesiones_data = sesiones.data or []
