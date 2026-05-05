@@ -15,7 +15,7 @@
                         <input type="text" name="nombre" class="form-control" value="{{ current_user.nombre }}" required>
                         <small class="text-muted">
                             {% if current_user.rol in ['profesor', 'psicologo'] %}
-                            ⚠️ Este nombre se usa en la planificación. Si lo cambias, se actualizarán tus sesiones.
+                            ⚠️ Este nombre se usa en la planificación. Se notificará al administrador del cambio.
                             {% endif %}
                         </small>
                     </div>
@@ -30,7 +30,6 @@
                     <div class="mb-3">
                         <label class="form-label">Rol actual</label>
                         <input type="text" class="form-control" value="{{ current_user.rol }}" disabled>
-                        <small class="text-muted">El rol solo puede cambiarlo el administrador.</small>
                     </div>
                     <button type="submit" class="btn btn-primary w-100">💾 Guardar Cambios</button>
                     <a href="/dashboard" class="btn btn-outline-secondary w-100 mt-2">Cancelar</a>
