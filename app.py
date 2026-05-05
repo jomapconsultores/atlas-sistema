@@ -314,8 +314,15 @@ def modulo4():
 @login_required
 @socio_admin_required
 def modulo5():
-    sesiones = supabase.table('sesiones').select('*, estudiantes(*)').eq('estado', 'Realizado').order('fecha', desc=True).execute()
+    query = supabase.table('sesiones').select('*, estudiantes(*)').eq('estado', 'Realizado')
+    
+    # Si es profesor/psicólogo, solo ver sus sesiones
+    if current_user.rol in ['profesor', 'psicologo']:
+        query = query.eq('profesor_terapeuta', current_user.nombre)
+    
+    sesiones = query.order('fecha', desc=True).execute()
     pagos, total, consolidado = [], 0, {}
+    
     for s in (sesiones.data or []):
         horas, valor, tipo = s.get('horas', 0) or 0, s.get('valor_total', 0) or 0, s.get('tipo_sesion', 'clase')
         profesor = s.get('profesor_terapeuta', 'Desconocido')
@@ -326,6 +333,7 @@ def modulo5():
                      'tipo': tipo, 'horas': horas, 'valor_total': valor, 'pago_docente': pago})
         if profesor not in consolidado: consolidado[profesor] = {'sesiones': 0, 'horas': 0, 'pago': 0}
         consolidado[profesor]['sesiones'] += 1; consolidado[profesor]['horas'] += horas; consolidado[profesor]['pago'] += pago
+    
     return render_template('modulo5.html', pagos=pagos, total_adeudado=total, consolidado=consolidado)
 
 # ============================================
@@ -561,6 +569,79 @@ def api_sesiones_pendientes():
             'profesor_terapeuta': s['profesor_terapeuta']
         })
     return jsonify(resultado)
+
+# ============================================
+# MI REPORTE (PADRES, ESTUDIANTES, PROFESORES, PSICÓLOGOS)
+# ============================================
+@app.route('/mi-reporte')
+@login_required
+def mi_reporte():
+    mes = int(request.args.get('mes', date.today().month))
+    anio = int(request.args.get('anio', date.today().year))
+    
+    datos = []
+    total_cobrar = 0
+    total_pagado = 0
+    total_horas = 0
+    
+    if current_user.rol in ['profesor', 'psicologo']:
+        # Ver sesiones donde es el profesor/psicólogo
+        sesiones = supabase.table('sesiones').select('*, estudiantes(*)').eq('profesor_terapeuta', current_user.nombre).eq('estado', 'Realizado').order('fecha', desc=True).execute()
+        
+        for s in (sesiones.data or []):
+            fecha_sesion = s['fecha']
+            if fecha_sesion[:7] == f"{anio}-{mes:02d}" or mes == 0:
+                est = s.get('estudiantes', {})
+                datos.append({
+                    'fecha': fecha_sesion,
+                    'estudiante': f"{est.get('apellidos', '')} {est.get('nombres', '')}",
+                    'tipo': s['tipo_sesion'],
+                    'asignatura': s.get('asignatura') or s.get('tema_terapia') or '-',
+                    'horas': s.get('horas', 0) or 0,
+                    'valor': s.get('valor_total', 0) or 0,
+                    'estado': s['estado']
+                })
+                total_horas += s.get('horas', 0) or 0
+                total_cobrar += s.get('valor_total', 0) or 0
+    
+    elif current_user.rol in ['padre', 'estudiante']:
+        # Buscar estudiantes relacionados con este usuario
+        if current_user.rol == 'padre':
+            estudiantes_rel = supabase.table('estudiantes').select('*').eq('usuario_id_padre', current_user.id).eq('activo', True).execute()
+        else:
+            estudiantes_rel = supabase.table('estudiantes').select('*').eq('usuario_id_estudiante', current_user.id).eq('activo', True).execute()
+        
+        for e in (estudiantes_rel.data or []):
+            sesiones = supabase.table('sesiones').select('*').eq('estudiante_id', e['id']).eq('estado', 'Realizado').order('fecha', desc=True).execute()
+            pagos = supabase.table('pagos').select('*').eq('estudiante_id', e['id']).order('fecha_pago', desc=True).execute()
+            
+            for s in (sesiones.data or []):
+                fecha_sesion = s['fecha']
+                if fecha_sesion[:7] == f"{anio}-{mes:02d}" or mes == 0:
+                    datos.append({
+                        'fecha': fecha_sesion,
+                        'estudiante': f"{e['apellidos']} {e['nombres']}",
+                        'tipo': s['tipo_sesion'],
+                        'asignatura': s.get('asignatura') or s.get('tema_terapia') or '-',
+                        'horas': s.get('horas', 0) or 0,
+                        'valor': s.get('valor_total', 0) or 0,
+                        'estado': s['estado']
+                    })
+                    total_horas += s.get('horas', 0) or 0
+                    total_cobrar += s.get('valor_total', 0) or 0
+            
+            for p in (pagos.data or []):
+                fecha_pago = p['fecha_pago']
+                if fecha_pago[:7] == f"{anio}-{mes:02d}" or mes == 0:
+                    total_pagado += p.get('monto', 0) or 0
+    
+    return render_template('mi_reporte.html',
+                         datos=datos,
+                         total_cobrar=total_cobrar,
+                         total_pagado=total_pagado,
+                         total_horas=total_horas,
+                         mes=mes, anio=anio,
+                         saldo=total_cobrar - total_pagado)
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
