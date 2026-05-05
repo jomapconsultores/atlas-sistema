@@ -645,9 +645,4 @@ def editar_perfil():
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=True)    
-
-    return render_template('mi_reporte.html',
-                         datos=datos, total_cobrar=total_cobrar,
-                         total_pagado=total_pagado, total_horas=total_horas,
-                         mes=mes, anio=anio, saldo=total_cobrar - total_pagado)
+    app.run(host='0.0.0.0', port=port, debug=True)
