@@ -551,6 +551,7 @@ def mi_reporte():
     total_pagado = 0
     total_horas = 0
     nombre_usuario = current_user.nombre.strip().lower()
+    palabras_usuario = nombre_usuario.split()
     
     sesiones = supabase.table('sesiones').select('*, estudiantes(*)').eq('estado', 'Realizado').order('fecha', desc=True).execute()
     
@@ -562,16 +563,29 @@ def mi_reporte():
         profesor = (s.get('profesor_terapeuta') or '').strip().lower()
         est = s.get('estudiantes', {})
         nombre_est = f"{est.get('apellidos', '')} {est.get('nombres', '')}".strip().lower()
+        apellidos_est = (est.get('apellidos', '') or '').strip().lower()
+        nombres_est = (est.get('nombres', '') or '').strip().lower()
         
         incluir = False
         
         if current_user.rol in ['profesor', 'psicologo']:
             if nombre_usuario in profesor or profesor in nombre_usuario:
                 incluir = True
+            else:
+                for palabra in palabras_usuario:
+                    if len(palabra) >= 3 and palabra in profesor:
+                        incluir = True
+                        break
         
         elif current_user.rol in ['estudiante', 'padre']:
             if nombre_usuario in nombre_est or nombre_est in nombre_usuario:
                 incluir = True
+            else:
+                for palabra in palabras_usuario:
+                    if len(palabra) >= 3:
+                        if palabra in apellidos_est or palabra in nombres_est:
+                            incluir = True
+                            break
         
         if incluir:
             datos.append({
@@ -590,7 +604,20 @@ def mi_reporte():
         estudiantes_rel = supabase.table('estudiantes').select('*').eq('activo', True).execute()
         for e in (estudiantes_rel.data or []):
             nombre_est = f"{e.get('apellidos', '')} {e.get('nombres', '')}".strip().lower()
+            apellidos_est = (e.get('apellidos', '') or '').strip().lower()
+            nombres_est = (e.get('nombres', '') or '').strip().lower()
+            
+            coincide = False
             if nombre_usuario in nombre_est or nombre_est in nombre_usuario:
+                coincide = True
+            else:
+                for palabra in palabras_usuario:
+                    if len(palabra) >= 3:
+                        if palabra in apellidos_est or palabra in nombres_est:
+                            coincide = True
+                            break
+            
+            if coincide:
                 pagos = supabase.table('pagos').select('*').eq('estudiante_id', e['id']).execute()
                 for p in (pagos.data or []):
                     fecha_pago = p['fecha_pago']
@@ -601,7 +628,6 @@ def mi_reporte():
                          datos=datos, total_cobrar=total_cobrar,
                          total_pagado=total_pagado, total_horas=total_horas,
                          mes=mes, anio=anio, saldo=total_cobrar - total_pagado)
-
 # ============================================
 # EDITAR MI PERFIL (Todos los usuarios)
 # ============================================
