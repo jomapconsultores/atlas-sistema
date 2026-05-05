@@ -374,25 +374,57 @@ def reportes():
     mes = int(request.args.get('mes', date.today().month))
     anio = int(request.args.get('anio', date.today().year))
     
-    # Datos de estudiantes
+    # Estudiantes
     estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
     datos, tc, tp, th = [], 0, 0, 0
+    procedencia_count = {}
+    horas_docente = []
+    ingresos_por_tipo = {}
+    consolidado_docentes = {}
+    
     for e in (estudiantes.data or []):
         ses = supabase.table('sesiones').select('*').eq('estudiante_id', e['id']).eq('estado', 'Realizado').execute()
+        # Filtrar por mes/año
+        ses_filtradas = [s for s in (ses.data or []) if s['fecha'][:7] == f"{anio}-{mes:02d}"]
         pag = supabase.table('pagos').select('*').eq('estudiante_id', e['id']).execute()
+        pag_filtrados = [p for p in (pag.data or []) if p['fecha_pago'][:7] == f"{anio}-{mes:02d}"]
+        
         asignaturas, horas = {}, 0
-        for s in (ses.data or []):
+        for s in ses_filtradas:
             asig = s.get('asignatura') or s.get('tema_terapia') or 'Sin registro'
             if asig not in asignaturas: asignaturas[asig] = {'horas': 0, 'fechas': []}
             asignaturas[asig]['horas'] += s.get('horas', 0) or 0
             asignaturas[asig]['fechas'].append(s['fecha'])
             horas += s.get('horas', 0) or 0
-        cobrar = sum(s.get('valor_total', 0) or 0 for s in (ses.data or []))
-        pagado = sum(p.get('monto', 0) or 0 for p in (pag.data or []))
+            
+            # Horas por docente
+            prof = s.get('profesor_terapeuta', 'Desconocido')
+            tipo = s.get('tipo_sesion', 'clase')
+            valor = s.get('valor_total', 0) or 0
+            pago = horas * 7 if tipo in ['clase', 'preuniversitario'] else valor * 0.35
+            horas_docente.append({'profesor': prof, 'asignatura': asig, 'horas': s.get('horas', 0) or 0, 'valor': valor, 'pago': pago})
+            
+            if prof not in consolidado_docentes: consolidado_docentes[prof] = {'sesiones': 0, 'horas': 0, 'pago': 0}
+            consolidado_docentes[prof]['sesiones'] += 1
+            consolidado_docentes[prof]['horas'] += s.get('horas', 0) or 0
+            consolidado_docentes[prof]['pago'] += pago
+            
+            # Ingresos por tipo
+            if tipo not in ingresos_por_tipo: ingresos_por_tipo[tipo] = {'cantidad': 0, 'total': 0}
+            ingresos_por_tipo[tipo]['cantidad'] += 1
+            ingresos_por_tipo[tipo]['total'] += valor
+        
+        cobrar = sum(s.get('valor_total', 0) or 0 for s in ses_filtradas)
+        pagado = sum(p.get('monto', 0) or 0 for p in pag_filtrados)
         tc += cobrar; tp += pagado; th += horas
+        
+        # Procedencia
+        proc = e.get('procedencia', 'Sin registro')
+        procedencia_count[proc] = procedencia_count.get(proc, 0) + 1
+        
         if cobrar > 0 or pagado > 0 or horas > 0:
             datos.append({'id': e['id'], 'estudiante': f"{e['apellidos']} {e['nombres']}",
-                         'nivel': e.get('nivel_curso', ''), 'procedencia': e.get('procedencia', ''),
+                         'nivel': e.get('nivel_curso', ''), 'procedencia': proc,
                          'asignaturas': asignaturas, 'total_horas': horas,
                          'cobrar': cobrar, 'pagado': pagado, 'saldo': cobrar - pagado})
     
@@ -400,20 +432,19 @@ def reportes():
     gastos_mes = supabase.table('gastos').select('*').eq('mes', mes).eq('anio', anio).order('fecha').execute()
     total_gastos = sum(g.get('monto', 0) or 0 for g in (gastos_mes.data or []))
     
-    # Ingresos del mes (pagos recibidos)
+    # Ingresos del mes
     pagos_mes = supabase.table('pagos').select('*').gte('fecha_pago', f"{anio}-{mes:02d}-01").lte('fecha_pago', f"{anio}-{mes:02d}-31").execute()
     total_ingresos = sum(p.get('monto', 0) or 0 for p in (pagos_mes.data or []))
     
-    # Acumulados
-    trimestre = (mes - 1) // 3 + 1
-    mes_inicio_trim = (trimestre - 1) * 3 + 1
-    mes_fin_trim = trimestre * 3
-    
-    return render_template('reportes.html', datos=datos, total_cobrar=tc, total_pagado=tp, total_horas=th,
-                         gastos=gastos_mes.data or [], total_gastos=total_gastos,
-                         total_ingresos=total_ingresos, mes=mes, anio=anio,
-                         balance=total_ingresos - total_gastos)
-
+    return render_template('reportes.html',
+                         datos=datos, total_estudiantes=len(datos),
+                         total_horas=th, total_ingresos=total_ingresos,
+                         total_gastos=total_gastos, balance=total_ingresos - total_gastos,
+                         gastos=gastos_mes.data or [], mes=mes, anio=anio,
+                         procedencia_count=procedencia_count,
+                         horas_docente=horas_docente,
+                         ingresos_por_tipo=ingresos_por_tipo,
+                         consolidado_docentes=consolidado_docentes)
 # ============================================
 # GASTOS
 # ============================================
