@@ -455,11 +455,15 @@ def gestion_gastos():
     if request.method == 'POST':
         fecha = request.form['fecha']
         fecha_obj = datetime.strptime(fecha, '%Y-%m-%d')
+        reembolso = request.form.get('reembolso') == 'true'
         supabase.table('gastos').insert({
             'concepto': request.form['concepto'],
             'monto': float(request.form['monto']),
             'fecha': fecha,
             'categoria': request.form.get('categoria', ''),
+            'persona': request.form.get('persona', ''),
+            'reembolso': reembolso,
+            'reembolsado_a': request.form.get('reembolsado_a', '') if reembolso else '',
             'registrado_por': current_user.nombre,
             'mes': fecha_obj.month,
             'anio': fecha_obj.year
@@ -472,13 +476,6 @@ def gestion_gastos():
     gastos = supabase.table('gastos').select('*').eq('mes', mes).eq('anio', anio).order('fecha', desc=True).execute()
     total = sum(g.get('monto', 0) or 0 for g in (gastos.data or []))
     return render_template('gastos.html', gastos=gastos.data or [], total=total, mes=mes, anio=anio, today=date.today())
-
-@app.route('/api/gasto/<int:id>/eliminar', methods=['POST'])
-@login_required
-def eliminar_gasto(id):
-    supabase.table('gastos').delete().eq('id', id).execute()
-    return jsonify({'success': True})
-
 # ============================================
 # ESTUDIANTES, PADRES, USUARIOS
 # ============================================

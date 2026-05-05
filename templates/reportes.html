@@ -66,25 +66,28 @@
         <div class="card shadow">
             <div class="card-header bg-primary text-white" data-bs-toggle="collapse" data-bs-target="#seccion1" style="cursor:pointer;">
                 <strong>🎓 Estudiantes Atendidos ({{ datos|length }})</strong>
+                <i class="bi bi-chevron-down float-end"></i>
             </div>
             <div class="collapse show" id="seccion1">
                 <div class="card-body p-2">
-                    <table class="table table-sm table-striped mb-0">
-                        <thead><tr><th>Estudiante</th><th>Nivel</th><th>Procedencia</th><th>Horas</th><th>Cobrar</th><th>Pagado</th><th>Saldo</th></tr></thead>
-                        <tbody>
-                            {% for d in datos %}
-                            <tr>
-                                <td>{{ d['estudiante'] }}</td>
-                                <td>{{ d.get('nivel', '') }}</td>
-                                <td>{{ d.get('procedencia', '') }}</td>
-                                <td>{{ d['total_horas'] }}</td>
-                                <td>${{ "%.2f"|format(d['cobrar']) }}</td>
-                                <td>${{ "%.2f"|format(d['pagado']) }}</td>
-                                <td class="{{ 'text-danger' if d['saldo'] > 0 else 'text-success' }}">${{ "%.2f"|format(d['saldo']) }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped mb-0">
+                            <thead><tr><th>Estudiante</th><th>Nivel</th><th>Procedencia</th><th>Horas</th><th>Cobrar</th><th>Pagado</th><th>Saldo</th></tr></thead>
+                            <tbody>
+                                {% for d in datos %}
+                                <tr>
+                                    <td>{{ d['estudiante'] }}</td>
+                                    <td>{{ d.get('nivel', '') }}</td>
+                                    <td>{{ d.get('procedencia', '') }}</td>
+                                    <td>{{ d['total_horas'] }}</td>
+                                    <td>${{ "%.2f"|format(d['cobrar']) }}</td>
+                                    <td>${{ "%.2f"|format(d['pagado']) }}</td>
+                                    <td class="{{ 'text-danger' if d['saldo'] > 0 else 'text-success' }}">${{ "%.2f"|format(d['saldo']) }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -95,6 +98,7 @@
         <div class="card shadow">
             <div class="card-header bg-info text-white" data-bs-toggle="collapse" data-bs-target="#seccion2" style="cursor:pointer;">
                 <strong>📍 Procedencia / Frecuencia</strong>
+                <i class="bi bi-chevron-down float-end"></i>
             </div>
             <div class="collapse" id="seccion2">
                 <div class="card-body p-2">
@@ -116,23 +120,26 @@
         <div class="card shadow">
             <div class="card-header bg-success text-white" data-bs-toggle="collapse" data-bs-target="#seccion3" style="cursor:pointer;">
                 <strong>👨‍🏫 Horas por Docente y Asignatura</strong>
+                <i class="bi bi-chevron-down float-end"></i>
             </div>
             <div class="collapse" id="seccion3">
                 <div class="card-body p-2">
-                    <table class="table table-sm table-striped mb-0">
-                        <thead><tr><th>Docente</th><th>Asignatura</th><th>Horas</th><th>Valor Generado</th><th>A Pagar</th></tr></thead>
-                        <tbody>
-                            {% for item in horas_docente %}
-                            <tr>
-                                <td>{{ item['profesor'] }}</td>
-                                <td>{{ item['asignatura'] }}</td>
-                                <td>{{ item['horas'] }}</td>
-                                <td>${{ "%.2f"|format(item['valor']) }}</td>
-                                <td class="fw-bold">${{ "%.2f"|format(item['pago']) }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped mb-0">
+                            <thead><tr><th>Docente</th><th>Asignatura</th><th>Horas</th><th>Valor Generado</th><th>A Pagar</th></tr></thead>
+                            <tbody>
+                                {% for item in horas_docente %}
+                                <tr>
+                                    <td>{{ item['profesor'] }}</td>
+                                    <td>{{ item['asignatura'] }}</td>
+                                    <td>{{ item['horas'] }}</td>
+                                    <td>${{ "%.2f"|format(item['valor']) }}</td>
+                                    <td class="fw-bold">${{ "%.2f"|format(item['pago']) }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -143,6 +150,7 @@
         <div class="card shadow">
             <div class="card-header bg-warning text-dark" data-bs-toggle="collapse" data-bs-target="#seccion4" style="cursor:pointer;">
                 <strong>💵 Ingresos por Servicios</strong>
+                <i class="bi bi-chevron-down float-end"></i>
             </div>
             <div class="collapse" id="seccion4">
                 <div class="card-body p-2">
@@ -164,18 +172,55 @@
         <div class="card shadow">
             <div class="card-header bg-danger text-white" data-bs-toggle="collapse" data-bs-target="#seccion5" style="cursor:pointer;">
                 <strong>📉 Gastos del Mes</strong>
+                <i class="bi bi-chevron-down float-end"></i>
             </div>
             <div class="collapse" id="seccion5">
                 <div class="card-body p-2">
-                    <table class="table table-sm table-striped mb-0">
-                        <thead><tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Monto</th></tr></thead>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped mb-0">
+                            <thead><tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Persona</th><th>Monto</th><th>Reemb.</th></tr></thead>
+                            <tbody>
+                                {% for g in gastos %}
+                                <tr>
+                                    <td>{{ g['fecha'] }}</td>
+                                    <td>{{ g['concepto'] }}</td>
+                                    <td><span class="badge bg-secondary">{{ g.get('categoria', '') }}</span></td>
+                                    <td>{{ g.get('persona', '') }}</td>
+                                    <td>${{ "%.2f"|format(g['monto']) }}</td>
+                                    <td>
+                                        {% if g.get('reembolso') %}
+                                        <span class="badge bg-warning text-dark" title="Reembolsar a: {{ g.get('reembolsado_a', '') }}">🔄</span>
+                                        {% else %}-{% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot><tr class="fw-bold"><td colspan="4">Total Gastos</td><td>${{ "%.2f"|format(total_gastos) }}</td><td></td></tr></tfoot>
+                        </table>
+                    </div>
+                    
+                    <!-- Reembolsos pendientes -->
+                    {% set reembolsos = gastos|selectattr('reembolso', 'equalto', True)|list %}
+                    {% if reembolsos %}
+                    <hr>
+                    <h6>🔄 Reembolsos Pendientes</h6>
+                    <table class="table table-sm table-warning">
+                        <thead><tr><th>Persona</th><th>Concepto</th><th>Monto</th><th>Reembolsar a</th></tr></thead>
                         <tbody>
-                            {% for g in gastos %}
-                            <tr><td>{{ g['fecha'] }}</td><td>{{ g['concepto'] }}</td><td>{{ g.get('categoria', '') }}</td><td>${{ "%.2f"|format(g['monto']) }}</td></tr>
+                            {% for r in reembolsos %}
+                            <tr>
+                                <td>{{ r.get('persona', '') }}</td>
+                                <td>{{ r['concepto'] }}</td>
+                                <td>${{ "%.2f"|format(r['monto']) }}</td>
+                                <td><strong>{{ r.get('reembolsado_a', r.get('persona', '')) }}</strong></td>
+                            </tr>
                             {% endfor %}
                         </tbody>
-                        <tfoot><tr><th colspan="3">Total Gastos</th><th>${{ "%.2f"|format(total_gastos) }}</th></tr></tfoot>
+                        <tfoot>
+                            <tr class="fw-bold"><td colspan="2">Total reembolsos</td><td colspan="2">${{ "%.2f"|format(reembolsos|sum(attribute='monto')) }}</td></tr>
+                        </tfoot>
                     </table>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -186,6 +231,7 @@
         <div class="card shadow">
             <div class="card-header bg-secondary text-white" data-bs-toggle="collapse" data-bs-target="#seccion6" style="cursor:pointer;">
                 <strong>💲 Valor a Pagar por Docente (acumulado)</strong>
+                <i class="bi bi-chevron-down float-end"></i>
             </div>
             <div class="collapse" id="seccion6">
                 <div class="card-body p-2">
