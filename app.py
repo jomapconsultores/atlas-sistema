@@ -193,54 +193,27 @@ def modulo1():
 @login_required
 def modulo2():
     fecha = request.args.get('fecha', str(date.today()))
-    sesiones = supabase.table('sesiones').select('*, estudiantes(*)').eq('fecha', fecha).order('hora_inicio').execute()
+    query = supabase.table('sesiones').select('*, estudiantes(*)').eq('fecha', fecha)
+    
+    # Si es profesor o psicólogo, solo ver sus sesiones
+    if current_user.rol in ['profesor', 'psicologo']:
+        query = query.eq('profesor_terapeuta', current_user.nombre)
+    
+    # Si es estudiante o padre, solo ver sesiones de sus estudiantes
+    elif current_user.rol in ['estudiante', 'padre']:
+        if current_user.rol == 'estudiante':
+            ests = supabase.table('estudiantes').select('id').eq('usuario_id_estudiante', current_user.id).execute()
+        else:
+            ests = supabase.table('estudiantes').select('id').eq('usuario_id_padre', current_user.id).execute()
+        
+        ids = [e['id'] for e in (ests.data or [])]
+        if ids:
+            query = query.in_('estudiante_id', ids)
+        else:
+            return render_template('modulo2.html', sesiones=[], fecha=fecha)
+    
+    sesiones = query.order('hora_inicio').execute()
     return render_template('modulo2.html', sesiones=sesiones.data or [], fecha=fecha)
-
-@app.route('/api/sesion/<int:id>/toggle', methods=['POST'])
-@login_required
-def toggle_sesion(id):
-    data = request.get_json()
-    estado = data.get('estado', 'Realizado')
-    updates = {'estado': estado}
-    if estado == 'Realizado':
-        s = supabase.table('sesiones').select('*').eq('id', id).execute()
-        if s.data:
-            sd = s.data[0]
-            if sd.get('cobro_por_sesion') or sd.get('tipo_sesion') in ['terapia', 'ambos']:
-                updates['valor_total'] = sd.get('precio_hora', 40) or 40
-            else:
-                updates['valor_total'] = round((sd.get('horas', 1) or 1) * (sd.get('precio_hora', 10) or 10), 2)
-    elif estado == 'Cancelado': updates['valor_total'] = 0
-    supabase.table('sesiones').update(updates).eq('id', id).execute()
-    return jsonify({'success': True})
-
-@app.route('/api/sesion/<int:id>/eliminar', methods=['GET', 'POST', 'DELETE'])
-@login_required
-def eliminar_sesion(id):
-    try:
-        sesion = supabase.table('sesiones').select('evento_calendar_id').eq('id', id).execute()
-        evento_id = sesion.data[0].get('evento_calendar_id') if sesion.data else None
-        if evento_id and eliminar_evento_calendar: eliminar_evento_calendar(evento_id)
-        supabase.table('sesiones').delete().eq('id', id).execute()
-        return jsonify({'success': True})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
-
-@app.route('/api/sesion/<int:id>/modificar', methods=['POST'])
-@login_required
-def modificar_sesion(id):
-    try:
-        data = request.get_json()
-        fecha, h_ini, h_fin = data['fecha'], data['hora_inicio'][:5], data['hora_fin'][:5]
-        inicio = datetime.strptime(f"{fecha} {h_ini}", '%Y-%m-%d %H:%M')
-        fin = datetime.strptime(f"{fecha} {h_fin}", '%Y-%m-%d %H:%M')
-        supabase.table('sesiones').update({
-            'fecha': fecha, 'hora_inicio': h_ini, 'hora_fin': h_fin,
-            'horas': round((fin - inicio).total_seconds() / 3600, 2)
-        }).eq('id', id).execute()
-        return jsonify({'success': True})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
 
 # ============================================
 # MÓDULO 3 - PAGOS (CON ELIMINAR CON MOTIVO)
@@ -585,12 +558,14 @@ def mi_reporte():
     total_horas = 0
     
     if current_user.rol in ['profesor', 'psicologo']:
-        # Ver sesiones donde es el profesor/psicólogo
-        sesiones = supabase.table('sesiones').select('*, estudiantes(*)').eq('profesor_terapeuta', current_user.nombre).eq('estado', 'Realizado').order('fecha', desc=True).execute()
+        # Solo sesiones donde este usuario es el profesor/psicólogo
+        sesiones = supabase.table('sesiones').select('*, estudiantes(*)')\
+            .eq('profesor_terapeuta', current_user.nombre)\
+            .eq('estado', 'Realizado').order('fecha', desc=True).execute()
         
         for s in (sesiones.data or []):
             fecha_sesion = s['fecha']
-            if fecha_sesion[:7] == f"{anio}-{mes:02d}" or mes == 0:
+            if mes == 0 or fecha_sesion[:7] == f"{anio}-{mes:02d}":
                 est = s.get('estudiantes', {})
                 datos.append({
                     'fecha': fecha_sesion,
@@ -617,7 +592,7 @@ def mi_reporte():
             
             for s in (sesiones.data or []):
                 fecha_sesion = s['fecha']
-                if fecha_sesion[:7] == f"{anio}-{mes:02d}" or mes == 0:
+                if mes == 0 or fecha_sesion[:7] == f"{anio}-{mes:02d}":
                     datos.append({
                         'fecha': fecha_sesion,
                         'estudiante': f"{e['apellidos']} {e['nombres']}",
@@ -632,7 +607,7 @@ def mi_reporte():
             
             for p in (pagos.data or []):
                 fecha_pago = p['fecha_pago']
-                if fecha_pago[:7] == f"{anio}-{mes:02d}" or mes == 0:
+                if mes == 0 or fecha_pago[:7] == f"{anio}-{mes:02d}":
                     total_pagado += p.get('monto', 0) or 0
     
     return render_template('mi_reporte.html',
@@ -642,7 +617,3 @@ def mi_reporte():
                          total_horas=total_horas,
                          mes=mes, anio=anio,
                          saldo=total_cobrar - total_pagado)
-
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=True)

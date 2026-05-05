@@ -4,123 +4,74 @@
 {% block content %}
 <h2 class="mb-4">👋 Bienvenido, {{ current_user.nombre }} <small class="text-muted">({{ current_user.rol }})</small></h2>
 
+{% if current_user.rol in ['admin', 'socio'] %}
+<!-- ========== ADMIN Y SOCIO: VEN TODO ========== -->
 <div class="row">
-    <!-- Módulo 1: Admin, Socio, Profesor, Psicólogo -->
-    {% if current_user.rol in ['admin', 'socio', 'profesor', 'psicologo'] %}
     <div class="col-md-4 mb-3">
         <a href="/modulo1" class="text-decoration-none">
-            <div class="card bg-primary text-white h-100">
-                <div class="card-body text-center">
-                    <i class="bi bi-journal-plus" style="font-size: 50px;"></i>
-                    <h5 class="mt-3">📋 Módulo 1</h5>
-                    <p>Planificación de Sesiones</p>
-                </div>
-            </div>
+            <div class="card bg-primary text-white h-100"><div class="card-body text-center"><i class="bi bi-journal-plus" style="font-size: 50px;"></i><h5 class="mt-3">📋 Módulo 1</h5><p>Planificación</p></div></div>
         </a>
     </div>
-    {% endif %}
-    
-    <!-- Módulo 2: Admin, Socio, Profesor, Psicólogo -->
-    {% if current_user.rol in ['admin', 'socio', 'profesor', 'psicologo'] %}
     <div class="col-md-4 mb-3">
         <a href="/modulo2" class="text-decoration-none">
-            <div class="card bg-success text-white h-100">
-                <div class="card-body text-center">
-                    <i class="bi bi-calendar-check" style="font-size: 50px;"></i>
-                    <h5 class="mt-3">📅 Módulo 2</h5>
-                    <p>Calendario de Clases</p>
-                </div>
-            </div>
+            <div class="card bg-success text-white h-100"><div class="card-body text-center"><i class="bi bi-calendar-check" style="font-size: 50px;"></i><h5 class="mt-3">📅 Módulo 2</h5><p>Calendario</p></div></div>
         </a>
     </div>
-    {% endif %}
-    
-    <!-- Módulo 3: Solo Admin y Socio -->
-    {% if current_user.rol in ['admin', 'socio'] %}
     <div class="col-md-4 mb-3">
         <a href="/modulo3" class="text-decoration-none">
-            <div class="card bg-warning text-white h-100">
-                <div class="card-body text-center">
-                    <i class="bi bi-cash-coin" style="font-size: 50px;"></i>
-                    <h5 class="mt-3">💰 Módulo 3</h5>
-                    <p>Gestión de Pagos</p>
-                </div>
-            </div>
+            <div class="card bg-warning text-white h-100"><div class="card-body text-center"><i class="bi bi-cash-coin" style="font-size: 50px;"></i><h5 class="mt-3">💰 Módulo 3</h5><p>Pagos</p></div></div>
         </a>
     </div>
-    {% endif %}
-    
-    <!-- Módulo 4: Todos -->
     <div class="col-md-4 mb-3">
         <a href="/modulo4" class="text-decoration-none">
-            <div class="card bg-info text-white h-100">
-                <div class="card-body text-center">
-                    <i class="bi bi-calendar-week" style="font-size: 50px;"></i>
-                    <h5 class="mt-3">📅 Módulo 4</h5>
-                    <p>Calendario Público</p>
-                </div>
-            </div>
+            <div class="card bg-info text-white h-100"><div class="card-body text-center"><i class="bi bi-calendar-week" style="font-size: 50px;"></i><h5 class="mt-3">📅 Módulo 4</h5><p>Calendario Público</p></div></div>
         </a>
     </div>
-    
-    <!-- Módulo 5: Admin, Socio, Profesor, Psicólogo -->
-    {% if current_user.rol in ['admin', 'socio', 'profesor', 'psicologo'] %}
     <div class="col-md-4 mb-3">
         <a href="/modulo5" class="text-decoration-none">
-            <div class="card bg-secondary text-white h-100">
-                <div class="card-body text-center">
-                    <i class="bi bi-wallet2" style="font-size: 50px;"></i>
-                    <h5 class="mt-3">💵 Módulo 5</h5>
-                    <p>Pagos a Docentes</p>
-                </div>
-            </div>
+            <div class="card bg-secondary text-white h-100"><div class="card-body text-center"><i class="bi bi-wallet2" style="font-size: 50px;"></i><h5 class="mt-3">💵 Módulo 5</h5><p>Pagos Docentes</p></div></div>
         </a>
     </div>
-    {% endif %}
-    
-    <!-- Módulo 6: Admin, Socio -->
-    {% if current_user.rol in ['admin', 'socio'] %}
     <div class="col-md-4 mb-3">
         <a href="/modulo6" class="text-decoration-none">
-            <div class="card bg-dark text-white h-100">
-                <div class="card-body text-center">
-                    <i class="bi bi-people-fill" style="font-size: 50px;"></i>
-                    <h5 class="mt-3">📋 Módulo 6</h5>
-                    <p>Programar Reuniones</p>
-                </div>
-            </div>
+            <div class="card bg-dark text-white h-100"><div class="card-body text-center"><i class="bi bi-people-fill" style="font-size: 50px;"></i><h5 class="mt-3">📋 Módulo 6</h5><p>Reuniones</p></div></div>
         </a>
     </div>
-    {% endif %}
-    
-    <!-- MI REPORTE: Padre, Estudiante, Profesor, Psicólogo -->
-    {% if current_user.rol in ['padre', 'estudiante', 'profesor', 'psicologo'] %}
-    <div class="col-md-4 mb-3">
-        <a href="/mi-reporte" class="text-decoration-none">
-            <div class="card bg-info text-white h-100">
-                <div class="card-body text-center">
-                    <i class="bi bi-file-earmark-text" style="font-size: 50px;"></i>
-                    <h5 class="mt-3">📊 Mi Reporte</h5>
-                    <p>Mis Clases, Pagos y Saldos</p>
-                </div>
-            </div>
-        </a>
-    </div>
-    {% endif %}
 </div>
-
 <div class="row mt-3">
-    <!-- Admin y Socio -->
-    {% if current_user.rol in ['admin', 'socio'] %}
     <div class="col-md-3 mb-2"><a href="/estudiantes" class="btn btn-outline-primary w-100">🎓 Estudiantes</a></div>
     <div class="col-md-3 mb-2"><a href="/padres" class="btn btn-outline-primary w-100">👨‍👩‍👧 Padres</a></div>
     <div class="col-md-3 mb-2"><a href="/gastos" class="btn btn-outline-danger w-100">📉 Gastos</a></div>
     <div class="col-md-3 mb-2"><a href="/reportes" class="btn btn-outline-info w-100">📊 Reportes</a></div>
-    {% endif %}
-    
-    <!-- Solo Admin -->
     {% if current_user.rol == 'admin' %}
     <div class="col-md-3 mb-2"><a href="/usuarios" class="btn btn-outline-danger w-100">👥 Usuarios</a></div>
     {% endif %}
 </div>
+
+{% else %}
+<!-- ========== PROFESOR, PSICÓLOGO, ESTUDIANTE, PADRE: SOLO VEN SUS COSAS ========== -->
+<div class="row">
+    <div class="col-md-6 mb-3">
+        <a href="/modulo2" class="text-decoration-none">
+            <div class="card bg-success text-white h-100"><div class="card-body text-center"><i class="bi bi-calendar-check" style="font-size: 50px;"></i><h5 class="mt-3">📅 Mis Clases</h5><p>Ver mis sesiones programadas</p></div></div>
+        </a>
+    </div>
+    <div class="col-md-6 mb-3">
+        <a href="/mi-reporte" class="text-decoration-none">
+            <div class="card bg-info text-white h-100"><div class="card-body text-center"><i class="bi bi-file-earmark-text" style="font-size: 50px;"></i><h5 class="mt-3">📊 Mi Reporte</h5><p>Mis clases, pagos y saldos</p></div></div>
+        </a>
+    </div>
+</div>
+
+<!-- Formulario para actualizar mis datos -->
+<div class="card shadow mt-3">
+    <div class="card-header bg-primary text-white"><strong>✏️ Mis Datos</strong></div>
+    <div class="card-body">
+        <p class="text-muted">Estos son los datos con los que apareces en el sistema. Si necesitas corregirlos, contacta al administrador.</p>
+        <p><strong>Nombre:</strong> {{ current_user.nombre }}</p>
+        <p><strong>Email:</strong> {{ current_user.email }}</p>
+        <p><strong>Rol:</strong> {{ current_user.rol }}</p>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
