@@ -75,12 +75,38 @@ def inicio():
 @app.route('/registro', methods=['GET', 'POST'])
 def registro():
     if request.method == 'POST':
-        supabase.table('usuarios').insert({
-            'nombre': request.form['nombre'], 'email': request.form['email'],
-            'password_hash': request.form['password'], 'rol': request.form['rol'], 'activo': False
-        }).execute()
-        flash('✅ Solicitud enviada', 'success')
-        return redirect(url_for('inicio'))
+        try:
+            email = request.form['email']
+            nombre = request.form['nombre']
+            rol = request.form['rol']
+            password = request.form['password']
+            
+            # Verificar si el email ya existe
+            existente = supabase.table('usuarios').select('*').eq('email', email).execute()
+            if existente.data:
+                flash('❌ Este email ya está registrado', 'error')
+                return redirect(url_for('registro'))
+            
+            # Insertar nuevo usuario
+            result = supabase.table('usuarios').insert({
+                'nombre': nombre,
+                'email': email,
+                'password_hash': password,
+                'rol': rol,
+                'activo': False
+            }).execute()
+            
+            if result.data:
+                flash('✅ Solicitud enviada. Espera la aprobación del administrador.', 'success')
+                return redirect(url_for('inicio'))
+            else:
+                flash('❌ Error al registrar. Intenta de nuevo.', 'error')
+                
+        except Exception as e:
+            flash(f'❌ Error: {str(e)}', 'error')
+        
+        return redirect(url_for('registro'))
+    
     return render_template('registro.html')
 
 @app.route('/login', methods=['GET', 'POST'])
