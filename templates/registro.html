@@ -13,25 +13,36 @@
                 <form method="POST">
                     <div class="mb-3">
                         <label class="form-label">Nombre completo *</label>
-                        <input type="text" name="nombre" class="form-control" required>
+                        <input type="text" name="nombre" class="form-control" required placeholder="Nombres y apellidos">
+                        <small class="text-muted">
+                            ⚠️ Este nombre se usará en la planificación. Asegúrate de escribirlo correctamente.
+                        </small>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Email *</label>
-                        <input type="email" name="email" class="form-control" required>
+                        <input type="email" name="email" class="form-control" required placeholder="tu@email.com">
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Contraseña *</label>
-                        <input type="password" name="password" class="form-control" required>
+                        <input type="password" name="password" class="form-control" required placeholder="Mínimo 6 caracteres">
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Rol *</label>
                         <select name="rol" class="form-select" required>
-                            <option value="">Seleccionar...</option>
-                            <option value="profesor">Profesor</option>
-                            <option value="psicologo">Psicólogo</option>
-                            <option value="estudiante">Estudiante</option>
-                            <option value="socio">Socio</option>
+                            <option value="">Seleccionar rol...</option>
+                            <option value="profesor">👨‍🏫 Profesor</option>
+                            <option value="psicologo">🧠 Psicólogo</option>
+                            <option value="estudiante">🎓 Estudiante</option>
+                            <option value="padre">👨‍👩‍👧 Padre de Familia</option>
+                            <option value="socio">💼 Socio</option>
                         </select>
+                        <small class="text-muted">
+                            👨‍🏫 <strong>Profesor:</strong> Podrás ver tus clases, marcarlas como realizadas y ver tus pagos.<br>
+                            🧠 <strong>Psicólogo:</strong> Podrás ver tus sesiones, marcarlas y ver tus pagos.<br>
+                            🎓 <strong>Estudiante:</strong> Podrás ver tus clases planificadas y tu reporte de pagos.<br>
+                            👨‍👩‍👧 <strong>Padre:</strong> Podrás ver las clases de tus hijos y su reporte de pagos.<br>
+                            💼 <strong>Socio:</strong> Acceso a todos los módulos excepto gestión de usuarios.
+                        </small>
                     </div>
                     <button type="submit" class="btn btn-primary w-100">
                         ✅ Solicitar Registro
