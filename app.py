@@ -238,12 +238,12 @@ def modulo2():
             if current_user.rol in ['profesor', 'psicologo']:
                 if nombre_usuario in profesor or profesor in nombre_usuario:
                     sesiones_filtradas.append(s)
-            elif current_user.rol in ['estudiante', 'padre']:
+                        elif current_user.rol in ['estudiante', 'padre']:
                 est = s.get('estudiantes', {})
                 nombre_est = f"{est.get('apellidos', '')} {est.get('nombres', '')}".strip().lower()
-                if nombre_usuario in nombre_est or nombre_est in nombre_usuario:
+                # Buscar coincidencia exacta o parcial con el nombre del usuario
+                if nombre_usuario in nombre_est or nombre_est in nombre_usuario or nombre_usuario == nombre_est:
                     sesiones_filtradas.append(s)
-        return render_template('modulo2.html', sesiones=sesiones_filtradas, fecha=fecha)
     
     return render_template('modulo2.html', sesiones=sesiones.data or [], fecha=fecha)
 
