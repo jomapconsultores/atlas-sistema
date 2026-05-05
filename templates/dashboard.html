@@ -57,11 +57,6 @@
         </a>
     </div>
     <div class="col-md-4 mb-3">
-        <a href="/modulo4" class="text-decoration-none">
-            <div class="card bg-info text-white h-100"><div class="card-body text-center"><i class="bi bi-calendar-week" style="font-size: 50px;"></i><h5 class="mt-3">📅 Calendario</h5><p>Ver calendario público</p></div></div>
-        </a>
-    </div>
-    <div class="col-md-4 mb-3">
         <a href="/modulo5" class="text-decoration-none">
             <div class="card bg-secondary text-white h-100"><div class="card-body text-center"><i class="bi bi-wallet2" style="font-size: 50px;"></i><h5 class="mt-3">💵 Mis Pagos</h5><p>Ver mis pagos como docente</p></div></div>
         </a>
@@ -81,7 +76,6 @@
         <a href="/editar-perfil" class="btn btn-primary btn-sm">✏️ Actualizar mis datos</a>
     </div>
 </div>
-
 {% elif current_user.rol in ['estudiante', 'padre'] %}
 <!-- ========== ESTUDIANTE / PADRE ========== -->
 <div class="row">
