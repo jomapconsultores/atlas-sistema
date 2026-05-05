@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Editar Perfil - Atlas{% endblock %}
+
+{% block content %}
+<h3>✏️ Actualizar Mis Datos</h3>
+
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white"><strong>Mis Datos</strong></div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label class="form-label">Nombre completo *</label>
+                        <input type="text" name="nombre" class="form-control" value="{{ current_user.nombre }}" required>
+                        <small class="text-muted">
+                            {% if current_user.rol in ['profesor', 'psicologo'] %}
+                            ⚠️ Este nombre se usa en la planificación. Si lo cambias, se actualizarán tus sesiones.
+                            {% endif %}
+                        </small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email *</label>
+                        <input type="email" name="email" class="form-control" value="{{ current_user.email }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Nueva contraseña (dejar en blanco para no cambiar)</label>
+                        <input type="password" name="password" class="form-control" placeholder="Nueva contraseña">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Rol actual</label>
+                        <input type="text" class="form-control" value="{{ current_user.rol }}" disabled>
+                        <small class="text-muted">El rol solo puede cambiarlo el administrador.</small>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">💾 Guardar Cambios</button>
+                    <a href="/dashboard" class="btn btn-outline-secondary w-100 mt-2">Cancelar</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

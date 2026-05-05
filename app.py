@@ -193,28 +193,39 @@ def modulo1():
 @login_required
 def modulo2():
     fecha = request.args.get('fecha', str(date.today()))
-    query = supabase.table('sesiones').select('*, estudiantes(*)').eq('fecha', fecha)
     
-    # Si es profesor o psicólogo, solo ver sus sesiones
-    if current_user.rol in ['profesor', 'psicologo']:
-        query = query.eq('profesor_terapeuta', current_user.nombre)
-    
-    # Si es estudiante o padre, solo ver sesiones de sus estudiantes
-    elif current_user.rol in ['estudiante', 'padre']:
-        if current_user.rol == 'estudiante':
-            ests = supabase.table('estudiantes').select('id').eq('usuario_id_estudiante', current_user.id).execute()
-        else:
-            ests = supabase.table('estudiantes').select('id').eq('usuario_id_padre', current_user.id).execute()
+    # Admin y socio ven todo
+    if current_user.rol in ['admin', 'socio']:
+        sesiones = supabase.table('sesiones').select('*, estudiantes(*)').eq('fecha', fecha).order('hora_inicio').execute()
+    else:
+        # Buscar el nombre del usuario en diferentes campos
+        nombre_usuario = current_user.nombre.strip()
         
-        ids = [e['id'] for e in (ests.data or [])]
-        if ids:
-            query = query.in_('estudiante_id', ids)
-        else:
-            return render_template('modulo2.html', sesiones=[], fecha=fecha)
+        # Primero buscar todas las sesiones de la fecha
+        todas = supabase.table('sesiones').select('*, estudiantes(*)').eq('fecha', fecha).order('hora_inicio').execute()
+        
+        # Filtrar manualmente por coincidencia de nombre
+        sesiones_filtradas = []
+        for s in (todas.data or []):
+            profesor = (s.get('profesor_terapeuta') or '').strip().lower()
+            encargado = (s.get('encargado_apertura') or '').strip().lower()
+            nombre_user = nombre_usuario.lower()
+            
+            # Si el usuario es profesor/psicólogo, buscar por profesor_terapeuta
+            if current_user.rol in ['profesor', 'psicologo']:
+                if nombre_user in profesor or profesor in nombre_user:
+                    sesiones_filtradas.append(s)
+            
+            # Si el usuario es estudiante/padre, buscar por el estudiante relacionado
+            elif current_user.rol in ['estudiante', 'padre']:
+                est = s.get('estudiantes', {})
+                nombre_est = f"{est.get('apellidos', '')} {est.get('nombres', '')}".strip().lower()
+                if nombre_user in nombre_est or nombre_est in nombre_user:
+                    sesiones_filtradas.append(s)
+        
+        return render_template('modulo2.html', sesiones=sesiones_filtradas, fecha=fecha)
     
-    sesiones = query.order('hora_inicio').execute()
     return render_template('modulo2.html', sesiones=sesiones.data or [], fecha=fecha)
-
 # ============================================
 # MÓDULO 3 - PAGOS (CON ELIMINAR CON MOTIVO)
 # ============================================
@@ -556,64 +567,87 @@ def mi_reporte():
     total_cobrar = 0
     total_pagado = 0
     total_horas = 0
+    nombre_usuario = current_user.nombre.strip().lower()
     
-    if current_user.rol in ['profesor', 'psicologo']:
-        # Solo sesiones donde este usuario es el profesor/psicólogo
-        sesiones = supabase.table('sesiones').select('*, estudiantes(*)')\
-            .eq('profesor_terapeuta', current_user.nombre)\
-            .eq('estado', 'Realizado').order('fecha', desc=True).execute()
-        
-        for s in (sesiones.data or []):
-            fecha_sesion = s['fecha']
-            if mes == 0 or fecha_sesion[:7] == f"{anio}-{mes:02d}":
-                est = s.get('estudiantes', {})
-                datos.append({
-                    'fecha': fecha_sesion,
-                    'estudiante': f"{est.get('apellidos', '')} {est.get('nombres', '')}",
-                    'tipo': s['tipo_sesion'],
-                    'asignatura': s.get('asignatura') or s.get('tema_terapia') or '-',
-                    'horas': s.get('horas', 0) or 0,
-                    'valor': s.get('valor_total', 0) or 0,
-                    'estado': s['estado']
-                })
-                total_horas += s.get('horas', 0) or 0
-                total_cobrar += s.get('valor_total', 0) or 0
+    # Obtener todas las sesiones realizadas
+    sesiones = supabase.table('sesiones').select('*, estudiantes(*)').eq('estado', 'Realizado').order('fecha', desc=True).execute()
     
-    elif current_user.rol in ['padre', 'estudiante']:
-        # Buscar estudiantes relacionados con este usuario
-        if current_user.rol == 'padre':
-            estudiantes_rel = supabase.table('estudiantes').select('*').eq('usuario_id_padre', current_user.id).eq('activo', True).execute()
-        else:
-            estudiantes_rel = supabase.table('estudiantes').select('*').eq('usuario_id_estudiante', current_user.id).eq('activo', True).execute()
+    for s in (sesiones.data or []):
+        fecha_sesion = s['fecha']
+        if mes != 0 and fecha_sesion[:7] != f"{anio}-{mes:02d}":
+            continue
         
+        profesor = (s.get('profesor_terapeuta') or '').strip().lower()
+        est = s.get('estudiantes', {})
+        nombre_est = f"{est.get('apellidos', '')} {est.get('nombres', '')}".strip().lower()
+        
+        incluir = False
+        
+        if current_user.rol in ['profesor', 'psicologo']:
+            # Solo sesiones donde este usuario es el profesor
+            if nombre_usuario in profesor or profesor in nombre_usuario:
+                incluir = True
+        
+        elif current_user.rol in ['estudiante', 'padre']:
+            # Solo sesiones donde el estudiante coincide con el nombre del usuario
+            if nombre_usuario in nombre_est or nombre_est in nombre_usuario:
+                incluir = True
+        
+        if incluir:
+            datos.append({
+                'fecha': fecha_sesion,
+                'estudiante': f"{est.get('apellidos', '')} {est.get('nombres', '')}",
+                'tipo': s['tipo_sesion'],
+                'asignatura': s.get('asignatura') or s.get('tema_terapia') or '-',
+                'horas': s.get('horas', 0) or 0,
+                'valor': s.get('valor_total', 0) or 0,
+                'estado': s['estado']
+            })
+            total_horas += s.get('horas', 0) or 0
+            total_cobrar += s.get('valor_total', 0) or 0
+    
+    # Pagos
+    if current_user.rol in ['estudiante', 'padre']:
+        estudiantes_rel = supabase.table('estudiantes').select('*').eq('activo', True).execute()
         for e in (estudiantes_rel.data or []):
-            sesiones = supabase.table('sesiones').select('*').eq('estudiante_id', e['id']).eq('estado', 'Realizado').order('fecha', desc=True).execute()
-            pagos = supabase.table('pagos').select('*').eq('estudiante_id', e['id']).order('fecha_pago', desc=True).execute()
-            
-            for s in (sesiones.data or []):
-                fecha_sesion = s['fecha']
-                if mes == 0 or fecha_sesion[:7] == f"{anio}-{mes:02d}":
-                    datos.append({
-                        'fecha': fecha_sesion,
-                        'estudiante': f"{e['apellidos']} {e['nombres']}",
-                        'tipo': s['tipo_sesion'],
-                        'asignatura': s.get('asignatura') or s.get('tema_terapia') or '-',
-                        'horas': s.get('horas', 0) or 0,
-                        'valor': s.get('valor_total', 0) or 0,
-                        'estado': s['estado']
-                    })
-                    total_horas += s.get('horas', 0) or 0
-                    total_cobrar += s.get('valor_total', 0) or 0
-            
-            for p in (pagos.data or []):
-                fecha_pago = p['fecha_pago']
-                if mes == 0 or fecha_pago[:7] == f"{anio}-{mes:02d}":
-                    total_pagado += p.get('monto', 0) or 0
+            nombre_est = f"{e.get('apellidos', '')} {e.get('nombres', '')}".strip().lower()
+            if nombre_usuario in nombre_est or nombre_est in nombre_usuario:
+                pagos = supabase.table('pagos').select('*').eq('estudiante_id', e['id']).execute()
+                for p in (pagos.data or []):
+                    fecha_pago = p['fecha_pago']
+                    if mes == 0 or fecha_pago[:7] == f"{anio}-{mes:02d}":
+                        total_pagado += p.get('monto', 0) or 0
+
+# ============================================
+# EDITAR MI PERFIL
+# ============================================
+@app.route('/editar-perfil', methods=['GET', 'POST'])
+@login_required
+def editar_perfil():
+    if request.method == 'POST':
+        nuevo_nombre = request.form['nombre']
+        nuevo_email = request.form['email']
+        nueva_password = request.form.get('password', '')
+        
+        updates = {'nombre': nuevo_nombre, 'email': nuevo_email}
+        if nueva_password:
+            updates['password_hash'] = nueva_password
+        
+        supabase.table('usuarios').update(updates).eq('id', current_user.id).execute()
+        
+        if current_user.rol in ['profesor', 'psicologo']:
+            supabase.table('sesiones').update({'profesor_terapeuta': nuevo_nombre}).eq('profesor_terapeuta', current_user.nombre).execute()
+        
+        flash('✅ Perfil actualizado correctamente', 'success')
+        return redirect(url_for('dashboard'))
     
+    return render_template('editar_perfil.html')
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=True)    
+
     return render_template('mi_reporte.html',
-                         datos=datos,
-                         total_cobrar=total_cobrar,
-                         total_pagado=total_pagado,
-                         total_horas=total_horas,
-                         mes=mes, anio=anio,
-                         saldo=total_cobrar - total_pagado)
+                         datos=datos, total_cobrar=total_cobrar,
+                         total_pagado=total_pagado, total_horas=total_horas,
+                         mes=mes, anio=anio, saldo=total_cobrar - total_pagado)
