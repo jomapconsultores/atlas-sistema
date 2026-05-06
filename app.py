@@ -232,6 +232,7 @@ def modulo2():
         return render_template('modulo2.html', sesiones=sesiones.data or [], fecha=fecha)
     
     nombre_usuario = current_user.nombre.strip().lower()
+    palabras_usuario = nombre_usuario.split()
     todas = supabase.table('sesiones').select('*, estudiantes(*)').eq('fecha', fecha).order('hora_inicio').execute()
     sesiones_filtradas = []
     
@@ -239,16 +240,77 @@ def modulo2():
         profesor = (s.get('profesor_terapeuta') or '').strip().lower()
         est = s.get('estudiantes', {})
         nombre_est = f"{est.get('apellidos', '')} {est.get('nombres', '')}".strip().lower()
+        apellidos_est = (est.get('apellidos', '') or '').strip().lower()
+        nombres_est = (est.get('nombres', '') or '').strip().lower()
         
         if current_user.rol in ['profesor', 'psicologo']:
             if nombre_usuario in profesor or profesor in nombre_usuario:
                 sesiones_filtradas.append(s)
+            else:
+                for palabra in palabras_usuario:
+                    if len(palabra) >= 3 and palabra in profesor:
+                        sesiones_filtradas.append(s)
+                        break
         
         elif current_user.rol in ['estudiante', 'padre']:
             if nombre_usuario in nombre_est or nombre_est in nombre_usuario:
                 sesiones_filtradas.append(s)
+            else:
+                for palabra in palabras_usuario:
+                    if len(palabra) >= 3:
+                        if palabra in apellidos_est or palabra in nombres_est:
+                            sesiones_filtradas.append(s)
+                            break
     
     return render_template('modulo2.html', sesiones=sesiones_filtradas, fecha=fecha)
+@app.route('/api/sesion/<int:id>/toggle', methods=['POST'])
+@login_required
+def toggle_sesion(id):
+    data = request.get_json()
+    estado = data.get('estado', 'Realizado')
+    updates = {'estado': estado}
+    if estado == 'Realizado':
+        s = supabase.table('sesiones').select('*').eq('id', id).execute()
+        if s.data:
+            sd = s.data[0]
+            if sd.get('cobro_por_sesion') or sd.get('tipo_sesion') in ['terapia', 'ambos']:
+                updates['valor_total'] = sd.get('precio_hora', 40) or 40
+            else:
+                updates['valor_total'] = round((sd.get('horas', 1) or 1) * (sd.get('precio_hora', 10) or 10), 2)
+    elif estado == 'Cancelado':
+        updates['valor_total'] = 0
+    supabase.table('sesiones').update(updates).eq('id', id).execute()
+    return jsonify({'success': True})
+
+@app.route('/api/sesion/<int:id>/eliminar', methods=['GET', 'POST', 'DELETE'])
+@login_required
+@socio_admin_required
+def eliminar_sesion(id):
+    try:
+        sesion = supabase.table('sesiones').select('evento_calendar_id').eq('id', id).execute()
+        evento_id = sesion.data[0].get('evento_calendar_id') if sesion.data else None
+        if evento_id and eliminar_evento_calendar: eliminar_evento_calendar(evento_id)
+        supabase.table('sesiones').delete().eq('id', id).execute()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/sesion/<int:id>/modificar', methods=['POST'])
+@login_required
+@socio_admin_required
+def modificar_sesion(id):
+    try:
+        data = request.get_json()
+        fecha, h_ini, h_fin = data['fecha'], data['hora_inicio'][:5], data['hora_fin'][:5]
+        inicio = datetime.strptime(f"{fecha} {h_ini}", '%Y-%m-%d %H:%M')
+        fin = datetime.strptime(f"{fecha} {h_fin}", '%Y-%m-%d %H:%M')
+        supabase.table('sesiones').update({
+            'fecha': fecha, 'hora_inicio': h_ini, 'hora_fin': h_fin,
+            'horas': round((fin - inicio).total_seconds() / 3600, 2)
+        }).eq('id', id).execute()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 # ============================================
 # MÓDULO 3 - PAGOS (solo admin y socio)
@@ -307,9 +369,13 @@ def modulo3():
 # MÓDULO 4 - CALENDARIO PÚBLICO
 # ============================================
 @app.route('/modulo4')
+@login_required
 def modulo4():
     sesiones = supabase.table('sesiones').select('*, estudiantes(*)').gte('fecha', str(date.today())).order('fecha').execute()
-    return render_template('modulo4.html', sesiones=sesiones.data or [])
+    reuniones = []
+    if current_user.rol in ['admin', 'socio']:
+        reuniones = supabase.table('reuniones').select('*').gte('fecha', str(date.today())).order('fecha').execute()
+    return render_template('modulo4.html', sesiones=sesiones.data or [], reuniones=reuniones.data if reuniones else [])
 
 # ============================================
 # MÓDULO 5 - PAGOS DOCENTES (admin, socio, profesor, psicólogo)
