@@ -97,22 +97,49 @@
 {% endif %}
 
 <script>
+// CONFIRMACIÓN AL MARCAR REALIZADA O CANCELADA
 document.querySelectorAll('.radio-sesion').forEach(radio => {
     radio.addEventListener('change', function() {
         if (!this.checked) return;
         const id = this.dataset.id;
         const estado = this.dataset.estado;
-        fetch('/api/sesion/' + id + '/toggle', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({estado: estado})
-        }).then(r => r.json()).then(() => location.reload());
+        const fila = this.closest('tr');
+        const fecha = fila.querySelector('td:nth-child(1)').textContent.trim();
+        const hora = fila.querySelector('td:nth-child(2)').textContent.trim();
+        const asignatura = fila.querySelector('td:nth-child(5)').textContent.trim();
+        const estudiante = fila.querySelector('td:nth-child(3)').textContent.trim();
+        const profesor = fila.querySelector('td:nth-child(6)').textContent.trim();
+        
+        let mensaje = '';
+        if (estado === 'Realizado') {
+            mensaje = `✅ ¿CONFIRMAS que la clase SÍ se realizó?\n\n📖 Asignatura: ${asignatura}\n👨‍🎓 Estudiante: ${estudiante}\n👨‍🏫 Profesor: ${profesor}\n📅 Fecha: ${fecha}\n🕐 Horario: ${hora}`;
+        } else {
+            mensaje = `❌ ¿CONFIRMAS que la clase NO se realizó?\n\n📖 Asignatura: ${asignatura}\n👨‍🎓 Estudiante: ${estudiante}\n👨‍🏫 Profesor: ${profesor}\n📅 Fecha: ${fecha}\n🕐 Horario: ${hora}\n\n⚠️ Se cancelará sin costo.`;
+        }
+        
+        if (confirm(mensaje)) {
+            fetch('/api/sesion/' + id + '/toggle', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({estado: estado})
+            }).then(r => r.json()).then(() => location.reload());
+        } else {
+            location.reload();
+        }
     });
 });
 
+// CONFIRMACIÓN AL ELIMINAR
 {% if current_user.rol in ['admin', 'socio'] %}
 function eliminarSesion(id) {
-    if (!confirm('¿Eliminar esta sesión definitivamente?')) return;
+    const fila = document.querySelector(`button[onclick="eliminarSesion(${id})"]`)?.closest('tr');
+    const fecha = fila?.querySelector('td:nth-child(1)')?.textContent?.trim() || '';
+    const hora = fila?.querySelector('td:nth-child(2)')?.textContent?.trim() || '';
+    const asignatura = fila?.querySelector('td:nth-child(5)')?.textContent?.trim() || '';
+    const estudiante = fila?.querySelector('td:nth-child(3)')?.textContent?.trim() || '';
+    
+    if (!confirm(`🗑️ ¿ELIMINAR esta sesión definitivamente?\n\n📖 ${asignatura}\n👨‍🎓 ${estudiante}\n📅 ${fecha}\n🕐 ${hora}\n\n⚠️ Se borrará del sistema y del calendario.`)) return;
+    
     fetch('/api/sesion/' + id + '/eliminar', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'}
@@ -123,6 +150,7 @@ function eliminarSesion(id) {
 }
 {% endif %}
 
+// CARGAR PENDIENTES
 function cargarPendientes() {
     fetch('/api/sesiones/pendientes')
         .then(r => r.json())
@@ -131,29 +159,39 @@ function cargarPendientes() {
             if (data.length === 0) {
                 html = '<p class="text-success">✅ Todas las sesiones han sido marcadas.</p>';
             } else {
-                html = `<table class="table table-sm"><thead><tr><th>Fecha</th><th>Hora</th><th>Estudiante</th><th>Tipo</th><th>Asignatura</th><th>Profesor</th><th>✅</th><th>❌</th></tr></thead><tbody>`;
+                html = `<div class="table-responsive"><table class="table table-sm"><thead><tr><th>Fecha</th><th>Hora</th><th>Estudiante</th><th>Tipo</th><th>Asignatura</th><th>Profesor</th><th>✅</th><th>❌</th></tr></thead><tbody>`;
                 data.forEach(s => {
                     html += `<tr id="pend-${s.id}">
                         <td>${s.fecha}</td><td>${s.hora_inicio} - ${s.hora_fin}</td>
                         <td>${s.estudiante}</td><td>${s.tipo_sesion}</td>
                         <td>${s.asignatura || '-'}</td><td>${s.profesor_terapeuta}</td>
-                        <td><button class="btn btn-success btn-sm" onclick="marcar(${s.id},'Realizado')">✅</button></td>
-                        <td><button class="btn btn-warning btn-sm" onclick="marcar(${s.id},'Cancelado')">❌</button></td>
+                        <td><button class="btn btn-success btn-sm" onclick="marcarPendiente(${s.id},'Realizado')">✅</button></td>
+                        <td><button class="btn btn-warning btn-sm" onclick="marcarPendiente(${s.id},'Cancelado')">❌</button></td>
                     </tr>`;
                 });
-                html += '</tbody></table>';
+                html += '</tbody></table></div>';
             }
             document.getElementById('pendientesContainer').innerHTML = html;
         });
 }
 
-function marcar(id, estado) {
+function marcarPendiente(id, estado) {
+    const fila = document.getElementById('pend-' + id);
+    const fecha = fila?.querySelector('td:nth-child(1)')?.textContent || '';
+    const asignatura = fila?.querySelector('td:nth-child(5)')?.textContent || '';
+    
+    const mensaje = estado === 'Realizado' 
+        ? `✅ ¿Confirmas que la clase SÍ se realizó?\n\n📖 ${asignatura}\n📅 ${fecha}`
+        : `❌ ¿Confirmas que la clase NO se realizó?\n\n📖 ${asignatura}\n📅 ${fecha}`;
+    
+    if (!confirm(mensaje)) return;
+    
     fetch('/api/sesion/' + id + '/toggle', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({estado: estado})
     }).then(r => r.json()).then(() => {
-        document.getElementById('pend-' + id)?.remove();
+        fila?.remove();
         if (!document.querySelector('#pendientesContainer tbody tr')) {
             document.getElementById('pendientesContainer').innerHTML = '<p class="text-success">✅ Todas las sesiones han sido marcadas.</p>';
         }

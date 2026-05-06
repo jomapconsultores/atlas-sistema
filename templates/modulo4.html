@@ -29,7 +29,7 @@
                         <tr id="fila-{{ s['id'] }}">
                             <td>
                                 <span class="fecha-texto">{{ s['fecha'] }}</span>
-                                <input type="date" class="form-control form-control-sm fecha-input" value="{{ s['fecha'] }}" style="display:none; width:130px;" data-id="{{ s['id'] }}">
+                                <input type="date" class="form-control form-control-sm fecha-input" value="{{ s['fecha'] }}" style="display:none; width:130px;">
                             </td>
                             <td>
                                 <span class="hora-texto">{{ s['hora_inicio'] }} - {{ s['hora_fin'] }}</span>
@@ -81,10 +81,10 @@
 </div>
 
 <div class="mt-4 d-flex flex-wrap justify-content-between">
-    <a href="/modulo1" class="btn btn-outline-primary mb-1">M1: Planificar</a>
-    <a href="/modulo2" class="btn btn-outline-success mb-1">M2: Calendario</a>
-    <a href="/modulo3" class="btn btn-outline-info mb-1">M3: Pagos</a>
-    <a href="/modulo5" class="btn btn-outline-warning mb-1">M5: Docentes</a>
+    <a href="/modulo1" class="btn btn-outline-primary mb-1">M1</a>
+    <a href="/modulo2" class="btn btn-outline-success mb-1">M2</a>
+    <a href="/modulo3" class="btn btn-outline-info mb-1">M3</a>
+    <a href="/modulo5" class="btn btn-outline-warning mb-1">M5</a>
 </div>
 
 <script>
@@ -99,9 +99,7 @@ function modificarSesion(id) {
     fila.querySelector('.cancelar-btn').style.display = 'inline-block';
 }
 
-function cancelarEdicion() {
-    location.reload();
-}
+function cancelarEdicion() { location.reload(); }
 
 async function guardarCambios(id) {
     const fila = document.getElementById('fila-' + id);
@@ -111,37 +109,36 @@ async function guardarCambios(id) {
     
     if (!fecha || !hIni || !hFin) { alert('Completa todos los campos'); return; }
     
+    const mensaje = `✏️ ¿Confirmas el cambio de horario?\n\n📅 Nueva fecha: ${fecha}\n🕐 Nuevo horario: ${hIni} - ${hFin}\n\n⚠️ Se actualizará en el calendario.`;
+    if (!confirm(mensaje)) return;
+    
     const resp = await fetch('/api/sesion/' + id + '/modificar', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({fecha: fecha, hora_inicio: hIni, hora_fin: hFin})
     });
     const data = await resp.json();
-    
-    if (data.success) {
-        location.reload();
-    } else {
-        alert('❌ Error: ' + (data.error || 'Desconocido'));
-    }
+    if (data.success) { location.reload(); }
+    else { alert('❌ Error: ' + (data.error || 'Desconocido')); }
 }
 
 async function eliminarSesion(id) {
-    if (!confirm('¿Eliminar esta sesión definitivamente?')) return;
+    const fila = document.getElementById('fila-' + id);
+    const fecha = fila?.querySelector('.fecha-texto')?.textContent || '';
+    const hora = fila?.querySelector('.hora-texto')?.textContent || '';
+    const asignatura = fila?.querySelector('td:nth-child(5)')?.textContent || '';
+    const estudiante = fila?.querySelector('td:nth-child(3)')?.textContent || '';
+    
+    if (!confirm(`🗑️ ¿Eliminar esta sesión?\n\n📖 ${asignatura}\n👨‍🎓 ${estudiante}\n📅 ${fecha}\n🕐 ${hora}\n\n⚠️ Se borrará del sistema y del calendario.`)) return;
     
     const resp = await fetch('/api/sesion/' + id + '/eliminar', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'}
     });
     const data = await resp.json();
-    
     if (data.success) {
-        // Quitar la fila sin recargar
-        const fila = document.getElementById('fila-' + id);
-        if (fila) fila.remove();
-        
-        // Si no quedan filas, recargar para mostrar "No hay sesiones"
-        const filas = document.querySelectorAll('tbody tr');
-        if (filas.length === 0) location.reload();
+        fila?.remove();
+        if (!document.querySelector('tbody tr')) location.reload();
     } else {
         alert('❌ Error al eliminar');
     }

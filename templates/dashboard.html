@@ -3,6 +3,7 @@
 
 {% block content %}
 <h2 class="mb-4">👋 Bienvenido, {{ current_user.nombre }} <small class="text-muted">({{ current_user.rol }})</small></h2>
+<p class="text-muted small mb-3">Sistema creado por <strong>Marco Antonio Posligua San Martín</strong></p>
 
 {% if current_user.rol in ['admin', 'socio'] %}
 <!-- ========== ADMIN Y SOCIO ========== -->

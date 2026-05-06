@@ -5,13 +5,15 @@
 <h3>💰 Gestión de Pagos</h3>
 
 <div class="row">
+    <!-- REGISTRAR PAGO -->
     <div class="col-md-5 mb-4">
         <div class="card shadow">
             <div class="card-header bg-success text-white"><strong>Registrar Pago</strong></div>
             <div class="card-body">
-                <form method="POST">
+                <form method="POST" id="formPago">
                     <input type="hidden" name="accion" value="pagar">
-                    <div class="mb-2"><label class="form-label">Estudiante *</label>
+                    <div class="mb-2">
+                        <label class="form-label">Estudiante *</label>
                         <select name="estudiante_id" class="form-select" required>
                             <option value="">Seleccionar...</option>
                             {% for e in estudiantes %}
@@ -19,9 +21,16 @@
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="mb-2"><label class="form-label">Monto *</label><input type="number" name="monto" class="form-control" step="0.01" required></div>
-                    <div class="mb-2"><label class="form-label">Fecha *</label><input type="date" name="fecha_pago" class="form-control" value="{{ today }}" required></div>
-                    <div class="mb-2"><label class="form-label">Tipo</label><select name="tipo_pago" class="form-select"><option value="efectivo">💵 Efectivo</option><option value="transferencia">🏦 Transferencia</option><option value="deposito">📥 Depósito</option></select></div>
+                    <div class="mb-2"><label class="form-label">Monto *</label><input type="number" name="monto" id="montoPago" class="form-control" step="0.01" required></div>
+                    <div class="mb-2"><label class="form-label">Fecha *</label><input type="date" name="fecha_pago" id="fechaPago" class="form-control" value="{{ today }}" required></div>
+                    <div class="mb-2">
+                        <label class="form-label">Tipo</label>
+                        <select name="tipo_pago" class="form-select">
+                            <option value="efectivo">💵 Efectivo</option>
+                            <option value="transferencia">🏦 Transferencia</option>
+                            <option value="deposito">📥 Depósito</option>
+                        </select>
+                    </div>
                     <div class="mb-2"><label class="form-label">Concepto</label><textarea name="concepto" class="form-control" rows="2"></textarea></div>
                     <button type="submit" class="btn btn-success w-100">✅ Registrar Pago</button>
                 </form>
@@ -29,10 +38,12 @@
         </div>
     </div>
 
+    <!-- ESTADO DE CUENTAS -->
     <div class="col-md-7">
         <div class="card shadow">
-            <div class="card-header bg-info text-white"><strong>Pagos por Estudiante</strong></div>
+            <div class="card-header bg-info text-white"><strong>Estado de Cuentas</strong></div>
             <div class="card-body">
+                {% if estudiantes %}
                 {% for e in estudiantes %}
                 <div class="border rounded p-2 mb-2">
                     <button class="btn btn-link text-start w-100" data-bs-toggle="collapse" data-bs-target="#pagos-{{ e['id'] }}">
@@ -49,7 +60,13 @@
                                 {% for p in e['pagos'] %}
                                 <tr>
                                     <td>{{ p['fecha_pago'] }}</td>
-                                    <td><span class="editable-monto" style="cursor:pointer;border-bottom:1px dashed #999;" onclick="abrirCorreccion({{ p['id'] }}, {{ p['monto'] }})">${{ "%.2f"|format(p['monto']) }}</span></td>
+                                    <td>
+                                        <span class="editable-monto" style="cursor:pointer;border-bottom:1px dashed #999;" 
+                                              onclick="abrirCorreccion({{ p['id'] }}, {{ p['monto'] }})" 
+                                              title="Click para corregir">
+                                            ${{ "%.2f"|format(p['monto']) }}
+                                        </span>
+                                    </td>
                                     <td>{{ p.get('tipo_pago', '') }}</td>
                                     <td>{{ p.get('concepto', '')[:20] }}</td>
                                     <td>
@@ -63,6 +80,9 @@
                     </div>
                 </div>
                 {% endfor %}
+                {% else %}
+                <p class="text-muted">No hay estudiantes con movimientos.</p>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -71,15 +91,20 @@
 <!-- MODAL CORRECCIÓN -->
 <div class="modal fade" id="modalCorreccion" tabindex="-1">
     <div class="modal-dialog"><div class="modal-content">
-        <form method="POST"><input type="hidden" name="accion" value="corregir"><input type="hidden" name="pago_id" id="modalPagoId">
+        <form method="POST" onsubmit="return confirmarCorreccion()">
+            <input type="hidden" name="accion" value="corregir">
+            <input type="hidden" name="pago_id" id="modalPagoId">
             <div class="modal-header bg-warning"><h5>🔧 Corregir Pago</h5></div>
             <div class="modal-body">
                 <p>Monto actual: <strong id="modalMontoActual">$0</strong></p>
                 <div class="mb-2"><label class="form-label">Nuevo monto *</label><input type="number" name="nuevo_monto" id="modalNuevoMonto" class="form-control" step="0.01" required></div>
-                <div class="mb-2"><label class="form-label">¿Quién corrige? *</label><input type="text" name="cambiado_por" class="form-control" value="{{ current_user.nombre }}" required></div>
-                <div class="mb-2"><label class="form-label">Motivo *</label><textarea name="motivo" class="form-control" rows="2" required></textarea></div>
+                <div class="mb-2"><label class="form-label">¿Quién corrige? *</label><input type="text" name="cambiado_por" id="modalQuien" class="form-control" value="{{ current_user.nombre }}" required></div>
+                <div class="mb-2"><label class="form-label">Motivo *</label><textarea name="motivo" id="modalMotivo" class="form-control" rows="2" required></textarea></div>
             </div>
-            <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-warning">Guardar</button></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-warning">Guardar</button>
+            </div>
         </form>
     </div></div>
 </div>
@@ -87,28 +112,72 @@
 <!-- MODAL ELIMINAR -->
 <div class="modal fade" id="modalEliminar" tabindex="-1">
     <div class="modal-dialog"><div class="modal-content">
-        <form method="POST"><input type="hidden" name="accion" value="eliminar_pago"><input type="hidden" name="pago_id" id="modalEliminarPagoId">
+        <form method="POST" onsubmit="return confirmarEliminacion()">
+            <input type="hidden" name="accion" value="eliminar_pago">
+            <input type="hidden" name="pago_id" id="modalEliminarPagoId">
             <div class="modal-header bg-danger text-white"><h5>🗑️ Eliminar Pago</h5></div>
             <div class="modal-body">
                 <p class="text-danger">⚠️ Esta acción no se puede deshacer.</p>
-                <div class="mb-2"><label class="form-label">Motivo de eliminación *</label><textarea name="motivo_eliminar" class="form-control" rows="2" required placeholder="Explica por qué se elimina este pago..."></textarea></div>
-                <div class="mb-2"><label class="form-label">¿Quién elimina? *</label><input type="text" name="eliminado_por" class="form-control" value="{{ current_user.nombre }}" required></div>
+                <div class="mb-2"><label class="form-label">Motivo de eliminación *</label><textarea name="motivo_eliminar" id="modalMotivoEliminar" class="form-control" rows="2" required></textarea></div>
+                <div class="mb-2"><label class="form-label">¿Quién elimina? *</label><input type="text" name="eliminado_por" id="modalEliminadoPor" class="form-control" value="{{ current_user.nombre }}" required></div>
             </div>
-            <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-danger">🗑️ Eliminar</button></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-danger">🗑️ Eliminar</button>
+            </div>
         </form>
     </div></div>
 </div>
 
+<div class="mt-4 d-flex flex-wrap justify-content-between">
+    <a href="/modulo1" class="btn btn-outline-primary mb-1">M1</a>
+    <a href="/modulo2" class="btn btn-outline-success mb-1">M2</a>
+    <a href="/modulo4" class="btn btn-outline-info mb-1">M4</a>
+    <a href="/modulo5" class="btn btn-outline-warning mb-1">M5</a>
+</div>
+
 <script>
+// CONFIRMACIÓN AL REGISTRAR PAGO
+document.getElementById('formPago').addEventListener('submit', function(e) {
+    const monto = document.getElementById('montoPago')?.value;
+    const fecha = document.getElementById('fechaPago')?.value;
+    const estudiante = this.querySelector('[name="estudiante_id"]')?.selectedOptions[0]?.text || '';
+    
+    if (!confirm(`💰 ¿Confirmas el registro del pago?\n\n👨‍🎓 ${estudiante}\n💵 Monto: $${parseFloat(monto).toFixed(2)}\n📅 Fecha: ${fecha}`)) {
+        e.preventDefault();
+    }
+});
+
 function abrirCorreccion(id, monto) {
     document.getElementById('modalPagoId').value = id;
     document.getElementById('modalMontoActual').textContent = '$' + monto.toFixed(2);
     document.getElementById('modalNuevoMonto').value = monto;
+    document.getElementById('modalQuien').value = '{{ current_user.nombre }}';
+    document.getElementById('modalMotivo').value = '';
     new bootstrap.Modal(document.getElementById('modalCorreccion')).show();
 }
+
+function confirmarCorreccion() {
+    const quien = document.getElementById('modalQuien').value.trim();
+    const motivo = document.getElementById('modalMotivo').value.trim();
+    if (!quien) { alert('Debes indicar quién corrige'); return false; }
+    if (!motivo) { alert('Debes indicar el motivo'); return false; }
+    return confirm('🔧 ¿Confirmas la corrección de este pago?');
+}
+
 function abrirEliminar(id) {
     document.getElementById('modalEliminarPagoId').value = id;
+    document.getElementById('modalMotivoEliminar').value = '';
+    document.getElementById('modalEliminadoPor').value = '{{ current_user.nombre }}';
     new bootstrap.Modal(document.getElementById('modalEliminar')).show();
+}
+
+function confirmarEliminacion() {
+    const motivo = document.getElementById('modalMotivoEliminar').value.trim();
+    const quien = document.getElementById('modalEliminadoPor').value.trim();
+    if (!motivo) { alert('Debes indicar el motivo de eliminación'); return false; }
+    if (!quien) { alert('Debes indicar quién elimina'); return false; }
+    return confirm('🗑️ ¿Confirmas la eliminación definitiva de este pago?');
 }
 </script>
 {% endblock %}

@@ -89,6 +89,34 @@
 </div>
 
 <script>
+// CONFIRMACIÓN AL PLANIFICAR
+document.getElementById('formPlanificar').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const numSesiones = document.getElementById('numSesiones').value;
+    const numEstudiantes = document.getElementById('numEstudiantes').value;
+    const tipo = document.getElementById('tipoSesion').value;
+    
+    let fechas = [];
+    for (let i = 1; i <= numSesiones; i++) {
+        const fecha = document.querySelector(`[name="fecha_${i}"]`)?.value;
+        const hIni = document.querySelector(`[name="hora_inicio_${i}"]`)?.value;
+        const hFin = document.querySelector(`[name="hora_fin_${i}"]`)?.value;
+        if (fecha && hIni && hFin) {
+            fechas.push(`📅 Sesión ${i}: ${fecha} de ${hIni} a ${hFin}`);
+        }
+    }
+    
+    let mensaje = `✅ ¿Confirmas la planificación?\n\n`;
+    mensaje += `📋 Tipo: ${tipo}\n`;
+    mensaje += `👨‍🎓 Estudiantes: ${numEstudiantes}\n`;
+    mensaje += `📅 Sesiones: ${numSesiones}\n\n`;
+    mensaje += `Detalle:\n${fechas.join('\n')}`;
+    
+    if (confirm(mensaje)) {
+        this.submit();
+    }
+});
+
 const ESTUDIANTES = [{% for e in estudiantes %}{id:{{ e['id'] }}, nombre:"{{ e['apellidos'] }} {{ e['nombres'] }}"},{% endfor %}];
 const PROFESORES = [{% for p in profesores %}"{{ p }}",{% endfor %}];
 const ENCARGADOS = [{% for e in encargados %}"{{ e }}",{% endfor %}];
