@@ -833,6 +833,29 @@ def api_sesiones_pendientes():
         })
     return jsonify(resultado)
 
+@app.route('/api/crear_estudiante_form', methods=['POST'])
+@login_required
+def crear_estudiante_form():
+    if current_user.rol not in ['admin', 'socio']:
+        flash('❌ Sin permiso', 'error')
+        return redirect(url_for('dashboard'))
+    
+    try:
+        supabase.table('estudiantes').insert({
+            'nombres': request.form['nombres'],
+            'apellidos': request.form['apellidos'],
+            'nivel_curso': request.form.get('nivel_curso', ''),
+            'procedencia': request.form.get('procedencia', ''),
+            'padre_nombre': request.form.get('padre_nombre', ''),
+            'activo': True,
+            'usuario_id': int(current_user.id)
+        }).execute()
+        flash('✅ Estudiante creado exitosamente', 'success')
+    except Exception as e:
+        flash(f'❌ Error: {str(e)}', 'error')
+    
+    return redirect(url_for('gestion_estudiantes'))
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)

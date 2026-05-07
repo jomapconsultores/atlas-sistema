@@ -6,26 +6,69 @@
 
 {% if rol in ['admin', 'socio'] %}
 <div class="row">
-    <div class="col-md-4 mb-4">
+    <!-- CREAR NUEVO ESTUDIANTE -->
+    <div class="col-md-5 mb-4">
         <div class="card shadow">
-            <div class="card-header bg-primary text-white"><strong>Editar Estudiante</strong></div>
+            <div class="card-header bg-success text-white"><strong>➕ Nuevo Estudiante</strong></div>
+            <div class="card-body">
+                <form method="POST" action="/api/crear_estudiante_form">
+                    <div class="mb-2">
+                        <label class="form-label">Nombres *</label>
+                        <input type="text" name="nombres" class="form-control" required>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Apellidos *</label>
+                        <input type="text" name="apellidos" class="form-control" required>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Nivel/Curso</label>
+                        <input type="text" name="nivel_curso" class="form-control" placeholder="Ej: 3ro Bachillerato">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Institución/Procedencia</label>
+                        <input type="text" name="procedencia" class="form-control" placeholder="Ej: Colegio Nacional" list="listaCentros" autocomplete="off">
+                        <datalist id="listaCentros">
+                            {% for e in estudiantes %}{% if e.get('procedencia') %}<option value="{{ e['procedencia'] }}">{% endif %}{% endfor %}
+                        </datalist>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Padre de Familia (opcional)</label>
+                        <input type="text" name="padre_nombre" class="form-control" placeholder="Nombre del padre">
+                    </div>
+                    <button type="submit" class="btn btn-success w-100">✅ Crear Estudiante</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- EDITAR ESTUDIANTE -->
+    <div class="col-md-7 mb-4">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white"><strong>✏️ Editar Estudiante</strong></div>
             <div class="card-body">
                 <form method="POST">
                     <div class="mb-2">
-                        <label class="form-label">Estudiante *</label>
-                        <select name="estudiante_id" class="form-select" required>
+                        <label class="form-label">Seleccionar estudiante *</label>
+                        <select name="estudiante_id" class="form-select" required onchange="cargarDatos(this)">
                             <option value="">Seleccionar...</option>
                             {% for e in estudiantes %}
-                            <option value="{{ e['id'] }}">{{ e['apellidos'] }} {{ e['nombres'] }}</option>
+                            <option value="{{ e['id'] }}" 
+                                    data-nombres="{{ e['nombres'] }}"
+                                    data-apellidos="{{ e['apellidos'] }}"
+                                    data-nivel="{{ e.get('nivel_curso', '') }}"
+                                    data-procedencia="{{ e.get('procedencia', '') }}"
+                                    data-padre="{{ e.get('padre_nombre', '') }}">
+                                {{ e['apellidos'] }} {{ e['nombres'] }}
+                            </option>
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="mb-2"><label class="form-label">Nombres *</label><input type="text" name="nombres" class="form-control" required></div>
-                    <div class="mb-2"><label class="form-label">Apellidos *</label><input type="text" name="apellidos" class="form-control" required></div>
-                    <div class="mb-2"><label class="form-label">Nivel/Curso</label><input type="text" name="nivel_curso" class="form-control"></div>
-                    <div class="mb-2"><label class="form-label">Institución/Procedencia</label><input type="text" name="procedencia" class="form-control"></div>
-                    <div class="mb-2"><label class="form-label">Padre de Familia (opcional)</label><input type="text" name="padre_nombre" class="form-control"></div>
-                    <button type="submit" class="btn btn-primary w-100">Actualizar</button>
+                    <div class="mb-2"><label class="form-label">Nombres *</label><input type="text" name="nombres" id="editNombres" class="form-control" required></div>
+                    <div class="mb-2"><label class="form-label">Apellidos *</label><input type="text" name="apellidos" id="editApellidos" class="form-control" required></div>
+                    <div class="mb-2"><label class="form-label">Nivel/Curso</label><input type="text" name="nivel_curso" id="editNivel" class="form-control"></div>
+                    <div class="mb-2"><label class="form-label">Institución/Procedencia</label><input type="text" name="procedencia" id="editProcedencia" class="form-control"></div>
+                    <div class="mb-2"><label class="form-label">Padre de Familia (opcional)</label><input type="text" name="padre_nombre" id="editPadre" class="form-control"></div>
+                    <button type="submit" class="btn btn-primary w-100">💾 Actualizar Estudiante</button>
                 </form>
             </div>
         </div>
@@ -33,25 +76,51 @@
 </div>
 {% endif %}
 
+<!-- LISTA DE ESTUDIANTES -->
 <div class="card shadow">
-    <div class="card-header bg-success text-white"><strong>Lista de Estudiantes</strong></div>
+    <div class="card-header bg-info text-white"><strong>📋 Lista de Estudiantes ({{ estudiantes|length }})</strong></div>
     <div class="card-body">
-        <table class="table table-striped table-sm">
-            <thead>
-                <tr><th>Apellidos</th><th>Nombres</th><th>Nivel/Curso</th><th>Institución</th><th>Padre</th></tr>
-            </thead>
-            <tbody>
-                {% for e in estudiantes %}
-                <tr>
-                    <td>{{ e['apellidos'] }}</td>
-                    <td>{{ e['nombres'] }}</td>
-                    <td>{{ e.get('nivel_curso', '') }}</td>
-                    <td>{{ e.get('procedencia', '') }}</td>
-                    <td>{{ e.get('padre_nombre', '') }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        {% if estudiantes %}
+        <div class="table-responsive">
+            <table class="table table-striped table-sm">
+                <thead>
+                    <tr>
+                        <th>Apellidos</th>
+                        <th>Nombres</th>
+                        <th>Nivel/Curso</th>
+                        <th>Institución</th>
+                        <th>Padre</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for e in estudiantes %}
+                    <tr>
+                        <td>{{ e['apellidos'] }}</td>
+                        <td>{{ e['nombres'] }}</td>
+                        <td>{{ e.get('nivel_curso', '') }}</td>
+                        <td>{{ e.get('procedencia', '') }}</td>
+                        <td>{{ e.get('padre_nombre', '') }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted">No hay estudiantes registrados. {% if rol in ['admin', 'socio'] %}Crea uno nuevo en el formulario de arriba.{% endif %}</p>
+        {% endif %}
     </div>
 </div>
+
+<script>
+function cargarDatos(select) {
+    const option = select.selectedOptions[0];
+    if (!option || !option.value) return;
+    
+    document.getElementById('editNombres').value = option.dataset.nombres || '';
+    document.getElementById('editApellidos').value = option.dataset.apellidos || '';
+    document.getElementById('editNivel').value = option.dataset.nivel || '';
+    document.getElementById('editProcedencia').value = option.dataset.procedencia || '';
+    document.getElementById('editPadre').value = option.dataset.padre || '';
+}
+</script>
 {% endblock %}
