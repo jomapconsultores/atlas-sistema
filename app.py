@@ -679,7 +679,16 @@ def crear_estudiante_form():
     except Exception as e:
         flash(f'❌ Error: {str(e)}', 'error')
     return redirect(url_for('gestion_estudiantes'))
-
+@app.route('/api/estudiante/<int:id>/eliminar', methods=['POST'])
+@login_required
+def eliminar_estudiante(id):
+    if current_user.rol not in ['admin', 'socio']:
+        return jsonify({'success': False, 'error': 'Sin permiso'})
+    try:
+        supabase.table('estudiantes').update({'activo': False}).eq('id', id).execute()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
