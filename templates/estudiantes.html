@@ -41,15 +41,15 @@
         </div>
     </div>
 
-    <!-- EDITAR ESTUDIANTE -->
+    <!-- EDITAR / ELIMINAR ESTUDIANTE -->
     <div class="col-md-6 mb-4">
         <div class="card shadow h-100">
-            <div class="card-header bg-primary text-white"><strong>✏️ Editar Estudiante</strong></div>
+            <div class="card-header bg-primary text-white"><strong>✏️ Editar / Eliminar Estudiante</strong></div>
             <div class="card-body">
                 <form method="POST">
                     <div class="mb-2">
                         <label class="form-label">Seleccionar estudiante *</label>
-                        <select name="estudiante_id" class="form-select" required onchange="cargarDatos(this)">
+                        <select name="estudiante_id" id="selectEstudiante" class="form-select" required onchange="cargarDatos(this)">
                             <option value="">Seleccionar...</option>
                             {% for e in estudiantes %}
                             <option value="{{ e['id'] }}" 
@@ -68,7 +68,10 @@
                     <div class="mb-2"><label class="form-label">Nivel/Curso</label><input type="text" name="nivel_curso" id="editNivel" class="form-control"></div>
                     <div class="mb-2"><label class="form-label">Institución/Procedencia</label><input type="text" name="procedencia" id="editProcedencia" class="form-control"></div>
                     <div class="mb-2"><label class="form-label">Padre de Familia (opcional)</label><input type="text" name="padre_nombre" id="editPadre" class="form-control"></div>
-                    <button type="submit" class="btn btn-primary w-100 mt-2">💾 Actualizar Estudiante</button>
+                    <div class="d-flex gap-2 mt-2">
+                        <button type="submit" class="btn btn-primary flex-fill">💾 Actualizar</button>
+                        <button type="button" class="btn btn-danger flex-fill" onclick="eliminarEstudiante()">🗑️ Eliminar</button>
+                    </div>
                 </form>
             </div>
         </div>
@@ -100,7 +103,7 @@
             </table>
         </div>
         {% else %}
-        <p class="text-muted">No hay estudiantes registrados. {% if rol in ['admin', 'socio'] %}Crea uno nuevo en el formulario de arriba.{% endif %}</p>
+        <p class="text-muted">No hay estudiantes registrados.</p>
         {% endif %}
     </div>
 </div>
@@ -114,6 +117,29 @@ function cargarDatos(select) {
     document.getElementById('editNivel').value = option.dataset.nivel || '';
     document.getElementById('editProcedencia').value = option.dataset.procedencia || '';
     document.getElementById('editPadre').value = option.dataset.padre || '';
+}
+
+function eliminarEstudiante() {
+    const select = document.getElementById('selectEstudiante');
+    const id = select.value;
+    const nombre = select.selectedOptions[0]?.text || '';
+    
+    if (!id) { alert('Selecciona un estudiante primero'); return; }
+    if (!confirm('🗑️ ¿Eliminar a ' + nombre + ' definitivamente?\n\n⚠️ Esta acción no se puede deshacer.')) return;
+    
+    fetch('/api/estudiante/' + id + '/eliminar', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert('✅ Estudiante eliminado');
+            location.reload();
+        } else {
+            alert('❌ Error al eliminar');
+        }
+    });
 }
 </script>
 {% endblock %}
