@@ -460,7 +460,7 @@ def modulo6():
                 'asistentes': request.form.get('asistentes', ''), 'tema': request.form.get('tema', ''),
                 'encargado': request.form.get('encargado', current_user.nombre), 'usuario_id': int(current_user.id)
             }
-                        if edit_id:
+            if edit_id:
                 supabase.table('reuniones').update(datos).eq('id', int(edit_id)).execute()
                 flash('✅ Reunión actualizada', 'success')
             else:
