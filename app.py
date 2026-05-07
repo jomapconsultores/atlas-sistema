@@ -163,6 +163,9 @@ def modulo1():
                     tema = ''
                     precio = float(request.form.get('precio_hora', 10))
                     valor_inicial = 0
+                
+                estudiantes_nombres = []
+                
                 for est_num in range(1, num_estudiantes + 1):
                     eid = request.form.get(f'estudiante_id_{est_num}', '')
                     if eid and eid != 'nuevo':
@@ -175,17 +178,24 @@ def modulo1():
                             'valor_total': valor_inicial, 'cobro_por_sesion': es_terapia,
                             'estudiante_id': int(eid), 'usuario_id': int(current_user.id)
                         }).execute()
-                        if crear_evento_calendar and result.data and est_num == 1:
-                            try:
-                                evento_id = crear_evento_calendar({
-                                    'asignatura': asignatura or 'Sesión', 'profesor': profesor,
-                                    'estudiantes': 'Varios' if num_estudiantes > 1 else f"Estudiante {eid}",
-                                    'fecha': fecha, 'hora_inicio': h_ini, 'hora_fin': h_fin,
-                                    'encargado_apertura': encargado
-                                })
-                                if evento_id and result.data:
-                                    supabase.table('sesiones').update({'evento_calendar_id': evento_id}).eq('id', result.data[0]['id']).execute()
-                            except: pass
+                        est_info = supabase.table('estudiantes').select('apellidos, nombres').eq('id', int(eid)).execute()
+                        if est_info.data:
+                            estudiantes_nombres.append(f"{est_info.data[0]['apellidos']} {est_info.data[0]['nombres']}")
+                
+                if crear_evento_calendar and primera_fecha and estudiantes_nombres:
+                    try:
+                        evento_id = crear_evento_calendar({
+                            'asignatura': asignatura or 'Sesión', 'profesor': profesor,
+                            'estudiantes': ', '.join(estudiantes_nombres),
+                            'fecha': fecha, 'hora_inicio': h_ini, 'hora_fin': h_fin,
+                            'encargado_apertura': encargado
+                        })
+                        if evento_id:
+                            for est_num in range(1, num_estudiantes + 1):
+                                eid = request.form.get(f'estudiante_id_{est_num}', '')
+                                if eid and eid != 'nuevo':
+                                    supabase.table('sesiones').update({'evento_calendar_id': evento_id}).eq('estudiante_id', int(eid)).eq('fecha', fecha).execute()
+                    except: pass
             flash(f'✅ {num_sesiones} sesión(es) para {num_estudiantes} estudiante(s)', 'success')
             return redirect(url_for('modulo2', fecha=primera_fecha or str(date.today())))
         except Exception as e:
