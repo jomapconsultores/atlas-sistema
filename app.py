@@ -282,19 +282,6 @@ def toggle_sesion(id):
     supabase.table('sesiones').update(updates).eq('id', id).execute()
     return jsonify({'success': True})
 
-@app.route('/api/sesion/<int:id>/eliminar', methods=['GET', 'POST', 'DELETE'])
-@login_required
-@socio_admin_required
-def eliminar_sesion(id):
-    try:
-        sesion = supabase.table('sesiones').select('evento_calendar_id').eq('id', id).execute()
-        evento_id = sesion.data[0].get('evento_calendar_id') if sesion.data else None
-        if evento_id and eliminar_evento_calendar: eliminar_evento_calendar(evento_id)
-        supabase.table('sesiones').delete().eq('id', id).execute()
-        return jsonify({'success': True})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
-
 @app.route('/api/sesion/<int:id>/modificar', methods=['POST'])
 @login_required
 @socio_admin_required
@@ -304,10 +291,44 @@ def modificar_sesion(id):
         fecha, h_ini, h_fin = data['fecha'], data['hora_inicio'][:5], data['hora_fin'][:5]
         inicio = datetime.strptime(f"{fecha} {h_ini}", '%Y-%m-%d %H:%M')
         fin = datetime.strptime(f"{fecha} {h_fin}", '%Y-%m-%d %H:%M')
-        supabase.table('sesiones').update({
-            'fecha': fecha, 'hora_inicio': h_ini, 'hora_fin': h_fin,
+        
+        updates = {
+            'fecha': fecha,
+            'hora_inicio': h_ini,
+            'hora_fin': h_fin,
             'horas': round((fin - inicio).total_seconds() / 3600, 2)
-        }).eq('id', id).execute()
+        }
+        supabase.table('sesiones').update(updates).eq('id', id).execute()
+        
+        # Actualizar en Google Calendar
+        sesion = supabase.table('sesiones').select('evento_calendar_id, asignatura, tema_terapia, profesor_terapeuta, encargado_apertura, estudiantes(apellidos, nombres)').eq('id', id).execute()
+        if sesion.data:
+            s = sesion.data[0]
+            # Eliminar evento viejo
+            if s.get('evento_calendar_id') and eliminar_evento_calendar:
+                try:
+                    eliminar_evento_calendar(s['evento_calendar_id'])
+                except:
+                    pass
+            
+            # Crear nuevo evento
+            if crear_evento_calendar:
+                try:
+                    est = s.get('estudiantes', {})
+                    nuevo_id = crear_evento_calendar({
+                        'asignatura': s.get('asignatura') or s.get('tema_terapia') or 'Sesión',
+                        'profesor': s.get('profesor_terapeuta', ''),
+                        'estudiantes': f"{est.get('apellidos', '')} {est.get('nombres', '')}" if est else '',
+                        'fecha': fecha,
+                        'hora_inicio': h_ini,
+                        'hora_fin': h_fin,
+                        'encargado_apertura': s.get('encargado_apertura', '')
+                    })
+                    if nuevo_id:
+                        supabase.table('sesiones').update({'evento_calendar_id': nuevo_id}).eq('id', id).execute()
+                except:
+                    pass
+        
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
