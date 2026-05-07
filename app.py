@@ -269,6 +269,7 @@ def toggle_sesion(id):
     data = request.get_json()
     estado = data.get('estado', 'Realizado')
     updates = {'estado': estado}
+    
     if estado == 'Realizado':
         s = supabase.table('sesiones').select('*').eq('id', id).execute()
         if s.data:
@@ -277,8 +278,19 @@ def toggle_sesion(id):
                 updates['valor_total'] = sd.get('precio_hora', 40) or 40
             else:
                 updates['valor_total'] = round((sd.get('horas', 1) or 1) * (sd.get('precio_hora', 10) or 10), 2)
+    
     elif estado == 'Cancelado':
         updates['valor_total'] = 0
+        # Eliminar de Google Calendar
+        s = supabase.table('sesiones').select('evento_calendar_id').eq('id', id).execute()
+        if s.data and s.data[0].get('evento_calendar_id'):
+            if eliminar_evento_calendar:
+                try:
+                    eliminar_evento_calendar(s.data[0]['evento_calendar_id'])
+                    updates['evento_calendar_id'] = None
+                except:
+                    pass
+    
     supabase.table('sesiones').update(updates).eq('id', id).execute()
     return jsonify({'success': True})
 
