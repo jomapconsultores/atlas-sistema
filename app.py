@@ -685,10 +685,18 @@ def eliminar_estudiante(id):
     if current_user.rol not in ['admin', 'socio']:
         return jsonify({'success': False, 'error': 'Sin permiso'})
     try:
+        # Verificar si tiene sesiones asociadas
+        sesiones = supabase.table('sesiones').select('id').eq('estudiante_id', id).execute()
+        if sesiones.data and len(sesiones.data) > 0:
+            return jsonify({'success': False, 'error': 'No se puede eliminar: tiene sesiones planificadas o realizadas. Elimina primero las sesiones.'})
+        
+        # Verificar si tiene pagos asociados
+        pagos = supabase.table('pagos').select('id').eq('estudiante_id', id).execute()
+        if pagos.data and len(pagos.data) > 0:
+            return jsonify({'success': False, 'error': 'No se puede eliminar: tiene pagos registrados. Elimina primero los pagos.'})
+        
+        # Si no tiene sesiones ni pagos, se puede eliminar
         supabase.table('estudiantes').update({'activo': False}).eq('id', id).execute()
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=True)

@@ -125,7 +125,7 @@ function eliminarEstudiante() {
     const nombre = select.selectedOptions[0]?.text || '';
     
     if (!id) { alert('Selecciona un estudiante primero'); return; }
-    if (!confirm('🗑️ ¿Eliminar a ' + nombre + ' definitivamente?\n\n⚠️ Esta acción no se puede deshacer.')) return;
+    if (!confirm('🗑️ ¿Eliminar a ' + nombre + ' definitivamente?\n\n⚠️ Si tiene sesiones o pagos, no se podrá eliminar.')) return;
     
     fetch('/api/estudiante/' + id + '/eliminar', {
         method: 'POST',
@@ -137,7 +137,7 @@ function eliminarEstudiante() {
             alert('✅ Estudiante eliminado');
             location.reload();
         } else {
-            alert('❌ Error al eliminar');
+            alert('❌ ' + (data.error || 'Error al eliminar'));
         }
     });
 }
