@@ -398,10 +398,10 @@ def modulo6():
         try:
             edit_id = request.form.get('edit_id', '')
             datos = {
-                'titulo': request.form['titulo'], 'fecha': request.form['fecha'],
+                'titulo': request.form.get('titulo_otro') or request.form['titulo'], 'fecha': request.form['fecha'],
                 'hora_inicio': request.form['hora_inicio'], 'hora_fin': request.form['hora_fin'],
                 'asistentes': request.form.get('asistentes', ''), 'tema': request.form.get('tema', ''),
-                'encargado': request.form.get('encargado', current_user.nombre), 'usuario_id': int(current_user.id)
+                'encargado': request.form.get('encargado_otro') or request.form.get('encargado', current_user.nombre), 'usuario_id': int(current_user.id)
             }
             if edit_id:
                 supabase.table('reuniones').update(datos).eq('id', int(edit_id)).execute()

@@ -15,19 +15,21 @@
                 <form method="POST" id="formReunion">
                     <input type="hidden" name="edit_id" id="edit_id" value="">
                     
+                    <!-- TÍTULO DESPLEGABLE -->
                     <div class="mb-2">
                         <label class="form-label">Título *</label>
-                        <input type="text" name="titulo" id="titulo" class="form-control text-uppercase" required 
-                               list="listaTitulos" autocomplete="off"
-                               oninput="aprender('titulos', this.value)">
-                        <datalist id="listaTitulos">
-                            <option value="REUNIÓN">
-                            <option value="WEBINAR">
-                            <option value="ASISTENCIA">
-                        </datalist>
-                        <small class="text-muted">Escribe o selecciona. Se guardará para futuras reuniones.</small>
+                        <select name="titulo" id="titulo" class="form-select text-uppercase" required onchange="tituloOtro(this)">
+                            <option value="">Seleccionar...</option>
+                            <option value="REUNIÓN">REUNIÓN</option>
+                            <option value="WEBINAR">WEBINAR</option>
+                            <option value="ASISTENCIA">ASISTENCIA</option>
+                            <option value="otro">➕ OTRO (escribir)</option>
+                        </select>
+                        <input type="text" id="tituloOtro" name="titulo_otro" class="form-control text-uppercase mt-1" style="display:none;" placeholder="Escribe el nuevo título">
+                        <small class="text-muted">Selecciona o agrega un nuevo título. Se guardará para futuras reuniones.</small>
                     </div>
                     
+                    <!-- TEMA -->
                     <div class="mb-2">
                         <label class="form-label">Tema *</label>
                         <input type="text" name="tema" id="tema" class="form-control"
@@ -38,6 +40,7 @@
                         <small class="text-muted">Este tema aparecerá en el calendario después del título.</small>
                     </div>
                     
+                    <!-- FECHA Y HORAS -->
                     <div class="mb-2">
                         <label class="form-label">Fecha *</label>
                         <input type="date" name="fecha" id="fecha" class="form-control" value="{{ today }}" required>
@@ -53,6 +56,7 @@
                         </div>
                     </div>
                     
+                    <!-- ASISTENTES -->
                     <div class="mb-2">
                         <label class="form-label">Asistentes *</label>
                         <input type="text" name="asistentes" id="asistentes" class="form-control" required
@@ -63,19 +67,19 @@
                         <small class="text-muted">Escribe nombres completos. Se guardarán para sugerencias futuras.</small>
                     </div>
                     
+                    <!-- ENCARGADO DESPLEGABLE -->
                     <div class="mb-2">
                         <label class="form-label">Encargado *</label>
-                        <input type="text" name="encargado" id="encargado" class="form-control text-uppercase"
-                               value="{{ current_user.nombre }}" required
-                               list="listaEncargados" autocomplete="off"
-                               oninput="aprender('encargados', this.value)">
-                        <datalist id="listaEncargados">
-                            <option value="CARMEN">
-                            <option value="ROSALÍA">
-                            <option value="JOHANNA">
-                            <option value="MAP">
-                        </datalist>
-                        <small class="text-muted">Escribe o selecciona. Se guardará para futuras reuniones.</small>
+                        <select name="encargado" id="encargado" class="form-select text-uppercase" required onchange="encargadoOtro(this)">
+                            <option value="">Seleccionar...</option>
+                            <option value="CARMEN">CARMEN</option>
+                            <option value="ROSALÍA">ROSALÍA</option>
+                            <option value="JOHANNA">JOHANNA</option>
+                            <option value="MAP">MAP</option>
+                            <option value="otro">➕ OTRO (escribir)</option>
+                        </select>
+                        <input type="text" id="encargadoOtro" name="encargado_otro" class="form-control text-uppercase mt-1" style="display:none;" placeholder="Escribe el nuevo encargado">
+                        <small class="text-muted">Selecciona o agrega un nuevo encargado. Se guardará para futuras reuniones.</small>
                     </div>
                     
                     <button type="submit" class="btn btn-dark w-100" id="btnSubmit">✅ Programar Reunión</button>
@@ -149,7 +153,7 @@ const DB_KEY = 'atlas_reuniones_db';
 let db = JSON.parse(localStorage.getItem(DB_KEY) || '{"titulos":["REUNIÓN","WEBINAR","ASISTENCIA"],"asistentes":[],"temas":[],"encargados":["CARMEN","ROSALÍA","JOHANNA","MAP"]}');
 
 function cargarSugerencias() {
-    ['titulos', 'asistentes', 'temas', 'encargados'].forEach(tipo => {
+    ['temas', 'asistentes'].forEach(tipo => {
         const cap = tipo.charAt(0).toUpperCase() + tipo.slice(1);
         const dl = document.getElementById('lista' + cap);
         if (dl) dl.innerHTML = [...new Set(db[tipo])].map(v => `<option value="${v}">`).join('');
@@ -165,6 +169,31 @@ function aprender(tipo, valor) {
     }
 }
 
+// TÍTULO: mostrar campo para escribir si elige "otro"
+function tituloOtro(select) {
+    const input = document.getElementById('tituloOtro');
+    if (select.value === 'otro') {
+        input.style.display = 'block';
+        input.required = true;
+    } else {
+        input.style.display = 'none';
+        input.required = false;
+    }
+}
+
+// ENCARGADO: mostrar campo para escribir si elige "otro"
+function encargadoOtro(select) {
+    const input = document.getElementById('encargadoOtro');
+    if (select.value === 'otro') {
+        input.style.display = 'block';
+        input.required = true;
+    } else {
+        input.style.display = 'none';
+        input.required = false;
+    }
+}
+
+// EDITAR REUNIÓN
 function editarReunion(id, titulo, tema, fecha, hIni, hFin, asistentes, encargado) {
     document.getElementById('edit_id').value = id;
     document.getElementById('titulo').value = titulo;
@@ -178,7 +207,6 @@ function editarReunion(id, titulo, tema, fecha, hIni, hFin, asistentes, encargad
     document.getElementById('formTitulo').textContent = '✏️ Editar Reunión';
     document.getElementById('btnSubmit').textContent = '💾 Guardar Cambios';
     document.getElementById('btnCancelar').classList.remove('d-none');
-    
     document.querySelector('.card-header').scrollIntoView({behavior: 'smooth'});
 }
 
@@ -195,9 +223,7 @@ async function eliminarReunion(id) {
     if (!confirm('¿Eliminar esta reunión?')) return;
     const resp = await fetch('/api/reunion/' + id + '/eliminar', {method: 'POST', headers: {'Content-Type': 'application/json'}});
     const data = await resp.json();
-    if (data.success) {
-        document.getElementById('fila-' + id)?.remove();
-    }
+    if (data.success) { document.getElementById('fila-' + id)?.remove(); }
 }
 
 cargarSugerencias();
