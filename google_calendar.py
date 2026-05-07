@@ -50,8 +50,9 @@ def crear_evento_calendar(datos):
         return event['id']
     except Exception as e:
         print(f'⚠️ Google Calendar: {e}')
+        return None
+
 def eliminar_evento_calendar(evento_id):
-    """Elimina un evento de Google Calendar"""
     if not evento_id:
         return False
     try:
@@ -67,4 +68,3 @@ def eliminar_evento_calendar(evento_id):
     except Exception as e:
         print(f'⚠️ Error al eliminar de Google Calendar: {e}')
         return False
-        return None
