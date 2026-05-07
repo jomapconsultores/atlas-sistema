@@ -25,6 +25,7 @@
                         <th>Profesor</th>
                         <th>Estado</th>
                         <th>Valor</th>
+                        {% if current_user.rol in ['admin', 'socio'] %}<th>📝 Obs.</th>{% endif %}
                         <th>✅</th>
                         <th>❌</th>
                         {% if current_user.rol in ['admin', 'socio'] %}<th>🗑️</th>{% endif %}
@@ -53,6 +54,16 @@
                             ${{ "%.2f"|format(s.get('valor_total', 0) or 0) }}
                             {% else %}-{% endif %}
                         </td>
+                        {% if current_user.rol in ['admin', 'socio'] %}
+                        <td>
+                            {% if s.get('observaciones') %}
+                            <small title="{{ s['observaciones'] }}">{{ s['observaciones'][:30] }}{% if s['observaciones']|length > 30 %}...{% endif %}</small>
+                            <button class="btn btn-outline-secondary btn-sm" onclick="agregarObservacion({{ s['id'] }}, '{{ s['observaciones']|escape }}')">✏️</button>
+                            {% else %}
+                            <button class="btn btn-outline-secondary btn-sm" onclick="agregarObservacion({{ s['id'] }}, '')">➕ Obs.</button>
+                            {% endif %}
+                        </td>
+                        {% endif %}
                         <td class="text-center">
                             <input type="radio" name="estado_{{ s['id'] }}" class="radio-sesion" 
                                    data-id="{{ s['id'] }}" data-estado="Realizado"
@@ -93,6 +104,29 @@
     <a href="/modulo3" class="btn btn-outline-success mb-1">M3: Pagos →</a>
     <a href="/modulo4" class="btn btn-outline-info mb-1">M4: Calendario Público</a>
     <a href="/modulo5" class="btn btn-outline-warning mb-1">M5: Docentes</a>
+</div>
+{% endif %}
+
+<!-- MODAL OBSERVACIONES (solo admin/socio) -->
+{% if current_user.rol in ['admin', 'socio'] %}
+<div class="modal fade" id="modalObservacion" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title">📝 Observaciones</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="obsSesionId">
+                <textarea id="obsTexto" class="form-control" rows="3" placeholder="Observaciones para esta sesión..."></textarea>
+                <small class="text-muted">Solo visible para administradores y socios. Útil para pagos a docentes.</small>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="guardarObservacion()">💾 Guardar</button>
+            </div>
+        </div>
+    </div>
 </div>
 {% endif %}
 
@@ -146,6 +180,29 @@ function eliminarSesion(id) {
     }).then(r => r.json()).then(data => {
         if (data.success) location.reload();
         else alert('Error al eliminar');
+    });
+}
+
+// OBSERVACIONES
+function agregarObservacion(id, texto) {
+    document.getElementById('obsSesionId').value = id;
+    document.getElementById('obsTexto').value = texto;
+    new bootstrap.Modal(document.getElementById('modalObservacion')).show();
+}
+
+function guardarObservacion() {
+    const id = document.getElementById('obsSesionId').value;
+    const texto = document.getElementById('obsTexto').value;
+    
+    fetch('/api/sesion/' + id + '/observacion', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({observaciones: texto})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) location.reload();
+        else alert('Error al guardar');
     });
 }
 {% endif %}

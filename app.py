@@ -700,3 +700,14 @@ def eliminar_estudiante(id):
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+@app.route('/api/sesion/<int:id>/observacion', methods=['POST'])
+@login_required
+def agregar_observacion(id):
+    if current_user.rol not in ['admin', 'socio']:
+        return jsonify({'success': False, 'error': 'Sin permiso'})
+    try:
+        data = request.get_json()
+        supabase.table('sesiones').update({'observaciones': data.get('observaciones', '')}).eq('id', id).execute()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
