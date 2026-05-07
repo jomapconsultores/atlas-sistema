@@ -461,8 +461,26 @@ def modulo6():
                 'encargado': request.form.get('encargado', current_user.nombre), 'usuario_id': int(current_user.id)
             }
             if edit_id:
-                supabase.table('reuniones').update(datos).eq('id', int(edit_id)).execute()
-                flash('✅ Reunión actualizada', 'success')
+                            else:
+                result = supabase.table('reuniones').insert(datos).execute()
+                flash('✅ Reunión programada', 'success')
+                
+                # Sincronizar con Google Calendar
+                if crear_evento_calendar and result.data:
+                    try:
+                        evento_id = crear_evento_calendar({
+                            'asignatura': f"{request.form['titulo']} - {request.form.get('tema', '')}",
+                            'profesor': request.form.get('encargado', current_user.nombre),
+                            'estudiantes': request.form.get('asistentes', ''),
+                            'fecha': request.form['fecha'],
+                            'hora_inicio': request.form['hora_inicio'],
+                            'hora_fin': request.form['hora_fin'],
+                            'encargado_apertura': request.form.get('encargado', '')
+                        })
+                        if evento_id and result.data:
+                            supabase.table('reuniones').update({'evento_calendar_id': evento_id}).eq('id', result.data[0]['id']).execute()
+                    except Exception as e:
+                        print(f'⚠️ Google Calendar (reunión): {e}')
             else:
                 supabase.table('reuniones').insert(datos).execute()
                 flash('✅ Reunión programada', 'success')

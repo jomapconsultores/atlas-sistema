@@ -17,11 +17,27 @@
                     
                     <div class="mb-2">
                         <label class="form-label">Título *</label>
-                        <input type="text" name="titulo" id="titulo" class="form-control" required 
+                        <input type="text" name="titulo" id="titulo" class="form-control text-uppercase" required 
                                list="listaTitulos" autocomplete="off"
                                oninput="aprender('titulos', this.value)">
-                        <datalist id="listaTitulos"></datalist>
+                        <datalist id="listaTitulos">
+                            <option value="REUNIÓN">
+                            <option value="WEBINAR">
+                            <option value="ASISTENCIA">
+                        </datalist>
+                        <small class="text-muted">Escribe o selecciona. Se guardará para futuras reuniones.</small>
                     </div>
+                    
+                    <div class="mb-2">
+                        <label class="form-label">Tema *</label>
+                        <input type="text" name="tema" id="tema" class="form-control"
+                               list="listaTemas" autocomplete="off"
+                               oninput="aprender('temas', this.value)"
+                               placeholder="¿De qué trata la reunión?">
+                        <datalist id="listaTemas"></datalist>
+                        <small class="text-muted">Este tema aparecerá en el calendario después del título.</small>
+                    </div>
+                    
                     <div class="mb-2">
                         <label class="form-label">Fecha *</label>
                         <input type="date" name="fecha" id="fecha" class="form-control" value="{{ today }}" required>
@@ -36,28 +52,32 @@
                             <input type="time" name="hora_fin" id="hora_fin" class="form-control" required>
                         </div>
                     </div>
+                    
                     <div class="mb-2">
                         <label class="form-label">Asistentes *</label>
                         <input type="text" name="asistentes" id="asistentes" class="form-control" required
-                               list="listaAsistentes" autocomplete="off" placeholder="Nombres y apellidos"
+                               list="listaAsistentes" autocomplete="off" 
+                               placeholder="Nombres y apellidos (separados por coma)"
                                oninput="aprender('asistentes', this.value)">
                         <datalist id="listaAsistentes"></datalist>
+                        <small class="text-muted">Escribe nombres completos. Se guardarán para sugerencias futuras.</small>
                     </div>
+                    
                     <div class="mb-2">
-                        <label class="form-label">Tema</label>
-                        <input type="text" name="tema" id="tema" class="form-control"
-                               list="listaTemas" autocomplete="off"
-                               oninput="aprender('temas', this.value)">
-                        <datalist id="listaTemas"></datalist>
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label">Encargado</label>
-                        <input type="text" name="encargado" id="encargado" class="form-control"
-                               value="{{ current_user.nombre }}"
+                        <label class="form-label">Encargado *</label>
+                        <input type="text" name="encargado" id="encargado" class="form-control text-uppercase"
+                               value="{{ current_user.nombre }}" required
                                list="listaEncargados" autocomplete="off"
                                oninput="aprender('encargados', this.value)">
-                        <datalist id="listaEncargados"></datalist>
+                        <datalist id="listaEncargados">
+                            <option value="CARMEN">
+                            <option value="ROSALÍA">
+                            <option value="JOHANNA">
+                            <option value="MAP">
+                        </datalist>
+                        <small class="text-muted">Escribe o selecciona. Se guardará para futuras reuniones.</small>
                     </div>
+                    
                     <button type="submit" class="btn btn-dark w-100" id="btnSubmit">✅ Programar Reunión</button>
                     <button type="button" class="btn btn-secondary w-100 mt-1 d-none" id="btnCancelar" onclick="cancelarEdicion()">❌ Cancelar Edición</button>
                 </form>
@@ -78,6 +98,7 @@
                                 <th>Fecha</th>
                                 <th>Hora</th>
                                 <th>Título</th>
+                                <th>Tema</th>
                                 <th>Asistentes</th>
                                 <th>Encargado</th>
                                 <th>✏️</th>
@@ -90,11 +111,12 @@
                                 <td>{{ r['fecha'] }}</td>
                                 <td>{{ r['hora_inicio'] }} - {{ r['hora_fin'] }}</td>
                                 <td>{{ r['titulo'] }}</td>
+                                <td>{{ r.get('tema', '')[:30] }}</td>
                                 <td>{{ r.get('asistentes', '')[:30] }}{% if r.get('asistentes', '')|length > 30 %}...{% endif %}</td>
                                 <td>{{ r['encargado'] }}</td>
                                 <td>
                                     <button class="btn btn-warning btn-sm" 
-                                            onclick="editarReunion({{ r['id'] }}, '{{ r['titulo']|escape }}', '{{ r['fecha'] }}', '{{ r['hora_inicio'] }}', '{{ r['hora_fin'] }}', '{{ r.get('asistentes', '')|escape }}', '{{ r.get('tema', '')|escape }}', '{{ r['encargado']|escape }}')">
+                                            onclick="editarReunion({{ r['id'] }}, '{{ r['titulo']|escape }}', '{{ r.get('tema', '')|escape }}', '{{ r['fecha'] }}', '{{ r['hora_inicio'] }}', '{{ r['hora_fin'] }}', '{{ r.get('asistentes', '')|escape }}', '{{ r['encargado']|escape }}')">
                                         ✏️
                                     </button>
                                 </td>
@@ -106,9 +128,7 @@
                         </tbody>
                     </table>
                 </div>
-                {% else %}
-                <p class="text-muted">No hay reuniones programadas.</p>
-                {% endif %}
+                {% else %}<p class="text-muted">No hay reuniones programadas.</p>{% endif %}
             </div>
         </div>
     </div>
@@ -124,34 +144,35 @@
 </div>
 
 <script>
+// Base de datos local de sugerencias
 const DB_KEY = 'atlas_reuniones_db';
-let db = JSON.parse(localStorage.getItem(DB_KEY) || '{"titulos":[],"asistentes":[],"temas":[],"encargados":[]}');
+let db = JSON.parse(localStorage.getItem(DB_KEY) || '{"titulos":["REUNIÓN","WEBINAR","ASISTENCIA"],"asistentes":[],"temas":[],"encargados":["CARMEN","ROSALÍA","JOHANNA","MAP"]}');
 
 function cargarSugerencias() {
     ['titulos', 'asistentes', 'temas', 'encargados'].forEach(tipo => {
         const cap = tipo.charAt(0).toUpperCase() + tipo.slice(1);
         const dl = document.getElementById('lista' + cap);
-        if (dl) dl.innerHTML = db[tipo].map(v => `<option value="${v}">`).join('');
+        if (dl) dl.innerHTML = [...new Set(db[tipo])].map(v => `<option value="${v}">`).join('');
     });
 }
 
 function aprender(tipo, valor) {
-    if (valor && valor.length >= 3 && !db[tipo].includes(valor)) {
-        db[tipo].push(valor);
-        if (db[tipo].length > 20) db[tipo].shift();
+    if (valor && valor.length >= 2 && !db[tipo].includes(valor.toUpperCase())) {
+        db[tipo].push(valor.toUpperCase());
+        if (db[tipo].length > 30) db[tipo].shift();
         localStorage.setItem(DB_KEY, JSON.stringify(db));
         cargarSugerencias();
     }
 }
 
-function editarReunion(id, titulo, fecha, hIni, hFin, asistentes, tema, encargado) {
+function editarReunion(id, titulo, tema, fecha, hIni, hFin, asistentes, encargado) {
     document.getElementById('edit_id').value = id;
     document.getElementById('titulo').value = titulo;
+    document.getElementById('tema').value = tema;
     document.getElementById('fecha').value = fecha;
     document.getElementById('hora_inicio').value = hIni;
     document.getElementById('hora_fin').value = hFin;
     document.getElementById('asistentes').value = asistentes;
-    document.getElementById('tema').value = tema;
     document.getElementById('encargado').value = encargado;
     
     document.getElementById('formTitulo').textContent = '✏️ Editar Reunión';
