@@ -4,10 +4,8 @@
 {% block content %}
 <h3>📊 Dashboard de Reportes</h3>
 
-<!-- Filtro de mes/año -->
 <form class="row g-2 mb-4">
     <div class="col-auto">
-        <label class="form-label">Mes</label>
         <select name="mes" class="form-select" onchange="this.form.submit()">
             {% for m in range(1, 13) %}
             <option value="{{ m }}" {{ 'selected' if m == mes }}>{{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][m-1] }}</option>
@@ -15,247 +13,133 @@
         </select>
     </div>
     <div class="col-auto">
-        <label class="form-label">Año</label>
         <select name="anio" class="form-select" onchange="this.form.submit()">
             {% for a in range(2025, 2031) %}
             <option value="{{ a }}" {{ 'selected' if a == anio }}>{{ a }}</option>
             {% endfor %}
         </select>
     </div>
-    <div class="col-auto align-self-end">
-        <a href="/reportes" class="btn btn-outline-secondary">Mes actual</a>
-    </div>
 </form>
 
-<!-- TARJETAS RESUMEN -->
+<!-- TARJETAS -->
 <div class="row mb-4">
-    <div class="col-md-3 mb-2">
-        <div class="card bg-primary text-white text-center p-3">
-            <h4>{{ total_estudiantes }}</h4>
-            <small>Estudiantes atendidos</small>
-        </div>
-    </div>
-    <div class="col-md-3 mb-2">
-        <div class="card bg-success text-white text-center p-3">
-            <h4>{{ total_horas }}</h4>
-            <small>Horas impartidas</small>
-        </div>
-    </div>
-    <div class="col-md-3 mb-2">
-        <div class="card bg-info text-white text-center p-3">
-            <h4>${{ "%.2f"|format(total_ingresos) }}</h4>
-            <small>Ingresos del mes</small>
-        </div>
-    </div>
-    <div class="col-md-3 mb-2">
-        <div class="card bg-danger text-white text-center p-3">
-            <h4>${{ "%.2f"|format(total_gastos) }}</h4>
-            <small>Gastos del mes</small>
-        </div>
-    </div>
-</div>
-
-<!-- BALANCE -->
-<div class="alert alert-{{ 'success' if balance >= 0 else 'danger' }} mb-4">
-    <h5>💰 Balance del mes: <strong>${{ "%.2f"|format(balance) }}</strong> ({{ 'Ganancia' if balance >= 0 else 'Pérdida' }})</h5>
+    <div class="col-md-2"><div class="card bg-primary text-white text-center p-2"><h5>{{ total_estudiantes }}</h5><small>Estudiantes</small></div></div>
+    <div class="col-md-2"><div class="card bg-success text-white text-center p-2"><h5>{{ total_horas }}</h5><small>Horas</small></div></div>
+    <div class="col-md-2"><div class="card bg-info text-white text-center p-2"><h5>${{ "%.0f"|format(total_ingresos) }}</h5><small>Ingresos</small></div></div>
+    <div class="col-md-2"><div class="card bg-danger text-white text-center p-2"><h5>${{ "%.0f"|format(total_gastos) }}</h5><small>Gastos</small></div></div>
+    <div class="col-md-2"><div class="card bg-warning text-dark text-center p-2"><h5>${{ "%.0f"|format(total_pago_docentes) }}</h5><small>Pago Docentes</small></div></div>
+    <div class="col-md-2"><div class="card bg-{{ 'success' if balance >= 0 else 'danger' }} text-white text-center p-2"><h5>${{ "%.0f"|format(balance) }}</h5><small>Balance</small></div></div>
 </div>
 
 <div class="row">
-    <!-- SECCIÓN 1: ESTUDIANTES ATENDIDOS -->
+    <!-- GRÁFICO: INGRESOS POR TIPO -->
     <div class="col-md-6 mb-4">
-        <div class="card shadow">
-            <div class="card-header bg-primary text-white" data-bs-toggle="collapse" data-bs-target="#seccion1" style="cursor:pointer;">
-                <strong>🎓 Estudiantes Atendidos ({{ datos|length }})</strong>
-                <i class="bi bi-chevron-down float-end"></i>
-            </div>
-            <div class="collapse show" id="seccion1">
-                <div class="card-body p-2">
-                    <div class="table-responsive">
-                        <table class="table table-sm table-striped mb-0">
-                            <thead><tr><th>Estudiante</th><th>Nivel</th><th>Procedencia</th><th>Horas</th><th>Cobrar</th><th>Pagado</th><th>Saldo</th></tr></thead>
-                            <tbody>
-                                {% for d in datos %}
-                                <tr>
-                                    <td>{{ d['estudiante'] }}</td>
-                                    <td>{{ d.get('nivel', '') }}</td>
-                                    <td>{{ d.get('procedencia', '') }}</td>
-                                    <td>{{ d['total_horas'] }}</td>
-                                    <td>${{ "%.2f"|format(d['cobrar']) }}</td>
-                                    <td>${{ "%.2f"|format(d['pagado']) }}</td>
-                                    <td class="{{ 'text-danger' if d['saldo'] > 0 else 'text-success' }}">${{ "%.2f"|format(d['saldo']) }}</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <div class="card shadow"><div class="card-header"><strong>Ingresos por Tipo</strong></div><div class="card-body"><canvas id="chartIngresos"></canvas></div></div>
     </div>
-
-    <!-- SECCIÓN 2: PROCEDENCIA (FRECUENCIA) -->
+    <!-- GRÁFICO: HORAS POR MATERIA -->
     <div class="col-md-6 mb-4">
-        <div class="card shadow">
-            <div class="card-header bg-info text-white" data-bs-toggle="collapse" data-bs-target="#seccion2" style="cursor:pointer;">
-                <strong>📍 Procedencia / Frecuencia</strong>
-                <i class="bi bi-chevron-down float-end"></i>
-            </div>
-            <div class="collapse" id="seccion2">
-                <div class="card-body p-2">
-                    <table class="table table-sm table-striped mb-0">
-                        <thead><tr><th>Institución</th><th>Estudiantes</th></tr></thead>
-                        <tbody>
-                            {% for inst, count in procedencia_count.items() %}
-                            <tr><td>{{ inst or 'Sin registro' }}</td><td>{{ count }}</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
+        <div class="card shadow"><div class="card-header"><strong>Horas por Materia</strong></div><div class="card-body"><canvas id="chartMaterias"></canvas></div></div>
     </div>
-
-    <!-- SECCIÓN 3: HORAS POR DOCENTE Y ASIGNATURA -->
-    <div class="col-md-6 mb-4">
-        <div class="card shadow">
-            <div class="card-header bg-success text-white" data-bs-toggle="collapse" data-bs-target="#seccion3" style="cursor:pointer;">
-                <strong>👨‍🏫 Horas por Docente y Asignatura</strong>
-                <i class="bi bi-chevron-down float-end"></i>
-            </div>
-            <div class="collapse" id="seccion3">
-                <div class="card-body p-2">
-                    <div class="table-responsive">
-                        <table class="table table-sm table-striped mb-0">
-                            <thead><tr><th>Docente</th><th>Asignatura</th><th>Horas</th><th>Valor Generado</th><th>A Pagar</th></tr></thead>
-                            <tbody>
-                                {% for item in horas_docente %}
-                                <tr>
-                                    <td>{{ item['profesor'] }}</td>
-                                    <td>{{ item['asignatura'] }}</td>
-                                    <td>{{ item['horas'] }}</td>
-                                    <td>${{ "%.2f"|format(item['valor']) }}</td>
-                                    <td class="fw-bold">${{ "%.2f"|format(item['pago']) }}</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <!-- GRÁFICO: CUMPLIMIENTO -->
+    <div class="col-md-4 mb-4">
+        <div class="card shadow"><div class="card-header"><strong>Cumplimiento</strong></div><div class="card-body"><canvas id="chartCumplimiento"></canvas></div></div>
     </div>
-
-    <!-- SECCIÓN 4: INGRESOS POR SERVICIOS -->
-    <div class="col-md-6 mb-4">
-        <div class="card shadow">
-            <div class="card-header bg-warning text-dark" data-bs-toggle="collapse" data-bs-target="#seccion4" style="cursor:pointer;">
-                <strong>💵 Ingresos por Servicios</strong>
-                <i class="bi bi-chevron-down float-end"></i>
-            </div>
-            <div class="collapse" id="seccion4">
-                <div class="card-body p-2">
-                    <table class="table table-sm table-striped mb-0">
-                        <thead><tr><th>Tipo</th><th>Cantidad</th><th>Total</th></tr></thead>
-                        <tbody>
-                            {% for tipo, info in ingresos_por_tipo.items() %}
-                            <tr><td>{{ tipo }}</td><td>{{ info['cantidad'] }}</td><td>${{ "%.2f"|format(info['total']) }}</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
+    <!-- GRÁFICO: GASTOS POR CATEGORÍA -->
+    <div class="col-md-4 mb-4">
+        <div class="card shadow"><div class="card-header"><strong>Gastos por Categoría</strong></div><div class="card-body"><canvas id="chartGastos"></canvas></div></div>
     </div>
-
-    <!-- SECCIÓN 5: GASTOS CLASIFICADOS -->
-    <div class="col-md-6 mb-4">
-        <div class="card shadow">
-            <div class="card-header bg-danger text-white" data-bs-toggle="collapse" data-bs-target="#seccion5" style="cursor:pointer;">
-                <strong>📉 Gastos del Mes</strong>
-                <i class="bi bi-chevron-down float-end"></i>
-            </div>
-            <div class="collapse" id="seccion5">
-                <div class="card-body p-2">
-                    <div class="table-responsive">
-                        <table class="table table-sm table-striped mb-0">
-                            <thead><tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Persona</th><th>Monto</th><th>Reemb.</th></tr></thead>
-                            <tbody>
-                                {% for g in gastos %}
-                                <tr>
-                                    <td>{{ g['fecha'] }}</td>
-                                    <td>{{ g['concepto'] }}</td>
-                                    <td><span class="badge bg-secondary">{{ g.get('categoria', '') }}</span></td>
-                                    <td>{{ g.get('persona', '') }}</td>
-                                    <td>${{ "%.2f"|format(g['monto']) }}</td>
-                                    <td>
-                                        {% if g.get('reembolso') %}
-                                        <span class="badge bg-warning text-dark" title="Reembolsar a: {{ g.get('reembolsado_a', '') }}">🔄</span>
-                                        {% else %}-{% endif %}
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                            <tfoot><tr class="fw-bold"><td colspan="4">Total Gastos</td><td>${{ "%.2f"|format(total_gastos) }}</td><td></td></tr></tfoot>
-                        </table>
-                    </div>
-                    
-                    <!-- Reembolsos pendientes -->
-                    {% set reembolsos = gastos|selectattr('reembolso', 'equalto', True)|list %}
-                    {% if reembolsos %}
-                    <hr>
-                    <h6>🔄 Reembolsos Pendientes</h6>
-                    <table class="table table-sm table-warning">
-                        <thead><tr><th>Persona</th><th>Concepto</th><th>Monto</th><th>Reembolsar a</th></tr></thead>
-                        <tbody>
-                            {% for r in reembolsos %}
-                            <tr>
-                                <td>{{ r.get('persona', '') }}</td>
-                                <td>{{ r['concepto'] }}</td>
-                                <td>${{ "%.2f"|format(r['monto']) }}</td>
-                                <td><strong>{{ r.get('reembolsado_a', r.get('persona', '')) }}</strong></td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                        <tfoot>
-                            <tr class="fw-bold"><td colspan="2">Total reembolsos</td><td colspan="2">${{ "%.2f"|format(reembolsos|sum(attribute='monto')) }}</td></tr>
-                        </tfoot>
-                    </table>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- SECCIÓN 6: VALOR A PAGAR POR DOCENTE -->
-    <div class="col-md-6 mb-4">
-        <div class="card shadow">
-            <div class="card-header bg-secondary text-white" data-bs-toggle="collapse" data-bs-target="#seccion6" style="cursor:pointer;">
-                <strong>💲 Valor a Pagar por Docente (acumulado)</strong>
-                <i class="bi bi-chevron-down float-end"></i>
-            </div>
-            <div class="collapse" id="seccion6">
-                <div class="card-body p-2">
-                    <table class="table table-sm table-striped mb-0">
-                        <thead><tr><th>Docente</th><th>Sesiones</th><th>Horas</th><th>A Pagar</th></tr></thead>
-                        <tbody>
-                            {% for docente, info in consolidado_docentes.items() %}
-                            <tr>
-                                <td>{{ docente }}</td>
-                                <td>{{ info['sesiones'] }}</td>
-                                <td>{{ info['horas'] }}</td>
-                                <td class="fw-bold">${{ "%.2f"|format(info['pago']) }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
+    <!-- NUEVOS USUARIOS -->
+    <div class="col-md-4 mb-4">
+        <div class="card shadow"><div class="card-header"><strong>Nuevos Registros ({{ nuevos_usuarios|length }})</strong></div>
+            <div class="card-body" style="max-height:200px;overflow-y:auto;">
+                {% for u in nuevos_usuarios %}
+                <small>👤 {{ u['nombre'] }} ({{ u['rol'] }}) - {{ u['fecha_registro'][:10] }}</small><br>
+                {% else %}<small class="text-muted">Sin registros este mes</small>{% endfor %}
             </div>
         </div>
     </div>
 </div>
 
-<div class="mt-4 d-flex flex-wrap justify-content-between">
-    <a href="/dashboard" class="btn btn-outline-secondary mb-1">← Dashboard</a>
-    <a href="/gastos" class="btn btn-outline-danger mb-1">📉 Registrar Gastos</a>
+<!-- PAGOS POR DOCENTE -->
+<div class="card shadow mb-4">
+    <div class="card-header bg-secondary text-white"><strong>Pagos a Docentes</strong></div>
+    <div class="card-body">
+        <table class="table table-sm"><thead><tr><th>Docente</th><th>Sesiones</th><th>Horas</th><th>A Pagar</th></tr></thead>
+            <tbody>{% for d, i in pagos_por_docente.items() %}<tr><td>{{ d }}</td><td>{{ i['sesiones'] }}</td><td>{{ i['horas'] }}</td><td>${{ "%.2f"|format(i['pago']) }}</td></tr>{% endfor %}</tbody>
+        </table>
+    </div>
 </div>
+
+<!-- DETALLE ESTUDIANTES -->
+<div class="card shadow mb-4">
+    <div class="card-header bg-info text-white"><strong>Detalle por Estudiante</strong></div>
+    <div class="card-body">
+        {% for d in datos %}
+        <div class="border rounded p-2 mb-2">
+            <strong>{{ d['estudiante'] }}</strong> | Horas: {{ d['total_horas'] }} | Cobrar: ${{ "%.2f"|format(d['cobrar']) }} | Pagado: ${{ "%.2f"|format(d['pagado']) }} | Saldo: <span class="{{ 'text-danger' if d['saldo'] > 0 else 'text-success' }}">${{ "%.2f"|format(d['saldo']) }}</span>
+        </div>{% endfor %}
+    </div>
+</div>
+
+<!-- CORRECCIONES -->
+<div class="card shadow mb-4">
+    <div class="card-header bg-warning text-dark"><strong>Correcciones de Pagos</strong></div>
+    <div class="card-body">
+        {% if correcciones %}<table class="table table-sm"><thead><tr><th>Pago ID</th><th>Anterior</th><th>Nuevo</th><th>Quién</th><th>Motivo</th></tr></thead>
+            <tbody>{% for c in correcciones %}<tr><td>{{ c['pago_id'] }}</td><td>${{ "%.2f"|format(c['monto_anterior']) }}</td><td>${{ "%.2f"|format(c['monto_nuevo']) }}</td><td>{{ c['cambiado_por'] }}</td><td>{{ c['motivo'][:50] }}</td></tr>{% endfor %}</tbody></table>
+        {% else %}<p class="text-muted">Sin correcciones.</p>{% endif %}
+    </div>
+</div>
+
+<!-- OBSERVACIONES -->
+<div class="card shadow mb-4">
+    <div class="card-header bg-dark text-white"><strong>Observaciones en Sesiones</strong></div>
+    <div class="card-body">
+        {% if observaciones %}<table class="table table-sm"><thead><tr><th>Fecha</th><th>Estudiante</th><th>Observación</th></tr></thead>
+            <tbody>{% for o in observaciones %}<tr><td>{{ o['fecha'] }}</td><td>{{ o.get('estudiantes', {}).get('apellidos', '') }} {{ o.get('estudiantes', {}).get('nombres', '') }}</td><td>{{ o['observaciones'][:60] }}</td></tr>{% endfor %}</tbody></table>
+        {% else %}<p class="text-muted">Sin observaciones.</p>{% endif %}
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+// COLORES
+const colors = ['#1a73e8','#0f9d58','#f4b400','#db4437','#ab47bc','#00acc1','#ff7043','#9ccc65'];
+
+// INGRESOS POR TIPO
+new Chart(document.getElementById('chartIngresos'), {
+    type: 'pie',
+    data: {
+        labels: [{% for t, v in ingresos_por_tipo.items() %}'{{ t }}',{% endfor %}],
+        datasets: [{data: [{% for t, v in ingresos_por_tipo.items() %}{{ v }},{% endfor %}], backgroundColor: colors}]
+    }
+});
+
+// HORAS POR MATERIA
+new Chart(document.getElementById('chartMaterias'), {
+    type: 'bar',
+    data: {
+        labels: [{% for m, h in horas_por_materia.items() %}'{{ m[:15] }}',{% endfor %}],
+        datasets: [{label: 'Horas', data: [{% for m, h in horas_por_materia.items() %}{{ h }},{% endfor %}], backgroundColor: '#1a73e8'}]
+    }
+});
+
+// CUMPLIMIENTO
+new Chart(document.getElementById('chartCumplimiento'), {
+    type: 'doughnut',
+    data: {
+        labels: ['Realizado','Planificado','Cancelado'],
+        datasets: [{data: [{{ cumplimiento.get('realizado',0) }},{{ cumplimiento.get('planificado',0) }},{{ cumplimiento.get('cancelado',0) }}], backgroundColor: ['#0f9d58','#f4b400','#db4437']}]
+    }
+});
+
+// GASTOS POR CATEGORÍA
+new Chart(document.getElementById('chartGastos'), {
+    type: 'pie',
+    data: {
+        labels: [{% for c, v in gastos_por_categoria.items() %}'{{ c }}',{% endfor %}],
+        datasets: [{data: [{% for c, v in gastos_por_categoria.items() %}{{ v }},{% endfor %}], backgroundColor: colors}]
+    }
+});
+</script>
 {% endblock %}
