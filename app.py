@@ -604,14 +604,34 @@ def gestion_usuarios():
     if request.method == 'POST':
         accion = request.form.get('accion')
         uid = int(request.form.get('usuario_id', 0))
-        if accion == 'aprobar': supabase.table('usuarios').update({'activo': True}).eq('id', uid).execute()
-        elif accion == 'rechazar': supabase.table('usuarios').delete().eq('id', uid).execute()
+        
+        if accion == 'aprobar':
+            supabase.table('usuarios').update({'activo': True}).eq('id', uid).execute()
+            flash('✅ Usuario aprobado', 'success')
+        elif accion == 'rechazar':
+            supabase.table('usuarios').update({'activo': False}).eq('id', uid).execute()
+            flash('❌ Usuario desactivado', 'info')
         elif accion == 'crear':
             supabase.table('usuarios').insert({
                 'nombre': request.form['nombre'], 'email': request.form['email'],
                 'password_hash': request.form['password'], 'rol': request.form['rol'], 'activo': True
             }).execute()
+            flash('✅ Usuario creado', 'success')
+        elif accion == 'editar':
+            edit_id = request.form.get('edit_id')
+            updates = {
+                'nombre': request.form['nombre'],
+                'email': request.form['email'],
+                'rol': request.form['rol']
+            }
+            password = request.form.get('password', '')
+            if password:
+                updates['password_hash'] = password
+            supabase.table('usuarios').update(updates).eq('id', int(edit_id)).execute()
+            flash('✅ Usuario actualizado', 'success')
+        
         return redirect(url_for('gestion_usuarios'))
+    
     usuarios = supabase.table('usuarios').select('*').order('fecha_registro', desc=True).execute()
     return render_template('usuarios.html', usuarios=usuarios.data or [])
 
