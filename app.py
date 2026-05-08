@@ -475,7 +475,11 @@ def reportes():
     return render_template('reportes.html', datos=datos, total_estudiantes=len(datos),
                          total_horas=th, total_ingresos=total_ingresos, total_gastos=total_gastos,
                          balance=total_ingresos - total_gastos, gastos=gastos_mes.data or [],
-                         mes=mes, anio=anio)
+                         mes=mes, anio=anio,
+                         procedencia_count=procedencia_count,
+                         horas_docente=horas_docente,
+                         ingresos_por_tipo=ingresos_por_tipo,
+                         consolidado_docentes=consolidado_docentes)
 
 @app.route('/gastos', methods=['GET', 'POST'])
 @login_required
