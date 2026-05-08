@@ -446,13 +446,23 @@ def eliminar_reunion(id):
 def reportes():
     mes = int(request.args.get('mes', date.today().month))
     anio = int(request.args.get('anio', date.today().year))
+    
+    # Datos generales
     estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
     datos, tc, tp, th = [], 0, 0, 0
+    
+    # Conteo por tipo
+    ingresos_por_tipo = {}
+    horas_por_materia = {}
+    pagos_por_docente = {}
+    cumplimiento = {'planificado': 0, 'realizado': 0, 'cancelado': 0}
+    
     for e in (estudiantes.data or []):
-        ses = supabase.table('sesiones').select('*').eq('estudiante_id', e['id']).eq('estado', 'Realizado').execute()
+        ses = supabase.table('sesiones').select('*').eq('estudiante_id', e['id']).execute()
         ses_filtradas = [s for s in (ses.data or []) if s['fecha'][:7] == f"{anio}-{mes:02d}"]
         pag = supabase.table('pagos').select('*').eq('estudiante_id', e['id']).execute()
         pag_filtrados = [p for p in (pag.data or []) if p['fecha_pago'][:7] == f"{anio}-{mes:02d}"]
+        
         asignaturas, horas = {}, 0
         for s in ses_filtradas:
             asig = s.get('asignatura') or s.get('tema_terapia') or 'Sin registro'
@@ -460,26 +470,74 @@ def reportes():
             asignaturas[asig]['horas'] += s.get('horas', 0) or 0
             asignaturas[asig]['fechas'].append(s['fecha'])
             horas += s.get('horas', 0) or 0
+            
+            # Horas por materia
+            horas_por_materia[asig] = horas_por_materia.get(asig, 0) + (s.get('horas', 0) or 0)
+            
+            # Cumplimiento
+            cumplimiento[s.get('estado', 'Planificado').lower()] = cumplimiento.get(s.get('estado', 'Planificado').lower(), 0) + 1
+            
+            # Pagos por docente
+            prof = s.get('profesor_terapeuta', 'Desconocido')
+            tipo = s.get('tipo_sesion', 'clase')
+            valor = s.get('valor_total', 0) or 0
+            pago = (s.get('horas', 0) or 0) * 7 if tipo in ['clase', 'preuniversitario'] else valor * 0.35
+            if prof not in pagos_por_docente: pagos_por_docente[prof] = {'horas': 0, 'pago': 0, 'sesiones': 0}
+            pagos_por_docente[prof]['horas'] += s.get('horas', 0) or 0
+            pagos_por_docente[prof]['pago'] += pago
+            pagos_por_docente[prof]['sesiones'] += 1
+            
+            # Ingresos por tipo
+            if tipo not in ingresos_por_tipo: ingresos_por_tipo[tipo] = 0
+            ingresos_por_tipo[tipo] += valor
+        
         cobrar = sum(s.get('valor_total', 0) or 0 for s in ses_filtradas)
         pagado = sum(p.get('monto', 0) or 0 for p in pag_filtrados)
         tc += cobrar; tp += pagado; th += horas
+        
         if cobrar > 0 or pagado > 0 or horas > 0:
             datos.append({'id': e['id'], 'estudiante': f"{e['apellidos']} {e['nombres']}",
-                         'nivel': e.get('nivel_curso', ''), 'procedencia': e.get('procedencia', ''),
                          'asignaturas': asignaturas, 'total_horas': horas,
                          'cobrar': cobrar, 'pagado': pagado, 'saldo': cobrar - pagado})
+    
+    # Gastos del mes
     gastos_mes = supabase.table('gastos').select('*').eq('mes', mes).eq('anio', anio).order('fecha').execute()
     total_gastos = sum(g.get('monto', 0) or 0 for g in (gastos_mes.data or []))
+    gastos_por_categoria = {}
+    for g in (gastos_mes.data or []):
+        cat = g.get('categoria', 'Sin categoría')
+        gastos_por_categoria[cat] = gastos_por_categoria.get(cat, 0) + (g.get('monto', 0) or 0)
+    
+    # Ingresos del mes
     pagos_mes = supabase.table('pagos').select('*').gte('fecha_pago', f"{anio}-{mes:02d}-01").lte('fecha_pago', f"{anio}-{mes:02d}-31").execute()
     total_ingresos = sum(p.get('monto', 0) or 0 for p in (pagos_mes.data or []))
-    return render_template('reportes.html', datos=datos, total_estudiantes=len(datos),
-                         total_horas=th, total_ingresos=total_ingresos, total_gastos=total_gastos,
-                         balance=total_ingresos - total_gastos, gastos=gastos_mes.data or [],
-                         mes=mes, anio=anio,
-                         procedencia_count=procedencia_count,
-                         horas_docente=horas_docente,
+    
+    # Correcciones de pagos
+    correcciones = supabase.table('correcciones_pagos').select('*').order('fecha_correccion', desc=True).limit(20).execute()
+    
+    # Observaciones de sesiones
+    observaciones = supabase.table('sesiones').select('*, estudiantes(apellidos, nombres)').not_.is_('observaciones', 'null').order('fecha', desc=True).limit(20).execute()
+    
+    # Nuevos usuarios del mes
+    nuevos_usuarios = supabase.table('usuarios').select('*').gte('fecha_registro', f"{anio}-{mes:02d}-01").lte('fecha_registro', f"{anio}-{mes:02d}-31").execute()
+    
+    # Total docentes para pago
+    total_pago_docentes = sum(d['pago'] for d in pagos_por_docente.values())
+    
+    return render_template('reportes.html',
+                         datos=datos, total_estudiantes=len(datos),
+                         total_horas=th, total_ingresos=total_ingresos,
+                         total_gastos=total_gastos, balance=total_ingresos - total_gastos,
+                         gastos=gastos_mes.data or [], mes=mes, anio=anio,
                          ingresos_por_tipo=ingresos_por_tipo,
-                         consolidado_docentes=consolidado_docentes)
+                         horas_por_materia=horas_por_materia,
+                         pagos_por_docente=pagos_por_docente,
+                         total_pago_docentes=total_pago_docentes,
+                         cumplimiento=cumplimiento,
+                         correcciones=correcciones.data or [],
+                         observaciones=observaciones.data or [],
+                         nuevos_usuarios=nuevos_usuarios.data or [],
+                         gastos_por_categoria=gastos_por_categoria)
 
 @app.route('/gastos', methods=['GET', 'POST'])
 @login_required
