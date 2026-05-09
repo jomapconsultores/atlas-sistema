@@ -39,30 +39,25 @@
     <div class="col-md-4 mb-4"><div class="card shadow h-100"><div class="card-header"><strong>Gastos por Categoría</strong></div><div class="card-body"><canvas id="chartGastos"></canvas></div></div></div>
 </div>
 
-<!-- ============================================ -->
 <!-- SECCIÓN 1: INGRESOS DESGLOSADOS -->
-<!-- ============================================ -->
 <div class="card shadow mb-4">
     <div class="card-header bg-success text-white" data-bs-toggle="collapse" data-bs-target="#seccionIngresos" style="cursor:pointer;">
         <strong>💵 Ingresos Desglosados</strong> <span class="float-end">▼</span>
     </div>
     <div class="collapse show" id="seccionIngresos">
         <div class="card-body p-2">
-            <!-- Por tipo -->
             <h6>📂 Por Tipo de Servicio</h6>
             <table class="table table-sm table-striped">
-                <thead><tr><th>Tipo</th><th>Cantidad</th><th>$ Total</th></tr></thead>
-                <tbody>{% for t, v in ingresos_por_tipo.items() %}<tr><td>{{ t }}</td><td>{{ v }}</td><td>${{ "%.2f"|format(v) }}</td></tr>{% endfor %}</tbody>
+                <thead><tr><th>Tipo</th><th>$ Total</th></tr></thead>
+                <tbody>{% for t, v in ingresos_por_tipo.items() %}<tr><td>{{ t }}</td><td>${{ "%.2f"|format(v) }}</td></tr>{% endfor %}</tbody>
             </table>
             <hr>
-            <!-- Por estudiante -->
             <h6>👨‍🎓 Por Estudiante</h6>
             <table class="table table-sm table-striped">
                 <thead><tr><th>Estudiante</th><th>Sesiones</th><th>Horas</th><th>$ Cobrar</th><th>$ Recibido</th><th>$ Pendiente</th></tr></thead>
                 <tbody>{% for d in datos %}<tr><td>{{ d['estudiante'] }}</td><td>{{ d['horas_real'] }}</td><td>{{ d['horas_real'] }}</td><td>${{ "%.2f"|format(d['cobrar']) }}</td><td>${{ "%.2f"|format(d['pagado']) }}</td><td class="{{ 'text-danger' if d['saldo'] > 0 else 'text-success' }}">${{ "%.2f"|format(d['saldo']) }}</td></tr>{% endfor %}</tbody>
             </table>
             <hr>
-            <!-- Por asignatura -->
             <h6>📚 Por Asignatura</h6>
             <table class="table table-sm table-striped">
                 <thead><tr><th>Asignatura</th><th>Horas</th></tr></thead>
@@ -72,9 +67,7 @@
     </div>
 </div>
 
-<!-- ============================================ -->
 <!-- SECCIÓN 2: GASTOS CLASIFICADOS -->
-<!-- ============================================ -->
 <div class="card shadow mb-4">
     <div class="card-header bg-danger text-white" data-bs-toggle="collapse" data-bs-target="#seccionGastos" style="cursor:pointer;">
         <strong>📉 Gastos Clasificados</strong> <span class="float-end">▼</span>
@@ -95,9 +88,7 @@
     </div>
 </div>
 
-<!-- ============================================ -->
 <!-- SECCIÓN 3: BALANCE DE RESULTADOS -->
-<!-- ============================================ -->
 <div class="card shadow mb-4">
     <div class="card-header bg-info text-white" data-bs-toggle="collapse" data-bs-target="#seccionBalance" style="cursor:pointer;">
         <strong>💰 Balance de Resultados</strong> <span class="float-end">▼</span>
