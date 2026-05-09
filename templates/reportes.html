@@ -32,7 +32,7 @@
 </div>
 
 <div class="row">
-    <!-- GRÁFICOS (TODOS IGUAL TAMAÑO) -->
+    <!-- GRÁFICOS -->
     <div class="col-md-4 mb-4"><div class="card shadow h-100"><div class="card-header"><strong>Ingresos por Tipo</strong></div><div class="card-body"><canvas id="chartIngresos"></canvas></div></div></div>
     <div class="col-md-4 mb-4"><div class="card shadow h-100"><div class="card-header"><strong>Horas por Materia</strong></div><div class="card-body"><canvas id="chartMaterias"></canvas></div></div></div>
     <div class="col-md-4 mb-4"><div class="card shadow h-100"><div class="card-header"><strong>Cumplimiento</strong></div><div class="card-body"><canvas id="chartCumplimiento"></canvas></div></div></div>
@@ -43,28 +43,28 @@
 
 <!-- PAGOS A DOCENTES -->
 <div class="card shadow mb-4">
-    <div class="card-header bg-secondary text-white"><strong>Pagos a Docentes</strong></div>
+    <div class="card-header bg-secondary text-white"><strong>💲 Pagos a Docentes</strong></div>
     <div class="card-body"><div class="table-responsive"><table class="table table-sm"><thead><tr><th>Docente</th><th>Sesiones</th><th>Horas</th><th>$ A Pagar</th><th>$ Pagado</th></tr></thead>
         <tbody>{% for d, i in pagos_por_docente.items() %}<tr><td>{{ d }}</td><td>{{ i['sesiones'] }}</td><td>{{ i['horas'] }}</td><td>${{ "%.2f"|format(i['pago']) }}</td><td>${{ "%.2f"|format(i['pagado']) }}</td></tr>{% endfor %}</tbody></table></div></div>
 </div>
 
 <!-- DETALLE POR ESTUDIANTE -->
 <div class="card shadow mb-4">
-    <div class="card-header bg-info text-white"><strong>Detalle por Estudiante</strong></div>
+    <div class="card-header bg-info text-white"><strong>🎓 Detalle por Estudiante</strong></div>
     <div class="card-body"><div class="table-responsive"><table class="table table-sm table-striped"><thead><tr><th>Estudiante</th><th>H Plan</th><th>H Efect</th><th>H Canc</th><th>$ Cobrar</th><th>$ Pagado</th><th>$ Falta</th><th>$ Sobra</th></tr></thead>
         <tbody>{% for d in datos %}<tr><td>{{ d['estudiante'] }}</td><td>{{ d['horas_plan'] }}</td><td>{{ d['horas_real'] }}</td><td>{{ d['horas_canc'] }}</td><td>${{ "%.2f"|format(d['cobrar']) }}</td><td>${{ "%.2f"|format(d['pagado']) }}</td><td class="text-danger">${{ "%.2f"|format(d['saldo'] if d['saldo'] > 0 else 0) }}</td><td class="text-success">${{ "%.2f"|format(-d['saldo'] if d['saldo'] < 0 else 0) }}</td></tr>{% endfor %}</tbody></table></div></div>
 </div>
 
 <!-- CORRECCIONES DE PAGOS -->
 <div class="card shadow mb-4">
-    <div class="card-header bg-warning text-dark"><strong>Correcciones de Pagos</strong></div>
+    <div class="card-header bg-warning text-dark"><strong>🔧 Correcciones de Pagos</strong></div>
     <div class="card-body">{% if correcciones %}<div class="table-responsive"><table class="table table-sm"><thead><tr><th>Fecha Corrección</th><th>Pago ID</th><th>$ Anterior</th><th>$ Nuevo</th><th>Quién</th><th>Motivo</th></tr></thead>
-        <tbody>{% for c in correcciones %}<tr><td>{{ c.get('fecha_correccion', '')[:10] }}</td><td>{{ c['pago_id'] }}</td><td>${{ "%.2f"|format(c['monto_anterior']) }}</td><td>${{ "%.2f"|format(c['monto_nuevo']) }}</td><td>{{ c['cambiado_por'] }}</td><td>{{ c['motivo'][:50] }}</td></tr>{% endfor %}</tbody></table></div>{% else %}<p class="text-muted">Sin correcciones.</p>{% endif %}</div>
+        <tbody>{% for c in correcciones %}<tr><td>{{ c.get('fecha_correccion', '')[:19] }}</td><td>{{ c['pago_id'] }}</td><td>${{ "%.2f"|format(c['monto_anterior']) }}</td><td>${{ "%.2f"|format(c['monto_nuevo']) }}</td><td>{{ c['cambiado_por'] }}</td><td>{{ c['motivo'][:60] }}</td></tr>{% endfor %}</tbody></table></div>{% else %}<p class="text-muted">Sin correcciones.</p>{% endif %}</div>
 </div>
 
 <!-- OBSERVACIONES -->
 <div class="card shadow mb-4">
-    <div class="card-header bg-dark text-white"><strong>Observaciones en Sesiones</strong></div>
+    <div class="card-header bg-dark text-white"><strong>📝 Observaciones en Sesiones</strong></div>
     <div class="card-body">{% if observaciones %}<div class="table-responsive"><table class="table table-sm"><thead><tr><th>Fecha</th><th>Estudiante</th><th>Tipo</th><th>Observación</th></tr></thead>
         <tbody>{% for o in observaciones %}<tr><td>{{ o['fecha'] }}</td><td>{{ o.get('estudiantes', {}).get('apellidos', '') }} {{ o.get('estudiantes', {}).get('nombres', '') }}</td><td>{{ o['tipo_sesion'] }}</td><td>{{ o['observaciones'][:80] }}</td></tr>{% endfor %}</tbody></table></div>{% else %}<p class="text-muted">Sin observaciones.</p>{% endif %}</div>
 </div>

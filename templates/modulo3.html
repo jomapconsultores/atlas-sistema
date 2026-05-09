@@ -36,6 +36,32 @@
                 </form>
             </div>
         </div>
+
+        <!-- EDITAR SESIONES -->
+        <div class="card shadow mt-3">
+            <div class="card-header bg-info text-white"><strong>✏️ Editar Sesión Realizada</strong></div>
+            <div class="card-body">
+                <form method="POST" onsubmit="return confirm('¿Actualizar esta sesión?')">
+                    <input type="hidden" name="accion" value="editar_sesion">
+                    <div class="mb-2">
+                        <label class="form-label">Sesión *</label>
+                        <select name="sesion_id" class="form-select" required>
+                            <option value="">Seleccionar sesión...</option>
+                            {% for e in estudiantes %}
+                            {% for s in e.get('sesiones', []) %}
+                            <option value="{{ s['id'] }}">{{ e['nombre'] }} - {{ s['fecha'] }} - {{ s.get('asignatura', s.get('tema_terapia', ''))[:20] }}</option>
+                            {% endfor %}
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-2"><label class="form-label">Nueva Fecha *</label><input type="date" name="nueva_fecha" class="form-control" required></div>
+                    <div class="row"><div class="col-6 mb-2"><label class="form-label">Inicio *</label><input type="time" name="nueva_hora_inicio" class="form-control" required></div>
+                    <div class="col-6 mb-2"><label class="form-label">Fin *</label><input type="time" name="nueva_hora_fin" class="form-control" required></div></div>
+                    <button type="submit" class="btn btn-info w-100">✏️ Actualizar Sesión</button>
+                </form>
+                <small class="text-muted">Solo para sesiones ya realizadas. Afecta a todos los módulos.</small>
+            </div>
+        </div>
     </div>
 
     <!-- ESTADO DE CUENTAS -->
@@ -98,27 +124,12 @@
             <div class="modal-header bg-warning"><h5>🔧 Corregir Pago</h5></div>
             <div class="modal-body">
                 <p>Monto actual: <strong id="modalMontoActual">$0</strong></p>
-                <div class="mb-2">
-                    <label class="form-label">Nuevo monto *</label>
-                    <input type="number" name="nuevo_monto" id="modalNuevoMonto" class="form-control" step="0.01" required>
-                </div>
-                <div class="mb-2">
-                    <label class="form-label">Corregido por:</label>
-                    <input type="text" class="form-control" value="{{ current_user.nombre }}" disabled>
-                </div>
-                <div class="mb-2">
-                    <label class="form-label">Fecha de corrección:</label>
-                    <input type="text" class="form-control" id="modalFechaTexto" disabled>
-                </div>
-                <div class="mb-2">
-                    <label class="form-label">Motivo *</label>
-                    <textarea name="motivo" id="modalMotivo" class="form-control" rows="2" required></textarea>
-                </div>
+                <div class="mb-2"><label class="form-label">Nuevo monto *</label><input type="number" name="nuevo_monto" id="modalNuevoMonto" class="form-control" step="0.01" required></div>
+                <div class="mb-2"><label class="form-label">Corregido por:</label><input type="text" class="form-control" value="{{ current_user.nombre }}" disabled></div>
+                <div class="mb-2"><label class="form-label">Fecha de corrección:</label><input type="text" class="form-control" id="modalFechaTexto" disabled></div>
+                <div class="mb-2"><label class="form-label">Motivo *</label><textarea name="motivo" id="modalMotivo" class="form-control" rows="2" required></textarea></div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="submit" class="btn btn-warning">Guardar</button>
-            </div>
+            <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-warning">Guardar</button></div>
         </form>
     </div></div>
 </div>
@@ -135,10 +146,7 @@
                 <div class="mb-2"><label class="form-label">Motivo de eliminación *</label><textarea name="motivo_eliminar" id="modalMotivoEliminar" class="form-control" rows="2" required></textarea></div>
                 <div class="mb-2"><label class="form-label">¿Quién elimina? *</label><input type="text" name="eliminado_por" id="modalEliminadoPor" class="form-control" value="{{ current_user.nombre }}" required></div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="submit" class="btn btn-danger">🗑️ Eliminar</button>
-            </div>
+            <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-danger">🗑️ Eliminar</button></div>
         </form>
     </div></div>
 </div>
@@ -151,12 +159,10 @@
 </div>
 
 <script>
-// CONFIRMACIÓN AL REGISTRAR PAGO
 document.getElementById('formPago').addEventListener('submit', function(e) {
     const monto = document.getElementById('montoPago')?.value;
     const fecha = document.getElementById('fechaPago')?.value;
     const estudiante = this.querySelector('[name="estudiante_id"]')?.selectedOptions[0]?.text || '';
-    
     if (!confirm(`💰 ¿Confirmas el registro del pago?\n\n👨‍🎓 ${estudiante}\n💵 Monto: $${parseFloat(monto).toFixed(2)}\n📅 Fecha: ${fecha}`)) {
         e.preventDefault();
     }
@@ -167,13 +173,8 @@ function abrirCorreccion(id, monto) {
     document.getElementById('modalMontoActual').textContent = '$' + monto.toFixed(2);
     document.getElementById('modalNuevoMonto').value = monto;
     document.getElementById('modalMotivo').value = '';
-    
-    // Fecha actual automática
     const hoy = new Date();
-    const fecha = hoy.toISOString().split('T')[0];
-    const hora = hoy.toTimeString().split(' ')[0].slice(0,5);
-    document.getElementById('modalFechaTexto').value = fecha + ' ' + hora;
-    
+    document.getElementById('modalFechaTexto').value = hoy.toISOString().split('T')[0] + ' ' + hoy.toTimeString().split(' ')[0].slice(0,5);
     new bootstrap.Modal(document.getElementById('modalCorreccion')).show();
 }
 

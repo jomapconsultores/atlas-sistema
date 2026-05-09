@@ -66,6 +66,7 @@ PROFESORES = ['Carmen Reinoso', 'Rosalía Moscoso', 'Marco Antonio Posligua',
               'Daniel Castillo', 'Johanna Nievecela']
 ENCARGADOS = ['CARMEN', 'ROSALÍA', 'EDWIN', 'MAP', 'JOHANNA']
 
+# ============================================
 @app.route('/')
 def inicio():
     if current_user.is_authenticated: return redirect(url_for('dashboard'))
@@ -88,10 +89,8 @@ def registro():
                 'password_hash': password, 'rol': rol, 'activo': False
             }).execute()
             if result.data:
-                flash('✅ Solicitud enviada. Espera la aprobación del administrador.', 'success')
+                flash('✅ Solicitud enviada', 'success')
                 return redirect(url_for('inicio'))
-            else:
-                flash('❌ Error al registrar. Intenta de nuevo.', 'error')
         except Exception as e:
             flash(f'❌ Error: {str(e)}', 'error')
         return redirect(url_for('registro'))
@@ -129,6 +128,9 @@ def api_crear_estudiante():
         return jsonify({'success': True, 'id': e['id'], 'nombre': f"{e['apellidos']} {e['nombres']}"})
     return jsonify({'success': False}), 400
 
+# ============================================
+# MÓDULO 1 - PLANIFICACIÓN
+# ============================================
 @app.route('/modulo1', methods=['GET', 'POST'])
 @login_required
 @socio_admin_required
@@ -163,9 +165,7 @@ def modulo1():
                     tema = ''
                     precio = float(request.form.get('precio_hora', 10))
                     valor_inicial = 0
-                
                 estudiantes_nombres = []
-                
                 for est_num in range(1, num_estudiantes + 1):
                     eid = request.form.get(f'estudiante_id_{est_num}', '')
                     if eid and eid != 'nuevo':
@@ -181,7 +181,6 @@ def modulo1():
                         est_info = supabase.table('estudiantes').select('apellidos, nombres').eq('id', int(eid)).execute()
                         if est_info.data:
                             estudiantes_nombres.append(f"{est_info.data[0]['apellidos']} {est_info.data[0]['nombres']}")
-                
                 if crear_evento_calendar and primera_fecha and estudiantes_nombres:
                     try:
                         evento_id = crear_evento_calendar({
@@ -208,6 +207,9 @@ def modulo1():
                          precios_pension=PRECIOS_PENSION, profesores=PROFESORES,
                          encargados=ENCARGADOS, today=date.today())
 
+# ============================================
+# MÓDULO 2 - CALENDARIO
+# ============================================
 @app.route('/modulo2')
 @login_required
 def modulo2():
@@ -304,6 +306,46 @@ def modificar_sesion(id):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+# ============================================
+# MÓDULO 3 - PAGOS (CON EDICIÓN DE SESIONES)
+# ============================================
+@app.route('/modulo3', methods=['GET', 'POST'])
+@login_required
+@socio_admin_required
+def modulo3():
+    if request.method == 'POST':
+        accion = request.form.get('accion', 'pagar')
+        if accion == 'pagar':
+            supabase.table('pagos').insert({
+                'fecha_pago': request.form['fecha_pago'], 'monto': float(request.form['monto']),
+                'tipo_pago': request.form.get('tipo_pago', 'efectivo'),
+                'concepto': request.form.get('concepto', ''),
+                'estudiante_id': int(request.form['estudiante_id']), 'usuario_id': int(current_user.id)
+            }).execute()
+            flash('✅ Pago registrado', 'success')
+        elif accion == 'corregir':
+            pago_id = int(request.form['pago_id'])
+            nuevo_monto = float(request.form['nuevo_monto'])
+            cambiado_por = request.form.get('cambiado_por', current_user.nombre)
+            motivo = request.form['motivo']
+            pago_anterior = supabase.table('pagos').select('monto').eq('id', pago_id).execute()
+            monto_anterior = pago_anterior.data[0]['monto'] if pago_anterior.data else 0
+            supabase.table('pagos').update({'monto': nuevo_monto}).eq('id', pago_id).execute()
+            supabase.table('correcciones_pagos').insert({
+                'pago_id': pago_id, 'monto_anterior': monto_anterior,
+                'monto_nuevo': nuevo_monto, 'cambiado_por': cambiado_por, 'motivo': motivo
+            }).execute()
+            flash('✅ Pago corregido', 'success')
+        elif accion == 'eliminar_pago':
+            pago_id = int(request.form['pago_id'])
+            motivo = request.form['motivo_eliminar']
+            eliminado_por = request.form.get('eliminado_por', current_user.nombre)
+            supabase.table('correcciones_pagos').insert({
+                'pago_id': pago_id, 'monto_anterior': 0, 'monto_nuevo': 0,
+                'cambiado_por': eliminado_por, 'motivo': f'ELIMINADO: {motivo}'
+            }).execute()
+            supabase.table('pagos').delete().eq('id', pago_id).execute()
+            flash('🗑️ Pago eliminado', 'info')
         elif accion == 'editar_sesion':
             sesion_id = int(request.form['sesion_id'])
             nueva_fecha = request.form['nueva_fecha']
@@ -316,7 +358,22 @@ def modificar_sesion(id):
                 'horas': round((fin - inicio).total_seconds() / 3600, 2)
             }).eq('id', sesion_id).execute()
             flash('✅ Sesión actualizada', 'success')
+        return redirect(url_for('modulo3'))
+    
+    estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
+    datos = []
+    for e in (estudiantes.data or []):
+        ses = supabase.table('sesiones').select('*').eq('estudiante_id', e['id']).eq('estado', 'Realizado').execute()
+        pag = supabase.table('pagos').select('*').eq('estudiante_id', e['id']).order('fecha_pago', desc=True).execute()
+        cobrar = sum(s.get('valor_total', 0) or 0 for s in (ses.data or []))
+        pagado = sum(p.get('monto', 0) or 0 for p in (pag.data or []))
+        if cobrar > 0 or pagado > 0:
+            datos.append({'id': e['id'], 'nombre': f"{e['apellidos']} {e['nombres']}", 'cobrar': cobrar, 'pagado': pagado, 'saldo': cobrar - pagado, 'pagos': pag.data or [], 'sesiones': ses.data or []})
+    return render_template('modulo3.html', estudiantes=datos, today=date.today())
 
+# ============================================
+# MÓDULO 4 - CALENDARIO PÚBLICO
+# ============================================
 @app.route('/modulo4')
 @login_required
 def modulo4():
@@ -326,6 +383,9 @@ def modulo4():
         reuniones = supabase.table('reuniones').select('*').gte('fecha', str(date.today())).order('fecha').execute()
     return render_template('modulo4.html', sesiones=sesiones.data or [], reuniones=reuniones.data if reuniones else [])
 
+# ============================================
+# MÓDULO 5 - PAGOS DOCENTES
+# ============================================
 @app.route('/modulo5')
 @login_required
 def modulo5():
@@ -351,10 +411,13 @@ def modulo5():
         est = s.get('estudiantes', {})
         pagos.append({'fecha': s['fecha'], 'profesor': profesor, 'estudiante': f"{est.get('apellidos', '')} {est.get('nombres', '')}",
                      'tipo': tipo, 'horas': horas, 'valor_total': valor, 'pago_docente': pago})
-        if profesor not in consolidado: consolidado[profesor] = {'sesiones': 0, 'horas': 0, 'pago': 0}
+        if profesor not in consolidado: consolidado[profesor] = {'sesiones': 0, 'horas': 0, 'pago': 0, 'pagado': 0}
         consolidado[profesor]['sesiones'] += 1; consolidado[profesor]['horas'] += horas; consolidado[profesor]['pago'] += pago
     return render_template('modulo5.html', pagos=pagos, total_adeudado=total, consolidado=consolidado)
 
+# ============================================
+# MÓDULO 6 - REUNIONES
+# ============================================
 @app.route('/modulo6', methods=['GET', 'POST'])
 @login_required
 @socio_admin_required
@@ -380,10 +443,8 @@ def modulo6():
                             'asignatura': f"{request.form['titulo']} - {request.form.get('tema', '')}",
                             'profesor': request.form.get('encargado', current_user.nombre),
                             'estudiantes': request.form.get('asistentes', ''),
-                            'fecha': request.form['fecha'],
-                            'hora_inicio': request.form['hora_inicio'],
-                            'hora_fin': request.form['hora_fin'],
-                            'encargado_apertura': request.form.get('encargado', '')
+                            'fecha': request.form['fecha'], 'hora_inicio': request.form['hora_inicio'],
+                            'hora_fin': request.form['hora_fin'], 'encargado_apertura': request.form.get('encargado', '')
                         })
                         if evento_id and result.data:
                             supabase.table('reuniones').update({'evento_calendar_id': evento_id}).eq('id', result.data[0]['id']).execute()
@@ -405,13 +466,15 @@ def eliminar_reunion(id):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+# ============================================
+# REPORTES
+# ============================================
 @app.route('/reportes')
 @login_required
 @socio_admin_required
 def reportes():
     mes = int(request.args.get('mes', date.today().month))
     anio = int(request.args.get('anio', date.today().year))
-    
     estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
     datos, tc, tp, th = [], 0, 0, 0
     horas_por_materia = {}
@@ -419,25 +482,19 @@ def reportes():
     cumplimiento = {'planificado': 0, 'realizado': 0, 'cancelado': 0}
     ingresos_por_tipo = {}
     gastos_por_categoria = {}
-    
     for e in (estudiantes.data or []):
         ses = supabase.table('sesiones').select('*').eq('estudiante_id', e['id']).execute()
         ses_todas = [s for s in (ses.data or []) if s['fecha'][:7] == f"{anio}-{mes:02d}"]
         ses_realizadas = [s for s in ses_todas if s['estado'] == 'Realizado']
         ses_canceladas = [s for s in ses_todas if s['estado'] == 'Cancelado']
-        ses_planificadas = [s for s in ses_todas if s['estado'] == 'Planificado']
-        
         pag = supabase.table('pagos').select('*').eq('estudiante_id', e['id']).execute()
         pag_filtrados = [p for p in (pag.data or []) if p['fecha_pago'][:7] == f"{anio}-{mes:02d}"]
-        
         horas_plan = sum(s.get('horas', 0) or 0 for s in ses_todas)
         horas_real = sum(s.get('horas', 0) or 0 for s in ses_realizadas)
         horas_canc = sum(s.get('horas', 0) or 0 for s in ses_canceladas)
         cobrar = sum(s.get('valor_total', 0) or 0 for s in ses_realizadas)
         pagado = sum(p.get('monto', 0) or 0 for p in pag_filtrados)
-        
         tc += cobrar; tp += pagado; th += horas_real
-        
         for s in ses_todas:
             asig = s.get('asignatura') or s.get('tema_terapia') or 'Sin registro'
             horas_por_materia[asig] = horas_por_materia.get(asig, 0) + (s.get('horas', 0) or 0)
@@ -452,36 +509,21 @@ def reportes():
             pagos_por_docente[prof]['sesiones'] += 1
             if tipo not in ingresos_por_tipo: ingresos_por_tipo[tipo] = 0
             ingresos_por_tipo[tipo] += valor
-        
         if cobrar > 0 or pagado > 0 or horas_real > 0:
-            datos.append({
-                'id': e['id'], 'estudiante': f"{e['apellidos']} {e['nombres']}",
-                'horas_plan': horas_plan, 'horas_real': horas_real, 'horas_canc': horas_canc,
-                'cobrar': cobrar, 'pagado': pagado, 'saldo': cobrar - pagado
-            })
-    
-    # Gastos
+            datos.append({'id': e['id'], 'estudiante': f"{e['apellidos']} {e['nombres']}",
+                         'horas_plan': horas_plan, 'horas_real': horas_real, 'horas_canc': horas_canc,
+                         'cobrar': cobrar, 'pagado': pagado, 'saldo': cobrar - pagado})
     gastos_mes = supabase.table('gastos').select('*').eq('mes', mes).eq('anio', anio).order('fecha').execute()
     total_gastos = sum(g.get('monto', 0) or 0 for g in (gastos_mes.data or []))
     for g in (gastos_mes.data or []):
         cat = g.get('categoria', 'Sin categoría')
         gastos_por_categoria[cat] = gastos_por_categoria.get(cat, 0) + (g.get('monto', 0) or 0)
-    
-    # Ingresos
     pagos_mes = supabase.table('pagos').select('*').gte('fecha_pago', f"{anio}-{mes:02d}-01").lte('fecha_pago', f"{anio}-{mes:02d}-31").execute()
     total_ingresos = sum(p.get('monto', 0) or 0 for p in (pagos_mes.data or []))
-    
-    # Correcciones
     correcciones = supabase.table('correcciones_pagos').select('*').order('fecha_correccion', desc=True).limit(30).execute()
-    
-    # Observaciones
     observaciones = supabase.table('sesiones').select('*, estudiantes(apellidos, nombres)').not_.is_('observaciones', 'null').order('fecha', desc=True).limit(30).execute()
-    
-    # Nuevos usuarios
     nuevos_usuarios = supabase.table('usuarios').select('*').gte('fecha_registro', f"{anio}-{mes:02d}-01").lte('fecha_registro', f"{anio}-{mes:02d}-31").execute()
-    
     total_pago_docentes = sum(d['pago'] for d in pagos_por_docente.values())
-    
     return render_template('reportes.html',
                          datos=datos, total_estudiantes=len(datos),
                          total_horas=th, total_ingresos=total_ingresos,
@@ -497,6 +539,9 @@ def reportes():
                          nuevos_usuarios=nuevos_usuarios.data or [],
                          gastos_por_categoria=gastos_por_categoria)
 
+# ============================================
+# GASTOS
+# ============================================
 @app.route('/gastos', methods=['GET', 'POST'])
 @login_required
 @socio_admin_required
@@ -527,6 +572,9 @@ def eliminar_gasto(id):
     supabase.table('gastos').delete().eq('id', id).execute()
     return jsonify({'success': True})
 
+# ============================================
+# ESTUDIANTES, PADRES, USUARIOS
+# ============================================
 @app.route('/estudiantes', methods=['GET', 'POST'])
 @login_required
 def gestion_estudiantes():
@@ -562,7 +610,6 @@ def gestion_usuarios():
     if request.method == 'POST':
         accion = request.form.get('accion')
         uid = int(request.form.get('usuario_id', 0))
-        
         if accion == 'aprobar':
             supabase.table('usuarios').update({'activo': True}).eq('id', uid).execute()
             flash('✅ Usuario aprobado', 'success')
@@ -577,22 +624,18 @@ def gestion_usuarios():
             flash('✅ Usuario creado', 'success')
         elif accion == 'editar':
             edit_id = request.form.get('edit_id')
-            updates = {
-                'nombre': request.form['nombre'],
-                'email': request.form['email'],
-                'rol': request.form['rol']
-            }
+            updates = {'nombre': request.form['nombre'], 'email': request.form['email'], 'rol': request.form['rol']}
             password = request.form.get('password', '')
-            if password:
-                updates['password_hash'] = password
+            if password: updates['password_hash'] = password
             supabase.table('usuarios').update(updates).eq('id', int(edit_id)).execute()
             flash('✅ Usuario actualizado', 'success')
-        
         return redirect(url_for('gestion_usuarios'))
-    
     usuarios = supabase.table('usuarios').select('*').order('fecha_registro', desc=True).execute()
     return render_template('usuarios.html', usuarios=usuarios.data or [])
 
+# ============================================
+# MI REPORTE
+# ============================================
 @app.route('/mi-reporte')
 @login_required
 def mi_reporte():
@@ -631,6 +674,9 @@ def mi_reporte():
                          total_pagado=total_pagado, total_horas=total_horas, mes=mes, anio=anio,
                          saldo=total_cobrar - total_pagado)
 
+# ============================================
+# EDITAR PERFIL
+# ============================================
 @app.route('/editar-perfil', methods=['GET', 'POST'])
 @login_required
 def editar_perfil():
@@ -647,6 +693,9 @@ def editar_perfil():
         return redirect(url_for('dashboard'))
     return render_template('editar_perfil.html')
 
+# ============================================
+# APIs
+# ============================================
 @app.route('/api/estudiante/<int:id>')
 @login_required
 def api_estudiante(id):
@@ -719,27 +768,24 @@ def crear_estudiante_form():
     except Exception as e:
         flash(f'❌ Error: {str(e)}', 'error')
     return redirect(url_for('gestion_estudiantes'))
+
 @app.route('/api/estudiante/<int:id>/eliminar', methods=['POST'])
 @login_required
 def eliminar_estudiante(id):
     if current_user.rol not in ['admin', 'socio']:
         return jsonify({'success': False, 'error': 'Sin permiso'})
     try:
-        # Verificar si tiene sesiones asociadas
         sesiones = supabase.table('sesiones').select('id').eq('estudiante_id', id).execute()
         if sesiones.data and len(sesiones.data) > 0:
-            return jsonify({'success': False, 'error': 'No se puede eliminar: tiene sesiones planificadas o realizadas. Elimina primero las sesiones.'})
-        
-        # Verificar si tiene pagos asociados
+            return jsonify({'success': False, 'error': 'No se puede eliminar: tiene sesiones. Elimina primero las sesiones.'})
         pagos = supabase.table('pagos').select('id').eq('estudiante_id', id).execute()
         if pagos.data and len(pagos.data) > 0:
-            return jsonify({'success': False, 'error': 'No se puede eliminar: tiene pagos registrados. Elimina primero los pagos.'})
-        
-        # Si no tiene sesiones ni pagos, se puede eliminar
+            return jsonify({'success': False, 'error': 'No se puede eliminar: tiene pagos. Elimina primero los pagos.'})
         supabase.table('estudiantes').update({'activo': False}).eq('id', id).execute()
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+
 @app.route('/api/sesion/<int:id>/observacion', methods=['POST'])
 @login_required
 def agregar_observacion(id):
@@ -751,3 +797,7 @@ def agregar_observacion(id):
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=True)
