@@ -346,19 +346,38 @@ def modulo3():
             }).execute()
             supabase.table('pagos').delete().eq('id', pago_id).execute()
             flash('🗑️ Pago eliminado', 'info')
-        elif accion == 'editar_sesion':
+                elif accion == 'editar_sesion':
             sesion_id = int(request.form['sesion_id'])
             nueva_fecha = request.form['nueva_fecha']
             nueva_h_ini = request.form['nueva_hora_inicio']
             nueva_h_fin = request.form['nueva_hora_fin']
             inicio = datetime.strptime(f"{nueva_fecha} {nueva_h_ini}", '%Y-%m-%d %H:%M')
             fin = datetime.strptime(f"{nueva_fecha} {nueva_h_fin}", '%Y-%m-%d %H:%M')
-            supabase.table('sesiones').update({
-                'fecha': nueva_fecha, 'hora_inicio': nueva_h_ini, 'hora_fin': nueva_h_fin,
-                'horas': round((fin - inicio).total_seconds() / 3600, 2)
-            }).eq('id', sesion_id).execute()
-            flash('✅ Sesión actualizada', 'success')
-        return redirect(url_for('modulo3'))
+            nuevas_horas = round((fin - inicio).total_seconds() / 3600, 2)
+            
+            # Obtener la sesión actual para recalcular valor
+            sesion_actual = supabase.table('sesiones').select('*').eq('id', sesion_id).execute()
+            if sesion_actual.data:
+                s = sesion_actual.data[0]
+                precio_hora = s.get('precio_hora', 10) or 10
+                cobro_por_sesion = s.get('cobro_por_sesion', False)
+                
+                # Si es terapia: precio fijo por sesión
+                if cobro_por_sesion or s.get('tipo_sesion') in ['terapia', 'ambos']:
+                    nuevo_valor = precio_hora  # Precio fijo
+                else:
+                    # Clase: horas * precio
+                    nuevo_valor = round(nuevas_horas * precio_hora, 2)
+                
+                supabase.table('sesiones').update({
+                    'fecha': nueva_fecha,
+                    'hora_inicio': nueva_h_ini,
+                    'hora_fin': nueva_h_fin,
+                    'horas': nuevas_horas,
+                    'valor_total': nuevo_valor
+                }).eq('id', sesion_id).execute()
+                
+                flash(f'✅ Sesión actualizada. Horas: {nuevas_horas}, Valor: ${nuevo_valor:.2f}', 'success')
     
     estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
     datos = []
