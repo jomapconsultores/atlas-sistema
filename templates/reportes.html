@@ -147,7 +147,7 @@
 const colors = ['#1a73e8','#0f9d58','#f4b400','#db4437','#ab47bc','#00acc1','#ff7043','#9ccc65'];
 const chartOptions = {responsive: true, maintainAspectRatio: true};
 
-new Chart(document.getElementById('chartIngresos'), {type:'pie',data:{labels:[{% for t,v in ingresos_por_tipo.items() %}'{{ t }}',{% endfor %}],datasets:[{data:[{% for t,v in ingresos_por_tipo.items() %}{{ v.get('total', v) }},{% endfor %}],backgroundColor:colors}]},options:chartOptions});
+new Chart(document.getElementById('chartIngresos'), {type:'pie',data:{labels:[{% for t,v in ingresos_por_tipo.items() %}'{{ t }}',{% endfor %}],datasets:[{data:[{% for t,v in ingresos_por_tipo.items() %}{{ v }},{% endfor %}],backgroundColor:colors}]},options:chartOptions});
 new Chart(document.getElementById('chartMaterias'), {type:'bar',data:{labels:[{% for m,h in horas_por_materia.items() %}'{{ m[:15] }}',{% endfor %}],datasets:[{label:'Horas',data:[{% for m,h in horas_por_materia.items() %}{{ h }},{% endfor %}],backgroundColor:'#1a73e8'}]},options:chartOptions});
 new Chart(document.getElementById('chartCumplimiento'), {type:'doughnut',data:{labels:['Realizado','Planificado','Cancelado'],datasets:[{data:[{{ cumplimiento.get('realizado',0) }},{{ cumplimiento.get('planificado',0) }},{{ cumplimiento.get('cancelado',0) }}],backgroundColor:['#0f9d58','#f4b400','#db4437']}]},options:chartOptions});
 new Chart(document.getElementById('chartGastos'), {type:'pie',data:{labels:[{% for c,v in gastos_por_categoria.items() %}'{{ c }}',{% endfor %}],datasets:[{data:[{% for c,v in gastos_por_categoria.items() %}{{ v }},{% endfor %}],backgroundColor:colors}]},options:chartOptions});
