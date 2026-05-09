@@ -511,6 +511,20 @@ def reportes():
     observaciones = supabase.table('sesiones').select('*, estudiantes(apellidos, nombres)').not_.is_('observaciones', 'null').order('fecha', desc=True).limit(30).execute()
     nuevos_usuarios = supabase.table('usuarios').select('*').gte('fecha_registro', f"{anio}-{mes:02d}-01").lte('fecha_registro', f"{anio}-{mes:02d}-31").execute()
     total_pago_docentes = sum(d['pago'] for d in pagos_por_docente.values())
+    # Total planificado
+    total_planificado = sum(s.get('valor_total', 0) or 0 for e in (estudiantes.data or []) for s in supabase.table('sesiones').select('*').eq('estudiante_id', e['id']).execute().data if s['fecha'][:7] == f"{anio}-{mes:02d}" and s['estado'] == 'Planificado')
+    
+    # Asignaturas detalle
+    asignaturas_detalle = {}
+    for e in (estudiantes.data or []):
+        ses = supabase.table('sesiones').select('*').eq('estudiante_id', e['id']).execute()
+        for s in (ses.data or []):
+            if s['fecha'][:7] == f"{anio}-{mes:02d}":
+                asig = s.get('asignatura') or s.get('tema_terapia') or 'Sin registro'
+                if asig not in asignaturas_detalle: asignaturas_detalle[asig] = {'plan': 0, 'real': 0, 'canc': 0}
+                if s['estado'] == 'Planificado': asignaturas_detalle[asig]['plan'] += s.get('horas', 0) or 0
+                elif s['estado'] == 'Realizado': asignaturas_detalle[asig]['real'] += s.get('horas', 0) or 0
+                elif s['estado'] == 'Cancelado': asignaturas_detalle[asig]['canc'] += s.get('horas', 0) or 0
     return render_template('reportes.html',
                          datos=datos, total_estudiantes=len(datos),
                          total_horas=th, total_ingresos=total_ingresos,
@@ -524,7 +538,10 @@ def reportes():
                          correcciones=correcciones.data or [],
                          observaciones=observaciones.data or [],
                          nuevos_usuarios=nuevos_usuarios.data or [],
+                         total_planificado=total_planificado,
+                         asignaturas_detalle=asignaturas_detalle,
                          gastos_por_categoria=gastos_por_categoria)
+                         
 
 @app.route('/gastos', methods=['GET', 'POST'])
 @login_required
