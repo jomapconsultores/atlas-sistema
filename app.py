@@ -526,8 +526,9 @@ def reportes():
             pagos_por_docente[prof]['horas'] += s.get('horas', 0) or 0
             pagos_por_docente[prof]['pago'] += pago
             pagos_por_docente[prof]['sesiones'] += 1
-            if tipo not in ingresos_por_tipo: ingresos_por_tipo[tipo] = 0
-            ingresos_por_tipo[tipo] += valor
+            if tipo not in ingresos_por_tipo: ingresos_por_tipo[tipo] = {'cantidad': 0, 'total': 0}
+	    ingresos_por_tipo[tipo]['cantidad'] += 1
+	    ingresos_por_tipo[tipo]['total'] += valor
         if cobrar > 0 or pagado > 0 or horas_real > 0:
             datos.append({'id': e['id'], 'estudiante': f"{e['apellidos']} {e['nombres']}",
                          'horas_plan': horas_plan, 'horas_real': horas_real, 'horas_canc': horas_canc,
