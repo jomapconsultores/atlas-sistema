@@ -346,7 +346,7 @@ def modulo3():
             }).execute()
             supabase.table('pagos').delete().eq('id', pago_id).execute()
             flash('🗑️ Pago eliminado', 'info')
-                elif accion == 'editar_sesion':
+        elif accion == 'editar_sesion':
             sesion_id = int(request.form['sesion_id'])
             nueva_fecha = request.form['nueva_fecha']
             nueva_h_ini = request.form['nueva_hora_inicio']
