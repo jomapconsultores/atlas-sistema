@@ -52,7 +52,7 @@
             <h6>📂 Por Tipo de Servicio</h6>
             <table class="table table-sm table-striped">
                 <thead><tr><th>Tipo</th><th>Cantidad</th><th>$ Total</th></tr></thead>
-                <tbody>{% for t, v in ingresos_por_tipo.items() %}<tr><td>{{ t }}</td><td>{{ v.get('cantidad', v) }}</td><td>${{ "%.2f"|format(v.get('total', v)) }}</td></tr>{% endfor %}</tbody>
+                <tbody>{% for t, v in ingresos_por_tipo.items() %}<tr><td>{{ t }}</td><td>{{ v }}</td><td>${{ "%.2f"|format(v) }}</td></tr>{% endfor %}</tbody>
             </table>
             <hr>
             <!-- Por estudiante -->
