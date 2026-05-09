@@ -303,54 +303,19 @@ def modificar_sesion(id):
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
-@app.route('/modulo3', methods=['GET', 'POST'])
-@login_required
-@socio_admin_required
-def modulo3():
-    if request.method == 'POST':
-        accion = request.form.get('accion', 'pagar')
-        if accion == 'pagar':
-            supabase.table('pagos').insert({
-                'fecha_pago': request.form['fecha_pago'], 'monto': float(request.form['monto']),
-                'tipo_pago': request.form.get('tipo_pago', 'efectivo'),
-                'concepto': request.form.get('concepto', ''),
-                'estudiante_id': int(request.form['estudiante_id']), 'usuario_id': int(current_user.id)
-            }).execute()
-            flash('✅ Pago registrado', 'success')
-        elif accion == 'corregir':
-            pago_id = int(request.form['pago_id'])
-            nuevo_monto = float(request.form['nuevo_monto'])
-            cambiado_por = request.form['cambiado_por']
-            motivo = request.form['motivo']
-            pago_anterior = supabase.table('pagos').select('monto').eq('id', pago_id).execute()
-            monto_anterior = pago_anterior.data[0]['monto'] if pago_anterior.data else 0
-            supabase.table('pagos').update({'monto': nuevo_monto}).eq('id', pago_id).execute()
-            supabase.table('correcciones_pagos').insert({
-                'pago_id': pago_id, 'monto_anterior': monto_anterior,
-                'monto_nuevo': nuevo_monto, 'cambiado_por': cambiado_por, 'motivo': motivo
-            }).execute()
-            flash('✅ Pago corregido', 'success')
-        elif accion == 'eliminar_pago':
-            pago_id = int(request.form['pago_id'])
-            motivo = request.form['motivo_eliminar']
-            eliminado_por = request.form.get('eliminado_por', current_user.nombre)
-            supabase.table('correcciones_pagos').insert({
-                'pago_id': pago_id, 'monto_anterior': 0, 'monto_nuevo': 0,
-                'cambiado_por': eliminado_por, 'motivo': f'ELIMINADO: {motivo}'
-            }).execute()
-            supabase.table('pagos').delete().eq('id', pago_id).execute()
-            flash('🗑️ Pago eliminado', 'info')
-        return redirect(url_for('modulo3'))
-    estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
-    datos = []
-    for e in (estudiantes.data or []):
-        ses = supabase.table('sesiones').select('*').eq('estudiante_id', e['id']).eq('estado', 'Realizado').execute()
-        pag = supabase.table('pagos').select('*').eq('estudiante_id', e['id']).order('fecha_pago', desc=True).execute()
-        cobrar = sum(s.get('valor_total', 0) or 0 for s in (ses.data or []))
-        pagado = sum(p.get('monto', 0) or 0 for p in (pag.data or []))
-        if cobrar > 0 or pagado > 0:
-            datos.append({'id': e['id'], 'nombre': f"{e['apellidos']} {e['nombres']}", 'cobrar': cobrar, 'pagado': pagado, 'saldo': cobrar - pagado, 'pagos': pag.data or []})
-    return render_template('modulo3.html', estudiantes=datos, today=date.today())
+
+        elif accion == 'editar_sesion':
+            sesion_id = int(request.form['sesion_id'])
+            nueva_fecha = request.form['nueva_fecha']
+            nueva_h_ini = request.form['nueva_hora_inicio']
+            nueva_h_fin = request.form['nueva_hora_fin']
+            inicio = datetime.strptime(f"{nueva_fecha} {nueva_h_ini}", '%Y-%m-%d %H:%M')
+            fin = datetime.strptime(f"{nueva_fecha} {nueva_h_fin}", '%Y-%m-%d %H:%M')
+            supabase.table('sesiones').update({
+                'fecha': nueva_fecha, 'hora_inicio': nueva_h_ini, 'hora_fin': nueva_h_fin,
+                'horas': round((fin - inicio).total_seconds() / 3600, 2)
+            }).eq('id', sesion_id).execute()
+            flash('✅ Sesión actualizada', 'success')
 
 @app.route('/modulo4')
 @login_required
@@ -447,81 +412,74 @@ def reportes():
     mes = int(request.args.get('mes', date.today().month))
     anio = int(request.args.get('anio', date.today().year))
     
-    # Datos generales
     estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
     datos, tc, tp, th = [], 0, 0, 0
-    
-    # Conteo por tipo
-    ingresos_por_tipo = {}
     horas_por_materia = {}
     pagos_por_docente = {}
     cumplimiento = {'planificado': 0, 'realizado': 0, 'cancelado': 0}
+    ingresos_por_tipo = {}
+    gastos_por_categoria = {}
     
     for e in (estudiantes.data or []):
         ses = supabase.table('sesiones').select('*').eq('estudiante_id', e['id']).execute()
-        ses_filtradas = [s for s in (ses.data or []) if s['fecha'][:7] == f"{anio}-{mes:02d}"]
+        ses_todas = [s for s in (ses.data or []) if s['fecha'][:7] == f"{anio}-{mes:02d}"]
+        ses_realizadas = [s for s in ses_todas if s['estado'] == 'Realizado']
+        ses_canceladas = [s for s in ses_todas if s['estado'] == 'Cancelado']
+        ses_planificadas = [s for s in ses_todas if s['estado'] == 'Planificado']
+        
         pag = supabase.table('pagos').select('*').eq('estudiante_id', e['id']).execute()
         pag_filtrados = [p for p in (pag.data or []) if p['fecha_pago'][:7] == f"{anio}-{mes:02d}"]
         
-        asignaturas, horas = {}, 0
-        for s in ses_filtradas:
+        horas_plan = sum(s.get('horas', 0) or 0 for s in ses_todas)
+        horas_real = sum(s.get('horas', 0) or 0 for s in ses_realizadas)
+        horas_canc = sum(s.get('horas', 0) or 0 for s in ses_canceladas)
+        cobrar = sum(s.get('valor_total', 0) or 0 for s in ses_realizadas)
+        pagado = sum(p.get('monto', 0) or 0 for p in pag_filtrados)
+        
+        tc += cobrar; tp += pagado; th += horas_real
+        
+        for s in ses_todas:
             asig = s.get('asignatura') or s.get('tema_terapia') or 'Sin registro'
-            if asig not in asignaturas: asignaturas[asig] = {'horas': 0, 'fechas': []}
-            asignaturas[asig]['horas'] += s.get('horas', 0) or 0
-            asignaturas[asig]['fechas'].append(s['fecha'])
-            horas += s.get('horas', 0) or 0
-            
-            # Horas por materia
             horas_por_materia[asig] = horas_por_materia.get(asig, 0) + (s.get('horas', 0) or 0)
-            
-            # Cumplimiento
             cumplimiento[s.get('estado', 'Planificado').lower()] = cumplimiento.get(s.get('estado', 'Planificado').lower(), 0) + 1
-            
-            # Pagos por docente
             prof = s.get('profesor_terapeuta', 'Desconocido')
             tipo = s.get('tipo_sesion', 'clase')
             valor = s.get('valor_total', 0) or 0
             pago = (s.get('horas', 0) or 0) * 7 if tipo in ['clase', 'preuniversitario'] else valor * 0.35
-            if prof not in pagos_por_docente: pagos_por_docente[prof] = {'horas': 0, 'pago': 0, 'sesiones': 0}
+            if prof not in pagos_por_docente: pagos_por_docente[prof] = {'horas': 0, 'pago': 0, 'sesiones': 0, 'pagado': 0}
             pagos_por_docente[prof]['horas'] += s.get('horas', 0) or 0
             pagos_por_docente[prof]['pago'] += pago
             pagos_por_docente[prof]['sesiones'] += 1
-            
-            # Ingresos por tipo
             if tipo not in ingresos_por_tipo: ingresos_por_tipo[tipo] = 0
             ingresos_por_tipo[tipo] += valor
         
-        cobrar = sum(s.get('valor_total', 0) or 0 for s in ses_filtradas)
-        pagado = sum(p.get('monto', 0) or 0 for p in pag_filtrados)
-        tc += cobrar; tp += pagado; th += horas
-        
-        if cobrar > 0 or pagado > 0 or horas > 0:
-            datos.append({'id': e['id'], 'estudiante': f"{e['apellidos']} {e['nombres']}",
-                         'asignaturas': asignaturas, 'total_horas': horas,
-                         'cobrar': cobrar, 'pagado': pagado, 'saldo': cobrar - pagado})
+        if cobrar > 0 or pagado > 0 or horas_real > 0:
+            datos.append({
+                'id': e['id'], 'estudiante': f"{e['apellidos']} {e['nombres']}",
+                'horas_plan': horas_plan, 'horas_real': horas_real, 'horas_canc': horas_canc,
+                'cobrar': cobrar, 'pagado': pagado, 'saldo': cobrar - pagado
+            })
     
-    # Gastos del mes
+    # Gastos
     gastos_mes = supabase.table('gastos').select('*').eq('mes', mes).eq('anio', anio).order('fecha').execute()
     total_gastos = sum(g.get('monto', 0) or 0 for g in (gastos_mes.data or []))
-    gastos_por_categoria = {}
     for g in (gastos_mes.data or []):
         cat = g.get('categoria', 'Sin categoría')
         gastos_por_categoria[cat] = gastos_por_categoria.get(cat, 0) + (g.get('monto', 0) or 0)
     
-    # Ingresos del mes
+    # Ingresos
     pagos_mes = supabase.table('pagos').select('*').gte('fecha_pago', f"{anio}-{mes:02d}-01").lte('fecha_pago', f"{anio}-{mes:02d}-31").execute()
     total_ingresos = sum(p.get('monto', 0) or 0 for p in (pagos_mes.data or []))
     
-    # Correcciones de pagos
-    correcciones = supabase.table('correcciones_pagos').select('*').order('fecha_correccion', desc=True).limit(20).execute()
+    # Correcciones
+    correcciones = supabase.table('correcciones_pagos').select('*').order('fecha_correccion', desc=True).limit(30).execute()
     
-    # Observaciones de sesiones
-    observaciones = supabase.table('sesiones').select('*, estudiantes(apellidos, nombres)').not_.is_('observaciones', 'null').order('fecha', desc=True).limit(20).execute()
+    # Observaciones
+    observaciones = supabase.table('sesiones').select('*, estudiantes(apellidos, nombres)').not_.is_('observaciones', 'null').order('fecha', desc=True).limit(30).execute()
     
-    # Nuevos usuarios del mes
+    # Nuevos usuarios
     nuevos_usuarios = supabase.table('usuarios').select('*').gte('fecha_registro', f"{anio}-{mes:02d}-01").lte('fecha_registro', f"{anio}-{mes:02d}-31").execute()
     
-    # Total docentes para pago
     total_pago_docentes = sum(d['pago'] for d in pagos_por_docente.values())
     
     return render_template('reportes.html',

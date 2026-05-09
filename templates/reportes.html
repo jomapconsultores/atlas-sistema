@@ -24,7 +24,7 @@
 <!-- TARJETAS -->
 <div class="row mb-4">
     <div class="col-md-2"><div class="card bg-primary text-white text-center p-2"><h5>{{ total_estudiantes }}</h5><small>Estudiantes</small></div></div>
-    <div class="col-md-2"><div class="card bg-success text-white text-center p-2"><h5>{{ total_horas }}</h5><small>Horas</small></div></div>
+    <div class="col-md-2"><div class="card bg-success text-white text-center p-2"><h5>{{ total_horas }}</h5><small>Horas Efectivas</small></div></div>
     <div class="col-md-2"><div class="card bg-info text-white text-center p-2"><h5>${{ "%.0f"|format(total_ingresos) }}</h5><small>Ingresos</small></div></div>
     <div class="col-md-2"><div class="card bg-danger text-white text-center p-2"><h5>${{ "%.0f"|format(total_gastos) }}</h5><small>Gastos</small></div></div>
     <div class="col-md-2"><div class="card bg-warning text-dark text-center p-2"><h5>${{ "%.0f"|format(total_pago_docentes) }}</h5><small>Pago Docentes</small></div></div>
@@ -32,114 +32,51 @@
 </div>
 
 <div class="row">
-    <!-- GRÁFICO: INGRESOS POR TIPO -->
-    <div class="col-md-6 mb-4">
-        <div class="card shadow"><div class="card-header"><strong>Ingresos por Tipo</strong></div><div class="card-body"><canvas id="chartIngresos"></canvas></div></div>
-    </div>
-    <!-- GRÁFICO: HORAS POR MATERIA -->
-    <div class="col-md-6 mb-4">
-        <div class="card shadow"><div class="card-header"><strong>Horas por Materia</strong></div><div class="card-body"><canvas id="chartMaterias"></canvas></div></div>
-    </div>
-    <!-- GRÁFICO: CUMPLIMIENTO -->
-    <div class="col-md-4 mb-4">
-        <div class="card shadow"><div class="card-header"><strong>Cumplimiento</strong></div><div class="card-body"><canvas id="chartCumplimiento"></canvas></div></div>
-    </div>
-    <!-- GRÁFICO: GASTOS POR CATEGORÍA -->
-    <div class="col-md-4 mb-4">
-        <div class="card shadow"><div class="card-header"><strong>Gastos por Categoría</strong></div><div class="card-body"><canvas id="chartGastos"></canvas></div></div>
-    </div>
-    <!-- NUEVOS USUARIOS -->
-    <div class="col-md-4 mb-4">
-        <div class="card shadow"><div class="card-header"><strong>Nuevos Registros ({{ nuevos_usuarios|length }})</strong></div>
-            <div class="card-body" style="max-height:200px;overflow-y:auto;">
-                {% for u in nuevos_usuarios %}
-                <small>👤 {{ u['nombre'] }} ({{ u['rol'] }}) - {{ u['fecha_registro'][:10] }}</small><br>
-                {% else %}<small class="text-muted">Sin registros este mes</small>{% endfor %}
-            </div>
-        </div>
-    </div>
+    <!-- GRÁFICOS (TODOS IGUAL TAMAÑO) -->
+    <div class="col-md-4 mb-4"><div class="card shadow h-100"><div class="card-header"><strong>Ingresos por Tipo</strong></div><div class="card-body"><canvas id="chartIngresos"></canvas></div></div></div>
+    <div class="col-md-4 mb-4"><div class="card shadow h-100"><div class="card-header"><strong>Horas por Materia</strong></div><div class="card-body"><canvas id="chartMaterias"></canvas></div></div></div>
+    <div class="col-md-4 mb-4"><div class="card shadow h-100"><div class="card-header"><strong>Cumplimiento</strong></div><div class="card-body"><canvas id="chartCumplimiento"></canvas></div></div></div>
+    <div class="col-md-4 mb-4"><div class="card shadow h-100"><div class="card-header"><strong>Gastos por Categoría</strong></div><div class="card-body"><canvas id="chartGastos"></canvas></div></div></div>
+    <div class="col-md-4 mb-4"><div class="card shadow h-100"><div class="card-header"><strong>Nuevos Registros ({{ nuevos_usuarios|length }})</strong></div><div class="card-body" style="max-height:250px;overflow-y:auto;">{% for u in nuevos_usuarios %}<small>👤 {{ u['nombre'] }} ({{ u['rol'] }}) - {{ u['fecha_registro'][:10] }}</small><br>{% else %}<small class="text-muted">Sin registros</small>{% endfor %}</div></div></div>
+    <div class="col-md-4 mb-4"><div class="card shadow h-100"><div class="card-header"><strong>Totales</strong></div><div class="card-body text-center"><h3>${{ "%.0f"|format(total_ingresos) }}</h3><small>Ingresos</small><hr><h3>${{ "%.0f"|format(total_gastos) }}</h3><small>Gastos</small><hr><h3 class="{{ 'text-success' if balance >= 0 else 'text-danger' }}">${{ "%.0f"|format(balance) }}</h3><small>Balance</small></div></div></div>
 </div>
 
-<!-- PAGOS POR DOCENTE -->
+<!-- PAGOS A DOCENTES -->
 <div class="card shadow mb-4">
     <div class="card-header bg-secondary text-white"><strong>Pagos a Docentes</strong></div>
-    <div class="card-body">
-        <table class="table table-sm"><thead><tr><th>Docente</th><th>Sesiones</th><th>Horas</th><th>A Pagar</th></tr></thead>
-            <tbody>{% for d, i in pagos_por_docente.items() %}<tr><td>{{ d }}</td><td>{{ i['sesiones'] }}</td><td>{{ i['horas'] }}</td><td>${{ "%.2f"|format(i['pago']) }}</td></tr>{% endfor %}</tbody>
-        </table>
-    </div>
+    <div class="card-body"><div class="table-responsive"><table class="table table-sm"><thead><tr><th>Docente</th><th>Sesiones</th><th>Horas</th><th>$ A Pagar</th><th>$ Pagado</th></tr></thead>
+        <tbody>{% for d, i in pagos_por_docente.items() %}<tr><td>{{ d }}</td><td>{{ i['sesiones'] }}</td><td>{{ i['horas'] }}</td><td>${{ "%.2f"|format(i['pago']) }}</td><td>${{ "%.2f"|format(i['pagado']) }}</td></tr>{% endfor %}</tbody></table></div></div>
 </div>
 
-<!-- DETALLE ESTUDIANTES -->
+<!-- DETALLE POR ESTUDIANTE -->
 <div class="card shadow mb-4">
     <div class="card-header bg-info text-white"><strong>Detalle por Estudiante</strong></div>
-    <div class="card-body">
-        {% for d in datos %}
-        <div class="border rounded p-2 mb-2">
-            <strong>{{ d['estudiante'] }}</strong> | Horas: {{ d['total_horas'] }} | Cobrar: ${{ "%.2f"|format(d['cobrar']) }} | Pagado: ${{ "%.2f"|format(d['pagado']) }} | Saldo: <span class="{{ 'text-danger' if d['saldo'] > 0 else 'text-success' }}">${{ "%.2f"|format(d['saldo']) }}</span>
-        </div>{% endfor %}
-    </div>
+    <div class="card-body"><div class="table-responsive"><table class="table table-sm table-striped"><thead><tr><th>Estudiante</th><th>H Plan</th><th>H Efect</th><th>H Canc</th><th>$ Cobrar</th><th>$ Pagado</th><th>$ Falta</th><th>$ Sobra</th></tr></thead>
+        <tbody>{% for d in datos %}<tr><td>{{ d['estudiante'] }}</td><td>{{ d['horas_plan'] }}</td><td>{{ d['horas_real'] }}</td><td>{{ d['horas_canc'] }}</td><td>${{ "%.2f"|format(d['cobrar']) }}</td><td>${{ "%.2f"|format(d['pagado']) }}</td><td class="text-danger">${{ "%.2f"|format(d['saldo'] if d['saldo'] > 0 else 0) }}</td><td class="text-success">${{ "%.2f"|format(-d['saldo'] if d['saldo'] < 0 else 0) }}</td></tr>{% endfor %}</tbody></table></div></div>
 </div>
 
-<!-- CORRECCIONES -->
+<!-- CORRECCIONES DE PAGOS -->
 <div class="card shadow mb-4">
     <div class="card-header bg-warning text-dark"><strong>Correcciones de Pagos</strong></div>
-    <div class="card-body">
-        {% if correcciones %}<table class="table table-sm"><thead><tr><th>Pago ID</th><th>Anterior</th><th>Nuevo</th><th>Quién</th><th>Motivo</th></tr></thead>
-            <tbody>{% for c in correcciones %}<tr><td>{{ c['pago_id'] }}</td><td>${{ "%.2f"|format(c['monto_anterior']) }}</td><td>${{ "%.2f"|format(c['monto_nuevo']) }}</td><td>{{ c['cambiado_por'] }}</td><td>{{ c['motivo'][:50] }}</td></tr>{% endfor %}</tbody></table>
-        {% else %}<p class="text-muted">Sin correcciones.</p>{% endif %}
-    </div>
+    <div class="card-body">{% if correcciones %}<div class="table-responsive"><table class="table table-sm"><thead><tr><th>Fecha Corrección</th><th>Pago ID</th><th>$ Anterior</th><th>$ Nuevo</th><th>Quién</th><th>Motivo</th></tr></thead>
+        <tbody>{% for c in correcciones %}<tr><td>{{ c.get('fecha_correccion', '')[:10] }}</td><td>{{ c['pago_id'] }}</td><td>${{ "%.2f"|format(c['monto_anterior']) }}</td><td>${{ "%.2f"|format(c['monto_nuevo']) }}</td><td>{{ c['cambiado_por'] }}</td><td>{{ c['motivo'][:50] }}</td></tr>{% endfor %}</tbody></table></div>{% else %}<p class="text-muted">Sin correcciones.</p>{% endif %}</div>
 </div>
 
 <!-- OBSERVACIONES -->
 <div class="card shadow mb-4">
     <div class="card-header bg-dark text-white"><strong>Observaciones en Sesiones</strong></div>
-    <div class="card-body">
-        {% if observaciones %}<table class="table table-sm"><thead><tr><th>Fecha</th><th>Estudiante</th><th>Observación</th></tr></thead>
-            <tbody>{% for o in observaciones %}<tr><td>{{ o['fecha'] }}</td><td>{{ o.get('estudiantes', {}).get('apellidos', '') }} {{ o.get('estudiantes', {}).get('nombres', '') }}</td><td>{{ o['observaciones'][:60] }}</td></tr>{% endfor %}</tbody></table>
-        {% else %}<p class="text-muted">Sin observaciones.</p>{% endif %}
-    </div>
+    <div class="card-body">{% if observaciones %}<div class="table-responsive"><table class="table table-sm"><thead><tr><th>Fecha</th><th>Estudiante</th><th>Tipo</th><th>Observación</th></tr></thead>
+        <tbody>{% for o in observaciones %}<tr><td>{{ o['fecha'] }}</td><td>{{ o.get('estudiantes', {}).get('apellidos', '') }} {{ o.get('estudiantes', {}).get('nombres', '') }}</td><td>{{ o['tipo_sesion'] }}</td><td>{{ o['observaciones'][:80] }}</td></tr>{% endfor %}</tbody></table></div>{% else %}<p class="text-muted">Sin observaciones.</p>{% endif %}</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
-// COLORES
 const colors = ['#1a73e8','#0f9d58','#f4b400','#db4437','#ab47bc','#00acc1','#ff7043','#9ccc65'];
+const chartOptions = {responsive: true, maintainAspectRatio: true};
 
-// INGRESOS POR TIPO
-new Chart(document.getElementById('chartIngresos'), {
-    type: 'pie',
-    data: {
-        labels: [{% for t, v in ingresos_por_tipo.items() %}'{{ t }}',{% endfor %}],
-        datasets: [{data: [{% for t, v in ingresos_por_tipo.items() %}{{ v }},{% endfor %}], backgroundColor: colors}]
-    }
-});
-
-// HORAS POR MATERIA
-new Chart(document.getElementById('chartMaterias'), {
-    type: 'bar',
-    data: {
-        labels: [{% for m, h in horas_por_materia.items() %}'{{ m[:15] }}',{% endfor %}],
-        datasets: [{label: 'Horas', data: [{% for m, h in horas_por_materia.items() %}{{ h }},{% endfor %}], backgroundColor: '#1a73e8'}]
-    }
-});
-
-// CUMPLIMIENTO
-new Chart(document.getElementById('chartCumplimiento'), {
-    type: 'doughnut',
-    data: {
-        labels: ['Realizado','Planificado','Cancelado'],
-        datasets: [{data: [{{ cumplimiento.get('realizado',0) }},{{ cumplimiento.get('planificado',0) }},{{ cumplimiento.get('cancelado',0) }}], backgroundColor: ['#0f9d58','#f4b400','#db4437']}]
-    }
-});
-
-// GASTOS POR CATEGORÍA
-new Chart(document.getElementById('chartGastos'), {
-    type: 'pie',
-    data: {
-        labels: [{% for c, v in gastos_por_categoria.items() %}'{{ c }}',{% endfor %}],
-        datasets: [{data: [{% for c, v in gastos_por_categoria.items() %}{{ v }},{% endfor %}], backgroundColor: colors}]
-    }
-});
+new Chart(document.getElementById('chartIngresos'), {type:'pie',data:{labels:[{% for t,v in ingresos_por_tipo.items() %}'{{ t }}',{% endfor %}],datasets:[{data:[{% for t,v in ingresos_por_tipo.items() %}{{ v }},{% endfor %}],backgroundColor:colors}]},options:chartOptions});
+new Chart(document.getElementById('chartMaterias'), {type:'bar',data:{labels:[{% for m,h in horas_por_materia.items() %}'{{ m[:15] }}',{% endfor %}],datasets:[{label:'Horas',data:[{% for m,h in horas_por_materia.items() %}{{ h }},{% endfor %}],backgroundColor:'#1a73e8'}]},options:chartOptions});
+new Chart(document.getElementById('chartCumplimiento'), {type:'doughnut',data:{labels:['Realizado','Planificado','Cancelado'],datasets:[{data:[{{ cumplimiento.get('realizado',0) }},{{ cumplimiento.get('planificado',0) }},{{ cumplimiento.get('cancelado',0) }}],backgroundColor:['#0f9d58','#f4b400','#db4437']}]},options:chartOptions});
+new Chart(document.getElementById('chartGastos'), {type:'pie',data:{labels:[{% for c,v in gastos_por_categoria.items() %}'{{ c }}',{% endfor %}],datasets:[{data:[{% for c,v in gastos_por_categoria.items() %}{{ v }},{% endfor %}],backgroundColor:colors}]},options:chartOptions});
 </script>
 {% endblock %}
