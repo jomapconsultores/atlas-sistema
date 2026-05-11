@@ -137,6 +137,7 @@ def modulo1():
             num_sesiones = int(request.form.get('num_sesiones', 1))
             num_estudiantes = int(request.form.get('num_estudiantes', 1))
             primera_fecha = None
+            
             for sesion_num in range(1, num_sesiones + 1):
                 fecha = request.form.get(f'fecha_{sesion_num}')
                 h_ini = request.form.get(f'hora_inicio_{sesion_num}')
@@ -144,12 +145,20 @@ def modulo1():
                 profesor = request.form.get(f'profesor_{sesion_num}', '')
                 nuevo_prof = request.form.get(f'nuevo_profesor_{sesion_num}', '')
                 encargado = request.form.get(f'encargado_{sesion_num}', '')
-                if nuevo_prof and profesor == 'nuevo': profesor = nuevo_prof
-                if not fecha or not h_ini or not h_fin: continue
-                if not primera_fecha: primera_fecha = fecha
+                
+                if nuevo_prof and profesor == 'nuevo':
+                    profesor = nuevo_prof
+                
+                if not fecha or not h_ini or not h_fin:
+                    continue
+                
+                if not primera_fecha:
+                    primera_fecha = fecha
+                
                 inicio = datetime.strptime(f"{fecha} {h_ini}", '%Y-%m-%d %H:%M')
                 fin = datetime.strptime(f"{fecha} {h_fin}", '%Y-%m-%d %H:%M')
                 horas = round((fin - inicio).total_seconds() / 3600, 2)
+                
                 es_terapia = tipo in ['terapia', 'ambos']
                 if es_terapia:
                     tema = request.form.get('atencion_psicologica', '')
@@ -161,48 +170,80 @@ def modulo1():
                     tema = ''
                     precio = float(request.form.get('precio_hora', 10))
                     valor_inicial = 0
+                
+                # Recolectar nombres de estudiantes para esta sesión
                 estudiantes_nombres = []
+                
                 for est_num in range(1, num_estudiantes + 1):
                     eid = request.form.get(f'estudiante_id_{est_num}', '')
                     if eid and eid != 'nuevo':
+                        # Insertar sesión para este estudiante en esta sesión
                         result = supabase.table('sesiones').insert({
-                            'tipo_sesion': tipo, 'asignatura': asignatura,
-                            'tema_terapia': tema, 'profesor_terapeuta': profesor,
-                            'fecha': fecha, 'hora_inicio': h_ini, 'hora_fin': h_fin,
-                            'horas': horas, 'estado': 'Planificado',
-                            'encargado_apertura': encargado, 'precio_hora': precio,
-                            'valor_total': valor_inicial, 'cobro_por_sesion': es_terapia,
-                            'estudiante_id': int(eid), 'usuario_id': int(current_user.id)
+                            'tipo_sesion': tipo,
+                            'asignatura': asignatura,
+                            'tema_terapia': tema,
+                            'profesor_terapeuta': profesor,
+                            'fecha': fecha,
+                            'hora_inicio': h_ini,
+                            'hora_fin': h_fin,
+                            'horas': horas,
+                            'estado': 'Planificado',
+                            'encargado_apertura': encargado,
+                            'precio_hora': precio,
+                            'valor_total': valor_inicial,
+                            'cobro_por_sesion': es_terapia,
+                            'estudiante_id': int(eid),
+                            'usuario_id': int(current_user.id)
                         }).execute()
+                        
+                        # Obtener nombre del estudiante para Google Calendar
                         est_info = supabase.table('estudiantes').select('apellidos, nombres').eq('id', int(eid)).execute()
                         if est_info.data:
-                            estudiantes_nombres.append(f"{est_info.data[0]['apellidos']} {est_info.data[0]['nombres']}")
-                if crear_evento_calendar and primera_fecha and estudiantes_nombres:
+                            nombre_completo = f"{est_info.data[0]['apellidos']} {est_info.data[0]['nombres']}"
+                            if nombre_completo not in estudiantes_nombres:
+                                estudiantes_nombres.append(nombre_completo)
+                
+                # Crear evento en Google Calendar para esta sesión
+                if crear_evento_calendar and estudiantes_nombres:
                     try:
                         evento_id = crear_evento_calendar({
-                            'asignatura': asignatura or 'Sesión', 'profesor': profesor,
+                            'asignatura': asignatura or 'Sesión',
+                            'profesor': profesor,
                             'estudiantes': ', '.join(estudiantes_nombres),
-                            'fecha': fecha, 'hora_inicio': h_ini, 'hora_fin': h_fin,
+                            'fecha': fecha,
+                            'hora_inicio': h_ini,
+                            'hora_fin': h_fin,
                             'encargado_apertura': encargado
                         })
                         if evento_id:
+                            # Actualizar evento_calendar_id para todos los estudiantes de esta sesión
                             for est_num in range(1, num_estudiantes + 1):
                                 eid = request.form.get(f'estudiante_id_{est_num}', '')
                                 if eid and eid != 'nuevo':
-                                    supabase.table('sesiones').update({'evento_calendar_id': evento_id}).eq('estudiante_id', int(eid)).eq('fecha', fecha).execute()
-                    except: pass
+                                    supabase.table('sesiones').update({
+                                        'evento_calendar_id': evento_id
+                                    }).eq('estudiante_id', int(eid)).eq('fecha', fecha).eq('hora_inicio', h_ini).execute()
+                    except Exception as e:
+                        print(f'⚠️ Google Calendar error: {e}')
+            
             flash(f'✅ {num_sesiones} sesión(es) para {num_estudiantes} estudiante(s)', 'success')
             return redirect(url_for('modulo2', fecha=primera_fecha or str(date.today())))
+            
         except Exception as e:
             flash(f'❌ Error: {str(e)}', 'error')
         return redirect(url_for('modulo1'))
+    
     estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
-    return render_template('modulo1.html', estudiantes=estudiantes.data or [],
-                         asignaturas=ASIGNATURAS, atencion_psicologica=ATENCION_PSICOLOGICA,
-                         precios_clase=PRECIOS_CLASE, precios_matricula=PRECIOS_MATRICULA,
-                         precios_pension=PRECIOS_PENSION, profesores=PROFESORES,
-                         encargados=ENCARGADOS, today=date.today())
-
+    return render_template('modulo1.html',
+                         estudiantes=estudiantes.data or [],
+                         asignaturas=ASIGNATURAS,
+                         atencion_psicologica=ATENCION_PSICOLOGICA,
+                         precios_clase=PRECIOS_CLASE,
+                         precios_matricula=PRECIOS_MATRICULA,
+                         precios_pension=PRECIOS_PENSION,
+                         profesores=PROFESORES,
+                         encargados=ENCARGADOS,
+                         today=date.today())
 @app.route('/modulo2')
 @login_required
 def modulo2():
