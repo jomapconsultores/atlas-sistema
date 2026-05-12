@@ -51,6 +51,13 @@
                             <span class="badge bg-{{ 'success' if s['estado'] == 'Realizado' else 'danger' if s['estado'] == 'Cancelado' else 'warning' }}">
                                 {{ s['estado'] }}
                             </span>
+                            {% if current_user.rol in ['admin', 'socio'] %}
+                                {% if s.get('evento_calendar_id') %}
+                                <span class="badge bg-success" title="Sincronizado">📅</span>
+                                {% else %}
+                                <span class="badge bg-secondary" title="No sincronizado">📅</span>
+                                {% endif %}
+                            {% endif %}
                         </td>
                         <td>
                             {% if s['estado'] == 'Realizado' %}
@@ -94,15 +101,19 @@
 
 <!-- MODAL CAMBIAR ESTUDIANTE -->
 <div class="modal fade" id="modalCambiarEstudiante" tabindex="-1">
-    <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-dialog modal-lg"><div class="modal-content">
         <div class="modal-header bg-primary text-white"><h5>🔄 Cambiar Estudiante</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
         <div class="modal-body">
             <input type="hidden" id="cambiarSesionId">
             <div class="mb-2">
-                <label class="form-label">Estudiante</label>
-                <select id="selectEstudianteCambio" class="form-select" onchange="toggleNuevoEstudiante()">
+                <input type="text" id="buscarEstudiante" class="form-control" placeholder="🔍 Buscar estudiante..." onkeyup="filtrarEstudiantes()">
+            </div>
+            <div class="mb-2" style="max-height:200px;overflow-y:auto;">
+                <select id="selectEstudianteCambio" class="form-select" size="8" onchange="toggleNuevoEstudiante()">
                     <option value="">Seleccionar...</option>
-                    {% for e in estudiantes %}<option value="{{ e['id'] }}">{{ e['apellidos'] }} {{ e['nombres'] }}</option>{% endfor %}
+                    {% for e in estudiantes %}
+                    <option value="{{ e['id'] }}" data-nombre="{{ e['apellidos'] }} {{ e['nombres'] }}">{{ e['apellidos'] }} {{ e['nombres'] }}</option>
+                    {% endfor %}
                     <option value="nuevo">➕ Nuevo estudiante</option>
                 </select>
             </div>
@@ -142,9 +153,22 @@ function eliminarSesion(id) {
 
 function abrirModalEstudiante(id) {
     document.getElementById('cambiarSesionId').value = id;
+    document.getElementById('buscarEstudiante').value = '';
     document.getElementById('selectEstudianteCambio').value = '';
     document.getElementById('nuevoEstudianteCambio').style.display = 'none';
+    const options = document.getElementById('selectEstudianteCambio').options;
+    for (let i = 0; i < options.length; i++) options[i].style.display = '';
     new bootstrap.Modal(document.getElementById('modalCambiarEstudiante')).show();
+}
+
+function filtrarEstudiantes() {
+    const busqueda = document.getElementById('buscarEstudiante').value.toLowerCase();
+    const select = document.getElementById('selectEstudianteCambio');
+    const options = select.options;
+    for (let i = 0; i < options.length; i++) {
+        const texto = options[i].textContent.toLowerCase();
+        options[i].style.display = (texto.includes(busqueda) || options[i].value === '' || options[i].value === 'nuevo') ? '' : 'none';
+    }
 }
 
 function toggleNuevoEstudiante() {
@@ -156,7 +180,6 @@ async function guardarCambioEstudiante() {
     const id = document.getElementById('cambiarSesionId').value;
     const selectVal = document.getElementById('selectEstudianteCambio').value;
     if (!selectVal) { alert('Selecciona un estudiante'); return; }
-    
     const body = {
         estudiante_id: selectVal,
         nuevo_nombre: document.getElementById('nuevoNombreCambio').value,
@@ -164,7 +187,6 @@ async function guardarCambioEstudiante() {
         nuevo_nivel: document.getElementById('nuevoNivelCambio').value,
         nuevo_procedencia: document.getElementById('nuevoProcCambio').value
     };
-    
     const resp = await fetch('/api/sesion/' + id + '/cambiar-estudiante', {
         method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)
     });

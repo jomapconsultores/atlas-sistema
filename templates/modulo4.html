@@ -21,7 +21,13 @@
                             <td>{{ s['tipo_sesion'] }}</td>
                             <td>{{ s.get('asignatura') or s.get('tema_terapia') or '-' }}</td>
                             <td>{{ s['profesor_terapeuta'] }}</td>
-                            <td><span class="badge bg-{{ 'success' if s['estado']=='Realizado' else 'danger' if s['estado']=='Cancelado' else 'warning' }}">{{ s['estado'] }}</span></td>
+                            <td>
+                                <span class="badge bg-{{ 'success' if s['estado']=='Realizado' else 'danger' if s['estado']=='Cancelado' else 'warning' }}">{{ s['estado'] }}</span>
+                                {% if current_user.rol in ['admin', 'socio'] %}
+                                    {% if s.get('evento_calendar_id') %}<span class="badge bg-success" title="Sincronizado">📅</span>
+                                    {% else %}<span class="badge bg-secondary" title="No sincronizado">📅</span>{% endif %}
+                                {% endif %}
+                            </td>
                             {% if current_user.rol in ['admin', 'socio'] %}
                             <td><button class="btn btn-warning btn-sm editar-btn" onclick="modificarSesion({{ s['id'] }})">✏️</button><button class="btn btn-success btn-sm guardar-btn" style="display:none;" onclick="guardarCambios({{ s['id'] }})">✅</button><button class="btn btn-secondary btn-sm cancelar-btn" style="display:none;" onclick="cancelarEdicion()">❌</button></td>
                             <td><button class="btn btn-outline-primary btn-sm" onclick="abrirModalEstudiante({{ s['id'] }})">🔄</button></td>
@@ -40,31 +46,42 @@
     <div class="col-md-3"><div class="card shadow"><div class="card-header bg-dark text-white"><strong>⚡ Acciones</strong></div><div class="card-body">{% if current_user.rol in ['admin', 'socio'] %}<a href="/modulo1" class="btn btn-primary w-100 mb-2">➕ Planificar</a>{% endif %}<a href="/modulo2" class="btn btn-success w-100">📅 Calendario</a></div></div></div>
 </div>
 
-<!-- MODAL CAMBIAR ESTUDIANTE -->
 {% if current_user.rol in ['admin', 'socio'] %}
-<div class="modal fade" id="modalCambiarEstudiante" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
-    <div class="modal-header bg-primary text-white"><h5>🔄 Cambiar Estudiante</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-    <div class="modal-body">
-        <input type="hidden" id="cambiarSesionId">
-        <select id="selectEstudianteCambio" class="form-select" onchange="toggleNuevoEstudiante()">
-            <option value="">Seleccionar...</option>{% for e in estudiantes %}<option value="{{ e['id'] }}">{{ e['apellidos'] }} {{ e['nombres'] }}</option>{% endfor %}<option value="nuevo">➕ Nuevo</option>
-        </select>
-        <div id="nuevoEstudianteCambio" style="display:none;" class="mt-2">
-            <input type="text" id="nuevoNombreCambio" class="form-control mb-1" placeholder="Nombres"><input type="text" id="nuevoApellidoCambio" class="form-control mb-1" placeholder="Apellidos"><input type="text" id="nuevoNivelCambio" class="form-control mb-1" placeholder="Nivel"><input type="text" id="nuevoProcCambio" class="form-control" placeholder="Procedencia">
+<!-- MODAL CAMBIAR ESTUDIANTE -->
+<div class="modal fade" id="modalCambiarEstudiante" tabindex="-1">
+    <div class="modal-dialog modal-lg"><div class="modal-content">
+        <div class="modal-header bg-primary text-white"><h5>🔄 Cambiar Estudiante</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+            <input type="hidden" id="cambiarSesionId">
+            <div class="mb-2"><input type="text" id="buscarEstudiante" class="form-control" placeholder="🔍 Buscar estudiante..." onkeyup="filtrarEstudiantes()"></div>
+            <div class="mb-2" style="max-height:200px;overflow-y:auto;">
+                <select id="selectEstudianteCambio" class="form-select" size="8" onchange="toggleNuevoEstudiante()">
+                    <option value="">Seleccionar...</option>
+                    {% for e in estudiantes %}<option value="{{ e['id'] }}">{{ e['apellidos'] }} {{ e['nombres'] }}</option>{% endfor %}
+                    <option value="nuevo">➕ Nuevo</option>
+                </select>
+            </div>
+            <div id="nuevoEstudianteCambio" style="display:none;" class="mt-2">
+                <input type="text" id="nuevoNombreCambio" class="form-control mb-1" placeholder="Nombres"><input type="text" id="nuevoApellidoCambio" class="form-control mb-1" placeholder="Apellidos"><input type="text" id="nuevoNivelCambio" class="form-control mb-1" placeholder="Nivel"><input type="text" id="nuevoProcCambio" class="form-control" placeholder="Procedencia">
+            </div>
         </div>
-    </div>
-    <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-primary" onclick="guardarCambioEstudiante()">💾 Guardar</button></div>
-</div></div></div>
+        <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-primary" onclick="guardarCambioEstudiante()">💾 Guardar</button></div>
+    </div></div>
+</div>
 {% endif %}
 
-<script>{% if current_user.rol in ['admin', 'socio'] %}
+<script>
+{% if current_user.rol in ['admin', 'socio'] %}
 function modificarSesion(id){const f=document.getElementById('fila-'+id);f.querySelector('.fecha-texto').style.display='none';f.querySelector('.fecha-input').style.display='block';f.querySelector('.hora-texto').style.display='none';f.querySelector('.hora-input').style.display='block';f.querySelector('.editar-btn').style.display='none';f.querySelector('.guardar-btn').style.display='inline-block';f.querySelector('.cancelar-btn').style.display='inline-block'}
 function cancelarEdicion(){location.reload()}
 async function guardarCambios(id){const f=document.getElementById('fila-'+id);const fecha=f.querySelector('.fecha-input').value;const hI=f.querySelector('.hora-inicio-input').value;const hF=f.querySelector('.hora-fin-input').value;if(!fecha||!hI||!hF){alert('Completa');return}if(!confirm('¿Confirmas?'))return;await fetch('/api/sesion/'+id+'/modificar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fecha,hora_inicio:hI,hora_fin:hF})});location.reload()}
-function abrirModalEstudiante(id){document.getElementById('cambiarSesionId').value=id;document.getElementById('selectEstudianteCambio').value='';document.getElementById('nuevoEstudianteCambio').style.display='none';new bootstrap.Modal(document.getElementById('modalCambiarEstudiante')).show()}
+
+function abrirModalEstudiante(id){document.getElementById('cambiarSesionId').value=id;document.getElementById('buscarEstudiante').value='';document.getElementById('selectEstudianteCambio').value='';document.getElementById('nuevoEstudianteCambio').style.display='none';const opts=document.getElementById('selectEstudianteCambio').options;for(let i=0;i<opts.length;i++)opts[i].style.display='';new bootstrap.Modal(document.getElementById('modalCambiarEstudiante')).show()}
+function filtrarEstudiantes(){const b=document.getElementById('buscarEstudiante').value.toLowerCase();const s=document.getElementById('selectEstudianteCambio');const o=s.options;for(let i=0;i<o.length;i++){const t=o[i].textContent.toLowerCase();o[i].style.display=(t.includes(b)||o[i].value===''||o[i].value==='nuevo')?'':'none'}}
 function toggleNuevoEstudiante(){document.getElementById('nuevoEstudianteCambio').style.display=document.getElementById('selectEstudianteCambio').value==='nuevo'?'block':'none'}
 async function guardarCambioEstudiante(){const id=document.getElementById('cambiarSesionId').value;const sv=document.getElementById('selectEstudianteCambio').value;if(!sv){alert('Selecciona');return}const r=await fetch('/api/sesion/'+id+'/cambiar-estudiante',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({estudiante_id:sv,nuevo_nombre:document.getElementById('nuevoNombreCambio').value,nuevo_apellido:document.getElementById('nuevoApellidoCambio').value,nuevo_nivel:document.getElementById('nuevoNivelCambio').value,nuevo_procedencia:document.getElementById('nuevoProcCambio').value})});const d=await r.json();if(d.success){alert('✅ '+d.nombre);location.reload()}else{alert('❌ '+(d.error||''))}}
 async function cambiarProfesor(id,act){const n=prompt('Nuevo profesor:',act);if(!n)return;const r=await fetch('/api/sesion/'+id+'/cambiar-profesor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({profesor:n})});if((await r.json()).success){alert('✅');location.reload()}}
 async function eliminarSesion(id){if(!confirm('🗑️'))return;await fetch('/api/sesion/'+id+'/eliminar',{method:'POST'});location.reload()}
-{% endif %}</script>
+{% endif %}
+</script>
 {% endblock %}
