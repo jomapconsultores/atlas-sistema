@@ -21,6 +21,11 @@
                     <td>{% if s.get('estudiantes') %}{{ s['estudiantes']['apellidos'] }} {{ s['estudiantes']['nombres'] }}{% else %}ID: {{ s['estudiante_id'] }}{% endif %}</td>
                     <td>{{ s['tipo_sesion'] }}</td><td>{{ s.get('asignatura') or s.get('tema_terapia') or '-' }}</td><td>{{ s['profesor_terapeuta'] }}</td>
                     <td><span class="badge bg-{{ 'success' if s['estado']=='Realizado' else 'danger' if s['estado']=='Cancelado' else 'warning' }}">{{ s['estado'] }}</span>{% if current_user.rol in ['admin','socio'] %}{% if s.get('evento_calendar_id') %}<span class="badge bg-success">📅</span>{% else %}<span class="badge bg-secondary">📅</span>{% endif %}{% endif %}</td>
+{% if current_user.rol in ['admin','socio'] %}
+    {% if not s.get('evento_calendar_id') %}
+    <button class="btn btn-outline-success btn-sm" onclick="sincronizarEvento({{ s['id'] }})" title="Sincronizar ahora">🔄</button>
+    {% endif %}
+{% endif %}
                     <td>{% if s['estado']=='Realizado' %}${{ "%.2f"|format(s.get('valor_total',0) or 0) }}{% else %}-{% endif %}</td>
                     <td><input type="radio" name="est_{{ s['id'] }}" class="radio-sesion" data-id="{{ s['id'] }}" data-estado="Realizado" {{ 'checked' if s['estado']=='Realizado' }}></td>
                     <td><input type="radio" name="est_{{ s['id'] }}" class="radio-sesion" data-id="{{ s['id'] }}" data-estado="Cancelado" {{ 'checked' if s['estado']=='Cancelado' }}></td>
@@ -62,6 +67,17 @@
 {% endif %}
 
 <script>
+async function sincronizarEvento(id) {
+    const btn = event.target;
+    btn.disabled = true;
+    btn.textContent = '⏳';
+    const resp = await fetch('/api/sesion/' + id + '/sincronizar', {
+        method: 'POST', headers: {'Content-Type': 'application/json'}
+    });
+    const data = await resp.json();
+    if (data.success) { alert('✅ Sincronizado con Google Calendar'); location.reload(); }
+    else { alert('❌ Error: ' + (data.error || 'Desconocido')); btn.disabled = false; btn.textContent = '🔄'; }
+}
 document.querySelectorAll('.radio-sesion').forEach(r=>{r.addEventListener('change',function(){if(!this.checked)return;const id=this.dataset.id,e=this.dataset.estado;if(!confirm('¿Confirmas marcar como '+e+'?')){location.reload();return}fetch('/api/sesion/'+id+'/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({estado:e})}).then(()=>location.reload())})});
 
 {% if current_user.rol in ['admin','socio'] %}
