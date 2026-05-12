@@ -844,6 +844,101 @@ def agregar_observacion(id):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+@app.route('/api/sesion/<int:id>/cambiar-estudiante', methods=['POST'])
+@login_required
+@socio_admin_required
+def cambiar_estudiante_sesion(id):
+    try:
+        data = request.get_json()
+        estudiante_id = data.get('estudiante_id')
+        nuevo_nombre = data.get('nuevo_nombre', '')
+        nuevo_apellido = data.get('nuevo_apellido', '')
+        
+        if estudiante_id == 'nuevo' and nuevo_nombre and nuevo_apellido:
+            result = supabase.table('estudiantes').insert({
+                'nombres': nuevo_nombre,
+                'apellidos': nuevo_apellido,
+                'nivel_curso': data.get('nuevo_nivel', ''),
+                'procedencia': data.get('nuevo_procedencia', ''),
+                'activo': True,
+                'usuario_id': int(current_user.id)
+            }).execute()
+            if result.data:
+                estudiante_id = result.data[0]['id']
+            else:
+                return jsonify({'success': False, 'error': 'No se pudo crear el estudiante'})
+        
+        if not estudiante_id or estudiante_id == 'nuevo':
+            return jsonify({'success': False, 'error': 'ID de estudiante requerido'})
+        
+        estudiante_id = int(estudiante_id)
+        
+        est = supabase.table('estudiantes').select('apellidos, nombres').eq('id', estudiante_id).execute()
+        nombre_est = ''
+        if est.data:
+            nombre_est = f"{est.data[0]['apellidos']} {est.data[0]['nombres']}"
+        
+        supabase.table('sesiones').update({'estudiante_id': estudiante_id}).eq('id', id).execute()
+        
+        sesion = supabase.table('sesiones').select('*').eq('id', id).execute()
+        if sesion.data:
+            s = sesion.data[0]
+            if s.get('evento_calendar_id') and eliminar_evento_calendar and crear_evento_calendar:
+                try:
+                    eliminar_evento_calendar(s['evento_calendar_id'])
+                    nuevo_id = crear_evento_calendar({
+                        'asignatura': s.get('asignatura') or s.get('tema_terapia') or 'Sesión',
+                        'profesor': s.get('profesor_terapeuta', ''),
+                        'estudiantes': nombre_est,
+                        'fecha': s['fecha'],
+                        'hora_inicio': s['hora_inicio'],
+                        'hora_fin': s['hora_fin'],
+                        'encargado_apertura': s.get('encargado_apertura', '')
+                    })
+                    if nuevo_id:
+                        supabase.table('sesiones').update({'evento_calendar_id': nuevo_id}).eq('id', id).execute()
+                except: pass
+        
+        return jsonify({'success': True, 'nombre': nombre_est})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/sesion/<int:id>/cambiar-profesor', methods=['POST'])
+@login_required
+@socio_admin_required
+def cambiar_profesor_sesion(id):
+    try:
+        data = request.get_json()
+        nuevo_profesor = data.get('profesor', '')
+        if not nuevo_profesor:
+            return jsonify({'success': False, 'error': 'Nombre de profesor requerido'})
+        
+        supabase.table('sesiones').update({'profesor_terapeuta': nuevo_profesor}).eq('id', id).execute()
+        
+        sesion = supabase.table('sesiones').select('*, estudiantes(apellidos, nombres)').eq('id', id).execute()
+        if sesion.data:
+            s = sesion.data[0]
+            if s.get('evento_calendar_id') and eliminar_evento_calendar and crear_evento_calendar:
+                try:
+                    eliminar_evento_calendar(s['evento_calendar_id'])
+                    est = s.get('estudiantes', {})
+                    nuevo_id = crear_evento_calendar({
+                        'asignatura': s.get('asignatura') or s.get('tema_terapia') or 'Sesión',
+                        'profesor': nuevo_profesor,
+                        'estudiantes': f"{est.get('apellidos', '')} {est.get('nombres', '')}" if est else '',
+                        'fecha': s['fecha'],
+                        'hora_inicio': s['hora_inicio'],
+                        'hora_fin': s['hora_fin'],
+                        'encargado_apertura': s.get('encargado_apertura', '')
+                    })
+                    if nuevo_id:
+                        supabase.table('sesiones').update({'evento_calendar_id': nuevo_id}).eq('id', id).execute()
+                except: pass
+        
+        return jsonify({'success': True, 'profesor': nuevo_profesor})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)

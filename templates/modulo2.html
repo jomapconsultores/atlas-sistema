@@ -58,25 +58,15 @@
                             {% else %}-{% endif %}
                         </td>
                         <td class="text-center">
-                            <input type="radio" name="estado_{{ s['id'] }}" class="radio-sesion" 
-                                   data-id="{{ s['id'] }}" data-estado="Realizado"
-                                   {{ 'checked' if s['estado'] == 'Realizado' }}>
+                            <input type="radio" name="estado_{{ s['id'] }}" class="radio-sesion" data-id="{{ s['id'] }}" data-estado="Realizado" {{ 'checked' if s['estado'] == 'Realizado' }}>
                         </td>
                         <td class="text-center">
-                            <input type="radio" name="estado_{{ s['id'] }}" class="radio-sesion" 
-                                   data-id="{{ s['id'] }}" data-estado="Cancelado"
-                                   {{ 'checked' if s['estado'] == 'Cancelado' }}>
+                            <input type="radio" name="estado_{{ s['id'] }}" class="radio-sesion" data-id="{{ s['id'] }}" data-estado="Cancelado" {{ 'checked' if s['estado'] == 'Cancelado' }}>
                         </td>
                         {% if current_user.rol in ['admin', 'socio'] %}
-                        <td class="text-center">
-                            <button class="btn btn-danger btn-sm" onclick="eliminarSesion({{ s['id'] }})">🗑️</button>
-                        </td>
-                        <td>
-                            <button class="btn btn-outline-primary btn-sm" onclick="cambiarEstudiante({{ s['id'] }}, '{{ s['estudiantes']['apellidos'] if s.get('estudiantes') else '' }} {{ s['estudiantes']['nombres'] if s.get('estudiantes') else '' }}')">🔄</button>
-                        </td>
-                        <td>
-                            <button class="btn btn-outline-warning btn-sm" onclick="cambiarProfesor({{ s['id'] }}, '{{ s['profesor_terapeuta'] }}')">👨‍🏫</button>
-                        </td>
+                        <td><button class="btn btn-danger btn-sm" onclick="eliminarSesion({{ s['id'] }})">🗑️</button></td>
+                        <td><button class="btn btn-outline-primary btn-sm" onclick="abrirModalEstudiante({{ s['id'] }})">🔄</button></td>
+                        <td><button class="btn btn-outline-warning btn-sm" onclick="cambiarProfesor({{ s['id'] }}, '{{ s['profesor_terapeuta'] }}')">👨‍🏫</button></td>
                         {% endif %}
                     </tr>
                     {% endfor %}
@@ -84,132 +74,133 @@
             </table>
         </div>
         {% else %}
-        <p class="text-muted">No hay sesiones para esta fecha. {% if current_user.rol in ['admin', 'socio'] %}<a href="/modulo1">¿Planificar una?</a>{% endif %}</p>
+        <p class="text-muted">No hay sesiones. {% if current_user.rol in ['admin', 'socio'] %}<a href="/modulo1">¿Planificar?</a>{% endif %}</p>
         {% endif %}
     </div>
 </div>
 
-<!-- Pendientes de marcar -->
 <div class="card shadow mb-4">
-    <div class="card-header bg-warning text-dark"><strong>⏳ Sesiones Pendientes de Marcar</strong></div>
-    <div class="card-body">
-        <div id="pendientesContainer"><p class="text-muted">Cargando...</p></div>
-    </div>
+    <div class="card-header bg-warning text-dark"><strong>⏳ Pendientes de Marcar</strong></div>
+    <div class="card-body"><div id="pendientesContainer">Cargando...</div></div>
 </div>
 
 {% if current_user.rol in ['admin', 'socio'] %}
 <div class="mt-4 d-flex flex-wrap justify-content-between">
-    <a href="/modulo1" class="btn btn-outline-primary mb-1">← M1: Planificar</a>
-    <a href="/modulo3" class="btn btn-outline-success mb-1">M3: Pagos →</a>
-    <a href="/modulo4" class="btn btn-outline-info mb-1">M4: Calendario Público</a>
-    <a href="/modulo5" class="btn btn-outline-warning mb-1">M5: Docentes</a>
+    <a href="/modulo1" class="btn btn-outline-primary mb-1">← M1</a>
+    <a href="/modulo3" class="btn btn-outline-success mb-1">M3 →</a>
+    <a href="/modulo4" class="btn btn-outline-info mb-1">M4</a>
+    <a href="/modulo5" class="btn btn-outline-warning mb-1">M5</a>
+</div>
+
+<!-- MODAL CAMBIAR ESTUDIANTE -->
+<div class="modal fade" id="modalCambiarEstudiante" tabindex="-1">
+    <div class="modal-dialog"><div class="modal-content">
+        <div class="modal-header bg-primary text-white"><h5>🔄 Cambiar Estudiante</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+            <input type="hidden" id="cambiarSesionId">
+            <div class="mb-2">
+                <label class="form-label">Estudiante</label>
+                <select id="selectEstudianteCambio" class="form-select" onchange="toggleNuevoEstudiante()">
+                    <option value="">Seleccionar...</option>
+                    {% for e in estudiantes %}<option value="{{ e['id'] }}">{{ e['apellidos'] }} {{ e['nombres'] }}</option>{% endfor %}
+                    <option value="nuevo">➕ Nuevo estudiante</option>
+                </select>
+            </div>
+            <div id="nuevoEstudianteCambio" style="display:none;">
+                <input type="text" id="nuevoNombreCambio" class="form-control mb-1" placeholder="Nombres *">
+                <input type="text" id="nuevoApellidoCambio" class="form-control mb-1" placeholder="Apellidos *">
+                <input type="text" id="nuevoNivelCambio" class="form-control mb-1" placeholder="Nivel/Curso">
+                <input type="text" id="nuevoProcCambio" class="form-control" placeholder="Procedencia">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="button" class="btn btn-primary" onclick="guardarCambioEstudiante()">💾 Guardar</button>
+        </div>
+    </div></div>
 </div>
 {% endif %}
 
 <script>
-// CONFIRMACIÓN AL MARCAR
 document.querySelectorAll('.radio-sesion').forEach(radio => {
     radio.addEventListener('change', function() {
         if (!this.checked) return;
-        const id = this.dataset.id;
-        const estado = this.dataset.estado;
-        const fila = this.closest('tr');
-        const fecha = fila.querySelector('td:nth-child(1)').textContent.trim();
-        const hora = fila.querySelector('td:nth-child(2)').textContent.trim();
-        const asignatura = fila.querySelector('td:nth-child(5)').textContent.trim();
-        const estudiante = fila.querySelector('td:nth-child(3)').textContent.trim();
-        const profesor = fila.querySelector('td:nth-child(6)').textContent.trim();
-        
-        let mensaje = estado === 'Realizado' 
-            ? `✅ ¿CONFIRMAS que la clase SÍ se realizó?\n\n📖 ${asignatura}\n👨‍🎓 ${estudiante}\n👨‍🏫 ${profesor}\n📅 ${fecha}\n🕐 ${hora}`
-            : `❌ ¿CONFIRMAS que la clase NO se realizó?\n\n📖 ${asignatura}\n👨‍🎓 ${estudiante}\n👨‍🏫 ${profesor}\n📅 ${fecha}\n🕐 ${hora}`;
-        
-        if (confirm(mensaje)) {
-            fetch('/api/sesion/' + id + '/toggle', {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({estado: estado})
-            }).then(r => r.json()).then(() => location.reload());
-        } else { location.reload(); }
+        const id = this.dataset.id, estado = this.dataset.estado;
+        if (!confirm(`¿Confirmas marcar como ${estado}?`)) { location.reload(); return; }
+        fetch('/api/sesion/' + id + '/toggle', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({estado: estado})
+        }).then(() => location.reload());
     });
 });
 
-// ELIMINAR
 {% if current_user.rol in ['admin', 'socio'] %}
 function eliminarSesion(id) {
-    if (!confirm('🗑️ ¿Eliminar esta sesión?')) return;
-    fetch('/api/sesion/' + id + '/eliminar', {
-        method: 'POST', headers: {'Content-Type': 'application/json'}
-    }).then(r => r.json()).then(data => {
-        if (data.success) location.reload();
-        else alert('Error al eliminar');
-    });
+    if (!confirm('🗑️ ¿Eliminar?')) return;
+    fetch('/api/sesion/' + id + '/eliminar', {method:'POST',headers:{'Content-Type':'application/json'}}).then(()=>location.reload());
 }
 
-// CAMBIAR ESTUDIANTE
-async function cambiarEstudiante(id, nombreActual) {
-    const nuevoId = prompt('🔄 Cambiar estudiante de:\n' + nombreActual + '\n\nIngresa el NUEVO ID del estudiante:');
-    if (!nuevoId) return;
+function abrirModalEstudiante(id) {
+    document.getElementById('cambiarSesionId').value = id;
+    document.getElementById('selectEstudianteCambio').value = '';
+    document.getElementById('nuevoEstudianteCambio').style.display = 'none';
+    new bootstrap.Modal(document.getElementById('modalCambiarEstudiante')).show();
+}
+
+function toggleNuevoEstudiante() {
+    document.getElementById('nuevoEstudianteCambio').style.display = 
+        document.getElementById('selectEstudianteCambio').value === 'nuevo' ? 'block' : 'none';
+}
+
+async function guardarCambioEstudiante() {
+    const id = document.getElementById('cambiarSesionId').value;
+    const selectVal = document.getElementById('selectEstudianteCambio').value;
+    if (!selectVal) { alert('Selecciona un estudiante'); return; }
+    
+    const body = {
+        estudiante_id: selectVal,
+        nuevo_nombre: document.getElementById('nuevoNombreCambio').value,
+        nuevo_apellido: document.getElementById('nuevoApellidoCambio').value,
+        nuevo_nivel: document.getElementById('nuevoNivelCambio').value,
+        nuevo_procedencia: document.getElementById('nuevoProcCambio').value
+    };
+    
     const resp = await fetch('/api/sesion/' + id + '/cambiar-estudiante', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({estudiante_id: parseInt(nuevoId)})
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)
     });
     const data = await resp.json();
-    if (data.success) { alert('✅ Estudiante cambiado'); location.reload(); }
-    else { alert('❌ Error: ' + (data.error || '')); }
+    if (data.success) { alert('✅ Cambiado a: ' + data.nombre); location.reload(); }
+    else { alert('❌ ' + (data.error || 'Error')); }
 }
 
-// CAMBIAR PROFESOR
-async function cambiarProfesor(id, nombreActual) {
-    const nuevoProf = prompt('👨‍🏫 Cambiar profesor de:\n' + nombreActual + '\n\nIngresa el NUEVO nombre del profesor:');
-    if (!nuevoProf) return;
+async function cambiarProfesor(id, actual) {
+    const nuevo = prompt('👨‍🏫 Nuevo profesor:', actual);
+    if (!nuevo) return;
     const resp = await fetch('/api/sesion/' + id + '/cambiar-profesor', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({profesor: nuevoProf})
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({profesor: nuevo})
     });
     const data = await resp.json();
-    if (data.success) { alert('✅ Profesor cambiado'); location.reload(); }
-    else { alert('❌ Error: ' + (data.error || '')); }
+    if (data.success) { alert('✅ Cambiado'); location.reload(); }
+    else { alert('❌ Error'); }
 }
 {% endif %}
 
-// PENDIENTES
 function cargarPendientes() {
-    fetch('/api/sesiones/pendientes')
-        .then(r => r.json())
-        .then(data => {
-            let html = '';
-            if (data.length === 0) {
-                html = '<p class="text-success">✅ Todas las sesiones han sido marcadas.</p>';
-            } else {
-                html = `<div class="table-responsive"><table class="table table-sm"><thead><tr><th>Fecha</th><th>Hora</th><th>Estudiante</th><th>Tipo</th><th>Asignatura</th><th>Profesor</th><th>✅</th><th>❌</th></tr></thead><tbody>`;
-                data.forEach(s => {
-                    html += `<tr id="pend-${s.id}">
-                        <td>${s.fecha}</td><td>${s.hora_inicio} - ${s.hora_fin}</td>
-                        <td>${s.estudiante}</td><td>${s.tipo_sesion}</td>
-                        <td>${s.asignatura || '-'}</td><td>${s.profesor_terapeuta}</td>
-                        <td><button class="btn btn-success btn-sm" onclick="marcarPendiente(${s.id},'Realizado')">✅</button></td>
-                        <td><button class="btn btn-warning btn-sm" onclick="marcarPendiente(${s.id},'Cancelado')">❌</button></td>
-                    </tr>`;
-                });
-                html += '</tbody></table></div>';
-            }
-            document.getElementById('pendientesContainer').innerHTML = html;
-        });
-}
-
-function marcarPendiente(id, estado) {
-    if (!confirm('¿Confirmas?')) return;
-    fetch('/api/sesion/' + id + '/toggle', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({estado: estado})
-    }).then(r => r.json()).then(() => {
-        document.getElementById('pend-' + id)?.remove();
-        if (!document.querySelector('#pendientesContainer tbody tr')) {
-            document.getElementById('pendientesContainer').innerHTML = '<p class="text-success">✅ Todas las sesiones han sido marcadas.</p>';
-        }
+    fetch('/api/sesiones/pendientes').then(r=>r.json()).then(data => {
+        let html = data.length === 0 ? '<p class="text-success">✅ Todas marcadas</p>' :
+        `<table class="table table-sm"><thead><tr><th>Fecha</th><th>Hora</th><th>Est</th><th>Tipo</th><th>Asig</th><th>Prof</th><th>✅</th><th>❌</th></tr></thead><tbody>`;
+        data.forEach(s => html += `<tr id="pend-${s.id}"><td>${s.fecha}</td><td>${s.hora_inicio}</td><td>${s.estudiante}</td><td>${s.tipo_sesion}</td><td>${s.asignatura||'-'}</td><td>${s.profesor_terapeuta}</td><td><button class="btn btn-success btn-sm" onclick="marcar(${s.id},'Realizado')">✅</button></td><td><button class="btn btn-warning btn-sm" onclick="marcar(${s.id},'Cancelado')">❌</button></td></tr>`);
+        html += '</tbody></table>';
+        document.getElementById('pendientesContainer').innerHTML = html;
     });
 }
-
+function marcar(id, estado) {
+    if (!confirm('¿Confirmas?')) return;
+    fetch('/api/sesion/'+id+'/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({estado})}).then(()=>{
+        document.getElementById('pend-'+id)?.remove();
+        if(!document.querySelector('#pendientesContainer tbody tr')) document.getElementById('pendientesContainer').innerHTML='<p class="text-success">✅ Todas marcadas</p>';
+    });
+}
 cargarPendientes();
 </script>
 {% endblock %}
