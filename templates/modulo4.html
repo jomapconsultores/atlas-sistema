@@ -24,6 +24,7 @@
                                 <th>Estado</th>
                                 {% if current_user.rol in ['admin', 'socio'] %}
                                 <th>✏️</th>
+                                <th>🔄</th>
                                 <th>🗑️</th>
                                 {% endif %}
                             </tr>
@@ -57,9 +58,12 @@
                                 </td>
                                 {% if current_user.rol in ['admin', 'socio'] %}
                                 <td>
-                                    <button class="btn btn-warning btn-sm editar-btn" onclick="modificarSesion({{ s['id'] }})" title="Modificar">✏️</button>
+                                    <button class="btn btn-warning btn-sm editar-btn" onclick="modificarSesion({{ s['id'] }})" title="Modificar fecha/hora">✏️</button>
                                     <button class="btn btn-success btn-sm guardar-btn" style="display:none;" onclick="guardarCambios({{ s['id'] }})" title="Guardar">✅</button>
                                     <button class="btn btn-secondary btn-sm cancelar-btn" style="display:none;" onclick="cancelarEdicion()" title="Cancelar">❌</button>
+                                </td>
+                                <td>
+                                    <button class="btn btn-outline-primary btn-sm" onclick="cambiarEstudiante({{ s['id'] }}, '{{ s['estudiantes']['apellidos'] }} {{ s['estudiantes']['nombres'] }}')" title="Cambiar estudiante">🔄</button>
                                 </td>
                                 <td>
                                     <button class="btn btn-danger btn-sm" onclick="eliminarSesion({{ s['id'] }})" title="Eliminar">🗑️</button>
@@ -118,6 +122,7 @@
             <div class="card-body">
                 {% if current_user.rol in ['admin', 'socio'] %}
                 <p><strong>✏️ Modificar:</strong> Cambia fecha y hora.</p>
+                <p><strong>🔄 Cambiar:</strong> Cambia el estudiante.</p>
                 <p><strong>🗑️ Eliminar:</strong> Borra la sesión.</p>
                 {% endif %}
                 <hr>
@@ -157,9 +162,7 @@ async function guardarCambios(id) {
     const fecha = fila.querySelector('.fecha-input').value;
     const hIni = fila.querySelector('.hora-inicio-input').value;
     const hFin = fila.querySelector('.hora-fin-input').value;
-    
     if (!fecha || !hIni || !hFin) { alert('Completa todos los campos'); return; }
-    
     if (!confirm(`✏️ ¿Confirmas el cambio?\n\n📅 ${fecha}\n🕐 ${hIni} - ${hFin}`)) return;
     
     const resp = await fetch('/api/sesion/' + id + '/modificar', {
@@ -169,6 +172,24 @@ async function guardarCambios(id) {
     const data = await resp.json();
     if (data.success) location.reload();
     else alert('❌ Error');
+}
+
+async function cambiarEstudiante(id, nombreActual) {
+    const nuevoId = prompt('🔄 Cambiar estudiante de:\n' + nombreActual + '\n\nIngresa el NUEVO ID del estudiante:');
+    if (!nuevoId) return;
+    
+    const resp = await fetch('/api/sesion/' + id + '/cambiar-estudiante', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({estudiante_id: parseInt(nuevoId)})
+    });
+    const data = await resp.json();
+    if (data.success) {
+        alert('✅ Estudiante cambiado a: ' + data.nombre);
+        location.reload();
+    } else {
+        alert('❌ Error: ' + (data.error || 'Desconocido'));
+    }
 }
 
 async function eliminarSesion(id) {

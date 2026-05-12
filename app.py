@@ -306,37 +306,53 @@ def toggle_sesion(id):
     supabase.table('sesiones').update(updates).eq('id', id).execute()
     return jsonify({'success': True})
 
-@app.route('/api/sesion/<int:id>/modificar', methods=['POST'])
+@app.route('/api/sesion/<int:id>/cambiar-estudiante', methods=['POST'])
 @login_required
 @socio_admin_required
-def modificar_sesion(id):
+def cambiar_estudiante_sesion(id):
     try:
         data = request.get_json()
-        fecha, h_ini, h_fin = data['fecha'], data['hora_inicio'][:5], data['hora_fin'][:5]
-        inicio = datetime.strptime(f"{fecha} {h_ini}", '%Y-%m-%d %H:%M')
-        fin = datetime.strptime(f"{fecha} {h_fin}", '%Y-%m-%d %H:%M')
-        updates = {'fecha': fecha, 'hora_inicio': h_ini, 'hora_fin': h_fin, 'horas': round((fin - inicio).total_seconds() / 3600, 2)}
-        supabase.table('sesiones').update(updates).eq('id', id).execute()
-        sesion = supabase.table('sesiones').select('evento_calendar_id, asignatura, tema_terapia, profesor_terapeuta, encargado_apertura, estudiantes(apellidos, nombres)').eq('id', id).execute()
-        if sesion.data:
-            s = sesion.data[0]
-            if s.get('evento_calendar_id') and eliminar_evento_calendar:
-                try: eliminar_evento_calendar(s['evento_calendar_id'])
-                except: pass
-            if crear_evento_calendar:
-                try:
-                    est = s.get('estudiantes', {})
-                    nuevo_id = crear_evento_calendar({
-                        'asignatura': s.get('asignatura') or s.get('tema_terapia') or 'Sesión',
-                        'profesor': s.get('profesor_terapeuta', ''),
-                        'estudiantes': f"{est.get('apellidos', '')} {est.get('nombres', '')}" if est else '',
-                        'fecha': fecha, 'hora_inicio': h_ini, 'hora_fin': h_fin,
-                        'encargado_apertura': s.get('encargado_apertura', '')
-                    })
-                    if nuevo_id:
-                        supabase.table('sesiones').update({'evento_calendar_id': nuevo_id}).eq('id', id).execute()
-                except: pass
-        return jsonify({'success': True})
+        nuevo_estudiante_id = int(data.get('estudiante_id', 0))
+        
+        if not nuevo_estudiante_id:
+            return jsonify({'success': False, 'error': 'ID de estudiante requerido'})
+        
+        # Obtener datos de la sesión actual
+        sesion = supabase.table('sesiones').select('*').eq('id', id).execute()
+        if not sesion.data:
+            return jsonify({'success': False, 'error': 'Sesión no encontrada'})
+        
+        # Actualizar estudiante
+        supabase.table('sesiones').update({
+            'estudiante_id': nuevo_estudiante_id
+        }).eq('id', id).execute()
+        
+        # Obtener nombre del nuevo estudiante
+        est = supabase.table('estudiantes').select('apellidos, nombres').eq('id', nuevo_estudiante_id).execute()
+        nombre_est = ''
+        if est.data:
+            nombre_est = f"{est.data[0]['apellidos']} {est.data[0]['nombres']}"
+        
+        # Actualizar Google Calendar
+        s = sesion.data[0]
+        if s.get('evento_calendar_id') and eliminar_evento_calendar and crear_evento_calendar:
+            try:
+                eliminar_evento_calendar(s['evento_calendar_id'])
+                nuevo_id = crear_evento_calendar({
+                    'asignatura': s.get('asignatura') or s.get('tema_terapia') or 'Sesión',
+                    'profesor': s.get('profesor_terapeuta', ''),
+                    'estudiantes': nombre_est,
+                    'fecha': s['fecha'],
+                    'hora_inicio': s['hora_inicio'],
+                    'hora_fin': s['hora_fin'],
+                    'encargado_apertura': s.get('encargado_apertura', '')
+                })
+                if nuevo_id:
+                    supabase.table('sesiones').update({'evento_calendar_id': nuevo_id}).eq('id', id).execute()
+            except Exception as e:
+                print(f'⚠️ Error Google Calendar: {e}')
+        
+        return jsonify({'success': True, 'nombre': nombre_est})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
