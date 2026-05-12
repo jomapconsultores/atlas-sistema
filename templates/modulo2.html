@@ -25,10 +25,13 @@
                         <th>Profesor</th>
                         <th>Estado</th>
                         <th>Valor</th>
-                        {% if current_user.rol in ['admin', 'socio'] %}<th>📝 Obs.</th>{% endif %}
                         <th>✅</th>
                         <th>❌</th>
-                        {% if current_user.rol in ['admin', 'socio'] %}<th>🗑️</th>{% endif %}
+                        {% if current_user.rol in ['admin', 'socio'] %}
+                        <th>🗑️</th>
+                        <th>🔄 Est.</th>
+                        <th>👨‍🏫 Prof.</th>
+                        {% endif %}
                     </tr>
                 </thead>
                 <tbody>
@@ -54,16 +57,6 @@
                             ${{ "%.2f"|format(s.get('valor_total', 0) or 0) }}
                             {% else %}-{% endif %}
                         </td>
-                        {% if current_user.rol in ['admin', 'socio'] %}
-                        <td>
-                            {% if s.get('observaciones') %}
-                            <small title="{{ s['observaciones'] }}">{{ s['observaciones'][:30] }}{% if s['observaciones']|length > 30 %}...{% endif %}</small>
-                            <button class="btn btn-outline-secondary btn-sm" onclick="agregarObservacion({{ s['id'] }}, '{{ s['observaciones']|escape }}')">✏️</button>
-                            {% else %}
-                            <button class="btn btn-outline-secondary btn-sm" onclick="agregarObservacion({{ s['id'] }}, '')">➕ Obs.</button>
-                            {% endif %}
-                        </td>
-                        {% endif %}
                         <td class="text-center">
                             <input type="radio" name="estado_{{ s['id'] }}" class="radio-sesion" 
                                    data-id="{{ s['id'] }}" data-estado="Realizado"
@@ -77,6 +70,12 @@
                         {% if current_user.rol in ['admin', 'socio'] %}
                         <td class="text-center">
                             <button class="btn btn-danger btn-sm" onclick="eliminarSesion({{ s['id'] }})">🗑️</button>
+                        </td>
+                        <td>
+                            <button class="btn btn-outline-primary btn-sm" onclick="cambiarEstudiante({{ s['id'] }}, '{{ s['estudiantes']['apellidos'] if s.get('estudiantes') else '' }} {{ s['estudiantes']['nombres'] if s.get('estudiantes') else '' }}')">🔄</button>
+                        </td>
+                        <td>
+                            <button class="btn btn-outline-warning btn-sm" onclick="cambiarProfesor({{ s['id'] }}, '{{ s['profesor_terapeuta'] }}')">👨‍🏫</button>
                         </td>
                         {% endif %}
                     </tr>
@@ -107,31 +106,8 @@
 </div>
 {% endif %}
 
-<!-- MODAL OBSERVACIONES (solo admin/socio) -->
-{% if current_user.rol in ['admin', 'socio'] %}
-<div class="modal fade" id="modalObservacion" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header bg-info text-white">
-                <h5 class="modal-title">📝 Observaciones</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <input type="hidden" id="obsSesionId">
-                <textarea id="obsTexto" class="form-control" rows="3" placeholder="Observaciones para esta sesión..."></textarea>
-                <small class="text-muted">Solo visible para administradores y socios. Útil para pagos a docentes.</small>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary" onclick="guardarObservacion()">💾 Guardar</button>
-            </div>
-        </div>
-    </div>
-</div>
-{% endif %}
-
 <script>
-// CONFIRMACIÓN AL MARCAR REALIZADA O CANCELADA
+// CONFIRMACIÓN AL MARCAR
 document.querySelectorAll('.radio-sesion').forEach(radio => {
     radio.addEventListener('change', function() {
         if (!this.checked) return;
@@ -144,70 +120,59 @@ document.querySelectorAll('.radio-sesion').forEach(radio => {
         const estudiante = fila.querySelector('td:nth-child(3)').textContent.trim();
         const profesor = fila.querySelector('td:nth-child(6)').textContent.trim();
         
-        let mensaje = '';
-        if (estado === 'Realizado') {
-            mensaje = `✅ ¿CONFIRMAS que la clase SÍ se realizó?\n\n📖 Asignatura: ${asignatura}\n👨‍🎓 Estudiante: ${estudiante}\n👨‍🏫 Profesor: ${profesor}\n📅 Fecha: ${fecha}\n🕐 Horario: ${hora}`;
-        } else {
-            mensaje = `❌ ¿CONFIRMAS que la clase NO se realizó?\n\n📖 Asignatura: ${asignatura}\n👨‍🎓 Estudiante: ${estudiante}\n👨‍🏫 Profesor: ${profesor}\n📅 Fecha: ${fecha}\n🕐 Horario: ${hora}\n\n⚠️ Se cancelará sin costo.`;
-        }
+        let mensaje = estado === 'Realizado' 
+            ? `✅ ¿CONFIRMAS que la clase SÍ se realizó?\n\n📖 ${asignatura}\n👨‍🎓 ${estudiante}\n👨‍🏫 ${profesor}\n📅 ${fecha}\n🕐 ${hora}`
+            : `❌ ¿CONFIRMAS que la clase NO se realizó?\n\n📖 ${asignatura}\n👨‍🎓 ${estudiante}\n👨‍🏫 ${profesor}\n📅 ${fecha}\n🕐 ${hora}`;
         
         if (confirm(mensaje)) {
             fetch('/api/sesion/' + id + '/toggle', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                method: 'POST', headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({estado: estado})
             }).then(r => r.json()).then(() => location.reload());
-        } else {
-            location.reload();
-        }
+        } else { location.reload(); }
     });
 });
 
-// CONFIRMACIÓN AL ELIMINAR
+// ELIMINAR
 {% if current_user.rol in ['admin', 'socio'] %}
 function eliminarSesion(id) {
-    const fila = document.querySelector(`button[onclick="eliminarSesion(${id})"]`)?.closest('tr');
-    const fecha = fila?.querySelector('td:nth-child(1)')?.textContent?.trim() || '';
-    const hora = fila?.querySelector('td:nth-child(2)')?.textContent?.trim() || '';
-    const asignatura = fila?.querySelector('td:nth-child(5)')?.textContent?.trim() || '';
-    const estudiante = fila?.querySelector('td:nth-child(3)')?.textContent?.trim() || '';
-    
-    if (!confirm(`🗑️ ¿ELIMINAR esta sesión definitivamente?\n\n📖 ${asignatura}\n👨‍🎓 ${estudiante}\n📅 ${fecha}\n🕐 ${hora}\n\n⚠️ Se borrará del sistema y del calendario.`)) return;
-    
+    if (!confirm('🗑️ ¿Eliminar esta sesión?')) return;
     fetch('/api/sesion/' + id + '/eliminar', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'}
+        method: 'POST', headers: {'Content-Type': 'application/json'}
     }).then(r => r.json()).then(data => {
         if (data.success) location.reload();
         else alert('Error al eliminar');
     });
 }
 
-// OBSERVACIONES
-function agregarObservacion(id, texto) {
-    document.getElementById('obsSesionId').value = id;
-    document.getElementById('obsTexto').value = texto;
-    new bootstrap.Modal(document.getElementById('modalObservacion')).show();
+// CAMBIAR ESTUDIANTE
+async function cambiarEstudiante(id, nombreActual) {
+    const nuevoId = prompt('🔄 Cambiar estudiante de:\n' + nombreActual + '\n\nIngresa el NUEVO ID del estudiante:');
+    if (!nuevoId) return;
+    const resp = await fetch('/api/sesion/' + id + '/cambiar-estudiante', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({estudiante_id: parseInt(nuevoId)})
+    });
+    const data = await resp.json();
+    if (data.success) { alert('✅ Estudiante cambiado'); location.reload(); }
+    else { alert('❌ Error: ' + (data.error || '')); }
 }
 
-function guardarObservacion() {
-    const id = document.getElementById('obsSesionId').value;
-    const texto = document.getElementById('obsTexto').value;
-    
-    fetch('/api/sesion/' + id + '/observacion', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({observaciones: texto})
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) location.reload();
-        else alert('Error al guardar');
+// CAMBIAR PROFESOR
+async function cambiarProfesor(id, nombreActual) {
+    const nuevoProf = prompt('👨‍🏫 Cambiar profesor de:\n' + nombreActual + '\n\nIngresa el NUEVO nombre del profesor:');
+    if (!nuevoProf) return;
+    const resp = await fetch('/api/sesion/' + id + '/cambiar-profesor', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({profesor: nuevoProf})
     });
+    const data = await resp.json();
+    if (data.success) { alert('✅ Profesor cambiado'); location.reload(); }
+    else { alert('❌ Error: ' + (data.error || '')); }
 }
 {% endif %}
 
-// CARGAR PENDIENTES
+// PENDIENTES
 function cargarPendientes() {
     fetch('/api/sesiones/pendientes')
         .then(r => r.json())
@@ -233,22 +198,12 @@ function cargarPendientes() {
 }
 
 function marcarPendiente(id, estado) {
-    const fila = document.getElementById('pend-' + id);
-    const fecha = fila?.querySelector('td:nth-child(1)')?.textContent || '';
-    const asignatura = fila?.querySelector('td:nth-child(5)')?.textContent || '';
-    
-    const mensaje = estado === 'Realizado' 
-        ? `✅ ¿Confirmas que la clase SÍ se realizó?\n\n📖 ${asignatura}\n📅 ${fecha}`
-        : `❌ ¿Confirmas que la clase NO se realizó?\n\n📖 ${asignatura}\n📅 ${fecha}`;
-    
-    if (!confirm(mensaje)) return;
-    
+    if (!confirm('¿Confirmas?')) return;
     fetch('/api/sesion/' + id + '/toggle', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({estado: estado})
     }).then(r => r.json()).then(() => {
-        fila?.remove();
+        document.getElementById('pend-' + id)?.remove();
         if (!document.querySelector('#pendientesContainer tbody tr')) {
             document.getElementById('pendientesContainer').innerHTML = '<p class="text-success">✅ Todas las sesiones han sido marcadas.</p>';
         }

@@ -24,7 +24,8 @@
                                 <th>Estado</th>
                                 {% if current_user.rol in ['admin', 'socio'] %}
                                 <th>✏️</th>
-                                <th>🔄</th>
+                                <th>🔄 Est.</th>
+                                <th>👨‍🏫 Prof.</th>
                                 <th>🗑️</th>
                                 {% endif %}
                             </tr>
@@ -66,6 +67,9 @@
                                     <button class="btn btn-outline-primary btn-sm" onclick="cambiarEstudiante({{ s['id'] }}, '{{ s['estudiantes']['apellidos'] }} {{ s['estudiantes']['nombres'] }}')" title="Cambiar estudiante">🔄</button>
                                 </td>
                                 <td>
+                                    <button class="btn btn-outline-warning btn-sm" onclick="cambiarProfesor({{ s['id'] }}, '{{ s['profesor_terapeuta'] }}')" title="Cambiar profesor">👨‍🏫</button>
+                                </td>
+                                <td>
                                     <button class="btn btn-danger btn-sm" onclick="eliminarSesion({{ s['id'] }})" title="Eliminar">🗑️</button>
                                 </td>
                                 {% endif %}
@@ -88,14 +92,7 @@
                 <div class="table-responsive">
                     <table class="table table-striped table-sm">
                         <thead>
-                            <tr>
-                                <th>Fecha</th>
-                                <th>Hora</th>
-                                <th>Título</th>
-                                <th>Asistentes</th>
-                                <th>Tema</th>
-                                <th>Encargado</th>
-                            </tr>
+                            <tr><th>Fecha</th><th>Hora</th><th>Título</th><th>Asistentes</th><th>Tema</th><th>Encargado</th></tr>
                         </thead>
                         <tbody>
                             {% for r in reuniones %}
@@ -103,7 +100,7 @@
                                 <td>{{ r['fecha'] }}</td>
                                 <td>{{ r['hora_inicio'] }} - {{ r['hora_fin'] }}</td>
                                 <td>{{ r['titulo'] }}</td>
-                                <td>{{ r.get('asistentes', '')[:40] }}{% if r.get('asistentes', '')|length > 40 %}...{% endif %}</td>
+                                <td>{{ r.get('asistentes', '')[:40] }}</td>
                                 <td>{{ r.get('tema', '') }}</td>
                                 <td>{{ r['encargado'] }}</td>
                             </tr>
@@ -121,12 +118,11 @@
             <div class="card-header bg-dark text-white"><strong>⚡ Acciones</strong></div>
             <div class="card-body">
                 {% if current_user.rol in ['admin', 'socio'] %}
-                <p><strong>✏️ Modificar:</strong> Cambia fecha y hora.</p>
-                <p><strong>🔄 Cambiar:</strong> Cambia el estudiante.</p>
-                <p><strong>🗑️ Eliminar:</strong> Borra la sesión.</p>
-                {% endif %}
+                <p><strong>✏️</strong> Modificar fecha/hora</p>
+                <p><strong>🔄</strong> Cambiar estudiante</p>
+                <p><strong>👨‍🏫</strong> Cambiar profesor</p>
+                <p><strong>🗑️</strong> Eliminar sesión</p>
                 <hr>
-                {% if current_user.rol in ['admin', 'socio'] %}
                 <a href="/modulo1" class="btn btn-primary w-100 mb-2">➕ Nueva Planificación</a>
                 {% endif %}
                 <a href="/modulo2" class="btn btn-success w-100">📅 Ver Calendario</a>
@@ -154,51 +150,46 @@ function modificarSesion(id) {
     fila.querySelector('.guardar-btn').style.display = 'inline-block';
     fila.querySelector('.cancelar-btn').style.display = 'inline-block';
 }
-
 function cancelarEdicion() { location.reload(); }
-
 async function guardarCambios(id) {
     const fila = document.getElementById('fila-' + id);
     const fecha = fila.querySelector('.fecha-input').value;
     const hIni = fila.querySelector('.hora-inicio-input').value;
     const hFin = fila.querySelector('.hora-fin-input').value;
-    if (!fecha || !hIni || !hFin) { alert('Completa todos los campos'); return; }
-    if (!confirm(`✏️ ¿Confirmas el cambio?\n\n📅 ${fecha}\n🕐 ${hIni} - ${hFin}`)) return;
-    
+    if (!fecha || !hIni || !hFin) { alert('Completa los campos'); return; }
+    if (!confirm(`✏️ ¿Confirmas?\n📅 ${fecha}\n🕐 ${hIni} - ${hFin}`)) return;
     const resp = await fetch('/api/sesion/' + id + '/modificar', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({fecha: fecha, hora_inicio: hIni, hora_fin: hFin})
     });
-    const data = await resp.json();
-    if (data.success) location.reload();
-    else alert('❌ Error');
+    if ((await resp.json()).success) location.reload();
 }
-
 async function cambiarEstudiante(id, nombreActual) {
-    const nuevoId = prompt('🔄 Cambiar estudiante de:\n' + nombreActual + '\n\nIngresa el NUEVO ID del estudiante:');
+    const nuevoId = prompt('🔄 Cambiar estudiante de:\n' + nombreActual + '\n\nNuevo ID del estudiante:');
     if (!nuevoId) return;
-    
     const resp = await fetch('/api/sesion/' + id + '/cambiar-estudiante', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({estudiante_id: parseInt(nuevoId)})
     });
     const data = await resp.json();
-    if (data.success) {
-        alert('✅ Estudiante cambiado a: ' + data.nombre);
-        location.reload();
-    } else {
-        alert('❌ Error: ' + (data.error || 'Desconocido'));
-    }
+    if (data.success) { alert('✅ Estudiante cambiado'); location.reload(); }
+    else { alert('❌ ' + (data.error || 'Error')); }
 }
-
-async function eliminarSesion(id) {
-    if (!confirm('🗑️ ¿Eliminar esta sesión?')) return;
-    const resp = await fetch('/api/sesion/' + id + '/eliminar', {
-        method: 'POST', headers: {'Content-Type': 'application/json'}
+async function cambiarProfesor(id, nombreActual) {
+    const nuevoProf = prompt('👨‍🏫 Cambiar profesor de:\n' + nombreActual + '\n\nNuevo nombre:');
+    if (!nuevoProf) return;
+    const resp = await fetch('/api/sesion/' + id + '/cambiar-profesor', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({profesor: nuevoProf})
     });
     const data = await resp.json();
-    if (data.success) location.reload();
+    if (data.success) { alert('✅ Profesor cambiado'); location.reload(); }
+    else { alert('❌ ' + (data.error || 'Error')); }
+}
+async function eliminarSesion(id) {
+    if (!confirm('🗑️ ¿Eliminar?')) return;
+    await fetch('/api/sesion/' + id + '/eliminar', {method: 'POST', headers: {'Content-Type': 'application/json'}});
+    location.reload();
 }
 </script>
 {% endif %}
