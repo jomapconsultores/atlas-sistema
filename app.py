@@ -209,9 +209,11 @@ def modulo1():
 @login_required
 def modulo2():
     fecha = request.args.get('fecha', str(date.today()))
+    estudiantes_lista = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute().data or []
     if current_user.rol in ['admin', 'socio']:
         sesiones = supabase.table('sesiones').select('*, estudiantes(*)').eq('fecha', fecha).order('hora_inicio').execute()
-        return render_template('modulo2.html', sesiones=sesiones.data or [], fecha=fecha)
+        return render_template('modulo2.html', sesiones=sesiones.data or [], fecha=fecha,
+                             estudiantes=estudiantes_lista, profesores=PROFESORES)
     nombre_usuario = current_user.nombre.strip().lower()
     palabras_usuario = nombre_usuario.split()
     todas = supabase.table('sesiones').select('*, estudiantes(*)').eq('fecha', fecha).order('hora_inicio').execute()
@@ -237,7 +239,8 @@ def modulo2():
                     if len(palabra) >= 3:
                         if palabra in apellidos_est or palabra in nombres_est:
                             sesiones_filtradas.append(s); break
-    return render_template('modulo2.html', sesiones=sesiones_filtradas, fecha=fecha)
+    return render_template('modulo2.html', sesiones=sesiones_filtradas, fecha=fecha,
+                         estudiantes=estudiantes_lista, profesores=PROFESORES)
 
 @app.route('/api/sesion/<int:id>/toggle', methods=['POST'])
 @login_required
@@ -370,7 +373,7 @@ def modulo3():
                     'fecha': nueva_fecha, 'hora_inicio': nueva_h_ini, 'hora_fin': nueva_h_fin,
                     'horas': nuevas_horas, 'valor_total': nuevo_valor
                 }).eq('id', sesion_id).execute()
-                flash(f'✅ Sesión actualizada. Horas: {nuevas_horas}, Valor: ${nuevo_valor:.2f}', 'success')
+                flash(f'✅ Sesión actualizada', 'success')
         return redirect(url_for('modulo3'))
     estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
     datos = []
@@ -390,7 +393,9 @@ def modulo4():
     reuniones = []
     if current_user.rol in ['admin', 'socio']:
         reuniones = supabase.table('reuniones').select('*').gte('fecha', str(date.today())).order('fecha').execute()
-    return render_template('modulo4.html', sesiones=sesiones.data or [], reuniones=reuniones.data if reuniones else [])
+    estudiantes_lista = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute().data or []
+    return render_template('modulo4.html', sesiones=sesiones.data or [], reuniones=reuniones.data if reuniones else [],
+                         estudiantes=estudiantes_lista, profesores=PROFESORES)
 
 @app.route('/modulo5')
 @login_required
@@ -812,6 +817,9 @@ def cambiar_estudiante_sesion(id):
         nombre_est = f"{est.data[0]['apellidos']} {est.data[0]['nombres']}" if est.data else ''
         
         supabase.table('sesiones').update({'estudiante_id': estudiante_id}).eq('id', id).execute()
+        supabase.table('sesiones').update({
+            'observaciones': f"CAMBIO ESTUDIANTE por {current_user.nombre} el {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        }).eq('id', id).execute()
         
         sesion = supabase.table('sesiones').select('*').eq('id', id).execute()
         if sesion.data:
@@ -847,11 +855,7 @@ def cambiar_profesor_sesion(id):
         profesor_anterior = supabase.table('sesiones').select('profesor_terapeuta').eq('id', id).execute()
         anterior = profesor_anterior.data[0]['profesor_terapeuta'] if profesor_anterior.data else ''
         
-        supabase.table('sesiones').update({
-            'profesor_terapeuta': nuevo_profesor
-        }).eq('id', id).execute()
-        
-        # Registrar en observaciones quién hizo el cambio
+        supabase.table('sesiones').update({'profesor_terapeuta': nuevo_profesor}).eq('id', id).execute()
         supabase.table('sesiones').update({
             'observaciones': f"CAMBIO PROFESOR: {anterior} → {nuevo_profesor} por {current_user.nombre} el {datetime.now().strftime('%Y-%m-%d %H:%M')}"
         }).eq('id', id).execute()

@@ -15,116 +15,69 @@
         {% if sesiones %}
         <div class="table-responsive">
             <table class="table table-striped">
-                <thead>
-                    <tr>
-                        <th>Fecha</th>
-                        <th>Hora</th>
-                        <th>Estudiante</th>
-                        <th>Tipo</th>
-                        <th>Asignatura</th>
-                        <th>Profesor</th>
-                        <th>Estado</th>
-                        <th>Valor</th>
-                        <th>✅</th>
-                        <th>❌</th>
-                        {% if current_user.rol in ['admin', 'socio'] %}
-                        <th>🗑️</th>
-                        <th>🔄 Est.</th>
-                        <th>👨‍🏫 Prof.</th>
-                        {% endif %}
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for s in sesiones %}
-                    <tr>
-                        <td>{{ s['fecha'] }}</td>
-                        <td>{{ s['hora_inicio'] }} - {{ s['hora_fin'] }}</td>
-                        <td>{% if s.get('estudiantes') %}{{ s['estudiantes']['apellidos'] }} {{ s['estudiantes']['nombres'] }}{% else %}ID: {{ s['estudiante_id'] }}{% endif %}</td>
-                        <td>{{ s['tipo_sesion'] }}</td>
-                        <td>{{ s.get('asignatura') or s.get('tema_terapia') or '-' }}</td>
-                        <td>{{ s['profesor_terapeuta'] }}</td>
-                        <td>
-                            <span class="badge bg-{{ 'success' if s['estado']=='Realizado' else 'danger' if s['estado']=='Cancelado' else 'warning' }}">{{ s['estado'] }}</span>
-                            {% if current_user.rol in ['admin', 'socio'] %}
-                                {% if s.get('evento_calendar_id') %}<span class="badge bg-success" title="Sincronizado">📅</span>{% else %}<span class="badge bg-secondary" title="No sincronizado">📅</span>{% endif %}
-                            {% endif %}
-                        </td>
-                        <td>{% if s['estado']=='Realizado' %}${{ "%.2f"|format(s.get('valor_total',0) or 0) }}{% else %}-{% endif %}</td>
-                        <td class="text-center"><input type="radio" name="estado_{{ s['id'] }}" class="radio-sesion" data-id="{{ s['id'] }}" data-estado="Realizado" {{ 'checked' if s['estado']=='Realizado' }}></td>
-                        <td class="text-center"><input type="radio" name="estado_{{ s['id'] }}" class="radio-sesion" data-id="{{ s['id'] }}" data-estado="Cancelado" {{ 'checked' if s['estado']=='Cancelado' }}></td>
-                        {% if current_user.rol in ['admin', 'socio'] %}
-                        <td><button class="btn btn-danger btn-sm" onclick="eliminarSesion({{ s['id'] }})">🗑️</button></td>
-                        <td><button class="btn btn-outline-primary btn-sm" onclick="abrirModalEstudiante({{ s['id'] }})">🔄</button></td>
-                        <td><button class="btn btn-outline-warning btn-sm" onclick="abrirModalProfesor({{ s['id'] }}, '{{ s['profesor_terapeuta'] }}')">👨‍🏫</button></td>
-                        {% endif %}
-                    </tr>
-                    {% endfor %}
-                </tbody>
+                <thead><tr><th>Fecha</th><th>Hora</th><th>Estudiante</th><th>Tipo</th><th>Asig</th><th>Prof</th><th>Estado</th><th>Valor</th><th>✅</th><th>❌</th>{% if current_user.rol in ['admin','socio'] %}<th>🗑️</th><th>🔄</th><th>👨‍🏫</th>{% endif %}</tr></thead>
+                <tbody>{% for s in sesiones %}<tr>
+                    <td>{{ s['fecha'] }}</td><td>{{ s['hora_inicio'] }} - {{ s['hora_fin'] }}</td>
+                    <td>{% if s.get('estudiantes') %}{{ s['estudiantes']['apellidos'] }} {{ s['estudiantes']['nombres'] }}{% else %}ID: {{ s['estudiante_id'] }}{% endif %}</td>
+                    <td>{{ s['tipo_sesion'] }}</td><td>{{ s.get('asignatura') or s.get('tema_terapia') or '-' }}</td><td>{{ s['profesor_terapeuta'] }}</td>
+                    <td><span class="badge bg-{{ 'success' if s['estado']=='Realizado' else 'danger' if s['estado']=='Cancelado' else 'warning' }}">{{ s['estado'] }}</span>{% if current_user.rol in ['admin','socio'] %}{% if s.get('evento_calendar_id') %}<span class="badge bg-success">📅</span>{% else %}<span class="badge bg-secondary">📅</span>{% endif %}{% endif %}</td>
+                    <td>{% if s['estado']=='Realizado' %}${{ "%.2f"|format(s.get('valor_total',0) or 0) }}{% else %}-{% endif %}</td>
+                    <td><input type="radio" name="est_{{ s['id'] }}" class="radio-sesion" data-id="{{ s['id'] }}" data-estado="Realizado" {{ 'checked' if s['estado']=='Realizado' }}></td>
+                    <td><input type="radio" name="est_{{ s['id'] }}" class="radio-sesion" data-id="{{ s['id'] }}" data-estado="Cancelado" {{ 'checked' if s['estado']=='Cancelado' }}></td>
+                    {% if current_user.rol in ['admin','socio'] %}
+                    <td><button class="btn btn-danger btn-sm" onclick="eliminarSesion({{ s['id'] }})">🗑️</button></td>
+                    <td><button class="btn btn-outline-primary btn-sm" onclick="abrirModalEstudiante({{ s['id'] }})">🔄</button></td>
+                    <td><button class="btn btn-outline-warning btn-sm" onclick="abrirModalProfesor({{ s['id'] }}, '{{ s['profesor_terapeuta'] }}')">👨‍🏫</button></td>
+                    {% endif %}
+                </tr>{% endfor %}</tbody>
             </table>
-        </div>
-        {% else %}<p class="text-muted">No hay sesiones. {% if current_user.rol in ['admin', 'socio'] %}<a href="/modulo1">¿Planificar?</a>{% endif %}</p>{% endif %}
+        </div>{% else %}<p class="text-muted">No hay sesiones. {% if current_user.rol in ['admin','socio'] %}<a href="/modulo1">¿Planificar?</a>{% endif %}</p>{% endif %}
     </div>
 </div>
 
 <div class="card shadow mb-4"><div class="card-header bg-warning text-dark"><strong>⏳ Pendientes</strong></div><div class="card-body"><div id="pendientesContainer">Cargando...</div></div></div>
 
-{% if current_user.rol in ['admin', 'socio'] %}
+{% if current_user.rol in ['admin','socio'] %}
 <div class="mt-4 d-flex flex-wrap justify-content-between"><a href="/modulo1" class="btn btn-outline-primary mb-1">← M1</a><a href="/modulo3" class="btn btn-outline-success mb-1">M3 →</a><a href="/modulo4" class="btn btn-outline-info mb-1">M4</a><a href="/modulo5" class="btn btn-outline-warning mb-1">M5</a></div>
 
 <!-- MODAL ESTUDIANTE -->
 <div class="modal fade" id="modalCambiarEstudiante" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content">
-    <div class="modal-header bg-primary text-white"><h5>🔄 Cambiar Estudiante</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-    <div class="modal-body">
-        <input type="hidden" id="cambiarSesionId">
-        <div class="mb-2"><input type="text" id="buscarEstudiante" class="form-control" placeholder="🔍 Buscar estudiante..." onkeyup="filtrarEstudiantes()"></div>
-        <div class="mb-2" style="max-height:200px;overflow-y:auto;">
-            <select id="selectEstudianteCambio" class="form-select" size="8" onchange="toggleNuevoEstudiante()">
-                <option value="">Seleccionar...</option>{% for e in estudiantes %}<option value="{{ e['id'] }}">{{ e['apellidos'] }} {{ e['nombres'] }}</option>{% endfor %}<option value="nuevo">➕ Nuevo</option>
-            </select>
-        </div>
-        <div id="nuevoEstudianteCambio" style="display:none;">
-            <input type="text" id="nuevoNombreCambio" class="form-control mb-1" placeholder="Nombres *"><input type="text" id="nuevoApellidoCambio" class="form-control mb-1" placeholder="Apellidos *"><input type="text" id="nuevoNivelCambio" class="form-control mb-1" placeholder="Nivel"><input type="text" id="nuevoProcCambio" class="form-control" placeholder="Procedencia">
-        </div>
-    </div>
-    <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-primary" onclick="guardarCambioEstudiante()">💾 Guardar</button></div>
+<div class="modal-header bg-primary text-white"><h5>🔄 Cambiar Estudiante</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+<div class="modal-body"><input type="hidden" id="cambiarSesionId">
+<input type="text" id="buscarEstudiante" class="form-control mb-2" placeholder="🔍 Buscar estudiante..." onkeyup="filtrarEstudiantes()">
+<select id="selectEstudianteCambio" class="form-select" size="8" onchange="toggleNuevoEstudiante()"><option value="">Seleccionar...</option>{% if estudiantes %}{% for e in estudiantes %}<option value="{{ e['id'] }}">{{ e['apellidos'] }} {{ e['nombres'] }}</option>{% endfor %}{% endif %}<option value="nuevo">➕ Nuevo estudiante</option></select>
+<div id="nuevoEstudianteCambio" style="display:none;" class="mt-2"><input type="text" id="nuevoNombreCambio" class="form-control mb-1" placeholder="Nombres *"><input type="text" id="nuevoApellidoCambio" class="form-control mb-1" placeholder="Apellidos *"><input type="text" id="nuevoNivelCambio" class="form-control mb-1" placeholder="Nivel/Curso"><input type="text" id="nuevoProcCambio" class="form-control" placeholder="Procedencia"></div></div>
+<div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-primary" onclick="guardarCambioEstudiante()">💾 Guardar</button></div>
 </div></div></div>
 
 <!-- MODAL PROFESOR -->
 <div class="modal fade" id="modalCambiarProfesor" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
-    <div class="modal-header bg-warning"><h5>👨‍🏫 Cambiar Profesor</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-    <div class="modal-body">
-        <input type="hidden" id="cambiarProfesorSesionId"><p>Actual: <strong id="profesorActual"></strong></p>
-        <div class="mb-2"><input type="text" id="buscarProfesor" class="form-control" placeholder="🔍 Buscar profesor..." onkeyup="filtrarProfesores()"></div>
-        <select id="selectProfesorCambio" class="form-select" size="6" onchange="toggleNuevoProfesor()">
-            <option value="">Seleccionar...</option>{% for p in profesores %}<option value="{{ p }}">{{ p }}</option>{% endfor %}<option value="nuevo">➕ Nuevo</option>
-        </select>
-        <div id="nuevoProfesorCambio" style="display:none;" class="mt-2"><input type="text" id="nuevoProfesorNombre" class="form-control" placeholder="Nombre del nuevo profesor"></div>
-    </div>
-    <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-warning" onclick="guardarCambioProfesor()">💾 Guardar</button></div>
+<div class="modal-header bg-warning"><h5>👨‍🏫 Cambiar Profesor</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+<div class="modal-body"><input type="hidden" id="cambiarProfesorSesionId"><p>Actual: <strong id="profesorActual"></strong></p>
+<input type="text" id="buscarProfesor" class="form-control mb-2" placeholder="🔍 Buscar profesor..." onkeyup="filtrarProfesores()">
+<select id="selectProfesorCambio" class="form-select" size="6" onchange="toggleNuevoProfesor()"><option value="">Seleccionar...</option>{% if profesores %}{% for p in profesores %}<option value="{{ p }}">{{ p }}</option>{% endfor %}{% endif %}<option value="nuevo">➕ Nuevo profesor</option></select>
+<div id="nuevoProfesorCambio" style="display:none;" class="mt-2"><input type="text" id="nuevoProfesorNombre" class="form-control" placeholder="Nombre del nuevo profesor"></div></div>
+<div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-warning" onclick="guardarCambioProfesor()">💾 Guardar</button></div>
 </div></div></div>
 {% endif %}
 
 <script>
-document.querySelectorAll('.radio-sesion').forEach(radio => {radio.addEventListener('change',function(){if(!this.checked)return;const id=this.dataset.id,estado=this.dataset.estado;if(!confirm(`¿Confirmas marcar como ${estado}?`)){location.reload();return}fetch('/api/sesion/'+id+'/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({estado})}).then(()=>location.reload())})});
+document.querySelectorAll('.radio-sesion').forEach(r=>{r.addEventListener('change',function(){if(!this.checked)return;const id=this.dataset.id,e=this.dataset.estado;if(!confirm('¿Confirmas marcar como '+e+'?')){location.reload();return}fetch('/api/sesion/'+id+'/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({estado:e})}).then(()=>location.reload())})});
 
-{% if current_user.rol in ['admin', 'socio'] %}
-function eliminarSesion(id){if(!confirm('🗑️ ¿Eliminar?'))return;fetch('/api/sesion/'+id+'/eliminar',{method:'POST',headers:{'Content-Type':'application/json'}}).then(()=>location.reload())}
-
-// ESTUDIANTE
+{% if current_user.rol in ['admin','socio'] %}
+function eliminarSesion(id){if(!confirm('🗑️ ¿Eliminar?'))return;fetch('/api/sesion/'+id+'/eliminar',{method:'POST'}).then(()=>location.reload())}
 function abrirModalEstudiante(id){document.getElementById('cambiarSesionId').value=id;document.getElementById('buscarEstudiante').value='';document.getElementById('selectEstudianteCambio').value='';document.getElementById('nuevoEstudianteCambio').style.display='none';const o=document.getElementById('selectEstudianteCambio').options;for(let i=0;i<o.length;i++)o[i].style.display='';new bootstrap.Modal(document.getElementById('modalCambiarEstudiante')).show()}
-function filtrarEstudiantes(){const b=document.getElementById('buscarEstudiante').value.toLowerCase();const s=document.getElementById('selectEstudianteCambio');for(let i=0;i<s.options.length;i++){const t=s.options[i].textContent.toLowerCase();s.options[i].style.display=(t.includes(b)||s.options[i].value===''||s.options[i].value==='nuevo')?'':'none'}}
+function filtrarEstudiantes(){const b=document.getElementById('buscarEstudiante').value.toLowerCase();const s=document.getElementById('selectEstudianteCambio');if(!s)return;for(let i=0;i<s.options.length;i++){const t=s.options[i].textContent.toLowerCase();s.options[i].style.display=(t.includes(b)||s.options[i].value===''||s.options[i].value==='nuevo')?'':'none'}}
 function toggleNuevoEstudiante(){document.getElementById('nuevoEstudianteCambio').style.display=document.getElementById('selectEstudianteCambio').value==='nuevo'?'block':'none'}
-async function guardarCambioEstudiante(){const id=document.getElementById('cambiarSesionId').value;const sv=document.getElementById('selectEstudianteCambio').value;if(!sv){alert('Selecciona');return}const body={estudiante_id:sv,nuevo_nombre:document.getElementById('nuevoNombreCambio').value,nuevo_apellido:document.getElementById('nuevoApellidoCambio').value,nuevo_nivel:document.getElementById('nuevoNivelCambio').value,nuevo_procedencia:document.getElementById('nuevoProcCambio').value};const r=await fetch('/api/sesion/'+id+'/cambiar-estudiante',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json();if(d.success){alert('✅ '+d.nombre);location.reload()}else{alert('❌ '+(d.error||''))}}
-
-// PROFESOR
+async function guardarCambioEstudiante(){const id=document.getElementById('cambiarSesionId').value;const sv=document.getElementById('selectEstudianteCambio').value;if(!sv){alert('Selecciona un estudiante');return}const body={estudiante_id:sv,nuevo_nombre:document.getElementById('nuevoNombreCambio').value,nuevo_apellido:document.getElementById('nuevoApellidoCambio').value,nuevo_nivel:document.getElementById('nuevoNivelCambio').value,nuevo_procedencia:document.getElementById('nuevoProcCambio').value};const r=await fetch('/api/sesion/'+id+'/cambiar-estudiante',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json();if(d.success){alert('✅ Cambiado a: '+d.nombre);location.reload()}else{alert('❌ '+(d.error||'Error'))}}
 function abrirModalProfesor(id,actual){document.getElementById('cambiarProfesorSesionId').value=id;document.getElementById('profesorActual').textContent=actual;document.getElementById('buscarProfesor').value='';document.getElementById('selectProfesorCambio').value='';document.getElementById('nuevoProfesorCambio').style.display='none';const o=document.getElementById('selectProfesorCambio').options;for(let i=0;i<o.length;i++)o[i].style.display='';new bootstrap.Modal(document.getElementById('modalCambiarProfesor')).show()}
-function filtrarProfesores(){const b=document.getElementById('buscarProfesor').value.toLowerCase();const s=document.getElementById('selectProfesorCambio');for(let i=0;i<s.options.length;i++){const t=s.options[i].textContent.toLowerCase();s.options[i].style.display=(t.includes(b)||s.options[i].value===''||s.options[i].value==='nuevo')?'':'none'}}
+function filtrarProfesores(){const b=document.getElementById('buscarProfesor').value.toLowerCase();const s=document.getElementById('selectProfesorCambio');if(!s)return;for(let i=0;i<s.options.length;i++){const t=s.options[i].textContent.toLowerCase();s.options[i].style.display=(t.includes(b)||s.options[i].value===''||s.options[i].value==='nuevo')?'':'none'}}
 function toggleNuevoProfesor(){document.getElementById('nuevoProfesorCambio').style.display=document.getElementById('selectProfesorCambio').value==='nuevo'?'block':'none'}
-async function guardarCambioProfesor(){const id=document.getElementById('cambiarProfesorSesionId').value;let prof=document.getElementById('selectProfesorCambio').value;if(prof==='nuevo'){prof=document.getElementById('nuevoProfesorNombre').value;if(!prof){alert('Ingresa el nombre');return}}if(!prof){alert('Selecciona');return}if(!confirm(`¿Confirmas cambiar a "${prof}"?`))return;const r=await fetch('/api/sesion/'+id+'/cambiar-profesor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({profesor:prof})});const d=await r.json();if(d.success){alert('✅ Cambiado');location.reload()}else{alert('❌ '+(d.error||''))}}
+async function guardarCambioProfesor(){const id=document.getElementById('cambiarProfesorSesionId').value;let prof=document.getElementById('selectProfesorCambio').value;if(prof==='nuevo'){prof=document.getElementById('nuevoProfesorNombre').value;if(!prof){alert('Ingresa el nombre');return}}if(!prof){alert('Selecciona un profesor');return}if(!confirm('¿Confirmas cambiar a "'+prof+'"?'))return;const r=await fetch('/api/sesion/'+id+'/cambiar-profesor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({profesor:prof})});const d=await r.json();if(d.success){alert('✅ Cambiado');location.reload()}else{alert('❌ '+(d.error||'Error'))}}
 {% endif %}
 
-function cargarPendientes(){fetch('/api/sesiones/pendientes').then(r=>r.json()).then(data=>{let html=data.length===0?'<p class="text-success">✅ Todas marcadas</p>':'<table class="table table-sm"><thead><tr><th>Fecha</th><th>Hora</th><th>Est</th><th>Tipo</th><th>Asig</th><th>Prof</th><th>✅</th><th>❌</th></tr></thead><tbody>';data.forEach(s=>html+=`<tr id="pend-${s.id}"><td>${s.fecha}</td><td>${s.hora_inicio}</td><td>${s.estudiante}</td><td>${s.tipo_sesion}</td><td>${s.asignatura||'-'}</td><td>${s.profesor_terapeuta}</td><td><button class="btn btn-success btn-sm" onclick="marcar(${s.id},'Realizado')">✅</button></td><td><button class="btn btn-warning btn-sm" onclick="marcar(${s.id},'Cancelado')">❌</button></td></tr>`);html+='</tbody></table>';document.getElementById('pendientesContainer').innerHTML=html})}
-function marcar(id,estado){if(!confirm('¿Confirmas?'))return;fetch('/api/sesion/'+id+'/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({estado})}).then(()=>{document.getElementById('pend-'+id)?.remove();if(!document.querySelector('#pendientesContainer tbody tr'))document.getElementById('pendientesContainer').innerHTML='<p class="text-success">✅ Todas marcadas</p>'})}
+function cargarPendientes(){fetch('/api/sesiones/pendientes').then(r=>r.json()).then(d=>{let h=d.length===0?'<p class="text-success">✅ Todas marcadas</p>':'<table class="table table-sm"><thead><tr><th>Fecha</th><th>Hora</th><th>Est</th><th>Tipo</th><th>Asig</th><th>Prof</th><th>✅</th><th>❌</th></tr></thead><tbody>';d.forEach(s=>h+=`<tr id="pend-${s.id}"><td>${s.fecha}</td><td>${s.hora_inicio}</td><td>${s.estudiante}</td><td>${s.tipo_sesion}</td><td>${s.asignatura||'-'}</td><td>${s.profesor_terapeuta}</td><td><button class="btn btn-success btn-sm" onclick="marcar(${s.id},'Realizado')">✅</button></td><td><button class="btn btn-warning btn-sm" onclick="marcar(${s.id},'Cancelado')">❌</button></td></tr>`);h+='</tbody></table>';document.getElementById('pendientesContainer').innerHTML=h})}
+function marcar(id,e){if(!confirm('¿Confirmas?'))return;fetch('/api/sesion/'+id+'/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({estado:e})}).then(()=>{document.getElementById('pend-'+id)?.remove();if(!document.querySelector('#pendientesContainer tbody tr'))document.getElementById('pendientesContainer').innerHTML='<p class="text-success">✅ Todas marcadas</p>'})}
 cargarPendientes();
 </script>
 {% endblock %}
