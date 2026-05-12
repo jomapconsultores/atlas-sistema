@@ -844,7 +844,17 @@ def cambiar_profesor_sesion(id):
         if not nuevo_profesor:
             return jsonify({'success': False, 'error': 'Nombre requerido'})
         
-        supabase.table('sesiones').update({'profesor_terapeuta': nuevo_profesor}).eq('id', id).execute()
+        profesor_anterior = supabase.table('sesiones').select('profesor_terapeuta').eq('id', id).execute()
+        anterior = profesor_anterior.data[0]['profesor_terapeuta'] if profesor_anterior.data else ''
+        
+        supabase.table('sesiones').update({
+            'profesor_terapeuta': nuevo_profesor
+        }).eq('id', id).execute()
+        
+        # Registrar en observaciones quién hizo el cambio
+        supabase.table('sesiones').update({
+            'observaciones': f"CAMBIO PROFESOR: {anterior} → {nuevo_profesor} por {current_user.nombre} el {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        }).eq('id', id).execute()
         
         sesion = supabase.table('sesiones').select('*, estudiantes(apellidos, nombres)').eq('id', id).execute()
         if sesion.data:

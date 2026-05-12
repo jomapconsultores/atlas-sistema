@@ -3,85 +3,44 @@
 
 {% block content %}
 <h3>📅 Calendario Público</h3>
+<div class="row"><div class="col-md-9">
+<div class="card shadow mb-4"><div class="card-header bg-info text-white"><strong>📚 Sesiones</strong></div><div class="card-body">
+{% if sesiones %}<div class="table-responsive"><table class="table table-sm"><thead><tr><th>Fecha</th><th>Hora</th><th>Est</th><th>Tipo</th><th>Asig</th><th>Prof</th><th>Estado</th>{% if current_user.rol in ['admin','socio'] %}<th>✏️</th><th>🔄</th><th>👨‍🏫</th><th>🗑️</th>{% endif %}</tr></thead><tbody>
+{% for s in sesiones %}<tr id="fila-{{ s['id'] }}">
+<td><span class="fecha-texto">{{ s['fecha'] }}</span>{% if current_user.rol in ['admin','socio'] %}<input type="date" class="form-control form-control-sm fecha-input" value="{{ s['fecha'] }}" style="display:none;width:130px;">{% endif %}</td>
+<td><span class="hora-texto">{{ s['hora_inicio'] }} - {{ s['hora_fin'] }}</span>{% if current_user.rol in ['admin','socio'] %}<div class="hora-input" style="display:none;"><input type="time" class="form-control form-control-sm hora-inicio-input" value="{{ s['hora_inicio'] }}" style="width:100px;"><input type="time" class="form-control form-control-sm hora-fin-input" value="{{ s['hora_fin'] }}" style="width:100px;"></div>{% endif %}</td>
+<td>{{ s['estudiantes']['apellidos'] }} {{ s['estudiantes']['nombres'] }}</td><td>{{ s['tipo_sesion'] }}</td><td>{{ s.get('asignatura') or s.get('tema_terapia') or '-' }}</td><td>{{ s['profesor_terapeuta'] }}</td>
+<td><span class="badge bg-{{ 'success' if s['estado']=='Realizado' else 'danger' if s['estado']=='Cancelado' else 'warning' }}">{{ s['estado'] }}</span>{% if current_user.rol in ['admin','socio'] %}{% if s.get('evento_calendar_id') %}<span class="badge bg-success" title="Sincronizado">📅</span>{% else %}<span class="badge bg-secondary" title="No sincronizado">📅</span>{% endif %}{% endif %}</td>
+{% if current_user.rol in ['admin','socio'] %}
+<td><button class="btn btn-warning btn-sm editar-btn" onclick="modificarSesion({{ s['id'] }})">✏️</button><button class="btn btn-success btn-sm guardar-btn" style="display:none;" onclick="guardarCambios({{ s['id'] }})">✅</button><button class="btn btn-secondary btn-sm cancelar-btn" style="display:none;" onclick="cancelarEdicion()">❌</button></td>
+<td><button class="btn btn-outline-primary btn-sm" onclick="abrirModalEstudiante({{ s['id'] }})">🔄</button></td>
+<td><button class="btn btn-outline-warning btn-sm" onclick="abrirModalProfesor({{ s['id'] }}, '{{ s['profesor_terapeuta'] }}')">👨‍🏫</button></td>
+<td><button class="btn btn-danger btn-sm" onclick="eliminarSesion({{ s['id'] }})">🗑️</button></td>
+{% endif %}</tr>{% endfor %}</tbody></table></div>{% else %}<p class="text-muted">No hay sesiones.</p>{% endif %}
+</div></div>
+{% if current_user.rol in ['admin','socio'] and reuniones %}<div class="card shadow mb-4"><div class="card-header bg-dark text-white"><strong>📋 Reuniones</strong></div><div class="card-body"><table class="table table-sm"><thead><tr><th>Fecha</th><th>Hora</th><th>Título</th><th>Asistentes</th><th>Tema</th><th>Enc</th></tr></thead><tbody>{% for r in reuniones %}<tr><td>{{ r['fecha'] }}</td><td>{{ r['hora_inicio'] }}</td><td>{{ r['titulo'] }}</td><td>{{ r.get('asistentes','')[:30] }}</td><td>{{ r.get('tema','') }}</td><td>{{ r['encargado'] }}</td></tr>{% endfor %}</tbody></table></div></div>{% endif %}
+</div><div class="col-md-3"><div class="card shadow"><div class="card-header bg-dark text-white"><strong>⚡ Acciones</strong></div><div class="card-body">{% if current_user.rol in ['admin','socio'] %}<a href="/modulo1" class="btn btn-primary w-100 mb-2">➕ Planificar</a>{% endif %}<a href="/modulo2" class="btn btn-success w-100">📅 Calendario</a></div></div></div></div>
 
-<div class="row">
-    <div class="col-md-9">
-        <div class="card shadow mb-4">
-            <div class="card-header bg-info text-white"><strong>📚 Sesiones Programadas</strong></div>
-            <div class="card-body">
-                {% if sesiones %}
-                <div class="table-responsive">
-                    <table class="table table-striped table-sm">
-                        <thead><tr><th>Fecha</th><th>Hora</th><th>Estudiante</th><th>Tipo</th><th>Asig</th><th>Prof</th><th>Estado</th>
-                        {% if current_user.rol in ['admin', 'socio'] %}<th>✏️</th><th>🔄</th><th>👨‍🏫</th><th>🗑️</th>{% endif %}</tr></thead>
-                        <tbody>{% for s in sesiones %}<tr id="fila-{{ s['id'] }}">
-                            <td><span class="fecha-texto">{{ s['fecha'] }}</span>{% if current_user.rol in ['admin', 'socio'] %}<input type="date" class="form-control form-control-sm fecha-input" value="{{ s['fecha'] }}" style="display:none;width:130px;">{% endif %}</td>
-                            <td><span class="hora-texto">{{ s['hora_inicio'] }} - {{ s['hora_fin'] }}</span>{% if current_user.rol in ['admin', 'socio'] %}<div class="hora-input" style="display:none;"><input type="time" class="form-control form-control-sm hora-inicio-input" value="{{ s['hora_inicio'] }}" style="width:100px;"><input type="time" class="form-control form-control-sm hora-fin-input" value="{{ s['hora_fin'] }}" style="width:100px;"></div>{% endif %}</td>
-                            <td>{{ s['estudiantes']['apellidos'] }} {{ s['estudiantes']['nombres'] }}</td>
-                            <td>{{ s['tipo_sesion'] }}</td>
-                            <td>{{ s.get('asignatura') or s.get('tema_terapia') or '-' }}</td>
-                            <td>{{ s['profesor_terapeuta'] }}</td>
-                            <td>
-                                <span class="badge bg-{{ 'success' if s['estado']=='Realizado' else 'danger' if s['estado']=='Cancelado' else 'warning' }}">{{ s['estado'] }}</span>
-                                {% if current_user.rol in ['admin', 'socio'] %}
-                                    {% if s.get('evento_calendar_id') %}<span class="badge bg-success" title="Sincronizado">📅</span>
-                                    {% else %}<span class="badge bg-secondary" title="No sincronizado">📅</span>{% endif %}
-                                {% endif %}
-                            </td>
-                            {% if current_user.rol in ['admin', 'socio'] %}
-                            <td><button class="btn btn-warning btn-sm editar-btn" onclick="modificarSesion({{ s['id'] }})">✏️</button><button class="btn btn-success btn-sm guardar-btn" style="display:none;" onclick="guardarCambios({{ s['id'] }})">✅</button><button class="btn btn-secondary btn-sm cancelar-btn" style="display:none;" onclick="cancelarEdicion()">❌</button></td>
-                            <td><button class="btn btn-outline-primary btn-sm" onclick="abrirModalEstudiante({{ s['id'] }})">🔄</button></td>
-                            <td><button class="btn btn-outline-warning btn-sm" onclick="cambiarProfesor({{ s['id'] }}, '{{ s['profesor_terapeuta'] }}')">👨‍🏫</button></td>
-                            <td><button class="btn btn-danger btn-sm" onclick="eliminarSesion({{ s['id'] }})">🗑️</button></td>
-                            {% endif %}</tr>{% endfor %}</tbody>
-                    </table>
-                </div>
-                {% else %}<p class="text-muted">No hay sesiones.</p>{% endif %}
-            </div>
-        </div>
-        {% if current_user.rol in ['admin', 'socio'] and reuniones %}
-        <div class="card shadow mb-4"><div class="card-header bg-dark text-white"><strong>📋 Reuniones</strong></div><div class="card-body"><table class="table table-sm"><thead><tr><th>Fecha</th><th>Hora</th><th>Título</th><th>Asistentes</th><th>Tema</th><th>Enc</th></tr></thead><tbody>{% for r in reuniones %}<tr><td>{{ r['fecha'] }}</td><td>{{ r['hora_inicio'] }}</td><td>{{ r['titulo'] }}</td><td>{{ r.get('asistentes','')[:30] }}</td><td>{{ r.get('tema','') }}</td><td>{{ r['encargado'] }}</td></tr>{% endfor %}</tbody></table></div></div>
-        {% endif %}
-    </div>
-    <div class="col-md-3"><div class="card shadow"><div class="card-header bg-dark text-white"><strong>⚡ Acciones</strong></div><div class="card-body">{% if current_user.rol in ['admin', 'socio'] %}<a href="/modulo1" class="btn btn-primary w-100 mb-2">➕ Planificar</a>{% endif %}<a href="/modulo2" class="btn btn-success w-100">📅 Calendario</a></div></div></div>
-</div>
+{% if current_user.rol in ['admin','socio'] %}
+<!-- MODAL ESTUDIANTE -->
+<div class="modal fade" id="modalCambiarEstudiante" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-header bg-primary text-white"><h5>🔄 Cambiar Estudiante</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><input type="hidden" id="cambiarSesionId"><div class="mb-2"><input type="text" id="buscarEstudiante" class="form-control" placeholder="🔍 Buscar..." onkeyup="filtrarEstudiantes()"></div><select id="selectEstudianteCambio" class="form-select" size="8" onchange="toggleNuevoEstudiante()"><option value="">Seleccionar...</option>{% for e in estudiantes %}<option value="{{ e['id'] }}">{{ e['apellidos'] }} {{ e['nombres'] }}</option>{% endfor %}<option value="nuevo">➕ Nuevo</option></select><div id="nuevoEstudianteCambio" style="display:none;" class="mt-2"><input type="text" id="nuevoNombreCambio" class="form-control mb-1" placeholder="Nombres"><input type="text" id="nuevoApellidoCambio" class="form-control mb-1" placeholder="Apellidos"><input type="text" id="nuevoNivelCambio" class="form-control mb-1" placeholder="Nivel"><input type="text" id="nuevoProcCambio" class="form-control" placeholder="Procedencia"></div></div><div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-primary" onclick="guardarCambioEstudiante()">💾 Guardar</button></div></div></div></div>
 
-{% if current_user.rol in ['admin', 'socio'] %}
-<!-- MODAL CAMBIAR ESTUDIANTE -->
-<div class="modal fade" id="modalCambiarEstudiante" tabindex="-1">
-    <div class="modal-dialog modal-lg"><div class="modal-content">
-        <div class="modal-header bg-primary text-white"><h5>🔄 Cambiar Estudiante</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-        <div class="modal-body">
-            <input type="hidden" id="cambiarSesionId">
-            <div class="mb-2"><input type="text" id="buscarEstudiante" class="form-control" placeholder="🔍 Buscar estudiante..." onkeyup="filtrarEstudiantes()"></div>
-            <div class="mb-2" style="max-height:200px;overflow-y:auto;">
-                <select id="selectEstudianteCambio" class="form-select" size="8" onchange="toggleNuevoEstudiante()">
-                    <option value="">Seleccionar...</option>
-                    {% for e in estudiantes %}<option value="{{ e['id'] }}">{{ e['apellidos'] }} {{ e['nombres'] }}</option>{% endfor %}
-                    <option value="nuevo">➕ Nuevo</option>
-                </select>
-            </div>
-            <div id="nuevoEstudianteCambio" style="display:none;" class="mt-2">
-                <input type="text" id="nuevoNombreCambio" class="form-control mb-1" placeholder="Nombres"><input type="text" id="nuevoApellidoCambio" class="form-control mb-1" placeholder="Apellidos"><input type="text" id="nuevoNivelCambio" class="form-control mb-1" placeholder="Nivel"><input type="text" id="nuevoProcCambio" class="form-control" placeholder="Procedencia">
-            </div>
-        </div>
-        <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-primary" onclick="guardarCambioEstudiante()">💾 Guardar</button></div>
-    </div></div>
-</div>
+<!-- MODAL PROFESOR -->
+<div class="modal fade" id="modalCambiarProfesor" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header bg-warning"><h5>👨‍🏫 Cambiar Profesor</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><input type="hidden" id="cambiarProfesorSesionId"><p>Actual: <strong id="profesorActual"></strong></p><input type="text" id="buscarProfesor" class="form-control mb-2" placeholder="🔍 Buscar..." onkeyup="filtrarProfesores()"><select id="selectProfesorCambio" class="form-select" size="6" onchange="toggleNuevoProfesor()"><option value="">Seleccionar...</option>{% for p in profesores %}<option value="{{ p }}">{{ p }}</option>{% endfor %}<option value="nuevo">➕ Nuevo</option></select><div id="nuevoProfesorCambio" style="display:none;" class="mt-2"><input type="text" id="nuevoProfesorNombre" class="form-control" placeholder="Nombre"></div></div><div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-warning" onclick="guardarCambioProfesor()">💾 Guardar</button></div></div></div></div>
 {% endif %}
 
-<script>
-{% if current_user.rol in ['admin', 'socio'] %}
+<script>{% if current_user.rol in ['admin','socio'] %}
 function modificarSesion(id){const f=document.getElementById('fila-'+id);f.querySelector('.fecha-texto').style.display='none';f.querySelector('.fecha-input').style.display='block';f.querySelector('.hora-texto').style.display='none';f.querySelector('.hora-input').style.display='block';f.querySelector('.editar-btn').style.display='none';f.querySelector('.guardar-btn').style.display='inline-block';f.querySelector('.cancelar-btn').style.display='inline-block'}
 function cancelarEdicion(){location.reload()}
 async function guardarCambios(id){const f=document.getElementById('fila-'+id);const fecha=f.querySelector('.fecha-input').value;const hI=f.querySelector('.hora-inicio-input').value;const hF=f.querySelector('.hora-fin-input').value;if(!fecha||!hI||!hF){alert('Completa');return}if(!confirm('¿Confirmas?'))return;await fetch('/api/sesion/'+id+'/modificar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fecha,hora_inicio:hI,hora_fin:hF})});location.reload()}
-
-function abrirModalEstudiante(id){document.getElementById('cambiarSesionId').value=id;document.getElementById('buscarEstudiante').value='';document.getElementById('selectEstudianteCambio').value='';document.getElementById('nuevoEstudianteCambio').style.display='none';const opts=document.getElementById('selectEstudianteCambio').options;for(let i=0;i<opts.length;i++)opts[i].style.display='';new bootstrap.Modal(document.getElementById('modalCambiarEstudiante')).show()}
-function filtrarEstudiantes(){const b=document.getElementById('buscarEstudiante').value.toLowerCase();const s=document.getElementById('selectEstudianteCambio');const o=s.options;for(let i=0;i<o.length;i++){const t=o[i].textContent.toLowerCase();o[i].style.display=(t.includes(b)||o[i].value===''||o[i].value==='nuevo')?'':'none'}}
+function abrirModalEstudiante(id){document.getElementById('cambiarSesionId').value=id;document.getElementById('buscarEstudiante').value='';document.getElementById('selectEstudianteCambio').value='';document.getElementById('nuevoEstudianteCambio').style.display='none';const o=document.getElementById('selectEstudianteCambio').options;for(let i=0;i<o.length;i++)o[i].style.display='';new bootstrap.Modal(document.getElementById('modalCambiarEstudiante')).show()}
+function filtrarEstudiantes(){const b=document.getElementById('buscarEstudiante').value.toLowerCase();const s=document.getElementById('selectEstudianteCambio');for(let i=0;i<s.options.length;i++){const t=s.options[i].textContent.toLowerCase();s.options[i].style.display=(t.includes(b)||s.options[i].value===''||s.options[i].value==='nuevo')?'':'none'}}
 function toggleNuevoEstudiante(){document.getElementById('nuevoEstudianteCambio').style.display=document.getElementById('selectEstudianteCambio').value==='nuevo'?'block':'none'}
 async function guardarCambioEstudiante(){const id=document.getElementById('cambiarSesionId').value;const sv=document.getElementById('selectEstudianteCambio').value;if(!sv){alert('Selecciona');return}const r=await fetch('/api/sesion/'+id+'/cambiar-estudiante',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({estudiante_id:sv,nuevo_nombre:document.getElementById('nuevoNombreCambio').value,nuevo_apellido:document.getElementById('nuevoApellidoCambio').value,nuevo_nivel:document.getElementById('nuevoNivelCambio').value,nuevo_procedencia:document.getElementById('nuevoProcCambio').value})});const d=await r.json();if(d.success){alert('✅ '+d.nombre);location.reload()}else{alert('❌ '+(d.error||''))}}
-async function cambiarProfesor(id,act){const n=prompt('Nuevo profesor:',act);if(!n)return;const r=await fetch('/api/sesion/'+id+'/cambiar-profesor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({profesor:n})});if((await r.json()).success){alert('✅');location.reload()}}
-async function eliminarSesion(id){if(!confirm('🗑️'))return;await fetch('/api/sesion/'+id+'/eliminar',{method:'POST'});location.reload()}
-{% endif %}
-</script>
+function abrirModalProfesor(id,actual){document.getElementById('cambiarProfesorSesionId').value=id;document.getElementById('profesorActual').textContent=actual;document.getElementById('buscarProfesor').value='';document.getElementById('selectProfesorCambio').value='';document.getElementById('nuevoProfesorCambio').style.display='none';const o=document.getElementById('selectProfesorCambio').options;for(let i=0;i<o.length;i++)o[i].style.display='';new bootstrap.Modal(document.getElementById('modalCambiarProfesor')).show()}
+function filtrarProfesores(){const b=document.getElementById('buscarProfesor').value.toLowerCase();const s=document.getElementById('selectProfesorCambio');for(let i=0;i<s.options.length;i++){const t=s.options[i].textContent.toLowerCase();s.options[i].style.display=(t.includes(b)||s.options[i].value===''||s.options[i].value==='nuevo')?'':'none'}}
+function toggleNuevoProfesor(){document.getElementById('nuevoProfesorCambio').style.display=document.getElementById('selectProfesorCambio').value==='nuevo'?'block':'none'}
+async function guardarCambioProfesor(){const id=document.getElementById('cambiarProfesorSesionId').value;let prof=document.getElementById('selectProfesorCambio').value;if(prof==='nuevo'){prof=document.getElementById('nuevoProfesorNombre').value;if(!prof){alert('Ingresa el nombre');return}}if(!prof){alert('Selecciona');return}if(!confirm(`¿Confirmas cambiar a "${prof}"?`))return;const r=await fetch('/api/sesion/'+id+'/cambiar-profesor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({profesor:prof})});const d=await r.json();if(d.success){alert('✅ Cambiado');location.reload()}else{alert('❌ '+(d.error||''))}}
+async function eliminarSesion(id){if(!confirm('🗑️ ¿Eliminar?'))return;await fetch('/api/sesion/'+id+'/eliminar',{method:'POST'});location.reload()}
+{% endif %}</script>
 {% endblock %}
