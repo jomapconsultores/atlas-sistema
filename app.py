@@ -882,6 +882,43 @@ def cambiar_profesor_sesion(id):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+@app.route('/api/sesion/<int:id>/sincronizar', methods=['POST'])
+@login_required
+@socio_admin_required
+def sincronizar_calendario(id):
+    try:
+        sesion = supabase.table('sesiones').select('*, estudiantes(apellidos, nombres)').eq('id', id).execute()
+        if not sesion.data:
+            return jsonify({'success': False, 'error': 'Sesión no encontrada'})
+        
+        s = sesion.data[0]
+        est = s.get('estudiantes', {})
+        
+        # Si ya tiene evento_calendar_id, eliminarlo primero
+        if s.get('evento_calendar_id') and eliminar_evento_calendar:
+            try:
+                eliminar_evento_calendar(s['evento_calendar_id'])
+            except: pass
+        
+        # Crear nuevo evento
+        if crear_evento_calendar:
+            evento_id = crear_evento_calendar({
+                'asignatura': s.get('asignatura') or s.get('tema_terapia') or 'Sesión',
+                'profesor': s.get('profesor_terapeuta', ''),
+                'estudiantes': f"{est.get('apellidos', '')} {est.get('nombres', '')}" if est else '',
+                'fecha': s['fecha'],
+                'hora_inicio': s['hora_inicio'],
+                'hora_fin': s['hora_fin'],
+                'encargado_apertura': s.get('encargado_apertura', '')
+            })
+            if evento_id:
+                supabase.table('sesiones').update({'evento_calendar_id': evento_id}).eq('id', id).execute()
+                return jsonify({'success': True, 'evento_id': evento_id})
+        
+        return jsonify({'success': False, 'error': 'No se pudo crear el evento'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
