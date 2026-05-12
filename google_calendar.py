@@ -26,6 +26,27 @@ def crear_evento_calendar(datos):
         service = get_calendar_service()
         if not service:
             return None
+        
+        # Verificar si ya existe un evento similar (evitar duplicados)
+        fecha = datos['fecha']
+        h_ini = datos['hora_inicio']
+        h_fin = datos['hora_fin']
+        
+        existing = service.events().list(
+            calendarId='atlas.cenest@gmail.com',
+            timeMin=f"{fecha}T00:00:00-05:00",
+            timeMax=f"{fecha}T23:59:59-05:00",
+            q=datos.get('asignatura', '')
+        ).execute()
+        
+        for event in existing.get('items', []):
+            start = event['start'].get('dateTime', '')
+            end = event['end'].get('dateTime', '')
+            if h_ini in start and h_fin in end:
+                print(f'⚠️ Evento ya existe: {event.get("id")}')
+                return event['id']  # Retornar el ID existente, no crear duplicado
+        
+        # Si no existe, crear nuevo
         evento = {
             'summary': f"🔑 {datos.get('encargado_apertura', '')} | 📚 {datos.get('asignatura', 'Sesión')}",
             'description': (
@@ -34,11 +55,11 @@ def crear_evento_calendar(datos):
                 f"🕐 {datos['hora_inicio']} - {datos['hora_fin']}"
             ),
             'start': {
-                'dateTime': f"{datos['fecha']}T{datos['hora_inicio']}:00",
+                'dateTime': f"{fecha}T{h_ini}:00",
                 'timeZone': 'America/Guayaquil',
             },
             'end': {
-                'dateTime': f"{datos['fecha']}T{datos['hora_fin']}:00",
+                'dateTime': f"{fecha}T{h_fin}:00",
                 'timeZone': 'America/Guayaquil',
             },
         }
@@ -46,7 +67,7 @@ def crear_evento_calendar(datos):
             calendarId='atlas.cenest@gmail.com',
             body=evento
         ).execute()
-        print('✅ Google Calendar OK')
+        print(f'✅ Google Calendar: {event.get("id")}')
         return event['id']
     except Exception as e:
         print(f'⚠️ Google Calendar: {e}')
@@ -66,5 +87,5 @@ def eliminar_evento_calendar(evento_id):
         print('✅ Evento eliminado de Google Calendar')
         return True
     except Exception as e:
-        print(f'⚠️ Error al eliminar de Google Calendar: {e}')
+        print(f'⚠️ Error al eliminar: {e}')
         return False
