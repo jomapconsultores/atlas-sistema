@@ -910,29 +910,25 @@ def sincronizar_calendario(id):
         
         s = sesion.data[0]
         est = s.get('estudiantes', {})
+        nombre_est = f"{est.get('apellidos', '')} {est.get('nombres', '')}".strip() if est else 'Estudiante'
+        if not nombre_est or nombre_est == ' ':
+            nombre_est = 'Estudiante ID ' + str(s.get('estudiante_id', ''))
         
-        # Si ya tiene evento_calendar_id, eliminarlo primero
-        if s.get('evento_calendar_id') and eliminar_evento_calendar:
-            try:
-                eliminar_evento_calendar(s['evento_calendar_id'])
-            except: pass
-        
-        # Crear nuevo evento
         if crear_evento_calendar:
             evento_id = crear_evento_calendar({
-                'asignatura': s.get('asignatura') or s.get('tema_terapia') or 'Sesión',
-                'profesor': s.get('profesor_terapeuta', ''),
-                'estudiantes': f"{est.get('apellidos', '')} {est.get('nombres', '')}" if est else '',
-                'fecha': s['fecha'],
-                'hora_inicio': s['hora_inicio'],
-                'hora_fin': s['hora_fin'],
-                'encargado_apertura': s.get('encargado_apertura', '')
+                'asignatura': (s.get('asignatura') or s.get('tema_terapia') or 'Sesión').strip(),
+                'profesor': (s.get('profesor_terapeuta', 'Profesor')).strip(),
+                'estudiantes': nombre_est.strip(),
+                'fecha': str(s['fecha']),
+                'hora_inicio': str(s['hora_inicio'])[:5],
+                'hora_fin': str(s['hora_fin'])[:5],
+                'encargado_apertura': (s.get('encargado_apertura', '')).strip() or 'ATLAS'
             })
             if evento_id:
                 supabase.table('sesiones').update({'evento_calendar_id': evento_id}).eq('id', id).execute()
-                return jsonify({'success': True, 'evento_id': evento_id})
+                return jsonify({'success': True, 'mensaje': 'Sincronizado'})
         
-        return jsonify({'success': False, 'error': 'No se pudo crear el evento'})
+        return jsonify({'success': False, 'error': 'No se pudo crear'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 

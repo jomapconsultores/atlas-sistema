@@ -47,19 +47,19 @@ def crear_evento_calendar(datos):
                 return event['id']  # Retornar el ID existente, no crear duplicado
         
         # Si no existe, crear nuevo
-        evento = {
+                evento = {
             'summary': f"🔑 {datos.get('encargado_apertura', '')} | 📚 {datos.get('asignatura', 'Sesión')}",
             'description': (
                 f"👨‍🎓 Estudiante: {datos.get('estudiantes', '')}\n"
                 f"👨‍🏫 Profesor: {datos.get('profesor', '')}\n"
-                f"🕐 {datos['hora_inicio']} - {datos['hora_fin']}"
+                f"🕐 {datos.get('hora_inicio', '')} - {datos.get('hora_fin', '')}"
             ),
             'start': {
-                'dateTime': f"{fecha}T{h_ini}:00",
+                'dateTime': f"{datos['fecha']}T{datos['hora_inicio']}:00-05:00",
                 'timeZone': 'America/Guayaquil',
             },
             'end': {
-                'dateTime': f"{fecha}T{h_fin}:00",
+                'dateTime': f"{datos['fecha']}T{datos['hora_fin']}:00-05:00",
                 'timeZone': 'America/Guayaquil',
             },
         }
