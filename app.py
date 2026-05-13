@@ -1004,11 +1004,20 @@ def api_sesiones_todas():
     resultado = []
     for s in (sesiones.data or []):
         est = s.get('estudiantes', {})
+        
+        # Limpiar horas (quitar segundos)
+        hora_inicio = s.get('hora_inicio', '')
+        if hora_inicio and len(hora_inicio) > 5:
+            hora_inicio = hora_inicio[:5]
+        hora_fin = s.get('hora_fin', '')
+        if hora_fin and len(hora_fin) > 5:
+            hora_fin = hora_fin[:5]
+        
         resultado.append({
             'id': s['id'],
             'fecha': s.get('fecha', ''),
-            'hora_inicio': s.get('hora_inicio', ''),
-            'hora_fin': s.get('hora_fin', ''),
+            'hora_inicio': hora_inicio,
+            'hora_fin': hora_fin,
             'estudiante_id': s.get('estudiante_id'),
             'estudiante_nombre': f"{est.get('apellidos', '')} {est.get('nombres', '')}".strip(),
             'tipo_sesion': s.get('tipo_sesion', ''),
@@ -1027,8 +1036,15 @@ def api_sesion_unica(id):
     s = supabase.table('sesiones').select('*').eq('id', id).execute()
     if not s.data:
         return jsonify({'error': 'No encontrada'}), 404
-    return jsonify(s.data[0])
-
+    
+    sesion = s.data[0]
+    # Limpiar formato de hora (quitar segundos)
+    if sesion.get('hora_inicio'):
+        sesion['hora_inicio'] = sesion['hora_inicio'][:5]
+    if sesion.get('hora_fin'):
+        sesion['hora_fin'] = sesion['hora_fin'][:5]
+    
+    return jsonify(sesion)
 @app.route('/api/sesion/<int:id>/editar', methods=['POST'])
 @login_required
 @socio_admin_required
@@ -1036,23 +1052,38 @@ def api_editar_sesion(id):
     try:
         data = request.get_json()
         
+        # Limpiar formatos de hora (eliminar segundos si existen)
+        hora_inicio = data['hora_inicio'].split(':')[:2]
+        hora_fin = data['hora_fin'].split(':')[:2]
+        hora_inicio_str = f"{hora_inicio[0]}:{hora_inicio[1]}"
+        hora_fin_str = f"{hora_fin[0]}:{hora_fin[1]}"
+        
         # Calcular horas
-        inicio = datetime.strptime(f"{data['fecha']} {data['hora_inicio']}", '%Y-%m-%d %H:%M')
-        fin = datetime.strptime(f"{data['fecha']} {data['hora_fin']}", '%Y-%m-%d %H:%M')
+        inicio = datetime.strptime(f"{data['fecha']} {hora_inicio_str}", '%Y-%m-%d %H:%M')
+        fin = datetime.strptime(f"{data['fecha']} {hora_fin_str}", '%Y-%m-%d %H:%M')
         horas = round((fin - inicio).total_seconds() / 3600, 2)
+        
+        # Obtener precios según el estudiante
+        estudiante = supabase.table('estudiantes').select('tipo_servicio, valor_hora_clase, valor_hora_terapia').eq('id', data['estudiante_id']).execute()
+        precio_hora = 10  # valor por defecto
+        if estudiante.data:
+            if data['tipo_sesion'] in ['clase', 'preuniversitario']:
+                precio_hora = estudiante.data[0].get('valor_hora_clase', 10) or 10
+            else:
+                precio_hora = estudiante.data[0].get('valor_hora_terapia', 40) or 40
         
         # Calcular valor según tipo
         es_terapia = data['tipo_sesion'] in ['terapia', 'ambos']
         if es_terapia:
-            valor_total = 40  # Precio base terapia
+            valor_total = precio_hora  # Terapia se cobra por sesión
         else:
-            valor_total = round(horas * 10, 2)  # Precio clase base
+            valor_total = round(horas * precio_hora, 2)
         
         # Actualizar en BD
         updates = {
             'fecha': data['fecha'],
-            'hora_inicio': data['hora_inicio'],
-            'hora_fin': data['hora_fin'],
+            'hora_inicio': hora_inicio_str,
+            'hora_fin': hora_fin_str,
             'horas': horas,
             'tipo_sesion': data['tipo_sesion'],
             'estudiante_id': data['estudiante_id'],
@@ -1062,18 +1093,22 @@ def api_editar_sesion(id):
             'encargado_apertura': data['encargado_apertura'],
             'estado': data.get('estado', 'Planificado'),
             'observaciones': data.get('observaciones', ''),
-            'valor_total': valor_total
+            'valor_total': valor_total,
+            'precio_hora': precio_hora,
+            'cobro_por_sesion': es_terapia
         }
         
         supabase.table('sesiones').update(updates).eq('id', id).execute()
         
-        # Si está realizado y tiene evento de calendario, actualizar
+        # Si está realizado, actualizar Google Calendar
         if data.get('estado') == 'Realizado':
             sesion = supabase.table('sesiones').select('*, estudiantes(apellidos, nombres)').eq('id', id).execute()
             if sesion.data:
                 s = sesion.data[0]
                 est = s.get('estudiantes', {})
                 nombre_est = f"{est.get('apellidos', '')} {est.get('nombres', '')}".strip()
+                if not nombre_est:
+                    nombre_est = 'Sin nombre'
                 
                 from google_calendar import crear_o_actualizar_evento_calendar
                 evento_id = crear_o_actualizar_evento_calendar({
