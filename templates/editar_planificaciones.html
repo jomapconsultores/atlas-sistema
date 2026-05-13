@@ -14,11 +14,11 @@
         <div class="row g-3">
             <div class="col-md-3">
                 <label class="form-label">Fecha desde</label>
-                <input type="date" id="fecha_desde" class="form-control" value="{{ today }}">
+                <input type="date" id="fecha_desde" class="form-control">
             </div>
             <div class="col-md-3">
                 <label class="form-label">Fecha hasta</label>
-                <input type="date" id="fecha_hasta" class="form-control" value="{{ today }}">
+                <input type="date" id="fecha_hasta" class="form-control">
             </div>
             <div class="col-md-3">
                 <label class="form-label">Estudiante</label>
@@ -211,7 +211,7 @@ async function cargarSesiones() {
         const response = await fetch('/api/sesiones/todas');
         const data = await response.json();
         todasSesiones = data;
-        document.getElementById('conteo_sesiones').innerText = `${todasSesiones.length} sesiones`;
+        document.getElementById('conteo_sesiones').innerText = todasSesiones.length + ' sesiones';
         mostrarSesiones(todasSesiones);
     } catch (error) {
         console.error('Error:', error);
@@ -229,7 +229,6 @@ function mostrarSesiones(sesiones) {
     
     let html = '';
     for (const s of sesiones) {
-        // Verificar campos faltantes
         const faltanDatos = [];
         if (!s.fecha) faltanDatos.push('Fecha');
         if (!s.hora_inicio) faltanDatos.push('Hora inicio');
@@ -435,7 +434,6 @@ async function eliminarSesionModal() {
     }
 }
 
-// Cargar al inicio
 cargarSesiones();
 </script>
 {% endblock %}

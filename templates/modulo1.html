@@ -4,7 +4,7 @@
 {% block content %}
 <h3>📋 Planificación de Sesiones</h3>
 
-<!-- ========== 👇 AQUÍ VAN LOS BOTONES (después del título) 👇 ========== -->
+<!-- Botones de sincronización -->
 <div class="d-flex justify-content-between mb-3 flex-wrap gap-2">
     <div>
         <a href="/editar-planificaciones" class="btn btn-warning">
@@ -20,7 +20,6 @@
         </button>
     </div>
 </div>
-<!-- ========== 👆 AQUÍ TERMINAN LOS BOTONES 👆 ========== -->
 
 <div class="card shadow mb-4">
     <div class="card-header bg-primary text-white"><strong>Nueva Planificación</strong></div>
@@ -248,13 +247,10 @@ function toggleNuevoProf(num, val) {
 mostrarEstudiantes();
 mostrarFechas();
 
-// ========== 👇 AQUÍ VAN LAS NUEVAS FUNCIONES DE SINCRONIZACIÓN (antes del </script>) 👇 ==========
+// ========== FUNCIONES DE SINCRONIZACIÓN ==========
 
 async function sincronizarTodoCalendario() {
-    if (!confirm('⚠️ ¿Estás seguro de sincronizar TODAS las sesiones con Google Calendar?\n\n' +
-                 'Esto actualizará o creará eventos para todas las sesiones en estado "Realizado".\n' +
-                 'Puede tomar varios segundos dependiendo de la cantidad de sesiones.\n\n' +
-                 '¿Deseas continuar?')) {
+    if (!confirm('⚠️ ¿Estás seguro de sincronizar TODAS las sesiones con Google Calendar?\n\nEsto actualizará o creará eventos para todas las sesiones en estado "Realizado".\nPuede tomar varios segundos dependiendo de la cantidad de sesiones.\n\n¿Deseas continuar?')) {
         return;
     }
     
@@ -278,15 +274,14 @@ async function sincronizarTodoCalendario() {
         
         const progressDiv = document.createElement('div');
         progressDiv.className = 'alert alert-info mt-3';
-        progressDiv.innerHTML = `<strong>🔄 Sincronizando...</strong><br>
-                                 <div class="progress">
-                                     <div id="syncProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
-                                          style="width: 0%">0%</div>
-                                 </div>
-                                 <p id="syncStatus" class="mt-2">Procesando 0 de ${sesiones.length} sesiones...</p>`;
+        progressDiv.innerHTML = '<strong>🔄 Sincronizando...</strong><br>' +
+            '<div class="progress"><div id="syncProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%">0%</div></div>' +
+            '<p id="syncStatus" class="mt-2">Procesando 0 de ' + sesiones.length + ' sesiones...</p>';
         
         const formCard = document.querySelector('.card.shadow.mb-4');
-        formCard.parentNode.insertBefore(progressDiv, formCard.nextSibling);
+        if (formCard) {
+            formCard.parentNode.insertBefore(progressDiv, formCard.nextSibling);
+        }
         
         for (let i = 0; i < sesiones.length; i++) {
             const s = sesiones[i];
@@ -296,8 +291,11 @@ async function sincronizarTodoCalendario() {
                     headers: {'Content-Type': 'application/json'}
                 });
                 const result = await syncResponse.json();
-                if (result.success) exitosas++;
-                else errores++;
+                if (result.success) {
+                    exitosas++;
+                } else {
+                    errores++;
+                }
             } catch (err) {
                 errores++;
             }
@@ -311,19 +309,24 @@ async function sincronizarTodoCalendario() {
             }
             const statusElem = document.getElementById('syncStatus');
             if (statusElem) {
-                statusElem.innerText = `Procesando ${procesadas} de ${sesiones.length} sesiones... ✅ ${exitosas} | ❌ ${errores}`;
+                statusElem.innerText = 'Procesando ' + procesadas + ' de ' + sesiones.length + ' sesiones... ✅ ' + exitosas + ' | ❌ ' + errores;
             }
         }
         
         const resultDiv = document.createElement('div');
-        resultDiv.className = `alert ${errores === 0 ? 'alert-success' : 'alert-warning'} mt-3`;
-        resultDiv.innerHTML = `<strong>📊 Sincronización completada</strong><br>✅ Exitosas: ${exitosas}<br>❌ Errores: ${errores}<br>📅 Total: ${procesadas}`;
+        resultDiv.className = 'alert ' + (errores === 0 ? 'alert-success' : 'alert-warning') + ' mt-3';
+        resultDiv.innerHTML = '<strong>📊 Sincronización completada</strong><br>✅ Exitosas: ' + exitosas + '<br>❌ Errores: ' + errores + '<br>📅 Total: ' + procesadas;
         
         const existingDiv = document.querySelector('.alert-info');
-        if (existingDiv) existingDiv.replaceWith(resultDiv);
-        setTimeout(() => resultDiv.remove(), 5000);
+        if (existingDiv) {
+            existingDiv.replaceWith(resultDiv);
+        }
         
-        alert(`✅ Sincronización completada\n\n✅ Exitosas: ${exitosas}\n❌ Errores: ${errores}`);
+        setTimeout(function() {
+            if (resultDiv) resultDiv.remove();
+        }, 5000);
+        
+        alert('✅ Sincronización completada\n\n✅ Exitosas: ' + exitosas + '\n❌ Errores: ' + errores);
         
     } catch (error) {
         alert('❌ Error: ' + error.message);
@@ -337,9 +340,12 @@ async function sincronizarMesActual() {
     const hoy = new Date();
     const anio = hoy.getFullYear();
     const mes = hoy.getMonth() + 1;
-    const nombreMes = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'][mes - 1];
+    const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    const nombreMes = meses[mes - 1];
     
-    if (!confirm(`⚠️ ¿Sincronizar solo las sesiones de ${nombreMes} ${anio}?`)) return;
+    if (!confirm('⚠️ ¿Sincronizar solo las sesiones de ' + nombreMes + ' ' + anio + '?')) {
+        return;
+    }
     
     const btn = event.target;
     const textoOriginal = btn.innerText;
@@ -347,17 +353,18 @@ async function sincronizarMesActual() {
     btn.innerText = '⏳...';
     
     try {
-        const response = await fetch(`/api/sesiones/para-sincronizar?mes=${mes}&anio=${anio}`);
+        const response = await fetch('/api/sesiones/para-sincronizar?mes=' + mes + '&anio=' + anio);
         const sesiones = await response.json();
         
         if (sesiones.length === 0) {
-            alert(`No hay sesiones en ${nombreMes} ${anio}`);
+            alert('No hay sesiones en ' + nombreMes + ' ' + anio);
             btn.disabled = false;
             btn.innerText = textoOriginal;
             return;
         }
         
         let exitosas = 0, errores = 0;
+        
         for (const s of sesiones) {
             try {
                 const syncResponse = await fetch('/api/sesion/' + s.id + '/sincronizar', {
@@ -365,14 +372,18 @@ async function sincronizarMesActual() {
                     headers: {'Content-Type': 'application/json'}
                 });
                 const result = await syncResponse.json();
-                if (result.success) exitosas++;
-                else errores++;
+                if (result.success) {
+                    exitosas++;
+                } else {
+                    errores++;
+                }
             } catch (err) {
                 errores++;
             }
         }
         
-        alert(`📅 ${nombreMes} ${anio}\n✅ Exitosas: ${exitosas}\n❌ Errores: ${errores}`);
+        alert('📅 ' + nombreMes + ' ' + anio + '\n✅ Exitosas: ' + exitosas + '\n❌ Errores: ' + errores);
+        
     } catch (error) {
         alert('❌ Error: ' + error.message);
     } finally {
@@ -380,8 +391,6 @@ async function sincronizarMesActual() {
         btn.innerText = textoOriginal;
     }
 }
-
-// ========== 👆 AQUÍ TERMINAN LAS NUEVAS FUNCIONES 👆 ==========
 
 </script>
 {% endblock %}

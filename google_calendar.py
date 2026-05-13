@@ -32,12 +32,10 @@ def crear_o_actualizar_evento_calendar(datos, evento_id_existente=None):
         h_ini = datos.get('hora_inicio', '')[:5]
         h_fin = datos.get('hora_fin', '')[:5]
         
-        # Obtener el encargado de apertura
         encargado = datos.get('encargado_apertura', '').strip()
         if not encargado:
             encargado = 'Por definir'
         
-        # Construir el evento
         summary = f"🔑 {encargado} | 📚 {datos.get('asignatura', 'Sesión')}"
         description = f"👨‍🎓 Estudiante: {datos.get('estudiantes', '')}\n👨‍🏫 Profesor: {datos.get('profesor', '')}\n🕐 {h_ini} - {h_fin}\n🔑 Encargado apertura: {encargado}"
         
@@ -54,7 +52,6 @@ def crear_o_actualizar_evento_calendar(datos, evento_id_existente=None):
             },
         }
         
-        # Si tenemos un ID existente, ACTUALIZAMOS el evento
         if evento_id_existente:
             try:
                 event = service.events().update(
@@ -66,9 +63,7 @@ def crear_o_actualizar_evento_calendar(datos, evento_id_existente=None):
                 return event['id']
             except Exception as e:
                 print(f'⚠️ Error al actualizar: {e}, creando nuevo...')
-                pass
         
-        # Buscar si ya existe un evento similar para evitar duplicados
         existing = service.events().list(
             calendarId='atlas.cenest@gmail.com',
             timeMin=f"{fecha}T00:00:00-05:00",
@@ -80,7 +75,6 @@ def crear_o_actualizar_evento_calendar(datos, evento_id_existente=None):
             start = ev['start'].get('dateTime', '')
             end = ev['end'].get('dateTime', '')
             if h_ini in start and h_fin in end:
-                # Si encontramos uno similar, lo ACTUALIZAMOS
                 try:
                     event = service.events().update(
                         calendarId='atlas.cenest@gmail.com',
@@ -93,7 +87,6 @@ def crear_o_actualizar_evento_calendar(datos, evento_id_existente=None):
                     print(f'⚠️ Error al actualizar existente: {e}')
                     continue
         
-        # Si no existe, crear nuevo
         event = service.events().insert(
             calendarId='atlas.cenest@gmail.com',
             body=nuevo_evento
