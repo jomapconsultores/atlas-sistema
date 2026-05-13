@@ -4,12 +4,12 @@
 {% block content %}
 <h3>📅 {% if current_user.rol in ['admin', 'socio'] %}Calendario de Clases{% else %}Mis Clases{% endif %}</h3>
 
-<form class="mb-3">
-{% if current_user.rol in ['admin','socio'] %}
-<button class="btn btn-outline-primary btn-sm mb-2" onclick="sincronizarTodos()">🔄 Sincronizar Todos</button>
-{% endif %}
+<form class="mb-3 d-flex gap-2">
     <input type="date" name="fecha" value="{{ fecha }}" class="form-control d-inline w-auto" onchange="this.form.submit()">
-    <a href="/modulo2" class="btn btn-outline-secondary btn-sm">Ver todas las fechas</a>
+    <a href="/modulo2" class="btn btn-outline-secondary btn-sm">Todas las fechas</a>
+    {% if current_user.rol in ['admin','socio'] %}
+    <button type="button" class="btn btn-outline-primary btn-sm" onclick="sincronizarTodos()" title="Sincronizar todas las sesiones de esta fecha con Google Calendar">🔄 Sincronizar Fecha</button>
+    {% endif %}
 </form>
 
 <div class="card shadow mb-4">
@@ -18,17 +18,21 @@
         {% if sesiones %}
         <div class="table-responsive">
             <table class="table table-striped">
-                <thead><tr><th>Fecha</th><th>Hora</th><th>Estudiante</th><th>Tipo</th><th>Asig</th><th>Prof</th><th>Estado</th><th>Valor</th><th>✅</th><th>❌</th>{% if current_user.rol in ['admin','socio'] %}<th>🗑️</th><th>🔄</th><th>👨‍🏫</th>{% endif %}</tr></thead>
+                <thead><tr><th>Fecha</th><th>Hora</th><th>Estudiante</th><th>Tipo</th><th>Asig</th><th>Prof</th><th>Estado</th><th>Valor</th><th>✅</th><th>❌</th>{% if current_user.rol in ['admin','socio'] %}<th>🗑️</th><th>🔄 Est.</th><th>👨‍🏫 Prof.</th>{% endif %}</tr></thead>
                 <tbody>{% for s in sesiones %}<tr>
                     <td>{{ s['fecha'] }}</td><td>{{ s['hora_inicio'] }} - {{ s['hora_fin'] }}</td>
                     <td>{% if s.get('estudiantes') %}{{ s['estudiantes']['apellidos'] }} {{ s['estudiantes']['nombres'] }}{% else %}ID: {{ s['estudiante_id'] }}{% endif %}</td>
                     <td>{{ s['tipo_sesion'] }}</td><td>{{ s.get('asignatura') or s.get('tema_terapia') or '-' }}</td><td>{{ s['profesor_terapeuta'] }}</td>
-                    <td><span class="badge bg-{{ 'success' if s['estado']=='Realizado' else 'danger' if s['estado']=='Cancelado' else 'warning' }}">{{ s['estado'] }}</span>{% if current_user.rol in ['admin','socio'] %}{% if s.get('evento_calendar_id') %}<span class="badge bg-success">📅</span>{% else %}<span class="badge bg-secondary">📅</span>{% endif %}{% endif %}</td>
-{% if current_user.rol in ['admin','socio'] %}
-    {% if not s.get('evento_calendar_id') %}
-    <button class="btn btn-outline-success btn-sm" onclick="sincronizarEvento({{ s['id'] }})" title="Sincronizar ahora">🔄</button>
-    {% endif %}
-{% endif %}
+                    <td>
+                        <span class="badge bg-{{ 'success' if s['estado']=='Realizado' else 'danger' if s['estado']=='Cancelado' else 'warning' }}">{{ s['estado'] }}</span>
+                        {% if current_user.rol in ['admin','socio'] %}
+                            {% if s.get('evento_calendario_id') %}
+                            <span class="badge bg-success" title="Sincronizado">📅</span>
+                            {% else %}
+                            <button class="btn btn-outline-success btn-sm" onclick="sincronizarEvento({{ s['id'] }})" title="Sincronizar ahora">🔄</button>
+                            {% endif %}
+                        {% endif %}
+                    </td>
                     <td>{% if s['estado']=='Realizado' %}${{ "%.2f"|format(s.get('valor_total',0) or 0) }}{% else %}-{% endif %}</td>
                     <td><input type="radio" name="est_{{ s['id'] }}" class="radio-sesion" data-id="{{ s['id'] }}" data-estado="Realizado" {{ 'checked' if s['estado']=='Realizado' }}></td>
                     <td><input type="radio" name="est_{{ s['id'] }}" class="radio-sesion" data-id="{{ s['id'] }}" data-estado="Cancelado" {{ 'checked' if s['estado']=='Cancelado' }}></td>
@@ -53,8 +57,8 @@
 <div class="modal-header bg-primary text-white"><h5>🔄 Cambiar Estudiante</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
 <div class="modal-body"><input type="hidden" id="cambiarSesionId">
 <input type="text" id="buscarEstudiante" class="form-control mb-2" placeholder="🔍 Buscar estudiante..." onkeyup="filtrarEstudiantes()">
-<select id="selectEstudianteCambio" class="form-select" size="8" onchange="toggleNuevoEstudiante()"><option value="">Seleccionar...</option>{% if estudiantes %}{% for e in estudiantes %}<option value="{{ e['id'] }}">{{ e['apellidos'] }} {{ e['nombres'] }}</option>{% endfor %}{% endif %}<option value="nuevo">➕ Nuevo estudiante</option></select>
-<div id="nuevoEstudianteCambio" style="display:none;" class="mt-2"><input type="text" id="nuevoNombreCambio" class="form-control mb-1" placeholder="Nombres *"><input type="text" id="nuevoApellidoCambio" class="form-control mb-1" placeholder="Apellidos *"><input type="text" id="nuevoNivelCambio" class="form-control mb-1" placeholder="Nivel/Curso"><input type="text" id="nuevoProcCambio" class="form-control" placeholder="Procedencia"></div></div>
+<select id="selectEstudianteCambio" class="form-select" size="8" onchange="toggleNuevoEstudiante()"><option value="">Seleccionar...</option>{% if estudiantes %}{% for e in estudiantes %}<option value="{{ e['id'] }}">{{ e['apellidos'] }} {{ e['nombres'] }}</option>{% endfor %}{% endif %}<option value="nuevo">➕ Nuevo</option></select>
+<div id="nuevoEstudianteCambio" style="display:none;" class="mt-2"><input type="text" id="nuevoNombreCambio" class="form-control mb-1" placeholder="Nombres *"><input type="text" id="nuevoApellidoCambio" class="form-control mb-1" placeholder="Apellidos *"><input type="text" id="nuevoNivelCambio" class="form-control mb-1" placeholder="Nivel"><input type="text" id="nuevoProcCambio" class="form-control" placeholder="Procedencia"></div></div>
 <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-primary" onclick="guardarCambioEstudiante()">💾 Guardar</button></div>
 </div></div></div>
 
@@ -63,44 +67,13 @@
 <div class="modal-header bg-warning"><h5>👨‍🏫 Cambiar Profesor</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
 <div class="modal-body"><input type="hidden" id="cambiarProfesorSesionId"><p>Actual: <strong id="profesorActual"></strong></p>
 <input type="text" id="buscarProfesor" class="form-control mb-2" placeholder="🔍 Buscar profesor..." onkeyup="filtrarProfesores()">
-<select id="selectProfesorCambio" class="form-select" size="6" onchange="toggleNuevoProfesor()"><option value="">Seleccionar...</option>{% if profesores %}{% for p in profesores %}<option value="{{ p }}">{{ p }}</option>{% endfor %}{% endif %}<option value="nuevo">➕ Nuevo profesor</option></select>
-<div id="nuevoProfesorCambio" style="display:none;" class="mt-2"><input type="text" id="nuevoProfesorNombre" class="form-control" placeholder="Nombre del nuevo profesor"></div></div>
+<select id="selectProfesorCambio" class="form-select" size="6" onchange="toggleNuevoProfesor()"><option value="">Seleccionar...</option>{% if profesores %}{% for p in profesores %}<option value="{{ p }}">{{ p }}</option>{% endfor %}{% endif %}<option value="nuevo">➕ Nuevo</option></select>
+<div id="nuevoProfesorCambio" style="display:none;" class="mt-2"><input type="text" id="nuevoProfesorNombre" class="form-control" placeholder="Nombre"></div></div>
 <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-warning" onclick="guardarCambioProfesor()">💾 Guardar</button></div>
 </div></div></div>
 {% endif %}
 
 <script>
-async function sincronizarTodos() {
-    if (!confirm('¿Sincronizar TODAS las sesiones de esta fecha con Google Calendar?')) return;
-    const filas = document.querySelectorAll('tbody tr');
-    let ok = 0, fallo = 0;
-    for (let fila of filas) {
-        const btn = fila.querySelector('button[onclick^="sincronizarEvento"]');
-        if (btn) {
-            const id = btn.getAttribute('onclick').match(/\d+/)[0];
-            try {
-                const resp = await fetch('/api/sesion/' + id + '/sincronizar', {
-                    method: 'POST', headers: {'Content-Type': 'application/json'}
-                });
-                const data = await resp.json();
-                if (data.success) ok++; else fallo++;
-            } catch(e) { fallo++; }
-        }
-    }
-    alert(`✅ ${ok} sincronizadas\n❌ ${fallo} errores`);
-    location.reload();
-}
-async function sincronizarEvento(id) {
-    const btn = event.target;
-    btn.disabled = true;
-    btn.textContent = '⏳';
-    const resp = await fetch('/api/sesion/' + id + '/sincronizar', {
-        method: 'POST', headers: {'Content-Type': 'application/json'}
-    });
-    const data = await resp.json();
-    if (data.success) { alert('✅ Sincronizado con Google Calendar'); location.reload(); }
-    else { alert('❌ Error: ' + (data.error || 'Desconocido')); btn.disabled = false; btn.textContent = '🔄'; }
-}
 document.querySelectorAll('.radio-sesion').forEach(r=>{r.addEventListener('change',function(){if(!this.checked)return;const id=this.dataset.id,e=this.dataset.estado;if(!confirm('¿Confirmas marcar como '+e+'?')){location.reload();return}fetch('/api/sesion/'+id+'/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({estado:e})}).then(()=>location.reload())})});
 
 {% if current_user.rol in ['admin','socio'] %}
@@ -108,11 +81,13 @@ function eliminarSesion(id){if(!confirm('🗑️ ¿Eliminar?'))return;fetch('/ap
 function abrirModalEstudiante(id){document.getElementById('cambiarSesionId').value=id;document.getElementById('buscarEstudiante').value='';document.getElementById('selectEstudianteCambio').value='';document.getElementById('nuevoEstudianteCambio').style.display='none';const o=document.getElementById('selectEstudianteCambio').options;for(let i=0;i<o.length;i++)o[i].style.display='';new bootstrap.Modal(document.getElementById('modalCambiarEstudiante')).show()}
 function filtrarEstudiantes(){const b=document.getElementById('buscarEstudiante').value.toLowerCase();const s=document.getElementById('selectEstudianteCambio');if(!s)return;for(let i=0;i<s.options.length;i++){const t=s.options[i].textContent.toLowerCase();s.options[i].style.display=(t.includes(b)||s.options[i].value===''||s.options[i].value==='nuevo')?'':'none'}}
 function toggleNuevoEstudiante(){document.getElementById('nuevoEstudianteCambio').style.display=document.getElementById('selectEstudianteCambio').value==='nuevo'?'block':'none'}
-async function guardarCambioEstudiante(){const id=document.getElementById('cambiarSesionId').value;const sv=document.getElementById('selectEstudianteCambio').value;if(!sv){alert('Selecciona un estudiante');return}const body={estudiante_id:sv,nuevo_nombre:document.getElementById('nuevoNombreCambio').value,nuevo_apellido:document.getElementById('nuevoApellidoCambio').value,nuevo_nivel:document.getElementById('nuevoNivelCambio').value,nuevo_procedencia:document.getElementById('nuevoProcCambio').value};const r=await fetch('/api/sesion/'+id+'/cambiar-estudiante',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json();if(d.success){alert('✅ Cambiado a: '+d.nombre);location.reload()}else{alert('❌ '+(d.error||'Error'))}}
+async function guardarCambioEstudiante(){const id=document.getElementById('cambiarSesionId').value;const sv=document.getElementById('selectEstudianteCambio').value;if(!sv){alert('Selecciona');return}const body={estudiante_id:sv,nuevo_nombre:document.getElementById('nuevoNombreCambio').value,nuevo_apellido:document.getElementById('nuevoApellidoCambio').value,nuevo_nivel:document.getElementById('nuevoNivelCambio').value,nuevo_procedencia:document.getElementById('nuevoProcCambio').value};const r=await fetch('/api/sesion/'+id+'/cambiar-estudiante',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json();if(d.success){alert('✅ '+d.nombre);location.reload()}else{alert('❌ '+(d.error||''))}}
 function abrirModalProfesor(id,actual){document.getElementById('cambiarProfesorSesionId').value=id;document.getElementById('profesorActual').textContent=actual;document.getElementById('buscarProfesor').value='';document.getElementById('selectProfesorCambio').value='';document.getElementById('nuevoProfesorCambio').style.display='none';const o=document.getElementById('selectProfesorCambio').options;for(let i=0;i<o.length;i++)o[i].style.display='';new bootstrap.Modal(document.getElementById('modalCambiarProfesor')).show()}
 function filtrarProfesores(){const b=document.getElementById('buscarProfesor').value.toLowerCase();const s=document.getElementById('selectProfesorCambio');if(!s)return;for(let i=0;i<s.options.length;i++){const t=s.options[i].textContent.toLowerCase();s.options[i].style.display=(t.includes(b)||s.options[i].value===''||s.options[i].value==='nuevo')?'':'none'}}
 function toggleNuevoProfesor(){document.getElementById('nuevoProfesorCambio').style.display=document.getElementById('selectProfesorCambio').value==='nuevo'?'block':'none'}
-async function guardarCambioProfesor(){const id=document.getElementById('cambiarProfesorSesionId').value;let prof=document.getElementById('selectProfesorCambio').value;if(prof==='nuevo'){prof=document.getElementById('nuevoProfesorNombre').value;if(!prof){alert('Ingresa el nombre');return}}if(!prof){alert('Selecciona un profesor');return}if(!confirm('¿Confirmas cambiar a "'+prof+'"?'))return;const r=await fetch('/api/sesion/'+id+'/cambiar-profesor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({profesor:prof})});const d=await r.json();if(d.success){alert('✅ Cambiado');location.reload()}else{alert('❌ '+(d.error||'Error'))}}
+async function guardarCambioProfesor(){const id=document.getElementById('cambiarProfesorSesionId').value;let prof=document.getElementById('selectProfesorCambio').value;if(prof==='nuevo'){prof=document.getElementById('nuevoProfesorNombre').value;if(!prof){alert('Ingresa el nombre');return}}if(!prof){alert('Selecciona');return}if(!confirm('¿Confirmas cambiar a "'+prof+'"?'))return;const r=await fetch('/api/sesion/'+id+'/cambiar-profesor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({profesor:prof})});const d=await r.json();if(d.success){alert('✅ Cambiado');location.reload()}else{alert('❌ '+(d.error||''))}}
+async function sincronizarEvento(id){if(!confirm('¿Sincronizar esta sesión con Google Calendar?'))return;const btn=event.target;btn.disabled=true;btn.textContent='⏳';try{const r=await fetch('/api/sesion/'+id+'/sincronizar',{method:'POST',headers:{'Content-Type':'application/json'}});const d=await r.json();if(d.success){alert('✅ '+d.mensaje);location.reload()}else{alert('❌ '+(d.error||'Error'))}}catch(e){alert('❌ Error')}btn.disabled=false;btn.textContent='🔄'}
+async function sincronizarTodos(){if(!confirm('¿Sincronizar TODAS las sesiones de esta fecha?'))return;const filas=document.querySelectorAll('tbody tr');let ok=0,fallo=0;for(let f of filas){const btn=f.querySelector('button[onclick^="sincronizarEvento"]');if(btn){const id=btn.getAttribute('onclick').match(/\d+/)[0];try{const r=await fetch('/api/sesion/'+id+'/sincronizar',{method:'POST',headers:{'Content-Type':'application/json'}});const d=await r.json();if(d.success)ok++;else fallo++}catch(e){fallo++}}}alert('✅ '+ok+' sincronizadas\n❌ '+fallo+' errores');location.reload()}
 {% endif %}
 
 function cargarPendientes(){fetch('/api/sesiones/pendientes').then(r=>r.json()).then(d=>{let h=d.length===0?'<p class="text-success">✅ Todas marcadas</p>':'<table class="table table-sm"><thead><tr><th>Fecha</th><th>Hora</th><th>Est</th><th>Tipo</th><th>Asig</th><th>Prof</th><th>✅</th><th>❌</th></tr></thead><tbody>';d.forEach(s=>h+=`<tr id="pend-${s.id}"><td>${s.fecha}</td><td>${s.hora_inicio}</td><td>${s.estudiante}</td><td>${s.tipo_sesion}</td><td>${s.asignatura||'-'}</td><td>${s.profesor_terapeuta}</td><td><button class="btn btn-success btn-sm" onclick="marcar(${s.id},'Realizado')">✅</button></td><td><button class="btn btn-warning btn-sm" onclick="marcar(${s.id},'Cancelado')">❌</button></td></tr>`);h+='</tbody></table>';document.getElementById('pendientesContainer').innerHTML=h})}

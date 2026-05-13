@@ -468,6 +468,36 @@ def modulo6():
 @login_required
 @socio_admin_required
 def eliminar_reunion(id):
+@app.route('/api/reunion/<int:id>/sincronizar', methods=['POST'])
+@login_required
+@socio_admin_required
+def sincronizar_reunion(id):
+    try:
+        reunion = supabase.table('reuniones').select('*').eq('id', id).execute()
+        if not reunion.data:
+            return jsonify({'success': False, 'error': 'Reunión no encontrada'})
+        
+        r = reunion.data[0]
+        if not r.get('fecha') or not r.get('hora_inicio') or not r.get('hora_fin'):
+            return jsonify({'success': False, 'error': 'Faltan datos'})
+        
+        if crear_evento_calendar:
+            evento_id = crear_evento_calendar({
+                'asignatura': f"{r.get('titulo', 'Reunión')} - {r.get('tema', '')}",
+                'profesor': r.get('encargado', ''),
+                'estudiantes': r.get('asistentes', ''),
+                'fecha': str(r['fecha']),
+                'hora_inicio': str(r['hora_inicio'])[:5],
+                'hora_fin': str(r['hora_fin'])[:5],
+                'encargado_apertura': r.get('encargado', '')[:10]
+            })
+            if evento_id:
+                supabase.table('reuniones').update({'evento_calendar_id': evento_id}).eq('id', id).execute()
+                return jsonify({'success': True})
+        
+        return jsonify({'success': False, 'error': 'No se pudo crear'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
     try:
         supabase.table('reuniones').delete().eq('id', id).execute()
         return jsonify({'success': True})
