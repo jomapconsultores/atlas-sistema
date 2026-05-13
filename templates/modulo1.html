@@ -4,21 +4,11 @@
 {% block content %}
 <h3>📋 Planificación de Sesiones</h3>
 
-<!-- Botones de sincronización -->
-<div class="d-flex justify-content-between mb-3 flex-wrap gap-2">
-    <div>
-        <a href="/editar-planificaciones" class="btn btn-warning">
-            ✏️ Editar Planificaciones Existentes
-        </a>
-    </div>
-    <div class="btn-group" role="group">
-        <button type="button" class="btn btn-danger" onclick="sincronizarTodoCalendario()" style="background-color: #dc3545; border-color: #dc3545;">
-            🔄 Sincronizar TODO con Google Calendar
-        </button>
-        <button type="button" class="btn btn-outline-danger" onclick="sincronizarMesActual()">
-            📅 Solo este mes
-        </button>
-    </div>
+<!-- Botón para editar planificaciones existentes -->
+<div class="d-flex justify-content-end mb-3">
+    <a href="/editar-planificaciones" class="btn btn-warning">
+        ✏️ Editar Planificaciones Existentes
+    </a>
 </div>
 
 <div class="card shadow mb-4">
@@ -246,151 +236,5 @@ function toggleNuevoProf(num, val) {
 
 mostrarEstudiantes();
 mostrarFechas();
-
-// ========== FUNCIONES DE SINCRONIZACIÓN ==========
-
-async function sincronizarTodoCalendario() {
-    if (!confirm('⚠️ ¿Estás seguro de sincronizar TODAS las sesiones con Google Calendar?\n\nEsto actualizará o creará eventos para todas las sesiones en estado "Realizado".\nPuede tomar varios segundos dependiendo de la cantidad de sesiones.\n\n¿Deseas continuar?')) {
-        return;
-    }
-    
-    const btn = event.target;
-    const textoOriginal = btn.innerText;
-    btn.disabled = true;
-    btn.innerText = '⏳ Sincronizando...';
-    
-    try {
-        const response = await fetch('/api/sesiones/para-sincronizar');
-        const sesiones = await response.json();
-        
-        if (sesiones.length === 0) {
-            alert('No hay sesiones realizadas para sincronizar');
-            btn.disabled = false;
-            btn.innerText = textoOriginal;
-            return;
-        }
-        
-        let procesadas = 0, exitosas = 0, errores = 0;
-        
-        const progressDiv = document.createElement('div');
-        progressDiv.className = 'alert alert-info mt-3';
-        progressDiv.innerHTML = '<strong>🔄 Sincronizando...</strong><br>' +
-            '<div class="progress"><div id="syncProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%">0%</div></div>' +
-            '<p id="syncStatus" class="mt-2">Procesando 0 de ' + sesiones.length + ' sesiones...</p>';
-        
-        const formCard = document.querySelector('.card.shadow.mb-4');
-        if (formCard) {
-            formCard.parentNode.insertBefore(progressDiv, formCard.nextSibling);
-        }
-        
-        for (let i = 0; i < sesiones.length; i++) {
-            const s = sesiones[i];
-            try {
-                const syncResponse = await fetch('/api/sesion/' + s.id + '/sincronizar', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'}
-                });
-                const result = await syncResponse.json();
-                if (result.success) {
-                    exitosas++;
-                } else {
-                    errores++;
-                }
-            } catch (err) {
-                errores++;
-            }
-            
-            procesadas++;
-            const porcentaje = Math.round((procesadas / sesiones.length) * 100);
-            const progressBar = document.getElementById('syncProgressBar');
-            if (progressBar) {
-                progressBar.style.width = porcentaje + '%';
-                progressBar.innerText = porcentaje + '%';
-            }
-            const statusElem = document.getElementById('syncStatus');
-            if (statusElem) {
-                statusElem.innerText = 'Procesando ' + procesadas + ' de ' + sesiones.length + ' sesiones... ✅ ' + exitosas + ' | ❌ ' + errores;
-            }
-        }
-        
-        const resultDiv = document.createElement('div');
-        resultDiv.className = 'alert ' + (errores === 0 ? 'alert-success' : 'alert-warning') + ' mt-3';
-        resultDiv.innerHTML = '<strong>📊 Sincronización completada</strong><br>✅ Exitosas: ' + exitosas + '<br>❌ Errores: ' + errores + '<br>📅 Total: ' + procesadas;
-        
-        const existingDiv = document.querySelector('.alert-info');
-        if (existingDiv) {
-            existingDiv.replaceWith(resultDiv);
-        }
-        
-        setTimeout(function() {
-            if (resultDiv) resultDiv.remove();
-        }, 5000);
-        
-        alert('✅ Sincronización completada\n\n✅ Exitosas: ' + exitosas + '\n❌ Errores: ' + errores);
-        
-    } catch (error) {
-        alert('❌ Error: ' + error.message);
-    } finally {
-        btn.disabled = false;
-        btn.innerText = textoOriginal;
-    }
-}
-
-async function sincronizarMesActual() {
-    const hoy = new Date();
-    const anio = hoy.getFullYear();
-    const mes = hoy.getMonth() + 1;
-    const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-    const nombreMes = meses[mes - 1];
-    
-    if (!confirm('⚠️ ¿Sincronizar solo las sesiones de ' + nombreMes + ' ' + anio + '?')) {
-        return;
-    }
-    
-    const btn = event.target;
-    const textoOriginal = btn.innerText;
-    btn.disabled = true;
-    btn.innerText = '⏳...';
-    
-    try {
-        const response = await fetch('/api/sesiones/para-sincronizar?mes=' + mes + '&anio=' + anio);
-        const sesiones = await response.json();
-        
-        if (sesiones.length === 0) {
-            alert('No hay sesiones en ' + nombreMes + ' ' + anio);
-            btn.disabled = false;
-            btn.innerText = textoOriginal;
-            return;
-        }
-        
-        let exitosas = 0, errores = 0;
-        
-        for (const s of sesiones) {
-            try {
-                const syncResponse = await fetch('/api/sesion/' + s.id + '/sincronizar', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'}
-                });
-                const result = await syncResponse.json();
-                if (result.success) {
-                    exitosas++;
-                } else {
-                    errores++;
-                }
-            } catch (err) {
-                errores++;
-            }
-        }
-        
-        alert('📅 ' + nombreMes + ' ' + anio + '\n✅ Exitosas: ' + exitosas + '\n❌ Errores: ' + errores);
-        
-    } catch (error) {
-        alert('❌ Error: ' + error.message);
-    } finally {
-        btn.disabled = false;
-        btn.innerText = textoOriginal;
-    }
-}
-
 </script>
 {% endblock %}

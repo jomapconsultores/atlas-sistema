@@ -36,8 +36,10 @@ def crear_o_actualizar_evento_calendar(datos, evento_id_existente=None):
         if not encargado:
             encargado = 'Por definir'
         
+        valor = datos.get('valor_total', 0)
+        
         summary = f"🔑 {encargado} | 📚 {datos.get('asignatura', 'Sesión')}"
-        description = f"👨‍🎓 Estudiante: {datos.get('estudiantes', '')}\n👨‍🏫 Profesor: {datos.get('profesor', '')}\n🕐 {h_ini} - {h_fin}\n🔑 Encargado apertura: {encargado}"
+        description = f"👨‍🎓 Estudiante: {datos.get('estudiantes', '')}\n👨‍🏫 Profesor: {datos.get('profesor', '')}\n🕐 {h_ini} - {h_fin}\n🔑 Encargado apertura: {encargado}\n💰 Valor: ${valor}"
         
         nuevo_evento = {
             'summary': summary,

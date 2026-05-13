@@ -33,9 +33,9 @@
                 <label class="form-label">Estado</label>
                 <select id="filtro_estado" class="form-select">
                     <option value="">Todos</option>
-                    <option value="Planificado">Planificado</option>
-                    <option value="Realizado">Realizado</option>
-                    <option value="Cancelado">Cancelado</option>
+                    <option value="Planificado">📅 Planificado</option>
+                    <option value="Realizado">✅ Realizado</option>
+                    <option value="Cancelado">❌ Cancelado</option>
                 </select>
             </div>
             <div class="col-md-12 mt-2">
@@ -74,15 +74,15 @@
             <div class="modal-body">
                 <input type="hidden" id="edit_sesion_id">
                 <div class="row">
-                    <div class="col-md-6 mb-2">
+                    <div class="col-md-4 mb-2">
                         <label class="form-label">Fecha *</label>
                         <input type="date" id="edit_fecha" class="form-control" required>
                     </div>
-                    <div class="col-md-3 mb-2">
+                    <div class="col-md-4 mb-2">
                         <label class="form-label">Hora inicio *</label>
                         <input type="time" id="edit_hora_inicio" class="form-control" required>
                     </div>
-                    <div class="col-md-3 mb-2">
+                    <div class="col-md-4 mb-2">
                         <label class="form-label">Hora fin *</label>
                         <input type="time" id="edit_hora_fin" class="form-control" required>
                     </div>
@@ -99,7 +99,7 @@
                     </div>
                     <div class="col-md-6 mb-2">
                         <label class="form-label">Tipo de sesión *</label>
-                        <select id="edit_tipo_sesion" class="form-select" required onchange="toggleCamposEdicion()">
+                        <select id="edit_tipo_sesion" class="form-select" required onchange="toggleCamposEdicion(); calcularValorAuto()">
                             <option value="clase">📚 Clase</option>
                             <option value="terapia">🧠 Terapia</option>
                             <option value="ambos">📚🧠 Ambos</option>
@@ -141,6 +141,22 @@
                         <option value="{{ e }}">
                         {% endfor %}
                     </datalist>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-2">
+                        <label class="form-label">💵 Precio por hora *</label>
+                        <input type="number" id="edit_precio_hora" class="form-control" step="0.01" required onchange="calcularValorAuto()">
+                        <small class="text-muted">Valor base por hora</small>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <label class="form-label">💰 Valor total *</label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="number" id="edit_valor_total" class="form-control" step="0.01" required>
+                            <button type="button" class="btn btn-outline-secondary" onclick="calcularValorAuto()">🔢 Calcular</button>
+                        </div>
+                        <small class="text-muted">Puedes modificar este valor manualmente</small>
+                    </div>
                 </div>
                 <div class="mb-2">
                     <label class="form-label">Estado</label>
@@ -252,6 +268,7 @@ function mostrarSesiones(sesiones) {
                     <div><strong>📚</strong> ${s.asignatura || s.tema_terapia || 'Sin asignatura'}</div>
                     <div><strong>👨‍🏫</strong> ${s.profesor_terapeuta || '<span class="text-danger">FALTA</span>'}</div>
                     <div><strong>🔑</strong> ${s.encargado_apertura || '<span class="text-danger">FALTA</span>'}</div>
+                    <div><strong>💰 Valor:</strong> $${(s.valor_total || 0).toFixed(2)}</div>
                     <div class="mt-2">
                         <span class="badge bg-${estadoClass === 'realizado' ? 'success' : estadoClass === 'cancelado' ? 'danger' : 'warning'}">
                             ${s.estado || 'Planificado'}
@@ -321,6 +338,34 @@ function marcarTodasCompletas() {
     }
 }
 
+function calcularHoras() {
+    const fecha = document.getElementById('edit_fecha').value;
+    const hIni = document.getElementById('edit_hora_inicio').value;
+    const hFin = document.getElementById('edit_hora_fin').value;
+    
+    if (!fecha || !hIni || !hFin) return 0;
+    
+    const inicio = new Date(`${fecha}T${hIni}:00`);
+    const fin = new Date(`${fecha}T${hFin}:00`);
+    const horas = (fin - inicio) / 3600000;
+    return horas > 0 ? horas : 0;
+}
+
+function calcularValorAuto() {
+    const horas = calcularHoras();
+    const precioHora = parseFloat(document.getElementById('edit_precio_hora').value) || 10;
+    const tipo = document.getElementById('edit_tipo_sesion').value;
+    
+    let valorTotal = 0;
+    if (tipo === 'terapia' || tipo === 'ambos') {
+        valorTotal = precioHora;
+    } else {
+        valorTotal = horas * precioHora;
+    }
+    
+    document.getElementById('edit_valor_total').value = valorTotal.toFixed(2);
+}
+
 async function abrirEdicion(id) {
     try {
         const response = await fetch('/api/sesion/' + id);
@@ -328,8 +373,8 @@ async function abrirEdicion(id) {
         
         document.getElementById('edit_sesion_id').value = s.id;
         document.getElementById('edit_fecha').value = s.fecha || '';
-        document.getElementById('edit_hora_inicio').value = s.hora_inicio || '';
-        document.getElementById('edit_hora_fin').value = s.hora_fin || '';
+        document.getElementById('edit_hora_inicio').value = (s.hora_inicio || '').substring(0, 5);
+        document.getElementById('edit_hora_fin').value = (s.hora_fin || '').substring(0, 5);
         document.getElementById('edit_estudiante_id').value = s.estudiante_id || '';
         document.getElementById('edit_tipo_sesion').value = s.tipo_sesion || 'clase';
         document.getElementById('edit_asignatura').value = s.asignatura || '';
@@ -338,6 +383,8 @@ async function abrirEdicion(id) {
         document.getElementById('edit_encargado').value = s.encargado_apertura || '';
         document.getElementById('edit_estado').value = s.estado || 'Planificado';
         document.getElementById('edit_observaciones').value = s.observaciones || '';
+        document.getElementById('edit_valor_total').value = s.valor_total || 0;
+        document.getElementById('edit_precio_hora').value = s.precio_hora || 10;
         
         toggleCamposEdicion();
         
@@ -367,10 +414,13 @@ async function guardarEdicionSesion() {
         return;
     }
     
+    const horas = calcularHoras();
+    
     const data = {
         fecha: fecha,
         hora_inicio: hIni,
         hora_fin: hFin,
+        horas: horas,
         tipo_sesion: tipo,
         estudiante_id: parseInt(document.getElementById('edit_estudiante_id').value),
         asignatura: document.getElementById('edit_asignatura').value,
@@ -378,7 +428,9 @@ async function guardarEdicionSesion() {
         profesor_terapeuta: document.getElementById('edit_profesor').value,
         encargado_apertura: document.getElementById('edit_encargado').value,
         estado: document.getElementById('edit_estado').value,
-        observaciones: document.getElementById('edit_observaciones').value
+        observaciones: document.getElementById('edit_observaciones').value,
+        valor_total: parseFloat(document.getElementById('edit_valor_total').value) || 0,
+        precio_hora: parseFloat(document.getElementById('edit_precio_hora').value) || 10
     };
     
     if (!data.estudiante_id) {
@@ -404,7 +456,7 @@ async function guardarEdicionSesion() {
         
         if (result.success) {
             bootstrap.Modal.getInstance(document.getElementById('modalEditarSesion')).hide();
-            alert('✅ Sesión actualizada correctamente');
+            alert('✅ Sesión actualizada correctamente\n💰 Nuevo valor: $' + data.valor_total.toFixed(2));
             cargarSesiones();
         } else {
             alert('❌ Error: ' + (result.error || 'Desconocido'));
@@ -433,6 +485,12 @@ async function eliminarSesionModal() {
         alert('❌ Error al eliminar: ' + error);
     }
 }
+
+// Event listeners para cálculo automático
+document.getElementById('edit_hora_inicio').addEventListener('change', calcularValorAuto);
+document.getElementById('edit_hora_fin').addEventListener('change', calcularValorAuto);
+document.getElementById('edit_precio_hora').addEventListener('change', calcularValorAuto);
+document.getElementById('edit_tipo_sesion').addEventListener('change', calcularValorAuto);
 
 cargarSesiones();
 </script>
