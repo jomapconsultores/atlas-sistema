@@ -150,6 +150,11 @@
                     </div>
                     <div class="col-md-6 mb-2">
                         <label class="form-label">💰 Valor total *</label>
+<!-- Resumen de precios -->
+<div class="alert alert-info mt-2" id="resumenPrecios" style="display:none;">
+    <strong>📊 Resumen de la sesión:</strong><br>
+    <span id="resumenHoras">0</span> horas × <span id="resumenPrecioHora">0</span> = <strong>$<span id="resumenValorTotal">0</span></strong>
+</div>
                         <div class="input-group">
                             <span class="input-group-text">$</span>
                             <input type="number" id="edit_valor_total" class="form-control" step="0.01" required>
@@ -219,6 +224,45 @@
     }
 </style>
 
+function calcularValorAuto() {
+    const fecha = document.getElementById('edit_fecha').value;
+    const hIni = document.getElementById('edit_hora_inicio').value;
+    const hFin = document.getElementById('edit_hora_fin').value;
+    const precioHora = parseFloat(document.getElementById('edit_precio_hora').value) || 10;
+    const tipo = document.getElementById('edit_tipo_sesion').value;
+    
+    let horas = 0;
+    let valorTotal = 0;
+    let esTerapia = (tipo === 'terapia' || tipo === 'ambos');
+    
+    if (fecha && hIni && hFin) {
+        const inicio = new Date(`${fecha}T${hIni}:00`);
+        const fin = new Date(`${fecha}T${hFin}:00`);
+        horas = (fin - inicio) / 3600000;
+        horas = horas > 0 ? horas.toFixed(2) : 0;
+    }
+    
+    if (esTerapia) {
+        valorTotal = precioHora;
+        horas = 1; // Terapia se cobra por sesión
+    } else {
+        valorTotal = horas * precioHora;
+    }
+    
+    document.getElementById('edit_valor_total').value = valorTotal.toFixed(2);
+    
+    // Mostrar resumen
+    const resumenDiv = document.getElementById('resumenPrecios');
+    if (horas > 0 || esTerapia) {
+        resumenDiv.style.display = 'block';
+        document.getElementById('resumenHoras').innerHTML = esTerapia ? '1 sesión' : horas + ' horas';
+        document.getElementById('resumenPrecioHora').innerHTML = '$' + precioHora.toFixed(2);
+        document.getElementById('resumenValorTotal').innerHTML = valorTotal.toFixed(2);
+    } else {
+        resumenDiv.style.display = 'none';
+    }
+}
+
 <script>
 let todasSesiones = [];
 
@@ -232,6 +276,7 @@ async function cargarSesiones() {
     } catch (error) {
         console.error('Error:', error);
         document.getElementById('sesionesContainer').innerHTML = '<div class="alert alert-danger">Error al cargar sesiones</div>';
+document.getElementById('edit_fecha').addEventListener('change', calcularValorAuto);
     }
 }
 
@@ -387,6 +432,7 @@ async function abrirEdicion(id) {
         document.getElementById('edit_precio_hora').value = s.precio_hora || 10;
         
         toggleCamposEdicion();
+        calcularValorAuto(); // Esto mostrará el resumen automáticamente
         
         new bootstrap.Modal(document.getElementById('modalEditarSesion')).show();
     } catch (error) {
@@ -408,29 +454,65 @@ async function guardarEdicionSesion() {
     const fecha = document.getElementById('edit_fecha').value;
     const hIni = document.getElementById('edit_hora_inicio').value;
     const hFin = document.getElementById('edit_hora_fin').value;
+    const estudianteSelect = document.getElementById('edit_estudiante_id');
+    const estudianteNombre = estudianteSelect.options[estudianteSelect.selectedIndex]?.text || 'Seleccionar';
+    const profesor = document.getElementById('edit_profesor').value;
+    const encargado = document.getElementById('edit_encargado').value;
+    const valorTotal = parseFloat(document.getElementById('edit_valor_total').value) || 0;
+    const precioHora = parseFloat(document.getElementById('edit_precio_hora').value) || 10;
     
     if (!fecha || !hIni || !hFin) {
         alert('❌ Fecha, hora inicio y hora fin son obligatorios');
         return;
     }
     
-    const horas = calcularHoras();
+    // Calcular horas para el resumen
+    const inicio = new Date(`${fecha}T${hIni}:00`);
+    const fin = new Date(`${fecha}T${hFin}:00`);
+    const horas = ((fin - inicio) / 3600000).toFixed(2);
+    const esTerapia = (tipo === 'terapia' || tipo === 'ambos');
+    
+    // Crear mensaje de resumen
+    let resumen = '📋 **RESUMEN DE CAMBIOS**\n\n';
+    resumen += `📅 Fecha: ${fecha}\n`;
+    resumen += `🕐 Horario: ${hIni} - ${hFin}\n`;
+    resumen += `👨‍🎓 Estudiante: ${estudianteNombre}\n`;
+    resumen += `📚 Tipo: ${tipo === 'clase' ? 'Clase' : tipo === 'terapia' ? 'Terapia' : tipo === 'ambos' ? 'Ambos' : 'Pre Universitario'}\n`;
+    resumen += `👨‍🏫 Profesor: ${profesor}\n`;
+    resumen += `🔑 Encargado: ${encargado}\n`;
+    resumen += `💰 Precio por hora: $${precioHora.toFixed(2)}\n`;
+    
+    if (esTerapia) {
+        resumen += `⏱️ Duración: 1 sesión\n`;
+        resumen += `💵 Valor total: $${valorTotal.toFixed(2)} (Terapia - valor por sesión)\n`;
+    } else {
+        resumen += `⏱️ Duración: ${horas} horas\n`;
+        resumen += `💵 Valor total: ${horas} horas × $${precioHora.toFixed(2)} = $${valorTotal.toFixed(2)}\n`;
+    }
+    
+    resumen += `\n✅ ¿Confirmas guardar estos cambios?`;
+    
+    if (!confirm(resumen)) {
+        return;
+    }
+    
+    const horasNum = parseFloat(horas);
     
     const data = {
         fecha: fecha,
         hora_inicio: hIni,
         hora_fin: hFin,
-        horas: horas,
+        horas: horasNum,
         tipo_sesion: tipo,
-        estudiante_id: parseInt(document.getElementById('edit_estudiante_id').value),
+        estudiante_id: parseInt(estudianteSelect.value),
         asignatura: document.getElementById('edit_asignatura').value,
         tema_terapia: document.getElementById('edit_tema_terapia').value,
-        profesor_terapeuta: document.getElementById('edit_profesor').value,
-        encargado_apertura: document.getElementById('edit_encargado').value,
+        profesor_terapeuta: profesor,
+        encargado_apertura: encargado,
         estado: document.getElementById('edit_estado').value,
         observaciones: document.getElementById('edit_observaciones').value,
-        valor_total: parseFloat(document.getElementById('edit_valor_total').value) || 0,
-        precio_hora: parseFloat(document.getElementById('edit_precio_hora').value) || 10
+        valor_total: valorTotal,
+        precio_hora: precioHora
     };
     
     if (!data.estudiante_id) {
@@ -456,7 +538,7 @@ async function guardarEdicionSesion() {
         
         if (result.success) {
             bootstrap.Modal.getInstance(document.getElementById('modalEditarSesion')).hide();
-            alert('✅ Sesión actualizada correctamente\n💰 Nuevo valor: $' + data.valor_total.toFixed(2));
+            alert('✅ ¡Sesión actualizada correctamente!\n\n💰 Nuevo valor registrado: $' + valorTotal.toFixed(2));
             cargarSesiones();
         } else {
             alert('❌ Error: ' + (result.error || 'Desconocido'));
