@@ -1125,6 +1125,46 @@ def api_editar_sesion(id):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+# ========== SINCRONIZACIÓN MASIVA ==========
+@app.route('/api/sesiones/para-sincronizar')
+@login_required
+@socio_admin_required
+def api_sesiones_para_sincronizar():
+    """Obtener todas las sesiones que necesitan sincronización (realizadas)"""
+    # Obtener parámetros de mes/año opcionales
+    mes = request.args.get('mes')
+    anio = request.args.get('anio')
+    
+    # Construir consulta
+    query = supabase.table('sesiones').select(
+        'id, fecha, hora_inicio, hora_fin, asignatura, tema_terapia, profesor_terapeuta, encargado_apertura, estudiantes(apellidos, nombres)'
+    ).eq('estado', 'Realizado')
+    
+    # Filtrar por mes/año si se proporcionan
+    if mes and anio:
+        query = query.gte('fecha', f"{anio}-{int(mes):02d}-01")
+        # Calcular último día del mes
+        from calendar import monthrange
+        ultimo_dia = monthrange(int(anio), int(mes))[1]
+        query = query.lte('fecha', f"{anio}-{int(mes):02d}-{ultimo_dia}")
+    
+    sesiones = query.execute()
+    
+    resultado = []
+    for s in (sesiones.data or []):
+        est = s.get('estudiantes', {})
+        resultado.append({
+            'id': s['id'],
+            'fecha': s.get('fecha'),
+            'hora_inicio': s.get('hora_inicio', '')[:5] if s.get('hora_inicio') else '',
+            'hora_fin': s.get('hora_fin', '')[:5] if s.get('hora_fin') else '',
+            'asignatura': s.get('asignatura') or s.get('tema_terapia') or 'Sesión',
+            'profesor': s.get('profesor_terapeuta', ''),
+            'estudiante': f"{est.get('apellidos', '')} {est.get('nombres', '')}".strip(),
+            'encargado': s.get('encargado_apertura', '')
+        })
+    return jsonify(resultado)
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
