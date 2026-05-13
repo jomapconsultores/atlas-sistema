@@ -952,6 +952,11 @@ def sincronizar_calendario(id):
         if not nombre_est.strip():
             nombre_est = 'Sin nombre'
         
+        # OBTENER EL ENCARGADO DE APERTURA REAL
+        encargado = s.get('encargado_apertura', '').strip()
+        if not encargado:
+            encargado = 'Por definir'
+        
         if crear_evento_calendar:
             evento_id = crear_evento_calendar({
                 'asignatura': (s.get('asignatura') or s.get('tema_terapia') or 'Sesión')[:50],
@@ -960,11 +965,11 @@ def sincronizar_calendario(id):
                 'fecha': str(s['fecha']),
                 'hora_inicio': str(s['hora_inicio'])[:5],
                 'hora_fin': str(s['hora_fin'])[:5],
-                'encargado_apertura': (s.get('encargado_apertura') or 'ATLAS')[:10]
+                'encargado_apertura': encargado
             })
             if evento_id:
                 supabase.table('sesiones').update({'evento_calendar_id': evento_id}).eq('id', id).execute()
-                return jsonify({'success': True, 'mensaje': '✅ Sincronizado correctamente'})
+                return jsonify({'success': True, 'mensaje': f'✅ Sincronizado - Encargado: {encargado}'})
             else:
                 return jsonify({'success': False, 'error': 'No se pudo crear el evento'})
         else:

@@ -87,7 +87,40 @@ function filtrarProfesores(){const b=document.getElementById('buscarProfesor').v
 function toggleNuevoProfesor(){document.getElementById('nuevoProfesorCambio').style.display=document.getElementById('selectProfesorCambio').value==='nuevo'?'block':'none'}
 async function guardarCambioProfesor(){const id=document.getElementById('cambiarProfesorSesionId').value;let prof=document.getElementById('selectProfesorCambio').value;if(prof==='nuevo'){prof=document.getElementById('nuevoProfesorNombre').value;if(!prof){alert('Ingresa el nombre');return}}if(!prof){alert('Selecciona');return}if(!confirm('¿Confirmas cambiar a "'+prof+'"?'))return;const r=await fetch('/api/sesion/'+id+'/cambiar-profesor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({profesor:prof})});const d=await r.json();if(d.success){alert('✅ Cambiado');location.reload()}else{alert('❌ '+(d.error||''))}}
 async function sincronizarEvento(id){if(!confirm('¿Sincronizar esta sesión con Google Calendar?'))return;const btn=event.target;btn.disabled=true;btn.textContent='⏳';try{const r=await fetch('/api/sesion/'+id+'/sincronizar',{method:'POST',headers:{'Content-Type':'application/json'}});const d=await r.json();if(d.success){alert('✅ '+d.mensaje);location.reload()}else{alert('❌ '+(d.error||'Error'))}}catch(e){alert('❌ Error')}btn.disabled=false;btn.textContent='🔄'}
-async function sincronizarTodos(){if(!confirm('¿Sincronizar TODAS las sesiones de esta fecha?'))return;const filas=document.querySelectorAll('tbody tr');let ok=0,fallo=0;for(let f of filas){const btn=f.querySelector('button[onclick^="sincronizarEvento"]');if(btn){const id=btn.getAttribute('onclick').match(/\d+/)[0];try{const r=await fetch('/api/sesion/'+id+'/sincronizar',{method:'POST',headers:{'Content-Type':'application/json'}});const d=await r.json();if(d.success)ok++;else fallo++}catch(e){fallo++}}}alert('✅ '+ok+' sincronizadas\n❌ '+fallo+' errores');location.reload()}
+async function sincronizarTodos() {
+    if(!confirm('¿Sincronizar TODAS las sesiones de esta fecha?')) return;
+    const filas = document.querySelectorAll('tbody tr');
+    let ok = 0, fallo = 0;
+    let errores = [];
+    for(let f of filas) {
+        const btn = f.querySelector('button[onclick^="sincronizarEvento"]');
+        if(btn) {
+            const id = btn.getAttribute('onclick').match(/\d+/)[0];
+            try {
+                const r = await fetch('/api/sesion/' + id + '/sincronizar', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+                const d = await r.json();
+                if(d.success) {
+                    ok++;
+                } else {
+                    fallo++;
+                    errores.push(`Sesión ${id}: ${d.error || 'Error'}`);
+                }
+            } catch(e) {
+                fallo++;
+                errores.push(`Sesión ${id}: ${e.message}`);
+            }
+        }
+    }
+    let mensaje = `✅ ${ok} sincronizadas\n❌ ${fallo} errores`;
+    if(errores.length > 0 && errores.length <= 5) {
+        mensaje += '\n\n' + errores.join('\n');
+    }
+    alert(mensaje);
+    location.reload();
+}
 {% endif %}
 
 function cargarPendientes(){fetch('/api/sesiones/pendientes').then(r=>r.json()).then(d=>{let h=d.length===0?'<p class="text-success">✅ Todas marcadas</p>':'<table class="table table-sm"><thead><tr><th>Fecha</th><th>Hora</th><th>Est</th><th>Tipo</th><th>Asig</th><th>Prof</th><th>✅</th><th>❌</th></tr></thead><tbody>';d.forEach(s=>h+=`<tr id="pend-${s.id}"><td>${s.fecha}</td><td>${s.hora_inicio}</td><td>${s.estudiante}</td><td>${s.tipo_sesion}</td><td>${s.asignatura||'-'}</td><td>${s.profesor_terapeuta}</td><td><button class="btn btn-success btn-sm" onclick="marcar(${s.id},'Realizado')">✅</button></td><td><button class="btn btn-warning btn-sm" onclick="marcar(${s.id},'Cancelado')">❌</button></td></tr>`);h+='</tbody></table>';document.getElementById('pendientesContainer').innerHTML=h})}

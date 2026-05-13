@@ -31,6 +31,11 @@ def crear_evento_calendar(datos):
         h_ini = datos.get('hora_inicio', '')[:5]
         h_fin = datos.get('hora_fin', '')[:5]
         
+        # Obtener el encargado de apertura
+        encargado = datos.get('encargado_apertura', '').strip()
+        if not encargado:
+            encargado = 'Por definir'
+        
         # Verificar si ya existe un evento similar
         existing = service.events().list(
             calendarId='atlas.cenest@gmail.com',
@@ -46,9 +51,9 @@ def crear_evento_calendar(datos):
                 print(f'⚠️ Ya existe: {ev.get("id")}')
                 return ev['id']
         
-        # Crear nuevo evento
-        summary = f"🔑 {datos.get('encargado_apertura', 'ATLAS')} | 📚 {datos.get('asignatura', 'Sesión')}"
-        description = f"👨‍🎓 Estudiante: {datos.get('estudiantes', '')}\n👨‍🏫 Profesor: {datos.get('profesor', '')}\n🕐 {h_ini} - {h_fin}"
+        # Crear nuevo evento con el encargado correcto
+        summary = f"🔑 {encargado} | 📚 {datos.get('asignatura', 'Sesión')}"
+        description = f"👨‍🎓 Estudiante: {datos.get('estudiantes', '')}\n👨‍🏫 Profesor: {datos.get('profesor', '')}\n🕐 {h_ini} - {h_fin}\n🔑 Encargado apertura: {encargado}"
         
         nuevo_evento = {
             'summary': summary,
@@ -67,7 +72,7 @@ def crear_evento_calendar(datos):
             calendarId='atlas.cenest@gmail.com',
             body=nuevo_evento
         ).execute()
-        print(f'✅ Google Calendar: {event.get("id")}')
+        print(f'✅ Google Calendar: {event.get("id")} - Encargado: {encargado}')
         return event['id']
     except Exception as e:
         print(f'⚠️ Google Calendar: {e}')
