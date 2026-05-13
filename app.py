@@ -1045,6 +1045,7 @@ def api_sesion_unica(id):
         sesion['hora_fin'] = sesion['hora_fin'][:5]
     
     return jsonify(sesion)
+
 @app.route('/api/sesion/<int:id>/editar', methods=['POST'])
 @login_required
 @socio_admin_required
@@ -1063,14 +1064,10 @@ def api_editar_sesion(id):
         fin = datetime.strptime(f"{data['fecha']} {hora_fin_str}", '%Y-%m-%d %H:%M')
         horas = round((fin - inicio).total_seconds() / 3600, 2)
         
-        # Obtener precios según el estudiante
-        estudiante = supabase.table('estudiantes').select('tipo_servicio, valor_hora_clase, valor_hora_terapia').eq('id', data['estudiante_id']).execute()
-        precio_hora = 10  # valor por defecto
-        if estudiante.data:
-            if data['tipo_sesion'] in ['clase', 'preuniversitario']:
-                precio_hora = estudiante.data[0].get('valor_hora_clase', 10) or 10
-            else:
-                precio_hora = estudiante.data[0].get('valor_hora_terapia', 40) or 40
+        # Precios por defecto
+        precio_hora = 10  # valor por defecto para clase
+        if data['tipo_sesion'] in ['terapia', 'ambos']:
+            precio_hora = 40  # valor por defecto para terapia
         
         # Calcular valor según tipo
         es_terapia = data['tipo_sesion'] in ['terapia', 'ambos']
