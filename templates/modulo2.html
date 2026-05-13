@@ -5,6 +5,9 @@
 <h3>📅 {% if current_user.rol in ['admin', 'socio'] %}Calendario de Clases{% else %}Mis Clases{% endif %}</h3>
 
 <form class="mb-3">
+{% if current_user.rol in ['admin','socio'] %}
+<button class="btn btn-outline-primary btn-sm mb-2" onclick="sincronizarTodos()">🔄 Sincronizar Todos</button>
+{% endif %}
     <input type="date" name="fecha" value="{{ fecha }}" class="form-control d-inline w-auto" onchange="this.form.submit()">
     <a href="/modulo2" class="btn btn-outline-secondary btn-sm">Ver todas las fechas</a>
 </form>
@@ -67,6 +70,26 @@
 {% endif %}
 
 <script>
+async function sincronizarTodos() {
+    if (!confirm('¿Sincronizar TODAS las sesiones de esta fecha con Google Calendar?')) return;
+    const filas = document.querySelectorAll('tbody tr');
+    let ok = 0, fallo = 0;
+    for (let fila of filas) {
+        const btn = fila.querySelector('button[onclick^="sincronizarEvento"]');
+        if (btn) {
+            const id = btn.getAttribute('onclick').match(/\d+/)[0];
+            try {
+                const resp = await fetch('/api/sesion/' + id + '/sincronizar', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'}
+                });
+                const data = await resp.json();
+                if (data.success) ok++; else fallo++;
+            } catch(e) { fallo++; }
+        }
+    }
+    alert(`✅ ${ok} sincronizadas\n❌ ${fallo} errores`);
+    location.reload();
+}
 async function sincronizarEvento(id) {
     const btn = event.target;
     btn.disabled = true;

@@ -909,8 +909,19 @@ def sincronizar_calendario(id):
             return jsonify({'success': False, 'error': 'Sesión no encontrada'})
         
         s = sesion.data[0]
-        est = s.get('estudiantes', {})
-        nombre_est = f"{est.get('apellidos', '')} {est.get('nombres', '')}".strip() if est else f"Estudiante {s.get('estudiante_id', '')}"
+        
+        # Validar datos mínimos
+        if not s.get('fecha') or not s.get('hora_inicio') or not s.get('hora_fin'):
+            return jsonify({'success': False, 'error': 'Faltan datos de fecha/hora en esta sesión'})
+        
+        est = s.get('estudiantes')
+        if est and isinstance(est, dict):
+            nombre_est = f"{est.get('apellidos', '')} {est.get('nombres', '')}".strip()
+        else:
+            nombre_est = f"Estudiante {s.get('estudiante_id', '')}"
+        
+        if not nombre_est.strip():
+            nombre_est = 'Sin nombre'
         
         if crear_evento_calendar:
             evento_id = crear_evento_calendar({
@@ -920,13 +931,15 @@ def sincronizar_calendario(id):
                 'fecha': str(s['fecha']),
                 'hora_inicio': str(s['hora_inicio'])[:5],
                 'hora_fin': str(s['hora_fin'])[:5],
-                'encargado_apertura': (s.get('encargado_apertura', 'ATLAS'))[:10]
+                'encargado_apertura': (s.get('encargado_apertura') or 'ATLAS')[:10]
             })
             if evento_id:
                 supabase.table('sesiones').update({'evento_calendar_id': evento_id}).eq('id', id).execute()
-                return jsonify({'success': True, 'mensaje': '✅ Sincronizado'})
-        
-        return jsonify({'success': False, 'error': 'No se pudo crear el evento'})
+                return jsonify({'success': True, 'mensaje': '✅ Sincronizado correctamente'})
+            else:
+                return jsonify({'success': False, 'error': 'No se pudo crear el evento'})
+        else:
+            return jsonify({'success': False, 'error': 'Google Calendar no configurado'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
