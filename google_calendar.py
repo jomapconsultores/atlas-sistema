@@ -27,11 +27,11 @@ def crear_evento_calendar(datos):
         if not service:
             return None
         
-        # Verificar si ya existe un evento similar (evitar duplicados)
-        fecha = datos['fecha']
-        h_ini = datos['hora_inicio']
-        h_fin = datos['hora_fin']
+        fecha = datos.get('fecha', '')
+        h_ini = datos.get('hora_inicio', '')[:5]
+        h_fin = datos.get('hora_fin', '')[:5]
         
+        # Verificar si ya existe un evento similar
         existing = service.events().list(
             calendarId='atlas.cenest@gmail.com',
             timeMin=f"{fecha}T00:00:00-05:00",
@@ -39,33 +39,33 @@ def crear_evento_calendar(datos):
             q=datos.get('asignatura', '')
         ).execute()
         
-        for event in existing.get('items', []):
-            start = event['start'].get('dateTime', '')
-            end = event['end'].get('dateTime', '')
+        for ev in existing.get('items', []):
+            start = ev['start'].get('dateTime', '')
+            end = ev['end'].get('dateTime', '')
             if h_ini in start and h_fin in end:
-                print(f'⚠️ Evento ya existe: {event.get("id")}')
-                return event['id']  # Retornar el ID existente, no crear duplicado
+                print(f'⚠️ Ya existe: {ev.get("id")}')
+                return ev['id']
         
-        # Si no existe, crear nuevo
-                evento = {
-            'summary': f"🔑 {datos.get('encargado_apertura', '')} | 📚 {datos.get('asignatura', 'Sesión')}",
-            'description': (
-                f"👨‍🎓 Estudiante: {datos.get('estudiantes', '')}\n"
-                f"👨‍🏫 Profesor: {datos.get('profesor', '')}\n"
-                f"🕐 {datos.get('hora_inicio', '')} - {datos.get('hora_fin', '')}"
-            ),
+        # Crear nuevo evento
+        summary = f"🔑 {datos.get('encargado_apertura', 'ATLAS')} | 📚 {datos.get('asignatura', 'Sesión')}"
+        description = f"👨‍🎓 Estudiante: {datos.get('estudiantes', '')}\n👨‍🏫 Profesor: {datos.get('profesor', '')}\n🕐 {h_ini} - {h_fin}"
+        
+        nuevo_evento = {
+            'summary': summary,
+            'description': description,
             'start': {
-                'dateTime': f"{datos['fecha']}T{datos['hora_inicio']}:00-05:00",
+                'dateTime': f"{fecha}T{h_ini}:00-05:00",
                 'timeZone': 'America/Guayaquil',
             },
             'end': {
-                'dateTime': f"{datos['fecha']}T{datos['hora_fin']}:00-05:00",
+                'dateTime': f"{fecha}T{h_fin}:00-05:00",
                 'timeZone': 'America/Guayaquil',
             },
         }
+        
         event = service.events().insert(
             calendarId='atlas.cenest@gmail.com',
-            body=evento
+            body=nuevo_evento
         ).execute()
         print(f'✅ Google Calendar: {event.get("id")}')
         return event['id']
@@ -84,7 +84,7 @@ def eliminar_evento_calendar(evento_id):
             calendarId='atlas.cenest@gmail.com',
             eventId=evento_id
         ).execute()
-        print('✅ Evento eliminado de Google Calendar')
+        print('✅ Eliminado de Google Calendar')
         return True
     except Exception as e:
         print(f'⚠️ Error al eliminar: {e}')

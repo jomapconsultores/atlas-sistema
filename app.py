@@ -910,25 +910,23 @@ def sincronizar_calendario(id):
         
         s = sesion.data[0]
         est = s.get('estudiantes', {})
-        nombre_est = f"{est.get('apellidos', '')} {est.get('nombres', '')}".strip() if est else 'Estudiante'
-        if not nombre_est or nombre_est == ' ':
-            nombre_est = 'Estudiante ID ' + str(s.get('estudiante_id', ''))
+        nombre_est = f"{est.get('apellidos', '')} {est.get('nombres', '')}".strip() if est else f"Estudiante {s.get('estudiante_id', '')}"
         
         if crear_evento_calendar:
             evento_id = crear_evento_calendar({
-                'asignatura': (s.get('asignatura') or s.get('tema_terapia') or 'Sesión').strip(),
-                'profesor': (s.get('profesor_terapeuta', 'Profesor')).strip(),
-                'estudiantes': nombre_est.strip(),
+                'asignatura': (s.get('asignatura') or s.get('tema_terapia') or 'Sesión')[:50],
+                'profesor': (s.get('profesor_terapeuta', 'Profesor'))[:50],
+                'estudiantes': nombre_est[:100],
                 'fecha': str(s['fecha']),
                 'hora_inicio': str(s['hora_inicio'])[:5],
                 'hora_fin': str(s['hora_fin'])[:5],
-                'encargado_apertura': (s.get('encargado_apertura', '')).strip() or 'ATLAS'
+                'encargado_apertura': (s.get('encargado_apertura', 'ATLAS'))[:10]
             })
             if evento_id:
                 supabase.table('sesiones').update({'evento_calendar_id': evento_id}).eq('id', id).execute()
-                return jsonify({'success': True, 'mensaje': 'Sincronizado'})
+                return jsonify({'success': True, 'mensaje': '✅ Sincronizado'})
         
-        return jsonify({'success': False, 'error': 'No se pudo crear'})
+        return jsonify({'success': False, 'error': 'No se pudo crear el evento'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
