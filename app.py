@@ -505,6 +505,91 @@ def sincronizar_reunion(id):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+@app.route('/reportes')
+@login_required
+@socio_admin_required
+def reportes():
+    mes = int(request.args.get('mes', date.today().month))
+    anio = int(request.args.get('anio', date.today().year))
+    estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
+    datos, tc, tp, th, tp_plan = [], 0, 0, 0, 0
+    horas_por_materia = {}
+    asignaturas_detalle = {}
+    pagos_por_docente = {}
+    cumplimiento = {'planificado': 0, 'realizado': 0, 'cancelado': 0}
+    ingresos_por_tipo = {}
+    gastos_por_categoria = {}
+    
+    for e in (estudiantes.data or []):
+        ses = supabase.table('sesiones').select('*').eq('estudiante_id', e['id']).execute()
+        ses_todas = [s for s in (ses.data or []) if s['fecha'][:7] == f"{anio}-{mes:02d}"]
+        ses_realizadas = [s for s in ses_todas if s['estado'] == 'Realizado']
+        ses_canceladas = [s for s in ses_todas if s['estado'] == 'Cancelado']
+        ses_planificadas = [s for s in ses_todas if s['estado'] == 'Planificado']
+        pag = supabase.table('pagos').select('*').eq('estudiante_id', e['id']).execute()
+        pag_filtrados = [p for p in (pag.data or []) if p['fecha_pago'][:7] == f"{anio}-{mes:02d}"]
+        
+        horas_plan = sum(s.get('horas', 0) or 0 for s in ses_todas)
+        horas_real = sum(s.get('horas', 0) or 0 for s in ses_realizadas)
+        horas_canc = sum(s.get('horas', 0) or 0 for s in ses_canceladas)
+        cobrar = sum(s.get('valor_total', 0) or 0 for s in ses_realizadas)
+        cobrar_plan = sum(s.get('valor_total', 0) or 0 for s in ses_planificadas)
+        pagado = sum(p.get('monto', 0) or 0 for p in pag_filtrados)
+        tc += cobrar; tp += pagado; th += horas_real; tp_plan += cobrar_plan
+        
+        for s in ses_todas:
+            asig = s.get('asignatura') or s.get('tema_terapia') or 'Sin registro'
+            horas_por_materia[asig] = horas_por_materia.get(asig, 0) + (s.get('horas', 0) or 0)
+            if asig not in asignaturas_detalle: asignaturas_detalle[asig] = {'plan': 0, 'real': 0, 'canc': 0}
+            if s['estado'] == 'Planificado': asignaturas_detalle[asig]['plan'] += s.get('horas', 0) or 0
+            elif s['estado'] == 'Realizado': asignaturas_detalle[asig]['real'] += s.get('horas', 0) or 0
+            elif s['estado'] == 'Cancelado': asignaturas_detalle[asig]['canc'] += s.get('horas', 0) or 0
+            cumplimiento[s.get('estado', 'Planificado').lower()] = cumplimiento.get(s.get('estado', 'Planificado').lower(), 0) + 1
+            prof = s.get('profesor_terapeuta', 'Desconocido')
+            tipo = s.get('tipo_sesion', 'clase')
+            valor = s.get('valor_total', 0) or 0
+            pago = (s.get('horas', 0) or 0) * 7 if tipo in ['clase', 'preuniversitario'] else valor * 0.35
+            if prof not in pagos_por_docente: pagos_por_docente[prof] = {'horas': 0, 'pago': 0, 'sesiones': 0, 'pagado': 0}
+            pagos_por_docente[prof]['horas'] += s.get('horas', 0) or 0
+            pagos_por_docente[prof]['pago'] += pago
+            pagos_por_docente[prof]['sesiones'] += 1
+            if tipo not in ingresos_por_tipo: ingresos_por_tipo[tipo] = 0
+            ingresos_por_tipo[tipo] += valor
+        
+        if cobrar > 0 or pagado > 0 or horas_real > 0:
+            datos.append({'id': e['id'], 'estudiante': f"{e['apellidos']} {e['nombres']}",
+                         'horas_plan': horas_plan, 'horas_real': horas_real, 'horas_canc': horas_canc,
+                         'cobrar': cobrar, 'pagado': pagado, 'saldo': cobrar - pagado})
+    
+    gastos_mes = supabase.table('gastos').select('*').eq('mes', mes).eq('anio', anio).order('fecha').execute()
+    total_gastos = sum(g.get('monto', 0) or 0 for g in (gastos_mes.data or []))
+    for g in (gastos_mes.data or []):
+        cat = g.get('categoria', 'Sin categoría')
+        gastos_por_categoria[cat] = gastos_por_categoria.get(cat, 0) + (g.get('monto', 0) or 0)
+    pagos_mes = supabase.table('pagos').select('*').gte('fecha_pago', f"{anio}-{mes:02d}-01").lte('fecha_pago', f"{anio}-{mes:02d}-31").execute()
+    total_ingresos = sum(p.get('monto', 0) or 0 for p in (pagos_mes.data or []))
+    correcciones = supabase.table('correcciones_pagos').select('*').order('fecha_correccion', desc=True).limit(30).execute()
+    observaciones = supabase.table('sesiones').select('*, estudiantes(apellidos, nombres)').not_.is_('observaciones', 'null').order('fecha', desc=True).limit(30).execute()
+    nuevos_usuarios = supabase.table('usuarios').select('*').gte('fecha_registro', f"{anio}-{mes:02d}-01").lte('fecha_registro', f"{anio}-{mes:02d}-31").execute()
+    total_pago_docentes = sum(d['pago'] for d in pagos_por_docente.values())
+    
+    return render_template('reportes.html',
+                         datos=datos, total_estudiantes=len(datos),
+                         total_horas=th, total_ingresos=total_ingresos,
+                         total_gastos=total_gastos, balance=total_ingresos - total_gastos,
+                         gastos=gastos_mes.data or [], mes=mes, anio=anio,
+                         ingresos_por_tipo=ingresos_por_tipo,
+                         horas_por_materia=horas_por_materia,
+                         asignaturas_detalle=asignaturas_detalle,
+                         pagos_por_docente=pagos_por_docente,
+                         total_pago_docentes=total_pago_docentes,
+                         cumplimiento=cumplimiento,
+                         correcciones=correcciones.data or [],
+                         observaciones=observaciones.data or [],
+                         nuevos_usuarios=nuevos_usuarios.data or [],
+                         gastos_por_categoria=gastos_por_categoria,
+                         total_planificado=tp_plan)
+
 @app.route('/gastos', methods=['GET', 'POST'])
 @login_required
 @socio_admin_required
