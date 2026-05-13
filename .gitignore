@@ -1,5 +1,5 @@
-echo venv/ > .gitignore
-echo __pycache__/ >> .gitignore
-echo *.pyc >> .gitignore
-echo .env >> .gitignore
-echo service-account.json >> .gitignore
+venv/  
+__pycache__/  
+*.pyc  
+.env  
+service-account.json  
