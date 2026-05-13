@@ -309,7 +309,8 @@ def eliminar_sesion(id):
     try:
         sesion = supabase.table('sesiones').select('evento_calendar_id').eq('id', id).execute()
         evento_id = sesion.data[0].get('evento_calendar_id') if sesion.data else None
-        if evento_id and eliminar_evento_calendar: eliminar_evento_calendar(evento_id)
+        if evento_id and eliminar_evento_calendar:
+            eliminar_evento_calendar(evento_id)
         supabase.table('sesiones').delete().eq('id', id).execute()
         return jsonify({'success': True})
     except Exception as e:
@@ -952,13 +953,18 @@ def sincronizar_calendario(id):
         if not nombre_est.strip():
             nombre_est = 'Sin nombre'
         
-        # OBTENER EL ENCARGADO DE APERTURA REAL
+        # Obtener el encargado de apertura REAL
         encargado = s.get('encargado_apertura', '').strip()
         if not encargado:
             encargado = 'Por definir'
         
+        # Obtener el ID del evento existente
+        evento_id_existente = s.get('evento_calendar_id')
+        
         if crear_evento_calendar:
-            evento_id = crear_evento_calendar({
+            # Usar la función que maneja actualización si ya existe
+            from google_calendar import crear_o_actualizar_evento_calendar
+            evento_id = crear_o_actualizar_evento_calendar({
                 'asignatura': (s.get('asignatura') or s.get('tema_terapia') or 'Sesión')[:50],
                 'profesor': (s.get('profesor_terapeuta', 'Profesor'))[:50],
                 'estudiantes': nombre_est[:100],
@@ -966,14 +972,124 @@ def sincronizar_calendario(id):
                 'hora_inicio': str(s['hora_inicio'])[:5],
                 'hora_fin': str(s['hora_fin'])[:5],
                 'encargado_apertura': encargado
-            })
+            }, evento_id_existente)
+            
             if evento_id:
                 supabase.table('sesiones').update({'evento_calendar_id': evento_id}).eq('id', id).execute()
                 return jsonify({'success': True, 'mensaje': f'✅ Sincronizado - Encargado: {encargado}'})
             else:
-                return jsonify({'success': False, 'error': 'No se pudo crear el evento'})
+                return jsonify({'success': False, 'error': 'No se pudo crear/actualizar el evento'})
         else:
             return jsonify({'success': False, 'error': 'Google Calendar no configurado'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+@app.route('/editar-planificaciones')
+@login_required
+@socio_admin_required
+def editar_planificaciones():
+    estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
+    return render_template('editar_planificaciones.html', 
+                         estudiantes=estudiantes.data or [],
+                         asignaturas=ASIGNATURAS,
+                         profesores=PROFESORES,
+                         encargados=ENCARGADOS,
+                         today=date.today().isoformat())
+
+@app.route('/api/sesiones/todas')
+@login_required
+@socio_admin_required
+def api_sesiones_todas():
+    sesiones = supabase.table('sesiones').select('*, estudiantes(apellidos, nombres)').order('fecha', desc=True).execute()
+    
+    resultado = []
+    for s in (sesiones.data or []):
+        est = s.get('estudiantes', {})
+        resultado.append({
+            'id': s['id'],
+            'fecha': s.get('fecha', ''),
+            'hora_inicio': s.get('hora_inicio', ''),
+            'hora_fin': s.get('hora_fin', ''),
+            'estudiante_id': s.get('estudiante_id'),
+            'estudiante_nombre': f"{est.get('apellidos', '')} {est.get('nombres', '')}".strip(),
+            'tipo_sesion': s.get('tipo_sesion', ''),
+            'asignatura': s.get('asignatura', ''),
+            'tema_terapia': s.get('tema_terapia', ''),
+            'profesor_terapeuta': s.get('profesor_terapeuta', ''),
+            'encargado_apertura': s.get('encargado_apertura', ''),
+            'estado': s.get('estado', 'Planificado'),
+            'observaciones': s.get('observaciones', '')
+        })
+    return jsonify(resultado)
+
+@app.route('/api/sesion/<int:id>')
+@login_required
+def api_sesion_unica(id):
+    s = supabase.table('sesiones').select('*').eq('id', id).execute()
+    if not s.data:
+        return jsonify({'error': 'No encontrada'}), 404
+    return jsonify(s.data[0])
+
+@app.route('/api/sesion/<int:id>/editar', methods=['POST'])
+@login_required
+@socio_admin_required
+def api_editar_sesion(id):
+    try:
+        data = request.get_json()
+        
+        # Calcular horas
+        inicio = datetime.strptime(f"{data['fecha']} {data['hora_inicio']}", '%Y-%m-%d %H:%M')
+        fin = datetime.strptime(f"{data['fecha']} {data['hora_fin']}", '%Y-%m-%d %H:%M')
+        horas = round((fin - inicio).total_seconds() / 3600, 2)
+        
+        # Calcular valor según tipo
+        es_terapia = data['tipo_sesion'] in ['terapia', 'ambos']
+        if es_terapia:
+            valor_total = 40  # Precio base terapia
+        else:
+            valor_total = round(horas * 10, 2)  # Precio clase base
+        
+        # Actualizar en BD
+        updates = {
+            'fecha': data['fecha'],
+            'hora_inicio': data['hora_inicio'],
+            'hora_fin': data['hora_fin'],
+            'horas': horas,
+            'tipo_sesion': data['tipo_sesion'],
+            'estudiante_id': data['estudiante_id'],
+            'asignatura': data.get('asignatura', ''),
+            'tema_terapia': data.get('tema_terapia', ''),
+            'profesor_terapeuta': data['profesor_terapeuta'],
+            'encargado_apertura': data['encargado_apertura'],
+            'estado': data.get('estado', 'Planificado'),
+            'observaciones': data.get('observaciones', ''),
+            'valor_total': valor_total
+        }
+        
+        supabase.table('sesiones').update(updates).eq('id', id).execute()
+        
+        # Si está realizado y tiene evento de calendario, actualizar
+        if data.get('estado') == 'Realizado':
+            sesion = supabase.table('sesiones').select('*, estudiantes(apellidos, nombres)').eq('id', id).execute()
+            if sesion.data:
+                s = sesion.data[0]
+                est = s.get('estudiantes', {})
+                nombre_est = f"{est.get('apellidos', '')} {est.get('nombres', '')}".strip()
+                
+                from google_calendar import crear_o_actualizar_evento_calendar
+                evento_id = crear_o_actualizar_evento_calendar({
+                    'asignatura': s.get('asignatura') or s.get('tema_terapia') or 'Sesión',
+                    'profesor': s.get('profesor_terapeuta', ''),
+                    'estudiantes': nombre_est,
+                    'fecha': s['fecha'],
+                    'hora_inicio': s['hora_inicio'][:5],
+                    'hora_fin': s['hora_fin'][:5],
+                    'encargado_apertura': s.get('encargado_apertura', '')
+                }, s.get('evento_calendar_id'))
+                
+                if evento_id:
+                    supabase.table('sesiones').update({'evento_calendar_id': evento_id}).eq('id', id).execute()
+        
+        return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 

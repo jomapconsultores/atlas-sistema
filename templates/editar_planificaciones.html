@@ -1,0 +1,441 @@
+{% extends "base.html" %}
+{% block title %}Editar Planificaciones - Atlas{% endblock %}
+
+{% block content %}
+<h3>✏️ Editor de Planificaciones</h3>
+<p class="text-muted">Aquí puedes modificar todas las sesiones planificadas.</p>
+
+<!-- Filtros -->
+<div class="card shadow mb-4">
+    <div class="card-header bg-primary text-white">
+        <strong>🔍 Filtros de búsqueda</strong>
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">Fecha desde</label>
+                <input type="date" id="fecha_desde" class="form-control" value="{{ today }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Fecha hasta</label>
+                <input type="date" id="fecha_hasta" class="form-control" value="{{ today }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Estudiante</label>
+                <select id="filtro_estudiante" class="form-select">
+                    <option value="">Todos</option>
+                    {% for e in estudiantes %}
+                    <option value="{{ e.id }}">{{ e.apellidos }} {{ e.nombres }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Estado</label>
+                <select id="filtro_estado" class="form-select">
+                    <option value="">Todos</option>
+                    <option value="Planificado">Planificado</option>
+                    <option value="Realizado">Realizado</option>
+                    <option value="Cancelado">Cancelado</option>
+                </select>
+            </div>
+            <div class="col-md-12 mt-2">
+                <button class="btn btn-primary" onclick="filtrarSesiones()">🔍 Filtrar</button>
+                <button class="btn btn-outline-secondary" onclick="limpiarFiltros()">🗑️ Limpiar</button>
+                <button class="btn btn-outline-success" onclick="marcarTodasCompletas()">✅ Marcar como completas</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Lista de sesiones -->
+<div class="card shadow">
+    <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+        <strong>📋 Sesiones Programadas</strong>
+        <span id="conteo_sesiones" class="badge bg-light text-dark">0 sesiones</span>
+    </div>
+    <div class="card-body">
+        <div id="sesionesContainer" class="row">
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status"></div>
+                <p>Cargando sesiones...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para editar sesión -->
+<div class="modal fade" id="modalEditarSesion" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title">✏️ Editar Sesión</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="edit_sesion_id">
+                <div class="row">
+                    <div class="col-md-6 mb-2">
+                        <label class="form-label">Fecha *</label>
+                        <input type="date" id="edit_fecha" class="form-control" required>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <label class="form-label">Hora inicio *</label>
+                        <input type="time" id="edit_hora_inicio" class="form-control" required>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <label class="form-label">Hora fin *</label>
+                        <input type="time" id="edit_hora_fin" class="form-control" required>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-2">
+                        <label class="form-label">Estudiante *</label>
+                        <select id="edit_estudiante_id" class="form-select" required>
+                            <option value="">Seleccionar...</option>
+                            {% for e in estudiantes %}
+                            <option value="{{ e.id }}">{{ e.apellidos }} {{ e.nombres }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <label class="form-label">Tipo de sesión *</label>
+                        <select id="edit_tipo_sesion" class="form-select" required onchange="toggleCamposEdicion()">
+                            <option value="clase">📚 Clase</option>
+                            <option value="terapia">🧠 Terapia</option>
+                            <option value="ambos">📚🧠 Ambos</option>
+                            <option value="preuniversitario">🎓 Pre Universitario</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="edit_campos_clase" style="display:none;">
+                    <div class="mb-2">
+                        <label class="form-label">Asignatura</label>
+                        <input type="text" id="edit_asignatura" class="form-control" list="listaAsignaturas">
+                        <datalist id="listaAsignaturas">
+                            {% for a in asignaturas %}
+                            <option value="{{ a }}">
+                            {% endfor %}
+                        </datalist>
+                    </div>
+                </div>
+                <div id="edit_campos_terapia" style="display:none;">
+                    <div class="mb-2">
+                        <label class="form-label">Tema terapia</label>
+                        <input type="text" id="edit_tema_terapia" class="form-control">
+                    </div>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">Profesor/Terapeuta *</label>
+                    <input type="text" id="edit_profesor" class="form-control" list="listaProfesores" required>
+                    <datalist id="listaProfesores">
+                        {% for p in profesores %}
+                        <option value="{{ p }}">
+                        {% endfor %}
+                    </datalist>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">Encargado apertura *</label>
+                    <input type="text" id="edit_encargado" class="form-control" list="listaEncargados" required>
+                    <datalist id="listaEncargados">
+                        {% for e in encargados %}
+                        <option value="{{ e }}">
+                        {% endfor %}
+                    </datalist>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">Estado</label>
+                    <select id="edit_estado" class="form-select">
+                        <option value="Planificado">📅 Planificado</option>
+                        <option value="Realizado">✅ Realizado</option>
+                        <option value="Cancelado">❌ Cancelado</option>
+                    </select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">Observaciones</label>
+                    <textarea id="edit_observaciones" class="form-control" rows="2" placeholder="Notas adicionales..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-danger" onclick="eliminarSesionModal()">🗑️ Eliminar</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="guardarEdicionSesion()">💾 Guardar Cambios</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .sesion-card {
+        border: 1px solid #ddd;
+        border-radius: 10px;
+        padding: 12px;
+        margin-bottom: 12px;
+        transition: all 0.2s;
+        cursor: pointer;
+    }
+    .sesion-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .sesion-card.faltan-datos {
+        background-color: #ffcccc;
+        border-left: 5px solid #dc3545;
+    }
+    .sesion-card.realizado {
+        background-color: #d4edda;
+        border-left: 5px solid #28a745;
+    }
+    .sesion-card.cancelado {
+        background-color: #f8d7da;
+        border-left: 5px solid #dc3545;
+    }
+    .sesion-card.planificado {
+        background-color: #fff3cd;
+        border-left: 5px solid #ffc107;
+    }
+    .badge-falta {
+        background-color: #dc3545;
+        color: white;
+        font-size: 10px;
+        padding: 2px 6px;
+        border-radius: 10px;
+        margin-left: 5px;
+    }
+</style>
+
+<script>
+let todasSesiones = [];
+
+async function cargarSesiones() {
+    try {
+        const response = await fetch('/api/sesiones/todas');
+        const data = await response.json();
+        todasSesiones = data;
+        document.getElementById('conteo_sesiones').innerText = `${todasSesiones.length} sesiones`;
+        mostrarSesiones(todasSesiones);
+    } catch (error) {
+        console.error('Error:', error);
+        document.getElementById('sesionesContainer').innerHTML = '<div class="alert alert-danger">Error al cargar sesiones</div>';
+    }
+}
+
+function mostrarSesiones(sesiones) {
+    const container = document.getElementById('sesionesContainer');
+    
+    if (sesiones.length === 0) {
+        container.innerHTML = '<div class="text-center py-5 text-muted">No hay sesiones que coincidan con los filtros</div>';
+        return;
+    }
+    
+    let html = '';
+    for (const s of sesiones) {
+        // Verificar campos faltantes
+        const faltanDatos = [];
+        if (!s.fecha) faltanDatos.push('Fecha');
+        if (!s.hora_inicio) faltanDatos.push('Hora inicio');
+        if (!s.hora_fin) faltanDatos.push('Hora fin');
+        if (!s.profesor_terapeuta) faltanDatos.push('Profesor');
+        if (!s.encargado_apertura) faltanDatos.push('Encargado');
+        
+        const tieneFaltantes = faltanDatos.length > 0;
+        const estadoClass = s.estado ? s.estado.toLowerCase() : 'planificado';
+        const cardClass = tieneFaltantes ? 'faltan-datos' : estadoClass;
+        
+        html += `
+            <div class="col-md-6 col-lg-4">
+                <div class="sesion-card ${cardClass}" onclick="abrirEdicion(${s.id})">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <strong>📅 ${s.fecha || 'Sin fecha'}</strong>
+                        ${tieneFaltantes ? `<span class="badge-falta">⚠️ Faltan ${faltanDatos.length} datos</span>` : ''}
+                    </div>
+                    <div><strong>🕐</strong> ${s.hora_inicio || '???'} - ${s.hora_fin || '???'}</div>
+                    <div><strong>👨‍🎓</strong> ${s.estudiante_nombre || 'ID: ' + s.estudiante_id}</div>
+                    <div><strong>📚</strong> ${s.asignatura || s.tema_terapia || 'Sin asignatura'}</div>
+                    <div><strong>👨‍🏫</strong> ${s.profesor_terapeuta || '<span class="text-danger">FALTA</span>'}</div>
+                    <div><strong>🔑</strong> ${s.encargado_apertura || '<span class="text-danger">FALTA</span>'}</div>
+                    <div class="mt-2">
+                        <span class="badge bg-${estadoClass === 'realizado' ? 'success' : estadoClass === 'cancelado' ? 'danger' : 'warning'}">
+                            ${s.estado || 'Planificado'}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    container.innerHTML = html;
+}
+
+function filtrarSesiones() {
+    const fechaDesde = document.getElementById('fecha_desde').value;
+    const fechaHasta = document.getElementById('fecha_hasta').value;
+    const estudianteId = document.getElementById('filtro_estudiante').value;
+    const estado = document.getElementById('filtro_estado').value;
+    
+    let filtradas = [...todasSesiones];
+    
+    if (fechaDesde) {
+        filtradas = filtradas.filter(s => s.fecha >= fechaDesde);
+    }
+    if (fechaHasta) {
+        filtradas = filtradas.filter(s => s.fecha <= fechaHasta);
+    }
+    if (estudianteId) {
+        filtradas = filtradas.filter(s => s.estudiante_id == estudianteId);
+    }
+    if (estado) {
+        filtradas = filtradas.filter(s => s.estado === estado);
+    }
+    
+    mostrarSesiones(filtradas);
+}
+
+function limpiarFiltros() {
+    document.getElementById('fecha_desde').value = '';
+    document.getElementById('fecha_hasta').value = '';
+    document.getElementById('filtro_estudiante').value = '';
+    document.getElementById('filtro_estado').value = '';
+    mostrarSesiones(todasSesiones);
+}
+
+function marcarTodasCompletas() {
+    if (!confirm('¿Marcar TODAS las sesiones como completas? Esto actualizará los valores de cobro.')) return;
+    
+    const sesionesMostradas = document.querySelectorAll('.sesion-card');
+    let procesadas = 0;
+    
+    for (const card of sesionesMostradas) {
+        const onclickAttr = card.getAttribute('onclick');
+        if (onclickAttr) {
+            const id = onclickAttr.match(/\d+/)[0];
+            fetch('/api/sesion/' + id + '/toggle', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({estado: 'Realizado'})
+            }).then(() => {
+                procesadas++;
+                if (procesadas === sesionesMostradas.length) {
+                    alert('✅ Todas las sesiones marcadas como realizadas');
+                    cargarSesiones();
+                }
+            });
+        }
+    }
+}
+
+async function abrirEdicion(id) {
+    try {
+        const response = await fetch('/api/sesion/' + id);
+        const s = await response.json();
+        
+        document.getElementById('edit_sesion_id').value = s.id;
+        document.getElementById('edit_fecha').value = s.fecha || '';
+        document.getElementById('edit_hora_inicio').value = s.hora_inicio || '';
+        document.getElementById('edit_hora_fin').value = s.hora_fin || '';
+        document.getElementById('edit_estudiante_id').value = s.estudiante_id || '';
+        document.getElementById('edit_tipo_sesion').value = s.tipo_sesion || 'clase';
+        document.getElementById('edit_asignatura').value = s.asignatura || '';
+        document.getElementById('edit_tema_terapia').value = s.tema_terapia || '';
+        document.getElementById('edit_profesor').value = s.profesor_terapeuta || '';
+        document.getElementById('edit_encargado').value = s.encargado_apertura || '';
+        document.getElementById('edit_estado').value = s.estado || 'Planificado';
+        document.getElementById('edit_observaciones').value = s.observaciones || '';
+        
+        toggleCamposEdicion();
+        
+        new bootstrap.Modal(document.getElementById('modalEditarSesion')).show();
+    } catch (error) {
+        alert('Error al cargar la sesión: ' + error);
+    }
+}
+
+function toggleCamposEdicion() {
+    const tipo = document.getElementById('edit_tipo_sesion').value;
+    document.getElementById('edit_campos_clase').style.display = 
+        (tipo === 'clase' || tipo === 'ambos' || tipo === 'preuniversitario') ? 'block' : 'none';
+    document.getElementById('edit_campos_terapia').style.display = 
+        (tipo === 'terapia' || tipo === 'ambos') ? 'block' : 'none';
+}
+
+async function guardarEdicionSesion() {
+    const id = document.getElementById('edit_sesion_id').value;
+    const tipo = document.getElementById('edit_tipo_sesion').value;
+    const fecha = document.getElementById('edit_fecha').value;
+    const hIni = document.getElementById('edit_hora_inicio').value;
+    const hFin = document.getElementById('edit_hora_fin').value;
+    
+    if (!fecha || !hIni || !hFin) {
+        alert('❌ Fecha, hora inicio y hora fin son obligatorios');
+        return;
+    }
+    
+    const data = {
+        fecha: fecha,
+        hora_inicio: hIni,
+        hora_fin: hFin,
+        tipo_sesion: tipo,
+        estudiante_id: parseInt(document.getElementById('edit_estudiante_id').value),
+        asignatura: document.getElementById('edit_asignatura').value,
+        tema_terapia: document.getElementById('edit_tema_terapia').value,
+        profesor_terapeuta: document.getElementById('edit_profesor').value,
+        encargado_apertura: document.getElementById('edit_encargado').value,
+        estado: document.getElementById('edit_estado').value,
+        observaciones: document.getElementById('edit_observaciones').value
+    };
+    
+    if (!data.estudiante_id) {
+        alert('❌ Selecciona un estudiante');
+        return;
+    }
+    if (!data.profesor_terapeuta) {
+        alert('❌ El profesor es obligatorio');
+        return;
+    }
+    if (!data.encargado_apertura) {
+        alert('❌ El encargado de apertura es obligatorio');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/sesion/' + id + '/editar', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            bootstrap.Modal.getInstance(document.getElementById('modalEditarSesion')).hide();
+            alert('✅ Sesión actualizada correctamente');
+            cargarSesiones();
+        } else {
+            alert('❌ Error: ' + (result.error || 'Desconocido'));
+        }
+    } catch (error) {
+        alert('❌ Error al guardar: ' + error);
+    }
+}
+
+async function eliminarSesionModal() {
+    const id = document.getElementById('edit_sesion_id').value;
+    if (!confirm('🗑️ ¿Eliminar esta sesión permanentemente?\n\nEsta acción no se puede deshacer.')) return;
+    
+    try {
+        const response = await fetch('/api/sesion/' + id + '/eliminar', {method: 'POST'});
+        const result = await response.json();
+        
+        if (result.success) {
+            bootstrap.Modal.getInstance(document.getElementById('modalEditarSesion')).hide();
+            alert('✅ Sesión eliminada');
+            cargarSesiones();
+        } else {
+            alert('❌ Error: ' + (result.error || 'Desconocido'));
+        }
+    } catch (error) {
+        alert('❌ Error al eliminar: ' + error);
+    }
+}
+
+// Cargar al inicio
+cargarSesiones();
+</script>
+{% endblock %}
