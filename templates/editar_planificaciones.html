@@ -99,7 +99,7 @@
                     </div>
                     <div class="col-md-6 mb-2">
                         <label class="form-label">Tipo de sesión *</label>
-                        <select id="edit_tipo_sesion" class="form-select" required onchange="toggleCamposEdicion(); calcularValorAuto()">
+                        <select id="edit_tipo_sesion" class="form-select" required onchange="calcularValorAuto()">
                             <option value="clase">📚 Clase</option>
                             <option value="terapia">🧠 Terapia</option>
                             <option value="ambos">📚🧠 Ambos</option>
@@ -150,11 +150,6 @@
                     </div>
                     <div class="col-md-6 mb-2">
                         <label class="form-label">💰 Valor total *</label>
-<!-- Resumen de precios -->
-<div class="alert alert-info mt-2" id="resumenPrecios" style="display:none;">
-    <strong>📊 Resumen de la sesión:</strong><br>
-    <span id="resumenHoras">0</span> horas × <span id="resumenPrecioHora">0</span> = <strong>$<span id="resumenValorTotal">0</span></strong>
-</div>
                         <div class="input-group">
                             <span class="input-group-text">$</span>
                             <input type="number" id="edit_valor_total" class="form-control" step="0.01" required>
@@ -163,6 +158,13 @@
                         <small class="text-muted">Puedes modificar este valor manualmente</small>
                     </div>
                 </div>
+
+                <!-- Resumen de precios -->
+                <div class="alert alert-info mt-2" id="resumenPrecios" style="display:none;">
+                    <strong>📊 Resumen de la sesión:</strong><br>
+                    <span id="resumenHoras">0</span> × <span id="resumenPrecioHora">$0</span> = <strong>$<span id="resumenValorTotal">0</span></strong>
+                </div>
+
                 <div class="mb-2">
                     <label class="form-label">Estado</label>
                     <select id="edit_estado" class="form-select">
@@ -224,45 +226,6 @@
     }
 </style>
 
-function calcularValorAuto() {
-    const fecha = document.getElementById('edit_fecha').value;
-    const hIni = document.getElementById('edit_hora_inicio').value;
-    const hFin = document.getElementById('edit_hora_fin').value;
-    const precioHora = parseFloat(document.getElementById('edit_precio_hora').value) || 10;
-    const tipo = document.getElementById('edit_tipo_sesion').value;
-    
-    let horas = 0;
-    let valorTotal = 0;
-    let esTerapia = (tipo === 'terapia' || tipo === 'ambos');
-    
-    if (fecha && hIni && hFin) {
-        const inicio = new Date(`${fecha}T${hIni}:00`);
-        const fin = new Date(`${fecha}T${hFin}:00`);
-        horas = (fin - inicio) / 3600000;
-        horas = horas > 0 ? horas.toFixed(2) : 0;
-    }
-    
-    if (esTerapia) {
-        valorTotal = precioHora;
-        horas = 1; // Terapia se cobra por sesión
-    } else {
-        valorTotal = horas * precioHora;
-    }
-    
-    document.getElementById('edit_valor_total').value = valorTotal.toFixed(2);
-    
-    // Mostrar resumen
-    const resumenDiv = document.getElementById('resumenPrecios');
-    if (horas > 0 || esTerapia) {
-        resumenDiv.style.display = 'block';
-        document.getElementById('resumenHoras').innerHTML = esTerapia ? '1 sesión' : horas + ' horas';
-        document.getElementById('resumenPrecioHora').innerHTML = '$' + precioHora.toFixed(2);
-        document.getElementById('resumenValorTotal').innerHTML = valorTotal.toFixed(2);
-    } else {
-        resumenDiv.style.display = 'none';
-    }
-}
-
 <script>
 let todasSesiones = [];
 
@@ -276,7 +239,6 @@ async function cargarSesiones() {
     } catch (error) {
         console.error('Error:', error);
         document.getElementById('sesionesContainer').innerHTML = '<div class="alert alert-danger">Error al cargar sesiones</div>';
-document.getElementById('edit_fecha').addEventListener('change', calcularValorAuto);
     }
 }
 
@@ -383,32 +345,52 @@ function marcarTodasCompletas() {
     }
 }
 
-function calcularHoras() {
-    const fecha = document.getElementById('edit_fecha').value;
-    const hIni = document.getElementById('edit_hora_inicio').value;
-    const hFin = document.getElementById('edit_hora_fin').value;
-    
-    if (!fecha || !hIni || !hFin) return 0;
-    
-    const inicio = new Date(`${fecha}T${hIni}:00`);
-    const fin = new Date(`${fecha}T${hFin}:00`);
-    const horas = (fin - inicio) / 3600000;
-    return horas > 0 ? horas : 0;
+function toggleCamposEdicion() {
+    const tipo = document.getElementById('edit_tipo_sesion').value;
+    document.getElementById('edit_campos_clase').style.display = 
+        (tipo === 'clase' || tipo === 'ambos' || tipo === 'preuniversitario') ? 'block' : 'none';
+    document.getElementById('edit_campos_terapia').style.display = 
+        (tipo === 'terapia' || tipo === 'ambos') ? 'block' : 'none';
 }
 
 function calcularValorAuto() {
-    const horas = calcularHoras();
+    const fecha = document.getElementById('edit_fecha').value;
+    const hIni = document.getElementById('edit_hora_inicio').value;
+    const hFin = document.getElementById('edit_hora_fin').value;
     const precioHora = parseFloat(document.getElementById('edit_precio_hora').value) || 10;
     const tipo = document.getElementById('edit_tipo_sesion').value;
     
+    let horas = 0;
     let valorTotal = 0;
-    if (tipo === 'terapia' || tipo === 'ambos') {
+    let esTerapia = (tipo === 'terapia' || tipo === 'ambos');
+    let textoHoras = '';
+    
+    if (fecha && hIni && hFin) {
+        const inicio = new Date(`${fecha}T${hIni}:00`);
+        const fin = new Date(`${fecha}T${hFin}:00`);
+        horas = (fin - inicio) / 3600000;
+        horas = horas > 0 ? horas : 0;
+    }
+    
+    if (esTerapia) {
         valorTotal = precioHora;
+        textoHoras = '1 sesión';
     } else {
         valorTotal = horas * precioHora;
+        textoHoras = horas.toFixed(2) + ' horas';
     }
     
     document.getElementById('edit_valor_total').value = valorTotal.toFixed(2);
+    
+    const resumenDiv = document.getElementById('resumenPrecios');
+    if ((horas > 0 && !esTerapia) || esTerapia) {
+        resumenDiv.style.display = 'block';
+        document.getElementById('resumenHoras').innerHTML = textoHoras;
+        document.getElementById('resumenPrecioHora').innerHTML = '$' + precioHora.toFixed(2);
+        document.getElementById('resumenValorTotal').innerHTML = valorTotal.toFixed(2);
+    } else {
+        resumenDiv.style.display = 'none';
+    }
 }
 
 async function abrirEdicion(id) {
@@ -432,20 +414,12 @@ async function abrirEdicion(id) {
         document.getElementById('edit_precio_hora').value = s.precio_hora || 10;
         
         toggleCamposEdicion();
-        calcularValorAuto(); // Esto mostrará el resumen automáticamente
+        calcularValorAuto();
         
         new bootstrap.Modal(document.getElementById('modalEditarSesion')).show();
     } catch (error) {
         alert('Error al cargar la sesión: ' + error);
     }
-}
-
-function toggleCamposEdicion() {
-    const tipo = document.getElementById('edit_tipo_sesion').value;
-    document.getElementById('edit_campos_clase').style.display = 
-        (tipo === 'clase' || tipo === 'ambos' || tipo === 'preuniversitario') ? 'block' : 'none';
-    document.getElementById('edit_campos_terapia').style.display = 
-        (tipo === 'terapia' || tipo === 'ambos') ? 'block' : 'none';
 }
 
 async function guardarEdicionSesion() {
@@ -466,6 +440,19 @@ async function guardarEdicionSesion() {
         return;
     }
     
+    if (!estudianteSelect.value) {
+        alert('❌ Selecciona un estudiante');
+        return;
+    }
+    if (!profesor) {
+        alert('❌ El profesor es obligatorio');
+        return;
+    }
+    if (!encargado) {
+        alert('❌ El encargado de apertura es obligatorio');
+        return;
+    }
+    
     // Calcular horas para el resumen
     const inicio = new Date(`${fecha}T${hIni}:00`);
     const fin = new Date(`${fecha}T${hFin}:00`);
@@ -473,7 +460,7 @@ async function guardarEdicionSesion() {
     const esTerapia = (tipo === 'terapia' || tipo === 'ambos');
     
     // Crear mensaje de resumen
-    let resumen = '📋 **RESUMEN DE CAMBIOS**\n\n';
+    let resumen = '📋 RESUMEN DE CAMBIOS\n\n';
     resumen += `📅 Fecha: ${fecha}\n`;
     resumen += `🕐 Horario: ${hIni} - ${hFin}\n`;
     resumen += `👨‍🎓 Estudiante: ${estudianteNombre}\n`;
@@ -496,13 +483,11 @@ async function guardarEdicionSesion() {
         return;
     }
     
-    const horasNum = parseFloat(horas);
-    
     const data = {
         fecha: fecha,
         hora_inicio: hIni,
         hora_fin: hFin,
-        horas: horasNum,
+        horas: parseFloat(horas),
         tipo_sesion: tipo,
         estudiante_id: parseInt(estudianteSelect.value),
         asignatura: document.getElementById('edit_asignatura').value,
@@ -515,19 +500,6 @@ async function guardarEdicionSesion() {
         precio_hora: precioHora
     };
     
-    if (!data.estudiante_id) {
-        alert('❌ Selecciona un estudiante');
-        return;
-    }
-    if (!data.profesor_terapeuta) {
-        alert('❌ El profesor es obligatorio');
-        return;
-    }
-    if (!data.encargado_apertura) {
-        alert('❌ El encargado de apertura es obligatorio');
-        return;
-    }
-    
     try {
         const response = await fetch('/api/sesion/' + id + '/editar', {
             method: 'POST',
@@ -538,7 +510,7 @@ async function guardarEdicionSesion() {
         
         if (result.success) {
             bootstrap.Modal.getInstance(document.getElementById('modalEditarSesion')).hide();
-            alert('✅ ¡Sesión actualizada correctamente!\n\n💰 Nuevo valor registrado: $' + valorTotal.toFixed(2));
+            alert('✅ Sesión actualizada correctamente!\n\n💰 Nuevo valor: $' + valorTotal.toFixed(2));
             cargarSesiones();
         } else {
             alert('❌ Error: ' + (result.error || 'Desconocido'));
@@ -573,6 +545,7 @@ document.getElementById('edit_hora_inicio').addEventListener('change', calcularV
 document.getElementById('edit_hora_fin').addEventListener('change', calcularValorAuto);
 document.getElementById('edit_precio_hora').addEventListener('change', calcularValorAuto);
 document.getElementById('edit_tipo_sesion').addEventListener('change', calcularValorAuto);
+document.getElementById('edit_fecha').addEventListener('change', calcularValorAuto);
 
 cargarSesiones();
 </script>
