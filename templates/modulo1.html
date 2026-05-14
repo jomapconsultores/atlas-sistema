@@ -98,59 +98,73 @@
             
             <div id="contenedorFechas"></div>
             
-            <button type="submit" class="btn btn-primary btn-lg w-100 mt-3">✅ Planificar</button>
+            <button type="submit" class="btn btn-primary btn-lg w-100 mt-3" id="btnPlanificar">✅ Planificar</button>
         </form>
     </div>
 </div>
 
+<style>
+    .hora-invalida {
+        border: 2px solid #dc3545 !important;
+        background-color: #ffe6e6 !important;
+    }
+    .mensaje-error {
+        color: #dc3545;
+        font-size: 12px;
+        margin-top: 5px;
+        display: none;
+    }
+    .alerta-error {
+        background-color: #f8d7da;
+        border: 1px solid #f5c6cb;
+        color: #721c24;
+        padding: 10px;
+        border-radius: 5px;
+        margin-top: 10px;
+        display: none;
+    }
+</style>
+
 <script>
+// ========== VARIABLES GLOBALES ==========
+let fechasValidas = {};
+
 // CONFIRMACIÓN AL PLANIFICAR CON VALIDACIONES
 document.getElementById('formPlanificar').addEventListener('submit', function(e) {
     e.preventDefault();
+    
+    // Verificar que todas las sesiones sean válidas
+    let todasValidas = true;
+    let errores = [];
     const numSesiones = document.getElementById('numSesiones').value;
+    
+    for (let i = 1; i <= numSesiones; i++) {
+        if (!fechasValidas[i]) {
+            todasValidas = false;
+            errores.push(`Sesión ${i}`);
+        }
+    }
+    
+    if (!todasValidas) {
+        alert(`❌ No se puede planificar.\n\nLas siguientes sesiones tienen errores:\n${errores.join('\n')}\n\nCorrige las horas antes de continuar.`);
+        return;
+    }
+    
     const numEstudiantes = document.getElementById('numEstudiantes').value;
     const tipo = document.getElementById('tipoSesion').value;
     
     let fechas = [];
-    let tieneError = false;
-    
     for (let i = 1; i <= numSesiones; i++) {
         const fecha = document.querySelector(`[name="fecha_${i}"]`)?.value;
         const hIni = document.querySelector(`[name="hora_inicio_${i}"]`)?.value;
         const hFin = document.querySelector(`[name="hora_fin_${i}"]`)?.value;
-        
         if (fecha && hIni && hFin) {
-            // Validar que la hora de fin no sea menor que la de inicio
-            if (hFin <= hIni) {
-                alert(`❌ Error en Sesión ${i}: La hora de fin (${hFin}) no puede ser menor o igual que la hora de inicio (${hIni})`);
-                tieneError = true;
-                return;
-            }
-            
-            // Validar que la duración sea positiva
             const inicio = new Date(`${fecha}T${hIni}:00`);
             const fin = new Date(`${fecha}T${hFin}:00`);
             const horas = (fin - inicio) / 3600000;
-            
-            if (horas <= 0) {
-                alert(`❌ Error en Sesión ${i}: La duración debe ser mayor a 0 horas`);
-                tieneError = true;
-                return;
-            }
-            
-            if (horas < 0.5) {
-                alert(`⚠️ Advertencia en Sesión ${i}: La duración es muy corta (${horas.toFixed(2)} horas). Mínimo recomendado: 0.5 horas`);
-                if (!confirm('¿Deseas continuar de todos modos?')) {
-                    tieneError = true;
-                    return;
-                }
-            }
-            
             fechas.push(`📅 Sesión ${i}: ${fecha} de ${hIni} a ${hFin} (${horas.toFixed(2)} horas)`);
         }
     }
-    
-    if (tieneError) return;
     
     let mensaje = `✅ ¿Confirmas la planificación?\n\n`;
     mensaje += `📋 Tipo: ${tipo}\n`;
@@ -162,6 +176,69 @@ document.getElementById('formPlanificar').addEventListener('submit', function(e)
         this.submit();
     }
 });
+
+function validarHoras(sesionNum) {
+    const fecha = document.querySelector(`[name="fecha_${sesionNum}"]`)?.value;
+    const hIni = document.querySelector(`[name="hora_inicio_${sesionNum}"]`)?.value;
+    const hFin = document.querySelector(`[name="hora_fin_${sesionNum}"]`)?.value;
+    
+    const inputIni = document.querySelector(`[name="hora_inicio_${sesionNum}"]`);
+    const inputFin = document.querySelector(`[name="hora_fin_${sesionNum}"]`);
+    const mensajeError = document.getElementById(`error_${sesionNum}`);
+    
+    if (!hIni || !hFin) {
+        if (mensajeError) mensajeError.style.display = 'none';
+        fechasValidas[sesionNum] = false;
+        return;
+    }
+    
+    // Validar que la hora de fin sea mayor que la de inicio
+    if (hFin <= hIni) {
+        inputIni.classList.add('hora-invalida');
+        inputFin.classList.add('hora-invalida');
+        if (mensajeError) {
+            mensajeError.style.display = 'block';
+            mensajeError.innerHTML = '❌ La hora de fin debe ser mayor que la hora de inicio';
+        }
+        fechasValidas[sesionNum] = false;
+        return;
+    }
+    
+    // Validar que la duración sea positiva y mayor a 0
+    if (fecha && hIni && hFin) {
+        const inicio = new Date(`${fecha}T${hIni}:00`);
+        const fin = new Date(`${fecha}T${hFin}:00`);
+        const horas = (fin - inicio) / 3600000;
+        
+        if (horas <= 0) {
+            inputIni.classList.add('hora-invalida');
+            inputFin.classList.add('hora-invalida');
+            if (mensajeError) {
+                mensajeError.style.display = 'block';
+                mensajeError.innerHTML = '❌ La duración de la sesión debe ser mayor a 0 horas';
+            }
+            fechasValidas[sesionNum] = false;
+            return;
+        }
+        
+        if (horas < 0.5) {
+            inputIni.classList.add('hora-invalida');
+            inputFin.classList.add('hora-invalida');
+            if (mensajeError) {
+                mensajeError.style.display = 'block';
+                mensajeError.innerHTML = '⚠️ La duración es muy corta (mínimo 30 minutos = 0.5 horas)';
+            }
+            fechasValidas[sesionNum] = false;
+            return;
+        }
+    }
+    
+    // Si todo está bien, quitar clases de error
+    inputIni.classList.remove('hora-invalida');
+    inputFin.classList.remove('hora-invalida');
+    if (mensajeError) mensajeError.style.display = 'none';
+    fechasValidas[sesionNum] = true;
+}
 
 const ESTUDIANTES = [{% for e in estudiantes %}{id:{{ e['id'] }}, nombre:"{{ e['apellidos'] }} {{ e['nombres'] }}"},{% endfor %}];
 const PROFESORES = [{% for p in profesores %}"{{ p }}",{% endfor %}];
@@ -240,12 +317,12 @@ function mostrarFechas() {
     let html = '';
     for (let i = 1; i <= num; i++) {
         html += `
-        <div class="border rounded p-2 mb-2">
+        <div class="border rounded p-2 mb-2" id="sesion_${i}">
             <strong>Sesión ${i}</strong>
             <div class="row">
                 <div class="col-md-3"><label class="small">Fecha</label><input type="date" name="fecha_${i}" class="form-control" value="{{ today }}" required></div>
-                <div class="col-md-3"><label class="small">Inicio</label><input type="time" name="hora_inicio_${i}" class="form-control" required></div>
-                <div class="col-md-3"><label class="small">Fin</label><input type="time" name="hora_fin_${i}" class="form-control" required></div>
+                <div class="col-md-3"><label class="small">Inicio</label><input type="time" name="hora_inicio_${i}" class="form-control" required onchange="validarHoras(${i})" oninput="validarHoras(${i})"></div>
+                <div class="col-md-3"><label class="small">Fin</label><input type="time" name="hora_fin_${i}" class="form-control" required onchange="validarHoras(${i})" oninput="validarHoras(${i})"></div>
                 <div class="col-md-3">
                     <label class="small">Profesor</label>
                     <select name="profesor_${i}" class="form-select" onchange="toggleNuevoProf(${i}, this.value)">
@@ -264,9 +341,14 @@ function mostrarFechas() {
                     </select>
                 </div>
             </div>
+            <div id="error_${i}" class="mensaje-error"></div>
         </div>`;
     }
     document.getElementById('contenedorFechas').innerHTML = html;
+    fechasValidas = {};
+    for (let i = 1; i <= num; i++) {
+        fechasValidas[i] = false;
+    }
 }
 
 function toggleNuevoProf(num, val) {
