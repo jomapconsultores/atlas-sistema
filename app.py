@@ -271,20 +271,46 @@ def api_editar_sesion(id):
     try:
         data = request.get_json()
         
+        # Limpiar formatos de hora
         hora_inicio = data['hora_inicio'].split(':')[:2]
         hora_fin = data['hora_fin'].split(':')[:2]
         hora_inicio_str = f"{hora_inicio[0]}:{hora_inicio[1]}"
         hora_fin_str = f"{hora_fin[0]}:{hora_fin[1]}"
         
-        horas = data.get('horas', 0)
-        if horas == 0:
-            inicio = datetime.strptime(f"{data['fecha']} {hora_inicio_str}", '%Y-%m-%d %H:%M')
-            fin = datetime.strptime(f"{data['fecha']} {hora_fin_str}", '%Y-%m-%d %H:%M')
-            horas = round((fin - inicio).total_seconds() / 3600, 2)
+        # Calcular horas
+        inicio = datetime.strptime(f"{data['fecha']} {hora_inicio_str}", '%Y-%m-%d %H:%M')
+        fin = datetime.strptime(f"{data['fecha']} {hora_fin_str}", '%Y-%m-%d %H:%M')
+        horas = round((fin - inicio).total_seconds() / 3600, 2)
         
+        # ========== VALIDACIONES ==========
+        # Validar horas negativas
+        if horas <= 0:
+            return jsonify({'success': False, 'error': 'La duración de la sesión debe ser mayor a 0 horas'})
+        
+        # Validar horas mínimas (30 minutos = 0.5 horas)
+        if horas < 0.5:
+            return jsonify({'success': False, 'error': 'La duración mínima de la sesión es 30 minutos (0.5 horas)'})
+        
+        # Validar valor total negativo
         valor_total = data.get('valor_total', 0)
+        if valor_total < 0:
+            return jsonify({'success': False, 'error': 'El valor total no puede ser negativo'})
+        
+        # Validar precio por hora negativo
         precio_hora = data.get('precio_hora', 10)
+        if precio_hora < 0:
+            return jsonify({'success': False, 'error': 'El precio por hora no puede ser negativo'})
+        
+        # Calcular pago al docente y validar que no sea negativo
         es_terapia = data['tipo_sesion'] in ['terapia', 'ambos']
+        if es_terapia:
+            pago_docente = valor_total * 0.35
+        else:
+            pago_docente = horas * 7
+        
+        if pago_docente < 0:
+            return jsonify({'success': False, 'error': 'El cálculo del pago al docente resultó negativo. Verifica los valores.'})
+        # ========== FIN VALIDACIONES ==========
         
         updates = {
             'fecha': data['fecha'],
@@ -306,6 +332,7 @@ def api_editar_sesion(id):
         
         supabase.table('sesiones').update(updates).eq('id', id).execute()
         
+        # Si está realizado, actualizar Google Calendar
         if data.get('estado') == 'Realizado':
             sesion = supabase.table('sesiones').select('*, estudiantes(apellidos, nombres)').eq('id', id).execute()
             if sesion.data:

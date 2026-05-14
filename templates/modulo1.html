@@ -2,11 +2,7 @@
 {% block title %}Planificación - Atlas{% endblock %}
 
 {% block content %}
-<h3>📋 Planificación de Sesiones</h3>
-
-<h3>📋 Planificación de Sesiones</h3>
-
-<!-- Botones -->
+<!-- Botones de sincronización -->
 <div class="d-flex justify-content-between mb-3 flex-wrap gap-2">
     <div>
         <a href="/editar-planificaciones" class="btn btn-warning">
@@ -24,7 +20,7 @@
 </div>
 
 <div class="card shadow mb-4">
-    <div class="card-header bg-primary text-white"><strong>Nueva Planificación</strong></div>
+    <div class="card-header bg-primary text-white"><strong>➕ Nueva Planificación</strong></div>
     <div class="card-body">
         <form method="POST" id="formPlanificar">
             
@@ -108,7 +104,7 @@
 </div>
 
 <script>
-// CONFIRMACIÓN AL PLANIFICAR
+// CONFIRMACIÓN AL PLANIFICAR CON VALIDACIONES
 document.getElementById('formPlanificar').addEventListener('submit', function(e) {
     e.preventDefault();
     const numSesiones = document.getElementById('numSesiones').value;
@@ -116,14 +112,45 @@ document.getElementById('formPlanificar').addEventListener('submit', function(e)
     const tipo = document.getElementById('tipoSesion').value;
     
     let fechas = [];
+    let tieneError = false;
+    
     for (let i = 1; i <= numSesiones; i++) {
         const fecha = document.querySelector(`[name="fecha_${i}"]`)?.value;
         const hIni = document.querySelector(`[name="hora_inicio_${i}"]`)?.value;
         const hFin = document.querySelector(`[name="hora_fin_${i}"]`)?.value;
+        
         if (fecha && hIni && hFin) {
-            fechas.push(`📅 Sesión ${i}: ${fecha} de ${hIni} a ${hFin}`);
+            // Validar que la hora de fin no sea menor que la de inicio
+            if (hFin <= hIni) {
+                alert(`❌ Error en Sesión ${i}: La hora de fin (${hFin}) no puede ser menor o igual que la hora de inicio (${hIni})`);
+                tieneError = true;
+                return;
+            }
+            
+            // Validar que la duración sea positiva
+            const inicio = new Date(`${fecha}T${hIni}:00`);
+            const fin = new Date(`${fecha}T${hFin}:00`);
+            const horas = (fin - inicio) / 3600000;
+            
+            if (horas <= 0) {
+                alert(`❌ Error en Sesión ${i}: La duración debe ser mayor a 0 horas`);
+                tieneError = true;
+                return;
+            }
+            
+            if (horas < 0.5) {
+                alert(`⚠️ Advertencia en Sesión ${i}: La duración es muy corta (${horas.toFixed(2)} horas). Mínimo recomendado: 0.5 horas`);
+                if (!confirm('¿Deseas continuar de todos modos?')) {
+                    tieneError = true;
+                    return;
+                }
+            }
+            
+            fechas.push(`📅 Sesión ${i}: ${fecha} de ${hIni} a ${hFin} (${horas.toFixed(2)} horas)`);
         }
     }
+    
+    if (tieneError) return;
     
     let mensaje = `✅ ¿Confirmas la planificación?\n\n`;
     mensaje += `📋 Tipo: ${tipo}\n`;
@@ -248,6 +275,7 @@ function toggleNuevoProf(num, val) {
 
 mostrarEstudiantes();
 mostrarFechas();
+
 // ========== FUNCIONES DE SINCRONIZACIÓN MASIVA ==========
 
 async function sincronizarTodoCalendario() {
