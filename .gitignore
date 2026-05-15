@@ -6,3 +6,6 @@ service-account.json
 "__pycache__/" 
 "*.pyc" 
 "credentials.json" 
+"__pycache__/" 
+"*.pyc" 
+"credentials.json" 

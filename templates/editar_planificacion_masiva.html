@@ -1,0 +1,476 @@
+{% extends "base.html" %}
+{% block title %}Edición Masiva de Planificación - Atlas{% endblock %}
+
+{% block content %}
+<h3>✏️ Edición Masiva de Planificación</h3>
+<p class="text-muted">Selecciona una planificación existente para modificarla completamente.</p>
+
+<div class="row">
+    <div class="col-md-5 mb-4">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <strong>📋 Seleccionar Planificación</strong>
+            </div>
+            <div class="card-body">
+                <form id="formSeleccionar">
+                    <div class="mb-3">
+                        <label class="form-label">Seleccionar estudiante *</label>
+                        <select id="selectEstudiante" class="form-select" required>
+                            <option value="">Seleccionar...</option>
+                            {% for e in estudiantes %}
+                            <option value="{{ e.id }}">{{ e.apellidos }} {{ e.nombres }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Seleccionar sesión a editar *</label>
+                        <select id="selectSesion" class="form-select" required disabled>
+                            <option value="">Primero selecciona un estudiante</option>
+                        </select>
+                    </div>
+                    <button type="button" class="btn btn-primary w-100" onclick="cargarSesion()" id="btnCargar">📋 Cargar sesión</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-7 mb-4">
+        <div class="card shadow">
+            <div class="card-header bg-info text-white">
+                <strong>📊 Resumen de la sesión actual</strong>
+            </div>
+            <div class="card-body" id="resumenActual">
+                <p class="text-muted">Selecciona una sesión para ver el resumen actual</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Formulario de edición -->
+<div id="formEdicion" style="display:none;">
+    <div class="card shadow mb-4">
+        <div class="card-header bg-warning text-dark">
+            <strong>✏️ Editar Planificación</strong>
+        </div>
+        <div class="card-body">
+            <form id="formPlanificar" method="POST">
+                <input type="hidden" name="sesion_id" id="sesion_id">
+                <input type="hidden" name="accion" value="editar_masiva">
+                
+                <div class="mb-2">
+                    <label class="form-label">Tipo de Sesión *</label>
+                    <select name="tipo_sesion" id="tipoSesion" class="form-select" required onchange="mostrarCampos()">
+                        <option value="">Seleccionar...</option>
+                        <option value="clase">📚 Clase</option>
+                        <option value="terapia">🧠 Atención Psicológica</option>
+                        <option value="ambos">📚🧠 Ambos</option>
+                        <option value="preuniversitario">🎓 Pre Universitario</option>
+                    </select>
+                </div>
+                
+                <div id="camposClase" style="display:none;">
+                    <div class="mb-2">
+                        <label class="form-label">Asignatura *</label>
+                        <select name="asignatura" id="asignatura" class="form-select">
+                            <option value="">Seleccionar...</option>
+                            {% for a in asignaturas %}
+                            <option value="{{ a }}">{{ a }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                
+                <div id="camposTerapia" style="display:none;">
+                    <div class="mb-2">
+                        <label class="form-label">Tipo de Atención *</label>
+                        <select name="atencion_psicologica" id="atencion_psicologica" class="form-select">
+                            <option value="">Seleccionar...</option>
+                            {% for item in atencion_psicologica %}
+                            <option value="{{ item['nombre'] }}" data-precio="{{ item['precio'] }}">
+                                {{ item['nombre'] }} - ${{ item['precio'] }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="mb-2">
+                    <label class="form-label">Profesor/Terapeuta *</label>
+                    <input type="text" name="profesor" id="profesor" class="form-control" list="listaProfesores" required>
+                    <datalist id="listaProfesores">
+                        {% for p in profesores %}
+                        <option value="{{ p }}">
+                        {% endfor %}
+                    </datalist>
+                </div>
+                
+                <div class="mb-2">
+                    <label class="form-label">Encargado Apertura *</label>
+                    <input type="text" name="encargado" id="encargado" class="form-control" list="listaEncargados" required>
+                    <datalist id="listaEncargados">
+                        {% for e in encargados %}
+                        <option value="{{ e }}">
+                        {% endfor %}
+                    </datalist>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-4 mb-2">
+                        <label class="form-label">Fecha *</label>
+                        <input type="date" name="fecha" id="fecha" class="form-control" required>
+                    </div>
+                    <div class="col-md-4 mb-2">
+                        <label class="form-label">Hora inicio *</label>
+                        <input type="time" name="hora_inicio" id="hora_inicio" class="form-control" required onchange="calcularHoras()">
+                    </div>
+                    <div class="col-md-4 mb-2">
+                        <label class="form-label">Hora fin *</label>
+                        <input type="time" name="hora_fin" id="hora_fin" class="form-control" required onchange="calcularHoras()">
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6 mb-2">
+                        <label class="form-label">💵 Precio por hora *</label>
+                        <input type="number" name="precio_hora" id="precio_hora" class="form-control" step="0.01" required onchange="calcularValorTotal()">
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <label class="form-label">💰 Valor total *</label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="number" name="valor_total" id="valor_total" class="form-control" step="0.01" required>
+                            <button type="button" class="btn btn-outline-secondary" onclick="calcularValorTotal()">🔢 Calcular</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="alert alert-info mt-2" id="resumenCalculo" style="display:none;">
+                    <strong>📊 Cálculo:</strong> <span id="horasCalculo">0</span> horas × $<span id="precioCalculo">0</span> = $<span id="totalCalculo">0</span>
+                </div>
+                
+                <div class="mb-2">
+                    <label class="form-label">Estado</label>
+                    <select name="estado" id="estado" class="form-select">
+                        <option value="Planificado">📅 Planificado</option>
+                        <option value="Realizado">✅ Realizado</option>
+                        <option value="Cancelado">❌ Cancelado</option>
+                    </select>
+                </div>
+                
+                <div class="mb-2">
+                    <label class="form-label">Observaciones</label>
+                    <textarea name="observaciones" id="observaciones" class="form-control" rows="2" placeholder="Notas adicionales..."></textarea>
+                </div>
+                
+                <div class="mb-2">
+                    <label class="form-label">👤 Responsable del cambio *</label>
+                    <input type="text" name="responsable" id="responsable" class="form-control" value="{{ current_user.nombre }}" required readonly>
+                    <small class="text-muted">El responsable quedará registrado en la auditoría</small>
+                </div>
+                
+                <button type="button" class="btn btn-primary btn-lg w-100 mt-3" onclick="mostrarConfirmacion()">✅ Guardar Cambios</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+    .campo-cambio {
+        background-color: #fff3cd;
+        border-left: 4px solid #ffc107;
+        padding: 2px 5px;
+    }
+    .campo-anterior {
+        text-decoration: line-through;
+        color: #dc3545;
+    }
+    .campo-nuevo {
+        color: #28a745;
+        font-weight: bold;
+    }
+    .comparacion {
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        padding: 10px;
+        margin-bottom: 10px;
+    }
+</style>
+
+<script>
+let sesionOriginal = null;
+
+function calcularHoras() {
+    const fecha = document.getElementById('fecha').value;
+    const hIni = document.getElementById('hora_inicio').value;
+    const hFin = document.getElementById('hora_fin').value;
+    
+    if (fecha && hIni && hFin) {
+        const inicio = new Date(`${fecha}T${hIni}:00`);
+        const fin = new Date(`${fecha}T${hFin}:00`);
+        const horas = (fin - inicio) / 3600000;
+        if (horas > 0) {
+            document.getElementById('horasCalculo').innerHTML = horas.toFixed(2);
+            document.getElementById('resumenCalculo').style.display = 'block';
+        } else {
+            document.getElementById('resumenCalculo').style.display = 'none';
+        }
+        calcularValorTotal();
+    }
+}
+
+function calcularValorTotal() {
+    const fecha = document.getElementById('fecha').value;
+    const hIni = document.getElementById('hora_inicio').value;
+    const hFin = document.getElementById('hora_fin').value;
+    const precioHora = parseFloat(document.getElementById('precio_hora').value) || 0;
+    const tipo = document.getElementById('tipoSesion').value;
+    
+    let horas = 0;
+    let valorTotal = 0;
+    
+    if (fecha && hIni && hFin) {
+        const inicio = new Date(`${fecha}T${hIni}:00`);
+        const fin = new Date(`${fecha}T${hFin}:00`);
+        horas = (fin - inicio) / 3600000;
+        horas = horas > 0 ? horas : 0;
+    }
+    
+    if (tipo === 'terapia' || tipo === 'ambos') {
+        valorTotal = precioHora;
+        document.getElementById('horasCalculo').innerHTML = '1 sesión';
+    } else {
+        valorTotal = horas * precioHora;
+        document.getElementById('horasCalculo').innerHTML = horas.toFixed(2) + ' horas';
+    }
+    
+    document.getElementById('valor_total').value = valorTotal.toFixed(2);
+    document.getElementById('precioCalculo').innerHTML = precioHora.toFixed(2);
+    document.getElementById('totalCalculo').innerHTML = valorTotal.toFixed(2);
+    document.getElementById('resumenCalculo').style.display = 'block';
+}
+
+// Cargar sesiones del estudiante seleccionado
+document.getElementById('selectEstudiante').addEventListener('change', async function() {
+    const estudianteId = this.value;
+    const selectSesion = document.getElementById('selectSesion');
+    
+    if (!estudianteId) {
+        selectSesion.innerHTML = '<option value="">Primero selecciona un estudiante</option>';
+        selectSesion.disabled = true;
+        return;
+    }
+    
+    selectSesion.disabled = true;
+    selectSesion.innerHTML = '<option value="">Cargando sesiones...</option>';
+    
+    try {
+        const response = await fetch(`/api/estudiante/${estudianteId}/sesiones`);
+        const sesiones = await response.json();
+        
+        if (sesiones.length === 0) {
+            selectSesion.innerHTML = '<option value="">No hay sesiones para este estudiante</option>';
+        } else {
+            let options = '<option value="">Seleccionar sesión...</option>';
+            for (const s of sesiones) {
+                options += `<option value="${s.id}">📅 ${s.fecha} - ${s.hora_inicio} a ${s.hora_fin} - ${s.tipo_sesion} - $${s.valor_total}</option>`;
+            }
+            selectSesion.innerHTML = options;
+            selectSesion.disabled = false;
+        }
+    } catch (error) {
+        selectSesion.innerHTML = '<option value="">Error al cargar sesiones</option>';
+        console.error(error);
+    }
+});
+
+async function cargarSesion() {
+    const sesionId = document.getElementById('selectSesion').value;
+    if (!sesionId) {
+        alert('❌ Selecciona una sesión');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/sesion/${sesionId}`);
+        sesionOriginal = await response.json();
+        
+        // Mostrar resumen actual
+        const resumenHtml = `
+            <div class="comparacion">
+                <p><strong>📅 Fecha:</strong> ${sesionOriginal.fecha || 'No definida'}</p>
+                <p><strong>🕐 Horario:</strong> ${sesionOriginal.hora_inicio || '???'} - ${sesionOriginal.hora_fin || '???'}</p>
+                <p><strong>📚 Tipo:</strong> ${sesionOriginal.tipo_sesion || 'No definido'}</p>
+                <p><strong>📖 Asignatura/Tema:</strong> ${sesionOriginal.asignatura || sesionOriginal.tema_terapia || 'No definido'}</p>
+                <p><strong>👨‍🏫 Profesor:</strong> ${sesionOriginal.profesor_terapeuta || 'No definido'}</p>
+                <p><strong>🔑 Encargado apertura:</strong> ${sesionOriginal.encargado_apertura || 'No definido'}</p>
+                <p><strong>💰 Valor total:</strong> $${(sesionOriginal.valor_total || 0).toFixed(2)}</p>
+                <p><strong>📌 Estado:</strong> ${sesionOriginal.estado || 'Planificado'}</p>
+            </div>
+        `;
+        document.getElementById('resumenActual').innerHTML = resumenHtml;
+        
+        // Cargar datos en el formulario
+        document.getElementById('sesion_id').value = sesionOriginal.id;
+        document.getElementById('tipoSesion').value = sesionOriginal.tipo_sesion || '';
+        document.getElementById('asignatura').value = sesionOriginal.asignatura || '';
+        document.getElementById('atencion_psicologica').value = sesionOriginal.tema_terapia || '';
+        document.getElementById('profesor').value = sesionOriginal.profesor_terapeuta || '';
+        document.getElementById('encargado').value = sesionOriginal.encargado_apertura || '';
+        document.getElementById('fecha').value = sesionOriginal.fecha || '';
+        document.getElementById('hora_inicio').value = (sesionOriginal.hora_inicio || '').substring(0, 5);
+        document.getElementById('hora_fin').value = (sesionOriginal.hora_fin || '').substring(0, 5);
+        document.getElementById('precio_hora').value = sesionOriginal.precio_hora || 10;
+        document.getElementById('valor_total').value = sesionOriginal.valor_total || 0;
+        document.getElementById('estado').value = sesionOriginal.estado || 'Planificado';
+        document.getElementById('observaciones').value = sesionOriginal.observaciones || '';
+        
+        mostrarCampos();
+        calcularHoras();
+        
+        document.getElementById('formEdicion').style.display = 'block';
+        document.getElementById('formEdicion').scrollIntoView({behavior: 'smooth'});
+        
+    } catch (error) {
+        alert('Error al cargar la sesión: ' + error);
+    }
+}
+
+function mostrarCampos() {
+    const tipo = document.getElementById('tipoSesion').value;
+    document.getElementById('camposClase').style.display = (tipo === 'clase' || tipo === 'ambos' || tipo === 'preuniversitario') ? 'block' : 'none';
+    document.getElementById('camposTerapia').style.display = (tipo === 'terapia' || tipo === 'ambos') ? 'block' : 'none';
+    calcularValorTotal();
+}
+
+function mostrarConfirmacion() {
+    if (!sesionOriginal) {
+        alert('❌ No hay sesión cargada');
+        return;
+    }
+    
+    // Obtener valores nuevos
+    const nuevos = {
+        fecha: document.getElementById('fecha').value,
+        hora_inicio: document.getElementById('hora_inicio').value,
+        hora_fin: document.getElementById('hora_fin').value,
+        tipo_sesion: document.getElementById('tipoSesion').value,
+        asignatura: document.getElementById('asignatura').value,
+        tema_terapia: document.getElementById('atencion_psicologica').value,
+        profesor: document.getElementById('profesor').value,
+        encargado: document.getElementById('encargado').value,
+        precio_hora: parseFloat(document.getElementById('precio_hora').value) || 0,
+        valor_total: parseFloat(document.getElementById('valor_total').value) || 0,
+        estado: document.getElementById('estado').value,
+        observaciones: document.getElementById('observaciones').value
+    };
+    
+    // Verificar si hay cambios
+    const hayCambios = (
+        sesionOriginal.fecha !== nuevos.fecha ||
+        (sesionOriginal.hora_inicio || '').substring(0,5) !== nuevos.hora_inicio ||
+        (sesionOriginal.hora_fin || '').substring(0,5) !== nuevos.hora_fin ||
+        sesionOriginal.tipo_sesion !== nuevos.tipo_sesion ||
+        sesionOriginal.asignatura !== nuevos.asignatura ||
+        (sesionOriginal.tema_terapia || '') !== nuevos.tema_terapia ||
+        sesionOriginal.profesor_terapeuta !== nuevos.profesor ||
+        sesionOriginal.encargado_apertura !== nuevos.encargado ||
+        (sesionOriginal.precio_hora || 10) !== nuevos.precio_hora ||
+        (sesionOriginal.valor_total || 0) !== nuevos.valor_total ||
+        sesionOriginal.estado !== nuevos.estado
+    );
+    
+    if (!hayCambios) {
+        alert('⚠️ No se detectaron cambios. Modifica algún campo antes de guardar.');
+        return;
+    }
+    
+    // Calcular pago al docente
+    const esTerapia = (nuevos.tipo_sesion === 'terapia' || nuevos.tipo_sesion === 'ambos');
+    let pagoDocenteAnterior = 0;
+    let pagoDocenteNuevo = 0;
+    
+    if (esTerapia) {
+        pagoDocenteNuevo = nuevos.valor_total * 0.35;
+    } else {
+        const inicio = new Date(`${nuevos.fecha}T${nuevos.hora_inicio}:00`);
+        const fin = new Date(`${nuevos.fecha}T${nuevos.hora_fin}:00`);
+        const horas = (fin - inicio) / 3600000;
+        pagoDocenteNuevo = horas * 7;
+    }
+    
+    const esTerapiaOriginal = (sesionOriginal.tipo_sesion === 'terapia' || sesionOriginal.tipo_sesion === 'ambos');
+    if (esTerapiaOriginal) {
+        pagoDocenteAnterior = (sesionOriginal.valor_total || 0) * 0.35;
+    } else {
+        if (sesionOriginal.fecha && sesionOriginal.hora_inicio && sesionOriginal.hora_fin) {
+            const inicio = new Date(`${sesionOriginal.fecha}T${(sesionOriginal.hora_inicio || '').substring(0,5)}:00`);
+            const fin = new Date(`${sesionOriginal.fecha}T${(sesionOriginal.hora_fin || '').substring(0,5)}:00`);
+            const horas = (fin - inicio) / 3600000;
+            pagoDocenteAnterior = horas * 7;
+        }
+    }
+    
+    // Construir mensaje de comparación
+    let mensaje = '📋 COMPARACIÓN DE CAMBIOS\n\n';
+    mensaje += '👤 Responsable: ' + document.getElementById('responsable').value + '\n';
+    mensaje += '=' . repeat(40) + '\n\n';
+    
+    mensaje += '📅 FECHA:\n';
+    mensaje += `   Anterior: ${sesionOriginal.fecha || 'No definida'}\n`;
+    mensaje += `   Nuevo:    ${nuevos.fecha}\n`;
+    mensaje += `   ${sesionOriginal.fecha !== nuevos.fecha ? '✅ CAMBIA' : '➡️ Sin cambios'}\n\n`;
+    
+    mensaje += '🕐 HORARIO:\n';
+    mensaje += `   Anterior: ${(sesionOriginal.hora_inicio || '???').substring(0,5)} - ${(sesionOriginal.hora_fin || '???').substring(0,5)}\n`;
+    mensaje += `   Nuevo:    ${nuevos.hora_inicio} - ${nuevos.hora_fin}\n`;
+    mensaje += `   ${(sesionOriginal.hora_inicio || '').substring(0,5) !== nuevos.hora_inicio || (sesionOriginal.hora_fin || '').substring(0,5) !== nuevos.hora_fin ? '✅ CAMBIA' : '➡️ Sin cambios'}\n\n`;
+    
+    mensaje += '📚 TIPO:\n';
+    mensaje += `   Anterior: ${sesionOriginal.tipo_sesion || 'No definido'}\n`;
+    mensaje += `   Nuevo:    ${nuevos.tipo_sesion}\n`;
+    mensaje += `   ${sesionOriginal.tipo_sesion !== nuevos.tipo_sesion ? '✅ CAMBIA' : '➡️ Sin cambios'}\n\n`;
+    
+    mensaje += '👨‍🏫 PROFESOR:\n';
+    mensaje += `   Anterior: ${sesionOriginal.profesor_terapeuta || 'No definido'}\n`;
+    mensaje += `   Nuevo:    ${nuevos.profesor}\n`;
+    mensaje += `   ${sesionOriginal.profesor_terapeuta !== nuevos.profesor ? '✅ CAMBIA' : '➡️ Sin cambios'}\n\n`;
+    
+    mensaje += '🔑 ENCARGADO APERTURA:\n';
+    mensaje += `   Anterior: ${sesionOriginal.encargado_apertura || 'No definido'}\n`;
+    mensaje += `   Nuevo:    ${nuevos.encargado}\n`;
+    mensaje += `   ${sesionOriginal.encargado_apertura !== nuevos.encargado ? '✅ CAMBIA' : '➡️ Sin cambios'}\n\n`;
+    
+    mensaje += '💰 VALORES:\n';
+    mensaje += `   Precio hora anterior: $${(sesionOriginal.precio_hora || 10).toFixed(2)}\n`;
+    mensaje += `   Precio hora nuevo:    $${nuevos.precio_hora.toFixed(2)}\n`;
+    mensaje += `   ${(sesionOriginal.precio_hora || 10) !== nuevos.precio_hora ? '✅ CAMBIA' : '➡️ Sin cambios'}\n`;
+    mensaje += `   Valor total anterior: $${(sesionOriginal.valor_total || 0).toFixed(2)}\n`;
+    mensaje += `   Valor total nuevo:    $${nuevos.valor_total.toFixed(2)}\n`;
+    mensaje += `   ${(sesionOriginal.valor_total || 0) !== nuevos.valor_total ? '✅ CAMBIA' : '➡️ Sin cambios'}\n\n`;
+    
+    mensaje += '💰 PAGO DOCENTE:\n';
+    mensaje += `   Anterior: $${pagoDocenteAnterior.toFixed(2)}\n`;
+    mensaje += `   Nuevo:    $${pagoDocenteNuevo.toFixed(2)}\n`;
+    mensaje += `   ${pagoDocenteAnterior !== pagoDocenteNuevo ? '✅ CAMBIA' : '➡️ Sin cambios'}\n\n`;
+    
+    mensaje += '📌 ESTADO:\n';
+    mensaje += `   Anterior: ${sesionOriginal.estado || 'Planificado'}\n`;
+    mensaje += `   Nuevo:    ${nuevos.estado}\n`;
+    mensaje += `   ${sesionOriginal.estado !== nuevos.estado ? '✅ CAMBIA' : '➡️ Sin cambios'}\n\n`;
+    
+    mensaje += '=' . repeat(40) + '\n';
+    mensaje += '⚠️ ¿Estás seguro de aplicar estos cambios?\n';
+    mensaje += 'La modificación quedará registrada en la auditoría.';
+    
+    if (confirm(mensaje)) {
+        document.getElementById('formPlanificar').submit();
+    }
+}
+
+// Agregar event listeners
+document.getElementById('hora_inicio').addEventListener('change', calcularHoras);
+document.getElementById('hora_fin').addEventListener('change', calcularHoras);
+document.getElementById('precio_hora').addEventListener('change', calcularValorTotal);
+document.getElementById('tipoSesion').addEventListener('change', calcularValorTotal);
+</script>
+{% endblock %}

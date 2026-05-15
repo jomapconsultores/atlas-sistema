@@ -127,6 +127,32 @@ def modulo1():
             num_sesiones = int(request.form.get('num_sesiones', 1))
             num_estudiantes = int(request.form.get('num_estudiantes', 1))
             primera_fecha = None
+            
+            # ========== VALIDACIONES DE HORAS ==========
+            for sesion_num in range(1, num_sesiones + 1):
+                fecha = request.form.get(f'fecha_{sesion_num}')
+                h_ini = request.form.get(f'hora_inicio_{sesion_num}')
+                h_fin = request.form.get(f'hora_fin_{sesion_num}')
+                
+                if fecha and h_ini and h_fin:
+                    # Validar que hora fin sea mayor que hora inicio
+                    if h_fin <= h_ini:
+                        flash(f'❌ Error en Sesión {sesion_num}: La hora de fin ({h_fin}) no puede ser menor o igual que la hora de inicio ({h_ini})', 'error')
+                        return redirect(url_for('modulo1'))
+                    
+                    # Validar duración
+                    inicio = datetime.strptime(f"{fecha} {h_ini}", '%Y-%m-%d %H:%M')
+                    fin = datetime.strptime(f"{fecha} {h_fin}", '%Y-%m-%d %H:%M')
+                    horas_val = round((fin - inicio).total_seconds() / 3600, 2)
+                    
+                    if horas_val <= 0:
+                        flash(f'❌ Error en Sesión {sesion_num}: La duración debe ser mayor a 0 horas', 'error')
+                        return redirect(url_for('modulo1'))
+                    
+                    if horas_val < 0.5:
+                        flash(f'⚠️ Advertencia en Sesión {sesion_num}: La duración es muy corta ({horas_val} horas). Mínimo recomendado: 0.5 horas', 'warning')
+            # ========== FIN VALIDACIONES ==========
+            
             for sesion_num in range(1, num_sesiones + 1):
                 fecha = request.form.get(f'fecha_{sesion_num}')
                 h_ini = request.form.get(f'hora_inicio_{sesion_num}')
@@ -214,6 +240,19 @@ def editar_planificaciones():
                          encargados=ENCARGADOS,
                          today=date.today().isoformat())
 
+@app.route('/editar-planificacion-masiva')
+@login_required
+@socio_admin_required
+def editar_planificacion_masiva():
+    estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
+    return render_template('editar_planificacion_masiva.html',
+                         estudiantes=estudiantes.data or [],
+                         asignaturas=ASIGNATURAS,
+                         atencion_psicologica=ATENCION_PSICOLOGICA,
+                         profesores=PROFESORES,
+                         encargados=ENCARGADOS,
+                         today=date.today().isoformat())
+
 @app.route('/api/sesiones/todas')
 @login_required
 @socio_admin_required
@@ -246,6 +285,23 @@ def api_sesiones_todas():
             'observaciones': s.get('observaciones', ''),
             'valor_total': s.get('valor_total', 0),
             'precio_hora': s.get('precio_hora', 10)
+        })
+    return jsonify(resultado)
+
+@app.route('/api/estudiante/<int:id>/sesiones')
+@login_required
+@socio_admin_required
+def api_estudiante_sesiones(id):
+    sesiones = supabase.table('sesiones').select('id, fecha, hora_inicio, hora_fin, tipo_sesion, valor_total').eq('estudiante_id', id).order('fecha', desc=True).execute()
+    resultado = []
+    for s in (sesiones.data or []):
+        resultado.append({
+            'id': s['id'],
+            'fecha': s.get('fecha'),
+            'hora_inicio': (s.get('hora_inicio') or '')[:5],
+            'hora_fin': (s.get('hora_fin') or '')[:5],
+            'tipo_sesion': s.get('tipo_sesion'),
+            'valor_total': s.get('valor_total', 0)
         })
     return jsonify(resultado)
 
@@ -283,25 +339,20 @@ def api_editar_sesion(id):
         horas = round((fin - inicio).total_seconds() / 3600, 2)
         
         # ========== VALIDACIONES ==========
-        # Validar horas negativas
         if horas <= 0:
             return jsonify({'success': False, 'error': 'La duración de la sesión debe ser mayor a 0 horas'})
         
-        # Validar horas mínimas (30 minutos = 0.5 horas)
         if horas < 0.5:
             return jsonify({'success': False, 'error': 'La duración mínima de la sesión es 30 minutos (0.5 horas)'})
         
-        # Validar valor total negativo
         valor_total = data.get('valor_total', 0)
         if valor_total < 0:
             return jsonify({'success': False, 'error': 'El valor total no puede ser negativo'})
         
-        # Validar precio por hora negativo
         precio_hora = data.get('precio_hora', 10)
         if precio_hora < 0:
             return jsonify({'success': False, 'error': 'El precio por hora no puede ser negativo'})
         
-        # Calcular pago al docente y validar que no sea negativo
         es_terapia = data['tipo_sesion'] in ['terapia', 'ambos']
         if es_terapia:
             pago_docente = valor_total * 0.35
@@ -310,7 +361,19 @@ def api_editar_sesion(id):
         
         if pago_docente < 0:
             return jsonify({'success': False, 'error': 'El cálculo del pago al docente resultó negativo. Verifica los valores.'})
-        # ========== FIN VALIDACIONES ==========
+        
+        # ========== REGISTRAR AUDITORÍA ==========
+        sesion_anterior = supabase.table('sesiones').select('*').eq('id', id).execute()
+        datos_anteriores = sesion_anterior.data[0] if sesion_anterior.data else {}
+        
+        supabase.table('correcciones_pagos').insert({
+            'pago_id': id,
+            'monto_anterior': datos_anteriores.get('valor_total', 0),
+            'monto_nuevo': valor_total,
+            'cambiado_por': current_user.nombre,
+            'motivo': f'EDICION SESION #{id} - Cambios: horas={horas}, precio={precio_hora}, valor_total={valor_total}'
+        }).execute()
+        # ========== FIN AUDITORÍA ==========
         
         updates = {
             'fecha': data['fecha'],
@@ -332,7 +395,6 @@ def api_editar_sesion(id):
         
         supabase.table('sesiones').update(updates).eq('id', id).execute()
         
-        # Si está realizado, actualizar Google Calendar
         if data.get('estado') == 'Realizado':
             sesion = supabase.table('sesiones').select('*, estudiantes(apellidos, nombres)').eq('id', id).execute()
             if sesion.data:
@@ -1216,7 +1278,7 @@ def editar_perfil():
         return redirect(url_for('dashboard'))
     return render_template('editar_perfil.html')
 
-# ========== API PARA ESTUDIANTES ==========
+# ========== API GENERAL ==========
 
 @app.route('/api/estudiante/<int:id>')
 @login_required
