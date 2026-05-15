@@ -80,12 +80,15 @@
                     </div>
                     <div class="col-md-4 mb-2">
                         <label class="form-label">Hora inicio *</label>
-                        <input type="time" id="edit_hora_inicio" class="form-control" required>
+                        <input type="time" id="edit_hora_inicio" class="form-control" required onchange="validarHorasEdicion()">
                     </div>
                     <div class="col-md-4 mb-2">
                         <label class="form-label">Hora fin *</label>
-                        <input type="time" id="edit_hora_fin" class="form-control" required>
+                        <input type="time" id="edit_hora_fin" class="form-control" required onchange="validarHorasEdicion()">
                     </div>
+                </div>
+                <div id="errorHoras" class="alert alert-danger" style="display:none; margin-bottom: 10px;">
+                    ❌ La hora de fin no puede ser menor o igual a la hora de inicio.
                 </div>
                 <div class="row">
                     <div class="col-md-6 mb-2">
@@ -99,7 +102,7 @@
                     </div>
                     <div class="col-md-6 mb-2">
                         <label class="form-label">Tipo de sesión *</label>
-                        <select id="edit_tipo_sesion" class="form-select" required onchange="calcularValorAuto()">
+                        <select id="edit_tipo_sesion" class="form-select" required onchange="toggleCamposEdicion(); calcularValorAuto()">
                             <option value="clase">📚 Clase</option>
                             <option value="terapia">🧠 Terapia</option>
                             <option value="ambos">📚🧠 Ambos</option>
@@ -110,18 +113,25 @@
                 <div id="edit_campos_clase" style="display:none;">
                     <div class="mb-2">
                         <label class="form-label">Asignatura</label>
-                        <input type="text" id="edit_asignatura" class="form-control" list="listaAsignaturas">
-                        <datalist id="listaAsignaturas">
+                        <select id="edit_asignatura" class="form-select">
+                            <option value="">Seleccionar asignatura...</option>
                             {% for a in asignaturas %}
-                            <option value="{{ a }}">
+                            <option value="{{ a }}">{{ a }}</option>
                             {% endfor %}
-                        </datalist>
+                        </select>
                     </div>
                 </div>
                 <div id="edit_campos_terapia" style="display:none;">
                     <div class="mb-2">
-                        <label class="form-label">Tema terapia</label>
-                        <input type="text" id="edit_tema_terapia" class="form-control">
+                        <label class="form-label">Tipo de Atención Psicológica</label>
+                        <select id="edit_tema_terapia" class="form-select">
+                            <option value="">Seleccionar atención...</option>
+                            {% for item in atencion_psicologica %}
+                            <option value="{{ item['nombre'] }}" data-precio="{{ item['precio'] }}">
+                                {{ item['nombre'] }} - ${{ item['precio'] }}
+                            </option>
+                            {% endfor %}
+                        </select>
                     </div>
                 </div>
                 
@@ -236,10 +246,40 @@
         border-radius: 10px;
         margin-left: 5px;
     }
+    .hora-invalida {
+        border: 2px solid #dc3545 !important;
+        background-color: #ffe6e6 !important;
+    }
 </style>
 
 <script>
 let todasSesiones = [];
+let horasValidasEdicion = true;
+
+function validarHorasEdicion() {
+    const hIni = document.getElementById('edit_hora_inicio').value;
+    const hFin = document.getElementById('edit_hora_fin').value;
+    const errorDiv = document.getElementById('errorHoras');
+    
+    if (hIni && hFin) {
+        if (hFin <= hIni) {
+            errorDiv.style.display = 'block';
+            document.getElementById('edit_hora_inicio').classList.add('hora-invalida');
+            document.getElementById('edit_hora_fin').classList.add('hora-invalida');
+            horasValidasEdicion = false;
+            return false;
+        } else {
+            errorDiv.style.display = 'none';
+            document.getElementById('edit_hora_inicio').classList.remove('hora-invalida');
+            document.getElementById('edit_hora_fin').classList.remove('hora-invalida');
+            horasValidasEdicion = true;
+            calcularValorAuto();
+            return true;
+        }
+    }
+    horasValidasEdicion = true;
+    return true;
+}
 
 async function cargarSesiones() {
     try {
@@ -275,6 +315,9 @@ function mostrarSesiones(sesiones) {
         const estadoClass = s.estado ? s.estado.toLowerCase() : 'planificado';
         const cardClass = tieneFaltantes ? 'faltan-datos' : estadoClass;
         
+        // Mostrar asignatura o tema de terapia
+        const materia = s.asignatura || s.tema_terapia || 'Sin asignatura';
+        
         html += `
             <div class="col-md-6 col-lg-4">
                 <div class="sesion-card ${cardClass}" onclick="abrirEdicion(${s.id})">
@@ -284,7 +327,7 @@ function mostrarSesiones(sesiones) {
                     </div>
                     <div><strong>🕐</strong> ${s.hora_inicio || '???'} - ${s.hora_fin || '???'}</div>
                     <div><strong>👨‍🎓</strong> ${s.estudiante_nombre || 'ID: ' + s.estudiante_id}</div>
-                    <div><strong>📚</strong> ${s.asignatura || s.tema_terapia || 'Sin asignatura'}</div>
+                    <div><strong>📚 Asignatura/Tema:</strong> ${materia}</div>
                     <div><strong>👨‍🏫</strong> ${s.profesor_terapeuta || '<span class="text-danger">FALTA</span>'}</div>
                     <div><strong>🔑</strong> ${s.encargado_apertura || '<span class="text-danger">FALTA</span>'}</div>
                     <div><strong>💰 Valor:</strong> $${(s.valor_total || 0).toFixed(2)}</div>
@@ -366,6 +409,8 @@ function toggleCamposEdicion() {
 }
 
 function calcularValorAuto() {
+    if (!horasValidasEdicion) return;
+    
     const fecha = document.getElementById('edit_fecha').value;
     const hIni = document.getElementById('edit_hora_inicio').value;
     const hFin = document.getElementById('edit_hora_fin').value;
@@ -377,7 +422,7 @@ function calcularValorAuto() {
     let esTerapia = (tipo === 'terapia' || tipo === 'ambos');
     let textoHoras = '';
     
-    if (fecha && hIni && hFin) {
+    if (fecha && hIni && hFin && horasValidasEdicion) {
         const inicio = new Date(`${fecha}T${hIni}:00`);
         const fin = new Date(`${fecha}T${hFin}:00`);
         horas = (fin - inicio) / 3600000;
@@ -426,6 +471,7 @@ async function abrirEdicion(id) {
         document.getElementById('edit_precio_hora').value = s.precio_hora || 10;
         
         toggleCamposEdicion();
+        validarHorasEdicion();
         calcularValorAuto();
         
         new bootstrap.Modal(document.getElementById('modalEditarSesion')).show();
@@ -435,6 +481,11 @@ async function abrirEdicion(id) {
 }
 
 async function guardarEdicionSesion() {
+    if (!horasValidasEdicion) {
+        alert('❌ No se puede guardar. Corrige las horas: La hora de fin debe ser mayor a la hora de inicio.');
+        return;
+    }
+    
     const id = document.getElementById('edit_sesion_id').value;
     const tipo = document.getElementById('edit_tipo_sesion').value;
     const fecha = document.getElementById('edit_fecha').value;
@@ -446,7 +497,7 @@ async function guardarEdicionSesion() {
     const encargado = document.getElementById('edit_encargado').value;
     let valorTotal = parseFloat(document.getElementById('edit_valor_total').value) || 0;
     const precioHora = parseFloat(document.getElementById('edit_precio_hora').value) || 10;
-    const responsable = "{{ current_user.nombre }}"; // Usuario logueado
+    const responsable = document.getElementById('edit_responsable').value;
     
     if (!fecha || !hIni || !hFin) {
         alert('❌ Fecha, hora inicio y hora fin son obligatorios');
@@ -466,30 +517,19 @@ async function guardarEdicionSesion() {
         return;
     }
     
-    // Calcular horas
     const inicio = new Date(`${fecha}T${hIni}:00`);
     const fin = new Date(`${fecha}T${hFin}:00`);
     let horas = (fin - inicio) / 3600000;
     
-    if (horas < 0) {
-        alert('❌ ERROR: La hora de fin no puede ser menor que la hora de inicio.');
-        return;
-    }
-    
-    if (horas === 0) {
-        alert('❌ ERROR: La duración de la sesión no puede ser cero.');
+    if (horas <= 0) {
+        alert('❌ ERROR: La hora de fin debe ser mayor que la hora de inicio.');
         return;
     }
     
     const esTerapia = (tipo === 'terapia' || tipo === 'ambos');
     
-    if (esTerapia && horas < 0.5) {
-        alert('❌ ERROR: La duración mínima para una terapia es de 30 minutos (0.5 horas).');
-        return;
-    }
-    
-    if (!esTerapia && horas < 0.5) {
-        alert('❌ ERROR: La duración mínima para una clase es de 30 minutos (0.5 horas).');
+    if (horas < 0.5) {
+        alert('❌ ERROR: La duración mínima es de 30 minutos (0.5 horas).');
         return;
     }
     
@@ -505,11 +545,6 @@ async function guardarEdicionSesion() {
         pagoDocente = valorTotal * 0.35;
     } else {
         pagoDocente = parseFloat(horas) * 7;
-    }
-    
-    if (pagoDocente < 0) {
-        alert('❌ ERROR: El cálculo del pago al docente resultó negativo.');
-        return;
     }
     
     let resumen = '📋 RESUMEN DE CAMBIOS\n\n';
@@ -588,9 +623,8 @@ async function eliminarSesionModal() {
     }
 }
 
-// Event listeners para cálculo automático
-document.getElementById('edit_hora_inicio').addEventListener('change', calcularValorAuto);
-document.getElementById('edit_hora_fin').addEventListener('change', calcularValorAuto);
+document.getElementById('edit_hora_inicio').addEventListener('change', validarHorasEdicion);
+document.getElementById('edit_hora_fin').addEventListener('change', validarHorasEdicion);
 document.getElementById('edit_precio_hora').addEventListener('change', calcularValorAuto);
 document.getElementById('edit_tipo_sesion').addEventListener('change', calcularValorAuto);
 document.getElementById('edit_fecha').addEventListener('change', calcularValorAuto);

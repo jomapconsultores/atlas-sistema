@@ -4,6 +4,13 @@
 {% block content %}
 <h3>💰 Gestión de Pagos</h3>
 
+<style>
+    .hora-invalida {
+        border: 2px solid #dc3545 !important;
+        background-color: #ffe6e6 !important;
+    }
+</style>
+
 <div class="row">
     <!-- REGISTRAR PAGO -->
     <div class="col-md-5 mb-4">
@@ -22,7 +29,7 @@
                         </select>
                     </div>
                     <div class="mb-2"><label class="form-label">Monto *</label><input type="number" name="monto" id="montoPago" class="form-control" step="0.01" required></div>
-                    <div class="mb-2"><label class="form-label">Fecha *</label><input type="date" name="fecha_pago" id="fechaPago" class="form-control" value="{{ today }}" required></div>
+                    <div class="mb-2"><label class="form-label">Fecha *</label><input type="date" name="fecha_pago" class="form-control" value="{{ today }}" required></div>
                     <div class="mb-2">
                         <label class="form-label">Tipo</label>
                         <select name="tipo_pago" class="form-select">
@@ -41,11 +48,11 @@
         <div class="card shadow mt-3">
             <div class="card-header bg-info text-white"><strong>✏️ Editar Sesión Realizada</strong></div>
             <div class="card-body">
-                <form method="POST" onsubmit="return confirm('¿Actualizar esta sesión?')">
+                <form method="POST" id="formEditarSesion" onsubmit="return validarHorasEdicion()">
                     <input type="hidden" name="accion" value="editar_sesion">
                     <div class="mb-2">
                         <label class="form-label">Sesión *</label>
-                        <select name="sesion_id" class="form-select" required>
+                        <select name="sesion_id" id="sesion_id" class="form-select" required>
                             <option value="">Seleccionar sesión...</option>
                             {% for e in estudiantes %}
                             {% for s in e.get('sesiones', []) %}
@@ -54,9 +61,14 @@
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="mb-2"><label class="form-label">Nueva Fecha *</label><input type="date" name="nueva_fecha" class="form-control" required></div>
-                    <div class="row"><div class="col-6 mb-2"><label class="form-label">Inicio *</label><input type="time" name="nueva_hora_inicio" class="form-control" required></div>
-                    <div class="col-6 mb-2"><label class="form-label">Fin *</label><input type="time" name="nueva_hora_fin" class="form-control" required></div></div>
+                    <div class="mb-2"><label class="form-label">Nueva Fecha *</label><input type="date" name="nueva_fecha" id="nueva_fecha" class="form-control" required></div>
+                    <div class="row">
+                        <div class="col-6 mb-2"><label class="form-label">Inicio *</label><input type="time" name="nueva_hora_inicio" id="nueva_hora_inicio" class="form-control" required onchange="validarHorasEdicion()"></div>
+                        <div class="col-6 mb-2"><label class="form-label">Fin *</label><input type="time" name="nueva_hora_fin" id="nueva_hora_fin" class="form-control" required onchange="validarHorasEdicion()"></div>
+                    </div>
+                    <div id="errorHoras" class="alert alert-danger" style="display:none; margin-bottom: 10px;">
+                        ❌ La hora de fin no puede ser menor o igual a la hora de inicio.
+                    </div>
                     <button type="submit" class="btn btn-info w-100">✏️ Actualizar Sesión</button>
                 </form>
                 <small class="text-muted">Solo para sesiones ya realizadas. Afecta a todos los módulos.</small>
@@ -95,9 +107,7 @@
                                     </td>
                                     <td>{{ p.get('tipo_pago', '') }}</td>
                                     <td>{{ p.get('concepto', '')[:20] }}</td>
-                                    <td>
-                                        <button class="btn btn-danger btn-sm" onclick="abrirEliminar({{ p['id'] }})">🗑️</button>
-                                    </td>
+                                    <td><button class="btn btn-danger btn-sm" onclick="abrirEliminar({{ p['id'] }})">🗑️</button></td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -114,56 +124,51 @@
     </div>
 </div>
 
-<!-- MODAL CORRECCIÓN -->
-<div class="modal fade" id="modalCorreccion" tabindex="-1">
-    <div class="modal-dialog"><div class="modal-content">
-        <form method="POST" onsubmit="return confirmarCorreccion()">
-            <input type="hidden" name="accion" value="corregir">
-            <input type="hidden" name="pago_id" id="modalPagoId">
-            <input type="hidden" name="cambiado_por" value="{{ current_user.nombre }}">
-            <div class="modal-header bg-warning"><h5>🔧 Corregir Pago</h5></div>
-            <div class="modal-body">
-                <p>Monto actual: <strong id="modalMontoActual">$0</strong></p>
-                <div class="mb-2"><label class="form-label">Nuevo monto *</label><input type="number" name="nuevo_monto" id="modalNuevoMonto" class="form-control" step="0.01" required></div>
-                <div class="mb-2"><label class="form-label">Corregido por:</label><input type="text" class="form-control" value="{{ current_user.nombre }}" disabled></div>
-                <div class="mb-2"><label class="form-label">Fecha de corrección:</label><input type="text" class="form-control" id="modalFechaTexto" disabled></div>
-                <div class="mb-2"><label class="form-label">Motivo *</label><textarea name="motivo" id="modalMotivo" class="form-control" rows="2" required></textarea></div>
-            </div>
-            <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-warning">Guardar</button></div>
-        </form>
-    </div></div>
-</div>
-
-<!-- MODAL ELIMINAR -->
-<div class="modal fade" id="modalEliminar" tabindex="-1">
-    <div class="modal-dialog"><div class="modal-content">
-        <form method="POST" onsubmit="return confirmarEliminacion()">
-            <input type="hidden" name="accion" value="eliminar_pago">
-            <input type="hidden" name="pago_id" id="modalEliminarPagoId">
-            <div class="modal-header bg-danger text-white"><h5>🗑️ Eliminar Pago</h5></div>
-            <div class="modal-body">
-                <p class="text-danger">⚠️ Esta acción no se puede deshacer.</p>
-                <div class="mb-2"><label class="form-label">Motivo de eliminación *</label><textarea name="motivo_eliminar" id="modalMotivoEliminar" class="form-control" rows="2" required></textarea></div>
-                <div class="mb-2"><label class="form-label">¿Quién elimina? *</label><input type="text" name="eliminado_por" id="modalEliminadoPor" class="form-control" value="{{ current_user.nombre }}" required></div>
-            </div>
-            <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-danger">🗑️ Eliminar</button></div>
-        </form>
-    </div></div>
-</div>
-
-<div class="mt-4 d-flex flex-wrap justify-content-between">
-    <a href="/modulo1" class="btn btn-outline-primary mb-1">M1</a>
-    <a href="/modulo2" class="btn btn-outline-success mb-1">M2</a>
-    <a href="/modulo4" class="btn btn-outline-info mb-1">M4</a>
-    <a href="/modulo5" class="btn btn-outline-warning mb-1">M5</a>
-</div>
-
 <script>
-document.getElementById('formPago').addEventListener('submit', function(e) {
+// Validación de horas para editar sesión
+function validarHorasEdicion() {
+    const hIni = document.getElementById('nueva_hora_inicio').value;
+    const hFin = document.getElementById('nueva_hora_fin').value;
+    const errorDiv = document.getElementById('errorHoras');
+    
+    if (hIni && hFin) {
+        if (hFin <= hIni) {
+            errorDiv.style.display = 'block';
+            document.getElementById('nueva_hora_inicio').classList.add('hora-invalida');
+            document.getElementById('nueva_hora_fin').classList.add('hora-invalida');
+            return false;
+        } else {
+            errorDiv.style.display = 'none';
+            document.getElementById('nueva_hora_inicio').classList.remove('hora-invalida');
+            document.getElementById('nueva_hora_fin').classList.remove('hora-invalida');
+            return true;
+        }
+    }
+    return true;
+}
+
+// Confirmación de pago
+document.getElementById('formPago')?.addEventListener('submit', function(e) {
     const monto = document.getElementById('montoPago')?.value;
-    const fecha = document.getElementById('fechaPago')?.value;
     const estudiante = this.querySelector('[name="estudiante_id"]')?.selectedOptions[0]?.text || '';
-    if (!confirm(`💰 ¿Confirmas el registro del pago?\n\n👨‍🎓 ${estudiante}\n💵 Monto: $${parseFloat(monto).toFixed(2)}\n📅 Fecha: ${fecha}`)) {
+    if (!confirm(`💰 ¿Confirmas el registro del pago?\n\n👨‍🎓 ${estudiante}\n💵 Monto: $${parseFloat(monto).toFixed(2)}`)) {
+        e.preventDefault();
+    }
+});
+
+// Confirmación de edición de sesión
+document.getElementById('formEditarSesion')?.addEventListener('submit', function(e) {
+    if (!validarHorasEdicion()) {
+        e.preventDefault();
+        alert('❌ Corrige las horas antes de guardar. La hora de fin debe ser mayor a la hora de inicio.');
+        return;
+    }
+    
+    const fecha = document.getElementById('nueva_fecha').value;
+    const hIni = document.getElementById('nueva_hora_inicio').value;
+    const hFin = document.getElementById('nueva_hora_fin').value;
+    
+    if (!confirm(`📝 ¿Confirmas la actualización?\n\n📅 Fecha: ${fecha}\n🕐 Horario: ${hIni} - ${hFin}`)) {
         e.preventDefault();
     }
 });
@@ -199,4 +204,47 @@ function confirmarEliminacion() {
     return confirm('🗑️ ¿Confirmas la eliminación definitiva de este pago?');
 }
 </script>
+
+<!-- MODALES -->
+<div class="modal fade" id="modalCorreccion" tabindex="-1">
+    <div class="modal-dialog"><div class="modal-content">
+        <form method="POST" onsubmit="return confirmarCorreccion()">
+            <input type="hidden" name="accion" value="corregir">
+            <input type="hidden" name="pago_id" id="modalPagoId">
+            <input type="hidden" name="cambiado_por" value="{{ current_user.nombre }}">
+            <div class="modal-header bg-warning"><h5>🔧 Corregir Pago</h5></div>
+            <div class="modal-body">
+                <p>Monto actual: <strong id="modalMontoActual">$0</strong></p>
+                <div class="mb-2"><label class="form-label">Nuevo monto *</label><input type="number" name="nuevo_monto" id="modalNuevoMonto" class="form-control" step="0.01" required></div>
+                <div class="mb-2"><label class="form-label">Corregido por:</label><input type="text" class="form-control" value="{{ current_user.nombre }}" disabled></div>
+                <div class="mb-2"><label class="form-label">Fecha de corrección:</label><input type="text" class="form-control" id="modalFechaTexto" disabled></div>
+                <div class="mb-2"><label class="form-label">Motivo *</label><textarea name="motivo" id="modalMotivo" class="form-control" rows="2" required></textarea></div>
+            </div>
+            <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-warning">Guardar</button></div>
+        </form>
+    </div></div>
+</div>
+
+<div class="modal fade" id="modalEliminar" tabindex="-1">
+    <div class="modal-dialog"><div class="modal-content">
+        <form method="POST" onsubmit="return confirmarEliminacion()">
+            <input type="hidden" name="accion" value="eliminar_pago">
+            <input type="hidden" name="pago_id" id="modalEliminarPagoId">
+            <div class="modal-header bg-danger text-white"><h5>🗑️ Eliminar Pago</h5></div>
+            <div class="modal-body">
+                <p class="text-danger">⚠️ Esta acción no se puede deshacer.</p>
+                <div class="mb-2"><label class="form-label">Motivo de eliminación *</label><textarea name="motivo_eliminar" id="modalMotivoEliminar" class="form-control" rows="2" required></textarea></div>
+                <div class="mb-2"><label class="form-label">¿Quién elimina? *</label><input type="text" name="eliminado_por" id="modalEliminadoPor" class="form-control" required></div>
+            </div>
+            <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-danger">🗑️ Eliminar</button></div>
+        </form>
+    </div></div>
+</div>
+
+<div class="mt-4 d-flex flex-wrap justify-content-between">
+    <a href="/modulo1" class="btn btn-outline-primary mb-1">M1</a>
+    <a href="/modulo2" class="btn btn-outline-success mb-1">M2</a>
+    <a href="/modulo4" class="btn btn-outline-info mb-1">M4</a>
+    <a href="/modulo5" class="btn btn-outline-warning mb-1">M5</a>
+</div>
 {% endblock %}

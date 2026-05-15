@@ -12,24 +12,22 @@
                 <strong>📋 Seleccionar Planificación</strong>
             </div>
             <div class="card-body">
-                <form id="formSeleccionar">
-                    <div class="mb-3">
-                        <label class="form-label">Seleccionar estudiante *</label>
-                        <select id="selectEstudiante" class="form-select" required>
-                            <option value="">Seleccionar...</option>
-                            {% for e in estudiantes %}
-                            <option value="{{ e.id }}">{{ e.apellidos }} {{ e.nombres }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Seleccionar sesión a editar *</label>
-                        <select id="selectSesion" class="form-select" required disabled>
-                            <option value="">Primero selecciona un estudiante</option>
-                        </select>
-                    </div>
-                    <button type="button" class="btn btn-primary w-100" onclick="cargarSesion()" id="btnCargar">📋 Cargar sesión</button>
-                </form>
+                <div class="mb-3">
+                    <label class="form-label">Seleccionar estudiante *</label>
+                    <select id="selectEstudiante" class="form-select" required>
+                        <option value="">Seleccionar...</option>
+                        {% for e in estudiantes %}
+                        <option value="{{ e.id }}">{{ e.apellidos }} {{ e.nombres }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Seleccionar sesión a editar *</label>
+                    <select id="selectSesion" class="form-select" required disabled>
+                        <option value="">Primero selecciona un estudiante</option>
+                    </select>
+                </div>
+                <button type="button" class="btn btn-primary w-100" onclick="cargarSesion()" id="btnCargar">📋 Cargar sesión</button>
             </div>
         </div>
     </div>
@@ -53,125 +51,126 @@
             <strong>✏️ Editar Planificación</strong>
         </div>
         <div class="card-body">
-            <form id="formPlanificar">
-                <input type="hidden" name="sesion_id" id="sesion_id">
-                
+            <input type="hidden" id="sesion_id">
+            
+            <div class="mb-2">
+                <label class="form-label">Tipo de Sesión *</label>
+                <select id="tipoSesion" class="form-select" required onchange="mostrarCampos()">
+                    <option value="">Seleccionar...</option>
+                    <option value="clase">📚 Clase</option>
+                    <option value="terapia">🧠 Atención Psicológica</option>
+                    <option value="ambos">📚🧠 Ambos</option>
+                    <option value="preuniversitario">🎓 Pre Universitario</option>
+                </select>
+            </div>
+            
+            <div id="camposClase" style="display:none;">
                 <div class="mb-2">
-                    <label class="form-label">Tipo de Sesión *</label>
-                    <select name="tipo_sesion" id="tipoSesion" class="form-select" required onchange="mostrarCampos()">
+                    <label class="form-label">Asignatura *</label>
+                    <select id="asignatura" class="form-select">
                         <option value="">Seleccionar...</option>
-                        <option value="clase">📚 Clase</option>
-                        <option value="terapia">🧠 Atención Psicológica</option>
-                        <option value="ambos">📚🧠 Ambos</option>
-                        <option value="preuniversitario">🎓 Pre Universitario</option>
-                    </select>
-                </div>
-                
-                <div id="camposClase" style="display:none;">
-                    <div class="mb-2">
-                        <label class="form-label">Asignatura *</label>
-                        <select name="asignatura" id="asignatura" class="form-select">
-                            <option value="">Seleccionar...</option>
-                            {% for a in asignaturas %}
-                            <option value="{{ a }}">{{ a }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                </div>
-                
-                <div id="camposTerapia" style="display:none;">
-                    <div class="mb-2">
-                        <label class="form-label">Tipo de Atención *</label>
-                        <select name="atencion_psicologica" id="atencion_psicologica" class="form-select">
-                            <option value="">Seleccionar...</option>
-                            {% for item in atencion_psicologica %}
-                            <option value="{{ item['nombre'] }}" data-precio="{{ item['precio'] }}">
-                                {{ item['nombre'] }} - ${{ item['precio'] }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                </div>
-                
-                <!-- PROFESOR - SELECT CON OPCIONES PREDEFINIDAS -->
-                <div class="mb-2">
-                    <label class="form-label">Profesor/Terapeuta *</label>
-                    <select name="profesor" id="profesor" class="form-select" required>
-                        <option value="">Seleccionar profesor...</option>
-                        {% for p in profesores %}
-                        <option value="{{ p }}">{{ p }}</option>
+                        {% for a in asignaturas %}
+                        <option value="{{ a }}">{{ a }}</option>
                         {% endfor %}
                     </select>
                 </div>
-                
-                <!-- ENCARGADO APERTURA - SELECT CON OPCIONES PREDEFINIDAS -->
+            </div>
+            
+            <div id="camposTerapia" style="display:none;">
                 <div class="mb-2">
-                    <label class="form-label">Encargado Apertura *</label>
-                    <select name="encargado" id="encargado" class="form-select" required>
-                        <option value="">Seleccionar encargado...</option>
-                        {% for e in encargados %}
-                        <option value="{{ e }}">{{ e }}</option>
+                    <label class="form-label">Tipo de Atención *</label>
+                    <select id="atencion_psicologica" class="form-select">
+                        <option value="">Seleccionar...</option>
+                        {% for item in atencion_psicologica %}
+                        <option value="{{ item['nombre'] }}" data-precio="{{ item['precio'] }}">
+                            {{ item['nombre'] }} - ${{ item['precio'] }}
+                        </option>
                         {% endfor %}
                     </select>
                 </div>
-                
-                <div class="row">
-                    <div class="col-md-4 mb-2">
-                        <label class="form-label">Fecha *</label>
-                        <input type="date" name="fecha" id="fecha" class="form-control" required>
+            </div>
+            
+            <!-- PROFESOR - SELECT CON OPCIONES PREDEFINIDAS -->
+            <div class="mb-2">
+                <label class="form-label">Profesor/Terapeuta *</label>
+                <select id="profesor" class="form-select" required>
+                    <option value="">Seleccionar profesor...</option>
+                    {% for p in profesores %}
+                    <option value="{{ p }}">{{ p }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <!-- ENCARGADO APERTURA - SELECT CON OPCIONES PREDEFINIDAS -->
+            <div class="mb-2">
+                <label class="form-label">Encargado Apertura *</label>
+                <select id="encargado" class="form-select" required>
+                    <option value="">Seleccionar encargado...</option>
+                    {% for e in encargados %}
+                    <option value="{{ e }}">{{ e }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-4 mb-2">
+                    <label class="form-label">Fecha *</label>
+                    <input type="date" id="fecha" class="form-control" required>
+                </div>
+                <div class="col-md-4 mb-2">
+                    <label class="form-label">Hora inicio *</label>
+                    <input type="time" id="hora_inicio" class="form-control" required onchange="validarHorasMasiva()">
+                </div>
+                <div class="col-md-4 mb-2">
+                    <label class="form-label">Hora fin *</label>
+                    <input type="time" id="hora_fin" class="form-control" required onchange="validarHorasMasiva()">
+                </div>
+            </div>
+            <div id="errorHorasMasiva" class="alert alert-danger" style="display:none; margin-bottom: 10px;">
+                ❌ La hora de fin no puede ser menor o igual a la hora de inicio.
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-2">
+                    <label class="form-label">💵 Precio por hora *</label>
+                    <input type="number" id="precio_hora" class="form-control" step="0.01" required onchange="calcularValorTotal()">
+                </div>
+                <div class="col-md-6 mb-2">
+                    <label class="form-label">💰 Valor total *</label>
+                    <div class="input-group">
+                        <span class="input-group-text">$</span>
+                        <input type="number" id="valor_total" class="form-control" step="0.01" required>
+                        <button type="button" class="btn btn-outline-secondary" onclick="calcularValorTotal()">🔢 Calcular</button>
                     </div>
-                    <div class="col-md-4 mb-2">
-                        <label class="form-label">Hora inicio *</label>
-                        <input type="time" name="hora_inicio" id="hora_inicio" class="form-control" required onchange="calcularHoras()">
-                    </div>
-                    <div class="col-md-4 mb-2">
-                        <label class="form-label">Hora fin *</label>
-                        <input type="time" name="hora_fin" id="hora_fin" class="form-control" required onchange="calcularHoras()">
-                    </div>
                 </div>
-                
-                <div class="row">
-                    <div class="col-md-6 mb-2">
-                        <label class="form-label">💵 Precio por hora *</label>
-                        <input type="number" name="precio_hora" id="precio_hora" class="form-control" step="0.01" required onchange="calcularValorTotal()">
-                    </div>
-                    <div class="col-md-6 mb-2">
-                        <label class="form-label">💰 Valor total *</label>
-                        <div class="input-group">
-                            <span class="input-group-text">$</span>
-                            <input type="number" name="valor_total" id="valor_total" class="form-control" step="0.01" required>
-                            <button type="button" class="btn btn-outline-secondary" onclick="calcularValorTotal()">🔢 Calcular</button>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="alert alert-info mt-2" id="resumenCalculo" style="display:none;">
-                    <strong>📊 Cálculo:</strong> <span id="horasCalculo">0</span> × $<span id="precioCalculo">0</span> = $<span id="totalCalculo">0</span>
-                </div>
-                
-                <div class="mb-2">
-                    <label class="form-label">Estado</label>
-                    <select name="estado" id="estado" class="form-select">
-                        <option value="Planificado">📅 Planificado</option>
-                        <option value="Realizado">✅ Realizado</option>
-                        <option value="Cancelado">❌ Cancelado</option>
-                    </select>
-                </div>
-                
-                <div class="mb-2">
-                    <label class="form-label">Observaciones</label>
-                    <textarea name="observaciones" id="observaciones" class="form-control" rows="2" placeholder="Notas adicionales..."></textarea>
-                </div>
-                
-                <!-- RESPONSABLE - SOLO LECTURA, AUTOMÁTICO -->
-                <div class="mb-2">
-                    <label class="form-label">👤 Responsable del cambio</label>
-                    <input type="text" id="responsable" class="form-control" value="{{ current_user.nombre }}" readonly disabled style="background-color: #e9ecef;">
-                    <small class="text-muted">El responsable se registra automáticamente (usuario logueado)</small>
-                </div>
-                
-                <button type="button" class="btn btn-primary btn-lg w-100 mt-3" onclick="mostrarConfirmacion()">✅ Guardar Cambios</button>
-            </form>
+            </div>
+            
+            <div class="alert alert-info mt-2" id="resumenCalculo" style="display:none;">
+                <strong>📊 Cálculo:</strong> <span id="horasCalculo">0</span> × $<span id="precioCalculo">0</span> = $<span id="totalCalculo">0</span>
+            </div>
+            
+            <div class="mb-2">
+                <label class="form-label">Estado</label>
+                <select id="estado" class="form-select">
+                    <option value="Planificado">📅 Planificado</option>
+                    <option value="Realizado">✅ Realizado</option>
+                    <option value="Cancelado">❌ Cancelado</option>
+                </select>
+            </div>
+            
+            <div class="mb-2">
+                <label class="form-label">Observaciones</label>
+                <textarea id="observaciones" class="form-control" rows="2" placeholder="Notas adicionales..."></textarea>
+            </div>
+            
+            <!-- RESPONSABLE - SOLO LECTURA, AUTOMÁTICO -->
+            <div class="mb-2">
+                <label class="form-label">👤 Responsable del cambio</label>
+                <input type="text" id="responsable" class="form-control" value="{{ current_user.nombre }}" readonly disabled style="background-color: #e9ecef;">
+                <small class="text-muted">El responsable se registra automáticamente (usuario logueado)</small>
+            </div>
+            
+            <button type="button" class="btn btn-primary btn-lg w-100 mt-3" onclick="mostrarConfirmacion()">✅ Guardar Cambios</button>
         </div>
     </div>
 </div>
@@ -196,17 +195,49 @@
         padding: 10px;
         margin-bottom: 10px;
     }
+    .hora-invalida {
+        border: 2px solid #dc3545 !important;
+        background-color: #ffe6e6 !important;
+    }
 </style>
 
 <script>
 let sesionOriginal = null;
+let horasValidasMasiva = true;
+
+function validarHorasMasiva() {
+    const hIni = document.getElementById('hora_inicio').value;
+    const hFin = document.getElementById('hora_fin').value;
+    const errorDiv = document.getElementById('errorHorasMasiva');
+    
+    if (hIni && hFin) {
+        if (hFin <= hIni) {
+            errorDiv.style.display = 'block';
+            document.getElementById('hora_inicio').classList.add('hora-invalida');
+            document.getElementById('hora_fin').classList.add('hora-invalida');
+            horasValidasMasiva = false;
+            return false;
+        } else {
+            errorDiv.style.display = 'none';
+            document.getElementById('hora_inicio').classList.remove('hora-invalida');
+            document.getElementById('hora_fin').classList.remove('hora-invalida');
+            horasValidasMasiva = true;
+            calcularValorTotal();
+            return true;
+        }
+    }
+    horasValidasMasiva = true;
+    return true;
+}
 
 function calcularHoras() {
+    if (!horasValidasMasiva) return;
+    
     const fecha = document.getElementById('fecha').value;
     const hIni = document.getElementById('hora_inicio').value;
     const hFin = document.getElementById('hora_fin').value;
     
-    if (fecha && hIni && hFin) {
+    if (fecha && hIni && hFin && horasValidasMasiva) {
         const inicio = new Date(`${fecha}T${hIni}:00`);
         const fin = new Date(`${fecha}T${hFin}:00`);
         const horas = (fin - inicio) / 3600000;
@@ -221,6 +252,8 @@ function calcularHoras() {
 }
 
 function calcularValorTotal() {
+    if (!horasValidasMasiva) return;
+    
     const fecha = document.getElementById('fecha').value;
     const hIni = document.getElementById('hora_inicio').value;
     const hFin = document.getElementById('hora_fin').value;
@@ -230,7 +263,7 @@ function calcularValorTotal() {
     let horas = 0;
     let valorTotal = 0;
     
-    if (fecha && hIni && hFin) {
+    if (fecha && hIni && hFin && horasValidasMasiva) {
         const inicio = new Date(`${fecha}T${hIni}:00`);
         const fin = new Date(`${fecha}T${hFin}:00`);
         horas = (fin - inicio) / 3600000;
@@ -251,6 +284,7 @@ function calcularValorTotal() {
     document.getElementById('resumenCalculo').style.display = 'block';
 }
 
+// Cargar sesiones al seleccionar estudiante
 document.getElementById('selectEstudiante').addEventListener('change', async function() {
     const estudianteId = this.value;
     const selectSesion = document.getElementById('selectSesion');
@@ -261,7 +295,7 @@ document.getElementById('selectEstudiante').addEventListener('change', async fun
         return;
     }
     
-    selectSesion.disabled = true;
+    selectSesion.disabled = false;
     selectSesion.innerHTML = '<option value="">Cargando sesiones...</option>';
     
     try {
@@ -270,16 +304,19 @@ document.getElementById('selectEstudiante').addEventListener('change', async fun
         
         if (sesiones.length === 0) {
             selectSesion.innerHTML = '<option value="">No hay sesiones para este estudiante</option>';
+            selectSesion.disabled = true;
         } else {
             let options = '<option value="">Seleccionar sesión...</option>';
             for (const s of sesiones) {
-                options += `<option value="${s.id}">📅 ${s.fecha} - ${s.hora_inicio} a ${s.hora_fin} - ${s.tipo_sesion} - $${s.valor_total}</option>`;
+                const materia = s.asignatura || s.tema_terapia || 'Sin asignatura';
+                options += `<option value="${s.id}">📅 ${s.fecha} - ${s.hora_inicio} a ${s.hora_fin} - ${s.tipo_sesion} - ${materia} - $${s.valor_total}</option>`;
             }
             selectSesion.innerHTML = options;
             selectSesion.disabled = false;
         }
     } catch (error) {
         selectSesion.innerHTML = '<option value="">Error al cargar sesiones</option>';
+        selectSesion.disabled = true;
         console.error(error);
     }
 });
@@ -295,12 +332,14 @@ async function cargarSesion() {
         const response = await fetch(`/api/sesion/${sesionId}`);
         sesionOriginal = await response.json();
         
+        const materiaActual = sesionOriginal.asignatura || sesionOriginal.tema_terapia || 'No definida';
+        
         const resumenHtml = `
             <div class="comparacion">
                 <p><strong>📅 Fecha:</strong> ${sesionOriginal.fecha || 'No definida'}</p>
                 <p><strong>🕐 Horario:</strong> ${(sesionOriginal.hora_inicio || '???').substring(0,5)} - ${(sesionOriginal.hora_fin || '???').substring(0,5)}</p>
                 <p><strong>📚 Tipo:</strong> ${sesionOriginal.tipo_sesion || 'No definido'}</p>
-                <p><strong>📖 Asignatura/Tema:</strong> ${sesionOriginal.asignatura || sesionOriginal.tema_terapia || 'No definido'}</p>
+                <p><strong>📖 Asignatura/Tema:</strong> ${materiaActual}</p>
                 <p><strong>👨‍🏫 Profesor:</strong> ${sesionOriginal.profesor_terapeuta || 'No definido'}</p>
                 <p><strong>🔑 Encargado apertura:</strong> ${sesionOriginal.encargado_apertura || 'No definido'}</p>
                 <p><strong>💰 Valor total:</strong> $${(sesionOriginal.valor_total || 0).toFixed(2)}</p>
@@ -324,6 +363,7 @@ async function cargarSesion() {
         document.getElementById('observaciones').value = sesionOriginal.observaciones || '';
         
         mostrarCampos();
+        validarHorasMasiva();
         calcularHoras();
         
         document.getElementById('formEdicion').style.display = 'block';
@@ -342,6 +382,11 @@ function mostrarCampos() {
 }
 
 function mostrarConfirmacion() {
+    if (!horasValidasMasiva) {
+        alert('❌ No se puede guardar. Corrige las horas: La hora de fin debe ser mayor a la hora de inicio.');
+        return;
+    }
+    
     if (!sesionOriginal) {
         alert('❌ No hay sesión cargada');
         return;
@@ -383,15 +428,32 @@ function mostrarConfirmacion() {
         return;
     }
     
+    // Validar horas nuevamente
+    if (nuevos.hora_fin <= nuevos.hora_inicio) {
+        alert('❌ ERROR: La hora de fin debe ser mayor que la hora de inicio.');
+        return;
+    }
+    
+    const inicio = new Date(`${nuevos.fecha}T${nuevos.hora_inicio}:00`);
+    const fin = new Date(`${nuevos.fecha}T${nuevos.hora_fin}:00`);
+    const horas = (fin - inicio) / 3600000;
+    
+    if (horas <= 0) {
+        alert('❌ ERROR: La hora de fin debe ser mayor que la hora de inicio.');
+        return;
+    }
+    
+    if (horas < 0.5) {
+        alert('❌ ERROR: La duración mínima es de 30 minutos (0.5 horas).');
+        return;
+    }
+    
     const esTerapia = (nuevos.tipo_sesion === 'terapia' || nuevos.tipo_sesion === 'ambos');
     let pagoDocenteNuevo = 0;
     
     if (esTerapia) {
         pagoDocenteNuevo = nuevos.valor_total * 0.35;
     } else {
-        const inicio = new Date(`${nuevos.fecha}T${nuevos.hora_inicio}:00`);
-        const fin = new Date(`${nuevos.fecha}T${nuevos.hora_fin}:00`);
-        const horas = (fin - inicio) / 3600000;
         pagoDocenteNuevo = horas * 7;
     }
     
@@ -415,7 +477,7 @@ function mostrarConfirmacion() {
     mensaje += `   Anterior: ${sesionOriginal.encargado_apertura || 'No definido'}\n`;
     mensaje += `   Nuevo:    ${nuevos.encargado}\n\n`;
     
-    mensaje += '💰 VALORES:\n`;
+    mensaje += '💰 VALORES:\n';
     mensaje += `   Valor anterior: $${(sesionOriginal.valor_total || 0).toFixed(2)}\n`;
     mensaje += `   Valor nuevo:    $${nuevos.valor_total.toFixed(2)}\n\n`;
     
@@ -427,12 +489,44 @@ function mostrarConfirmacion() {
     mensaje += 'La modificación quedará registrada en la auditoría.';
     
     if (confirm(mensaje)) {
-        document.getElementById('formPlanificar').submit();
+        const data = {
+            fecha: nuevos.fecha,
+            hora_inicio: nuevos.hora_inicio,
+            hora_fin: nuevos.hora_fin,
+            horas: horas,
+            tipo_sesion: nuevos.tipo_sesion,
+            estudiante_id: sesionOriginal.estudiante_id,
+            asignatura: nuevos.asignatura,
+            tema_terapia: nuevos.tema_terapia,
+            profesor_terapeuta: nuevos.profesor,
+            encargado_apertura: nuevos.encargado,
+            estado: nuevos.estado,
+            observaciones: nuevos.observaciones,
+            valor_total: nuevos.valor_total,
+            precio_hora: nuevos.precio_hora,
+            responsable: responsable
+        };
+        
+        fetch('/api/sesion/' + sesionOriginal.id + '/editar', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        }).then(response => response.json())
+        .then(result => {
+            if (result.success) {
+                alert('✅ Sesión actualizada correctamente!\n\n👤 Responsable: ' + responsable + '\n💰 Nuevo valor: $' + nuevos.valor_total.toFixed(2));
+                location.reload();
+            } else {
+                alert('❌ Error: ' + (result.error || 'Desconocido'));
+            }
+        }).catch(error => {
+            alert('❌ Error al guardar: ' + error);
+        });
     }
 }
 
-document.getElementById('hora_inicio').addEventListener('change', calcularHoras);
-document.getElementById('hora_fin').addEventListener('change', calcularHoras);
+document.getElementById('hora_inicio').addEventListener('change', validarHorasMasiva);
+document.getElementById('hora_fin').addEventListener('change', validarHorasMasiva);
 document.getElementById('precio_hora').addEventListener('change', calcularValorTotal);
 document.getElementById('tipoSesion').addEventListener('change', calcularValorTotal);
 </script>

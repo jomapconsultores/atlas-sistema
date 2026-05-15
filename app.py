@@ -135,12 +135,10 @@ def modulo1():
                 h_fin = request.form.get(f'hora_fin_{sesion_num}')
                 
                 if fecha and h_ini and h_fin:
-                    # Validar que hora fin sea mayor que hora inicio
                     if h_fin <= h_ini:
                         flash(f'❌ Error en Sesión {sesion_num}: La hora de fin ({h_fin}) no puede ser menor o igual que la hora de inicio ({h_ini})', 'error')
                         return redirect(url_for('modulo1'))
                     
-                    # Validar duración
                     inicio = datetime.strptime(f"{fecha} {h_ini}", '%Y-%m-%d %H:%M')
                     fin = datetime.strptime(f"{fecha} {h_fin}", '%Y-%m-%d %H:%M')
                     horas_val = round((fin - inicio).total_seconds() / 3600, 2)
@@ -292,7 +290,7 @@ def api_sesiones_todas():
 @login_required
 @socio_admin_required
 def api_estudiante_sesiones(id):
-    sesiones = supabase.table('sesiones').select('id, fecha, hora_inicio, hora_fin, tipo_sesion, valor_total').eq('estudiante_id', id).order('fecha', desc=True).execute()
+    sesiones = supabase.table('sesiones').select('id, fecha, hora_inicio, hora_fin, tipo_sesion, valor_total, asignatura, tema_terapia').eq('estudiante_id', id).order('fecha', desc=True).execute()
     resultado = []
     for s in (sesiones.data or []):
         resultado.append({
@@ -301,7 +299,9 @@ def api_estudiante_sesiones(id):
             'hora_inicio': (s.get('hora_inicio') or '')[:5],
             'hora_fin': (s.get('hora_fin') or '')[:5],
             'tipo_sesion': s.get('tipo_sesion'),
-            'valor_total': s.get('valor_total', 0)
+            'valor_total': s.get('valor_total', 0),
+            'asignatura': s.get('asignatura', ''),
+            'tema_terapia': s.get('tema_terapia', '')
         })
     return jsonify(resultado)
 
@@ -428,67 +428,6 @@ def api_editar_sesion(id):
         return jsonify({'success': True, 'mensaje': f'✅ Sesión actualizada - Responsable: {responsable} - Nuevo valor: ${valor_total}'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
-        
-        # ========== REGISTRAR AUDITORÍA ==========
-        sesion_anterior = supabase.table('sesiones').select('*').eq('id', id).execute()
-        datos_anteriores = sesion_anterior.data[0] if sesion_anterior.data else {}
-        
-        supabase.table('correcciones_pagos').insert({
-            'pago_id': id,
-            'monto_anterior': datos_anteriores.get('valor_total', 0),
-            'monto_nuevo': valor_total,
-            'cambiado_por': current_user.nombre,
-            'motivo': f'EDICION SESION #{id} - Cambios: horas={horas}, precio={precio_hora}, valor_total={valor_total}'
-        }).execute()
-        # ========== FIN AUDITORÍA ==========
-        
-        updates = {
-            'fecha': data['fecha'],
-            'hora_inicio': hora_inicio_str,
-            'hora_fin': hora_fin_str,
-            'horas': horas,
-            'tipo_sesion': data['tipo_sesion'],
-            'estudiante_id': data['estudiante_id'],
-            'asignatura': data.get('asignatura', ''),
-            'tema_terapia': data.get('tema_terapia', ''),
-            'profesor_terapeuta': data['profesor_terapeuta'],
-            'encargado_apertura': data['encargado_apertura'],
-            'estado': data.get('estado', 'Planificado'),
-            'observaciones': data.get('observaciones', ''),
-            'valor_total': valor_total,
-            'precio_hora': precio_hora,
-            'cobro_por_sesion': es_terapia
-        }
-        
-        supabase.table('sesiones').update(updates).eq('id', id).execute()
-        
-        if data.get('estado') == 'Realizado':
-            sesion = supabase.table('sesiones').select('*, estudiantes(apellidos, nombres)').eq('id', id).execute()
-            if sesion.data:
-                s = sesion.data[0]
-                est = s.get('estudiantes', {})
-                nombre_est = f"{est.get('apellidos', '')} {est.get('nombres', '')}".strip()
-                if not nombre_est:
-                    nombre_est = 'Sin nombre'
-                
-                if crear_o_actualizar_evento_calendar:
-                    evento_id = crear_o_actualizar_evento_calendar({
-                        'asignatura': s.get('asignatura') or s.get('tema_terapia') or 'Sesión',
-                        'profesor': s.get('profesor_terapeuta', ''),
-                        'estudiantes': nombre_est,
-                        'fecha': s['fecha'],
-                        'hora_inicio': s['hora_inicio'][:5],
-                        'hora_fin': s['hora_fin'][:5],
-                        'encargado_apertura': s.get('encargado_apertura', ''),
-                        'valor_total': valor_total
-                    }, s.get('evento_calendar_id'))
-                    
-                    if evento_id:
-                        supabase.table('sesiones').update({'evento_calendar_id': evento_id}).eq('id', id).execute()
-        
-        return jsonify({'success': True, 'mensaje': f'✅ Sesión actualizada - Nuevo valor: ${valor_total}'})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/sesiones/para-sincronizar')
 @login_required
@@ -594,6 +533,59 @@ def eliminar_sesion(id):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+@app.route('/api/sesion/<int:id>/modificar', methods=['POST'])
+@login_required
+@socio_admin_required
+def modificar_sesion(id):
+    try:
+        data = request.get_json()
+        fecha = data.get('fecha')
+        h_ini = data.get('hora_inicio', '')[:5]
+        h_fin = data.get('hora_fin', '')[:5]
+        
+        # ========== VALIDACIÓN DE HORAS ==========
+        if not fecha or not h_ini or not h_fin:
+            return jsonify({'success': False, 'error': 'Faltan datos de fecha u hora'})
+        
+        if h_fin <= h_ini:
+            return jsonify({'success': False, 'error': 'La hora de fin debe ser mayor a la hora de inicio'})
+        
+        inicio = datetime.strptime(f"{fecha} {h_ini}", '%Y-%m-%d %H:%M')
+        fin = datetime.strptime(f"{fecha} {h_fin}", '%Y-%m-%d %H:%M')
+        horas = round((fin - inicio).total_seconds() / 3600, 2)
+        
+        if horas <= 0:
+            return jsonify({'success': False, 'error': 'La duración de la sesión debe ser mayor a 0 horas'})
+        
+        if horas < 0.5:
+            return jsonify({'success': False, 'error': 'La duración mínima es de 30 minutos (0.5 horas)'})
+        # ========== FIN VALIDACIÓN ==========
+        
+        updates = {'fecha': fecha, 'hora_inicio': h_ini, 'hora_fin': h_fin, 'horas': horas}
+        supabase.table('sesiones').update(updates).eq('id', id).execute()
+        
+        sesion = supabase.table('sesiones').select('evento_calendar_id, asignatura, tema_terapia, profesor_terapeuta, encargado_apertura, estudiantes(apellidos, nombres)').eq('id', id).execute()
+        if sesion.data and sesion.data[0].get('evento_calendar_id') and eliminar_evento_calendar and crear_evento_calendar:
+            s = sesion.data[0]
+            try:
+                eliminar_evento_calendar(s['evento_calendar_id'])
+                est = s.get('estudiantes', {})
+                nuevo_id = crear_evento_calendar({
+                    'asignatura': s.get('asignatura') or s.get('tema_terapia') or 'Sesión',
+                    'profesor': s.get('profesor_terapeuta', ''),
+                    'estudiantes': f"{est.get('apellidos', '')} {est.get('nombres', '')}" if est else '',
+                    'fecha': fecha, 'hora_inicio': h_ini, 'hora_fin': h_fin,
+                    'encargado_apertura': s.get('encargado_apertura', '')
+                })
+                if nuevo_id:
+                    supabase.table('sesiones').update({'evento_calendar_id': nuevo_id}).eq('id', id).execute()
+            except:
+                pass
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
 @app.route('/api/sesion/<int:id>/toggle', methods=['POST'])
 @login_required
 def toggle_sesion(id):
@@ -623,84 +615,6 @@ def toggle_sesion(id):
     
     supabase.table('sesiones').update(updates).eq('id', id).execute()
     return jsonify({'success': True})
-
-# ========== MÓDULO 2: CALENDARIO ==========
-
-@app.route('/modulo2')
-@login_required
-def modulo2():
-    fecha = request.args.get('fecha', str(date.today()))
-    estudiantes_lista = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute().data or []
-    if current_user.rol in ['admin', 'socio']:
-        sesiones = supabase.table('sesiones').select('*, estudiantes(*)').eq('fecha', fecha).order('hora_inicio').execute()
-        return render_template('modulo2.html', sesiones=sesiones.data or [], fecha=fecha,
-                             estudiantes=estudiantes_lista, profesores=PROFESORES)
-    nombre_usuario = current_user.nombre.strip().lower()
-    palabras_usuario = nombre_usuario.split()
-    todas = supabase.table('sesiones').select('*, estudiantes(*)').eq('fecha', fecha).order('hora_inicio').execute()
-    sesiones_filtradas = []
-    for s in (todas.data or []):
-        profesor = (s.get('profesor_terapeuta') or '').strip().lower()
-        est = s.get('estudiantes', {})
-        nombre_est = f"{est.get('apellidos', '')} {est.get('nombres', '')}".strip().lower()
-        apellidos_est = (est.get('apellidos', '') or '').strip().lower()
-        nombres_est = (est.get('nombres', '') or '').strip().lower()
-        if current_user.rol in ['profesor', 'psicologo']:
-            if nombre_usuario in profesor or profesor in nombre_usuario:
-                sesiones_filtradas.append(s)
-            else:
-                for palabra in palabras_usuario:
-                    if len(palabra) >= 3 and palabra in profesor:
-                        sesiones_filtradas.append(s)
-                        break
-        elif current_user.rol in ['estudiante', 'padre']:
-            if nombre_usuario in nombre_est or nombre_est in nombre_usuario:
-                sesiones_filtradas.append(s)
-            else:
-                for palabra in palabras_usuario:
-                    if len(palabra) >= 3:
-                        if palabra in apellidos_est or palabra in nombres_est:
-                            sesiones_filtradas.append(s)
-                            break
-    return render_template('modulo2.html', sesiones=sesiones_filtradas, fecha=fecha,
-                         estudiantes=estudiantes_lista, profesores=PROFESORES)
-
-@app.route('/api/sesion/<int:id>/modificar', methods=['POST'])
-@login_required
-@socio_admin_required
-def modificar_sesion(id):
-    try:
-        data = request.get_json()
-        fecha, h_ini, h_fin = data['fecha'], data['hora_inicio'][:5], data['hora_fin'][:5]
-        inicio = datetime.strptime(f"{fecha} {h_ini}", '%Y-%m-%d %H:%M')
-        fin = datetime.strptime(f"{fecha} {h_fin}", '%Y-%m-%d %H:%M')
-        updates = {'fecha': fecha, 'hora_inicio': h_ini, 'hora_fin': h_fin, 'horas': round((fin - inicio).total_seconds() / 3600, 2)}
-        supabase.table('sesiones').update(updates).eq('id', id).execute()
-        sesion = supabase.table('sesiones').select('evento_calendar_id, asignatura, tema_terapia, profesor_terapeuta, encargado_apertura, estudiantes(apellidos, nombres)').eq('id', id).execute()
-        if sesion.data:
-            s = sesion.data[0]
-            if s.get('evento_calendar_id') and eliminar_evento_calendar:
-                try:
-                    eliminar_evento_calendar(s['evento_calendar_id'])
-                except:
-                    pass
-            if crear_evento_calendar:
-                try:
-                    est = s.get('estudiantes', {})
-                    nuevo_id = crear_evento_calendar({
-                        'asignatura': s.get('asignatura') or s.get('tema_terapia') or 'Sesión',
-                        'profesor': s.get('profesor_terapeuta', ''),
-                        'estudiantes': f"{est.get('apellidos', '')} {est.get('nombres', '')}" if est else '',
-                        'fecha': fecha, 'hora_inicio': h_ini, 'hora_fin': h_fin,
-                        'encargado_apertura': s.get('encargado_apertura', '')
-                    })
-                    if nuevo_id:
-                        supabase.table('sesiones').update({'evento_calendar_id': nuevo_id}).eq('id', id).execute()
-                except:
-                    pass
-        return jsonify({'success': True})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/sesion/<int:id>/cambiar-estudiante', methods=['POST'])
 @login_required
@@ -842,6 +756,47 @@ def api_sesiones_pendientes():
                          'profesor_terapeuta': s['profesor_terapeuta']})
     return jsonify(resultado)
 
+# ========== MÓDULO 2: CALENDARIO ==========
+
+@app.route('/modulo2')
+@login_required
+def modulo2():
+    fecha = request.args.get('fecha', str(date.today()))
+    estudiantes_lista = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute().data or []
+    if current_user.rol in ['admin', 'socio']:
+        sesiones = supabase.table('sesiones').select('*, estudiantes(*)').eq('fecha', fecha).order('hora_inicio').execute()
+        return render_template('modulo2.html', sesiones=sesiones.data or [], fecha=fecha,
+                             estudiantes=estudiantes_lista, profesores=PROFESORES)
+    nombre_usuario = current_user.nombre.strip().lower()
+    palabras_usuario = nombre_usuario.split()
+    todas = supabase.table('sesiones').select('*, estudiantes(*)').eq('fecha', fecha).order('hora_inicio').execute()
+    sesiones_filtradas = []
+    for s in (todas.data or []):
+        profesor = (s.get('profesor_terapeuta') or '').strip().lower()
+        est = s.get('estudiantes', {})
+        nombre_est = f"{est.get('apellidos', '')} {est.get('nombres', '')}".strip().lower()
+        apellidos_est = (est.get('apellidos', '') or '').strip().lower()
+        nombres_est = (est.get('nombres', '') or '').strip().lower()
+        if current_user.rol in ['profesor', 'psicologo']:
+            if nombre_usuario in profesor or profesor in nombre_usuario:
+                sesiones_filtradas.append(s)
+            else:
+                for palabra in palabras_usuario:
+                    if len(palabra) >= 3 and palabra in profesor:
+                        sesiones_filtradas.append(s)
+                        break
+        elif current_user.rol in ['estudiante', 'padre']:
+            if nombre_usuario in nombre_est or nombre_est in nombre_usuario:
+                sesiones_filtradas.append(s)
+            else:
+                for palabra in palabras_usuario:
+                    if len(palabra) >= 3:
+                        if palabra in apellidos_est or palabra in nombres_est:
+                            sesiones_filtradas.append(s)
+                            break
+    return render_template('modulo2.html', sesiones=sesiones_filtradas, fecha=fecha,
+                         estudiantes=estudiantes_lista, profesores=PROFESORES)
+
 # ========== MÓDULO 3: PAGOS ==========
 
 @app.route('/modulo3', methods=['GET', 'POST'])
@@ -886,9 +841,24 @@ def modulo3():
             nueva_fecha = request.form['nueva_fecha']
             nueva_h_ini = request.form['nueva_hora_inicio']
             nueva_h_fin = request.form['nueva_hora_fin']
+            
+            # ========== VALIDACIÓN DE HORAS ==========
+            if nueva_h_fin <= nueva_h_ini:
+                flash('❌ Error: La hora de fin debe ser mayor a la hora de inicio', 'error')
+                return redirect(url_for('modulo3'))
+            
             inicio = datetime.strptime(f"{nueva_fecha} {nueva_h_ini}", '%Y-%m-%d %H:%M')
             fin = datetime.strptime(f"{nueva_fecha} {nueva_h_fin}", '%Y-%m-%d %H:%M')
             nuevas_horas = round((fin - inicio).total_seconds() / 3600, 2)
+            
+            if nuevas_horas <= 0:
+                flash('❌ Error: La duración debe ser mayor a 0 horas', 'error')
+                return redirect(url_for('modulo3'))
+            
+            if nuevas_horas < 0.5:
+                flash('⚠️ Advertencia: La duración es muy corta (mínimo 30 minutos)', 'warning')
+            # ========== FIN VALIDACIÓN ==========
+            
             sesion_actual = supabase.table('sesiones').select('*').eq('id', sesion_id).execute()
             if sesion_actual.data:
                 s = sesion_actual.data[0]
