@@ -234,6 +234,7 @@ def editar_planificaciones():
     return render_template('editar_planificaciones.html', 
                          estudiantes=estudiantes.data or [],
                          asignaturas=ASIGNATURAS,
+                         atencion_psicologica=ATENCION_PSICOLOGICA,  # ← DEBE ESTAR ESTA LÍNEA
                          profesores=PROFESORES,
                          encargados=ENCARGADOS,
                          today=date.today().isoformat())

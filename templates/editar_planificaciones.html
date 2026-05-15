@@ -5,6 +5,21 @@
 <h3>✏️ Editor de Planificaciones</h3>
 <p class="text-muted">Aquí puedes modificar todas las sesiones planificadas.</p>
 
+<!-- DEBUG: Verificar variable -->
+<div class="alert alert-info small mb-3">
+    <strong>🔍 Debug:</strong> 
+    {% if atencion_psicologica %}
+        ✅ Terapias cargadas: {{ atencion_psicologica|length }} 
+        <ul class="mb-0">
+        {% for item in atencion_psicologica %}
+            <li>{{ item.nombre }} - ${{ item.precio }}</li>
+        {% endfor %}
+        </ul>
+    {% else %}
+        <span class="text-danger">❌ Variable 'atencion_psicologica' NO está llegando al template. Verifica app.py</span>
+    {% endif %}
+</div>
+
 <!-- Filtros -->
 <div class="card shadow mb-4">
     <div class="card-header bg-primary text-white">
@@ -121,7 +136,7 @@
                     </div>
                 </div>
                 
-                <!-- Campos para Terapia - CORREGIDO CON VERIFICACIÓN -->
+                <!-- Campos para Terapia - CORREGIDO -->
                 <div id="edit_campos_terapia" style="display:none;">
                     <div class="mb-2">
                         <label class="form-label">Tipo de Atención Psicológica</label>
@@ -134,7 +149,7 @@
                                 </option>
                                 {% endfor %}
                             {% else %}
-                                <option value="" disabled>⚠️ No hay opciones cargadas</option>
+                                <option value="" disabled>⚠️ No hay opciones cargadas - Contacte al administrador</option>
                             {% endif %}
                         </select>
                     </div>
@@ -443,6 +458,11 @@ async function guardarEdicionSesion() {
     const esTerapia = (tipo === 'terapia' || tipo === 'ambos');
     if (horas < 0.5) {
         alert('❌ ERROR: La duración mínima es de 30 minutos (0.5 horas).');
+        return;
+    }
+    
+    if (valorTotal < 0) {
+        alert('❌ ERROR: El valor total no puede ser negativo.');
         return;
     }
     
