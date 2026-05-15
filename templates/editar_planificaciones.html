@@ -124,24 +124,29 @@
                         <input type="text" id="edit_tema_terapia" class="form-control">
                     </div>
                 </div>
+                
+                <!-- PROFESOR - SELECT CON OPCIONES PREDEFINIDAS -->
                 <div class="mb-2">
                     <label class="form-label">Profesor/Terapeuta *</label>
-                    <input type="text" id="edit_profesor" class="form-control" list="listaProfesores" required>
-                    <datalist id="listaProfesores">
+                    <select id="edit_profesor" class="form-select" required>
+                        <option value="">Seleccionar profesor...</option>
                         {% for p in profesores %}
-                        <option value="{{ p }}">
+                        <option value="{{ p }}">{{ p }}</option>
                         {% endfor %}
-                    </datalist>
+                    </select>
                 </div>
+                
+                <!-- ENCARGADO APERTURA - SELECT CON OPCIONES PREDEFINIDAS -->
                 <div class="mb-2">
                     <label class="form-label">Encargado apertura *</label>
-                    <input type="text" id="edit_encargado" class="form-control" list="listaEncargados" required>
-                    <datalist id="listaEncargados">
+                    <select id="edit_encargado" class="form-select" required>
+                        <option value="">Seleccionar encargado...</option>
                         {% for e in encargados %}
-                        <option value="{{ e }}">
+                        <option value="{{ e }}">{{ e }}</option>
                         {% endfor %}
-                    </datalist>
+                    </select>
                 </div>
+                
                 <div class="row">
                     <div class="col-md-6 mb-2">
                         <label class="form-label">💵 Precio por hora *</label>
@@ -176,6 +181,13 @@
                 <div class="mb-2">
                     <label class="form-label">Observaciones</label>
                     <textarea id="edit_observaciones" class="form-control" rows="2" placeholder="Notas adicionales..."></textarea>
+                </div>
+                
+                <!-- RESPONSABLE - SOLO LECTURA, AUTOMÁTICO -->
+                <div class="mb-2">
+                    <label class="form-label">👤 Responsable del cambio</label>
+                    <input type="text" id="edit_responsable" class="form-control" value="{{ current_user.nombre }}" readonly disabled style="background-color: #e9ecef;">
+                    <small class="text-muted">El responsable se registra automáticamente (usuario logueado)</small>
                 </div>
             </div>
             <div class="modal-footer">
@@ -434,6 +446,7 @@ async function guardarEdicionSesion() {
     const encargado = document.getElementById('edit_encargado').value;
     let valorTotal = parseFloat(document.getElementById('edit_valor_total').value) || 0;
     const precioHora = parseFloat(document.getElementById('edit_precio_hora').value) || 10;
+    const responsable = "{{ current_user.nombre }}"; // Usuario logueado
     
     if (!fecha || !hIni || !hFin) {
         alert('❌ Fecha, hora inicio y hora fin son obligatorios');
@@ -458,41 +471,35 @@ async function guardarEdicionSesion() {
     const fin = new Date(`${fecha}T${hFin}:00`);
     let horas = (fin - inicio) / 3600000;
     
-    // VALIDACIÓN: Horas negativas
     if (horas < 0) {
-        alert('❌ ERROR: La hora de fin no puede ser menor que la hora de inicio.\n\n📌 La sesión no puede terminar antes de comenzar.');
+        alert('❌ ERROR: La hora de fin no puede ser menor que la hora de inicio.');
         return;
     }
     
-    // VALIDACIÓN: Horas cero
     if (horas === 0) {
-        alert('❌ ERROR: La duración de la sesión no puede ser cero.\n\n📌 La hora de inicio y fin no pueden ser iguales.');
+        alert('❌ ERROR: La duración de la sesión no puede ser cero.');
         return;
     }
     
     const esTerapia = (tipo === 'terapia' || tipo === 'ambos');
     
-    // Validación para terapia
     if (esTerapia && horas < 0.5) {
         alert('❌ ERROR: La duración mínima para una terapia es de 30 minutos (0.5 horas).');
         return;
     }
     
-    // Validación para clase
     if (!esTerapia && horas < 0.5) {
         alert('❌ ERROR: La duración mínima para una clase es de 30 minutos (0.5 horas).');
         return;
     }
     
-    // VALIDACIÓN: Valor total negativo
     if (valorTotal < 0) {
-        alert('❌ ERROR: El valor total no puede ser negativo.\n\n📌 Verifica el precio por hora y la duración de la sesión.');
+        alert('❌ ERROR: El valor total no puede ser negativo.');
         return;
     }
     
     horas = horas.toFixed(2);
     
-    // Calcular pago al docente
     let pagoDocente = 0;
     if (esTerapia) {
         pagoDocente = valorTotal * 0.35;
@@ -500,19 +507,18 @@ async function guardarEdicionSesion() {
         pagoDocente = parseFloat(horas) * 7;
     }
     
-    // VALIDACIÓN: Pago docente negativo
     if (pagoDocente < 0) {
-        alert('❌ ERROR: El cálculo del pago al docente resultó negativo.\n\n📌 Esto no está permitido. Verifica los valores ingresados.');
+        alert('❌ ERROR: El cálculo del pago al docente resultó negativo.');
         return;
     }
     
-    // Crear mensaje de resumen
     let resumen = '📋 RESUMEN DE CAMBIOS\n\n';
+    resumen += `👤 Responsable: ${responsable}\n`;
     resumen += `📅 Fecha: ${fecha}\n`;
     resumen += `🕐 Horario: ${hIni} - ${hFin}\n`;
     resumen += `⏱️ Duración: ${horas} horas\n`;
     resumen += `👨‍🎓 Estudiante: ${estudianteNombre}\n`;
-    resumen += `📚 Tipo: ${tipo === 'clase' ? 'Clase' : tipo === 'terapia' ? 'Terapia' : tipo === 'ambos' ? 'Ambos' : 'Pre Universitario'}\n`;
+    resumen += `📚 Tipo: ${tipo}\n`;
     resumen += `👨‍🏫 Profesor: ${profesor}\n`;
     resumen += `🔑 Encargado: ${encargado}\n`;
     resumen += `💰 Precio por hora: $${precioHora.toFixed(2)}\n`;
@@ -538,7 +544,8 @@ async function guardarEdicionSesion() {
         estado: document.getElementById('edit_estado').value,
         observaciones: document.getElementById('edit_observaciones').value,
         valor_total: valorTotal,
-        precio_hora: precioHora
+        precio_hora: precioHora,
+        responsable: responsable
     };
     
     try {
@@ -551,7 +558,7 @@ async function guardarEdicionSesion() {
         
         if (result.success) {
             bootstrap.Modal.getInstance(document.getElementById('modalEditarSesion')).hide();
-            alert('✅ Sesión actualizada correctamente!\n\n💰 Nuevo valor: $' + valorTotal.toFixed(2) + '\n💰 Pago docente: $' + pagoDocente.toFixed(2));
+            alert('✅ Sesión actualizada correctamente!\n\n👤 Responsable: ' + responsable + '\n💰 Nuevo valor: $' + valorTotal.toFixed(2));
             cargarSesiones();
         } else {
             alert('❌ Error: ' + (result.error || 'Desconocido'));

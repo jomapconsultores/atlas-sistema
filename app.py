@@ -327,6 +327,9 @@ def api_editar_sesion(id):
     try:
         data = request.get_json()
         
+        # Obtener responsable (del JSON o usar el usuario logueado)
+        responsable = data.get('responsable', current_user.nombre)
+        
         # Limpiar formatos de hora
         hora_inicio = data['hora_inicio'].split(':')[:2]
         hora_fin = data['hora_fin'].split(':')[:2]
@@ -361,6 +364,70 @@ def api_editar_sesion(id):
         
         if pago_docente < 0:
             return jsonify({'success': False, 'error': 'El cálculo del pago al docente resultó negativo. Verifica los valores.'})
+        # ========== FIN VALIDACIONES ==========
+        
+        # Obtener sesión anterior para auditoría
+        sesion_anterior = supabase.table('sesiones').select('*').eq('id', id).execute()
+        datos_anteriores = sesion_anterior.data[0] if sesion_anterior.data else {}
+        
+        # Guardar auditoría con el responsable
+        supabase.table('correcciones_pagos').insert({
+            'pago_id': id,
+            'monto_anterior': datos_anteriores.get('valor_total', 0),
+            'monto_nuevo': valor_total,
+            'cambiado_por': responsable,
+            'motivo': f'EDICION SESION #{id} - Cambios: horas={horas}, precio={precio_hora}, valor_total={valor_total}'
+        }).execute()
+        
+        # Actualizar en BD
+        updates = {
+            'fecha': data['fecha'],
+            'hora_inicio': hora_inicio_str,
+            'hora_fin': hora_fin_str,
+            'horas': horas,
+            'tipo_sesion': data['tipo_sesion'],
+            'estudiante_id': data['estudiante_id'],
+            'asignatura': data.get('asignatura', ''),
+            'tema_terapia': data.get('tema_terapia', ''),
+            'profesor_terapeuta': data['profesor_terapeuta'],
+            'encargado_apertura': data['encargado_apertura'],
+            'estado': data.get('estado', 'Planificado'),
+            'observaciones': data.get('observaciones', ''),
+            'valor_total': valor_total,
+            'precio_hora': precio_hora,
+            'cobro_por_sesion': es_terapia
+        }
+        
+        supabase.table('sesiones').update(updates).eq('id', id).execute()
+        
+        # Si está realizado, actualizar Google Calendar
+        if data.get('estado') == 'Realizado':
+            sesion = supabase.table('sesiones').select('*, estudiantes(apellidos, nombres)').eq('id', id).execute()
+            if sesion.data:
+                s = sesion.data[0]
+                est = s.get('estudiantes', {})
+                nombre_est = f"{est.get('apellidos', '')} {est.get('nombres', '')}".strip()
+                if not nombre_est:
+                    nombre_est = 'Sin nombre'
+                
+                if crear_o_actualizar_evento_calendar:
+                    evento_id = crear_o_actualizar_evento_calendar({
+                        'asignatura': s.get('asignatura') or s.get('tema_terapia') or 'Sesión',
+                        'profesor': s.get('profesor_terapeuta', ''),
+                        'estudiantes': nombre_est,
+                        'fecha': s['fecha'],
+                        'hora_inicio': s['hora_inicio'][:5],
+                        'hora_fin': s['hora_fin'][:5],
+                        'encargado_apertura': s.get('encargado_apertura', ''),
+                        'valor_total': valor_total
+                    }, s.get('evento_calendar_id'))
+                    
+                    if evento_id:
+                        supabase.table('sesiones').update({'evento_calendar_id': evento_id}).eq('id', id).execute()
+        
+        return jsonify({'success': True, 'mensaje': f'✅ Sesión actualizada - Responsable: {responsable} - Nuevo valor: ${valor_total}'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
         
         # ========== REGISTRAR AUDITORÍA ==========
         sesion_anterior = supabase.table('sesiones').select('*').eq('id', id).execute()

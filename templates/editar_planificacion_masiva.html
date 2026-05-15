@@ -53,9 +53,8 @@
             <strong>✏️ Editar Planificación</strong>
         </div>
         <div class="card-body">
-            <form id="formPlanificar" method="POST">
+            <form id="formPlanificar">
                 <input type="hidden" name="sesion_id" id="sesion_id">
-                <input type="hidden" name="accion" value="editar_masiva">
                 
                 <div class="mb-2">
                     <label class="form-label">Tipo de Sesión *</label>
@@ -94,24 +93,26 @@
                     </div>
                 </div>
                 
+                <!-- PROFESOR - SELECT CON OPCIONES PREDEFINIDAS -->
                 <div class="mb-2">
                     <label class="form-label">Profesor/Terapeuta *</label>
-                    <input type="text" name="profesor" id="profesor" class="form-control" list="listaProfesores" required>
-                    <datalist id="listaProfesores">
+                    <select name="profesor" id="profesor" class="form-select" required>
+                        <option value="">Seleccionar profesor...</option>
                         {% for p in profesores %}
-                        <option value="{{ p }}">
+                        <option value="{{ p }}">{{ p }}</option>
                         {% endfor %}
-                    </datalist>
+                    </select>
                 </div>
                 
+                <!-- ENCARGADO APERTURA - SELECT CON OPCIONES PREDEFINIDAS -->
                 <div class="mb-2">
                     <label class="form-label">Encargado Apertura *</label>
-                    <input type="text" name="encargado" id="encargado" class="form-control" list="listaEncargados" required>
-                    <datalist id="listaEncargados">
+                    <select name="encargado" id="encargado" class="form-select" required>
+                        <option value="">Seleccionar encargado...</option>
                         {% for e in encargados %}
-                        <option value="{{ e }}">
+                        <option value="{{ e }}">{{ e }}</option>
                         {% endfor %}
-                    </datalist>
+                    </select>
                 </div>
                 
                 <div class="row">
@@ -145,7 +146,7 @@
                 </div>
                 
                 <div class="alert alert-info mt-2" id="resumenCalculo" style="display:none;">
-                    <strong>📊 Cálculo:</strong> <span id="horasCalculo">0</span> horas × $<span id="precioCalculo">0</span> = $<span id="totalCalculo">0</span>
+                    <strong>📊 Cálculo:</strong> <span id="horasCalculo">0</span> × $<span id="precioCalculo">0</span> = $<span id="totalCalculo">0</span>
                 </div>
                 
                 <div class="mb-2">
@@ -162,10 +163,11 @@
                     <textarea name="observaciones" id="observaciones" class="form-control" rows="2" placeholder="Notas adicionales..."></textarea>
                 </div>
                 
+                <!-- RESPONSABLE - SOLO LECTURA, AUTOMÁTICO -->
                 <div class="mb-2">
-                    <label class="form-label">👤 Responsable del cambio *</label>
-                    <input type="text" name="responsable" id="responsable" class="form-control" value="{{ current_user.nombre }}" required readonly>
-                    <small class="text-muted">El responsable quedará registrado en la auditoría</small>
+                    <label class="form-label">👤 Responsable del cambio</label>
+                    <input type="text" id="responsable" class="form-control" value="{{ current_user.nombre }}" readonly disabled style="background-color: #e9ecef;">
+                    <small class="text-muted">El responsable se registra automáticamente (usuario logueado)</small>
                 </div>
                 
                 <button type="button" class="btn btn-primary btn-lg w-100 mt-3" onclick="mostrarConfirmacion()">✅ Guardar Cambios</button>
@@ -249,7 +251,6 @@ function calcularValorTotal() {
     document.getElementById('resumenCalculo').style.display = 'block';
 }
 
-// Cargar sesiones del estudiante seleccionado
 document.getElementById('selectEstudiante').addEventListener('change', async function() {
     const estudianteId = this.value;
     const selectSesion = document.getElementById('selectSesion');
@@ -294,11 +295,10 @@ async function cargarSesion() {
         const response = await fetch(`/api/sesion/${sesionId}`);
         sesionOriginal = await response.json();
         
-        // Mostrar resumen actual
         const resumenHtml = `
             <div class="comparacion">
                 <p><strong>📅 Fecha:</strong> ${sesionOriginal.fecha || 'No definida'}</p>
-                <p><strong>🕐 Horario:</strong> ${sesionOriginal.hora_inicio || '???'} - ${sesionOriginal.hora_fin || '???'}</p>
+                <p><strong>🕐 Horario:</strong> ${(sesionOriginal.hora_inicio || '???').substring(0,5)} - ${(sesionOriginal.hora_fin || '???').substring(0,5)}</p>
                 <p><strong>📚 Tipo:</strong> ${sesionOriginal.tipo_sesion || 'No definido'}</p>
                 <p><strong>📖 Asignatura/Tema:</strong> ${sesionOriginal.asignatura || sesionOriginal.tema_terapia || 'No definido'}</p>
                 <p><strong>👨‍🏫 Profesor:</strong> ${sesionOriginal.profesor_terapeuta || 'No definido'}</p>
@@ -309,7 +309,6 @@ async function cargarSesion() {
         `;
         document.getElementById('resumenActual').innerHTML = resumenHtml;
         
-        // Cargar datos en el formulario
         document.getElementById('sesion_id').value = sesionOriginal.id;
         document.getElementById('tipoSesion').value = sesionOriginal.tipo_sesion || '';
         document.getElementById('asignatura').value = sesionOriginal.asignatura || '';
@@ -348,7 +347,6 @@ function mostrarConfirmacion() {
         return;
     }
     
-    // Obtener valores nuevos
     const nuevos = {
         fecha: document.getElementById('fecha').value,
         hora_inicio: document.getElementById('hora_inicio').value,
@@ -364,7 +362,8 @@ function mostrarConfirmacion() {
         observaciones: document.getElementById('observaciones').value
     };
     
-    // Verificar si hay cambios
+    const responsable = document.getElementById('responsable').value;
+    
     const hayCambios = (
         sesionOriginal.fecha !== nuevos.fecha ||
         (sesionOriginal.hora_inicio || '').substring(0,5) !== nuevos.hora_inicio ||
@@ -384,9 +383,7 @@ function mostrarConfirmacion() {
         return;
     }
     
-    // Calcular pago al docente
     const esTerapia = (nuevos.tipo_sesion === 'terapia' || nuevos.tipo_sesion === 'ambos');
-    let pagoDocenteAnterior = 0;
     let pagoDocenteNuevo = 0;
     
     if (esTerapia) {
@@ -398,67 +395,34 @@ function mostrarConfirmacion() {
         pagoDocenteNuevo = horas * 7;
     }
     
-    const esTerapiaOriginal = (sesionOriginal.tipo_sesion === 'terapia' || sesionOriginal.tipo_sesion === 'ambos');
-    if (esTerapiaOriginal) {
-        pagoDocenteAnterior = (sesionOriginal.valor_total || 0) * 0.35;
-    } else {
-        if (sesionOriginal.fecha && sesionOriginal.hora_inicio && sesionOriginal.hora_fin) {
-            const inicio = new Date(`${sesionOriginal.fecha}T${(sesionOriginal.hora_inicio || '').substring(0,5)}:00`);
-            const fin = new Date(`${sesionOriginal.fecha}T${(sesionOriginal.hora_fin || '').substring(0,5)}:00`);
-            const horas = (fin - inicio) / 3600000;
-            pagoDocenteAnterior = horas * 7;
-        }
-    }
-    
-    // Construir mensaje de comparación
     let mensaje = '📋 COMPARACIÓN DE CAMBIOS\n\n';
-    mensaje += '👤 Responsable: ' + document.getElementById('responsable').value + '\n';
-    mensaje += '=' . repeat(40) + '\n\n';
+    mensaje += '👤 Responsable: ' + responsable + '\n';
+    mensaje += '='.repeat(40) + '\n\n';
     
     mensaje += '📅 FECHA:\n';
     mensaje += `   Anterior: ${sesionOriginal.fecha || 'No definida'}\n`;
-    mensaje += `   Nuevo:    ${nuevos.fecha}\n`;
-    mensaje += `   ${sesionOriginal.fecha !== nuevos.fecha ? '✅ CAMBIA' : '➡️ Sin cambios'}\n\n`;
+    mensaje += `   Nuevo:    ${nuevos.fecha}\n\n`;
     
     mensaje += '🕐 HORARIO:\n';
     mensaje += `   Anterior: ${(sesionOriginal.hora_inicio || '???').substring(0,5)} - ${(sesionOriginal.hora_fin || '???').substring(0,5)}\n`;
-    mensaje += `   Nuevo:    ${nuevos.hora_inicio} - ${nuevos.hora_fin}\n`;
-    mensaje += `   ${(sesionOriginal.hora_inicio || '').substring(0,5) !== nuevos.hora_inicio || (sesionOriginal.hora_fin || '').substring(0,5) !== nuevos.hora_fin ? '✅ CAMBIA' : '➡️ Sin cambios'}\n\n`;
-    
-    mensaje += '📚 TIPO:\n';
-    mensaje += `   Anterior: ${sesionOriginal.tipo_sesion || 'No definido'}\n`;
-    mensaje += `   Nuevo:    ${nuevos.tipo_sesion}\n`;
-    mensaje += `   ${sesionOriginal.tipo_sesion !== nuevos.tipo_sesion ? '✅ CAMBIA' : '➡️ Sin cambios'}\n\n`;
+    mensaje += `   Nuevo:    ${nuevos.hora_inicio} - ${nuevos.hora_fin}\n\n`;
     
     mensaje += '👨‍🏫 PROFESOR:\n';
     mensaje += `   Anterior: ${sesionOriginal.profesor_terapeuta || 'No definido'}\n`;
-    mensaje += `   Nuevo:    ${nuevos.profesor}\n`;
-    mensaje += `   ${sesionOriginal.profesor_terapeuta !== nuevos.profesor ? '✅ CAMBIA' : '➡️ Sin cambios'}\n\n`;
+    mensaje += `   Nuevo:    ${nuevos.profesor}\n\n`;
     
-    mensaje += '🔑 ENCARGADO APERTURA:\n';
+    mensaje += '🔑 ENCARGADO:\n';
     mensaje += `   Anterior: ${sesionOriginal.encargado_apertura || 'No definido'}\n`;
-    mensaje += `   Nuevo:    ${nuevos.encargado}\n`;
-    mensaje += `   ${sesionOriginal.encargado_apertura !== nuevos.encargado ? '✅ CAMBIA' : '➡️ Sin cambios'}\n\n`;
+    mensaje += `   Nuevo:    ${nuevos.encargado}\n\n`;
     
-    mensaje += '💰 VALORES:\n';
-    mensaje += `   Precio hora anterior: $${(sesionOriginal.precio_hora || 10).toFixed(2)}\n`;
-    mensaje += `   Precio hora nuevo:    $${nuevos.precio_hora.toFixed(2)}\n`;
-    mensaje += `   ${(sesionOriginal.precio_hora || 10) !== nuevos.precio_hora ? '✅ CAMBIA' : '➡️ Sin cambios'}\n`;
-    mensaje += `   Valor total anterior: $${(sesionOriginal.valor_total || 0).toFixed(2)}\n`;
-    mensaje += `   Valor total nuevo:    $${nuevos.valor_total.toFixed(2)}\n`;
-    mensaje += `   ${(sesionOriginal.valor_total || 0) !== nuevos.valor_total ? '✅ CAMBIA' : '➡️ Sin cambios'}\n\n`;
+    mensaje += '💰 VALORES:\n`;
+    mensaje += `   Valor anterior: $${(sesionOriginal.valor_total || 0).toFixed(2)}\n`;
+    mensaje += `   Valor nuevo:    $${nuevos.valor_total.toFixed(2)}\n\n`;
     
     mensaje += '💰 PAGO DOCENTE:\n';
-    mensaje += `   Anterior: $${pagoDocenteAnterior.toFixed(2)}\n`;
-    mensaje += `   Nuevo:    $${pagoDocenteNuevo.toFixed(2)}\n`;
-    mensaje += `   ${pagoDocenteAnterior !== pagoDocenteNuevo ? '✅ CAMBIA' : '➡️ Sin cambios'}\n\n`;
+    mensaje += `   Nuevo: $${pagoDocenteNuevo.toFixed(2)}\n\n`;
     
-    mensaje += '📌 ESTADO:\n';
-    mensaje += `   Anterior: ${sesionOriginal.estado || 'Planificado'}\n`;
-    mensaje += `   Nuevo:    ${nuevos.estado}\n`;
-    mensaje += `   ${sesionOriginal.estado !== nuevos.estado ? '✅ CAMBIA' : '➡️ Sin cambios'}\n\n`;
-    
-    mensaje += '=' . repeat(40) + '\n';
+    mensaje += '='.repeat(40) + '\n';
     mensaje += '⚠️ ¿Estás seguro de aplicar estos cambios?\n';
     mensaje += 'La modificación quedará registrada en la auditoría.';
     
@@ -467,7 +431,6 @@ function mostrarConfirmacion() {
     }
 }
 
-// Agregar event listeners
 document.getElementById('hora_inicio').addEventListener('change', calcularHoras);
 document.getElementById('hora_fin').addEventListener('change', calcularHoras);
 document.getElementById('precio_hora').addEventListener('change', calcularValorTotal);
