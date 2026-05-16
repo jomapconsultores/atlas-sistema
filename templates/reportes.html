@@ -22,7 +22,7 @@
     </div>
 </form>
 
-<!-- ========== TARJETAS DE RESUMEN ========== -->
+<!-- Tarjetas de resumen -->
 <div class="row mb-4">
     <div class="col-md-3">
         <div class="card bg-primary text-white text-center p-2">
@@ -75,7 +75,7 @@
     <div class="col-md-6">
         <div class="card bg-{{ 'success' if balance>=0 else 'danger' }} text-white text-center p-2">
             <h5>${{ "%.2f"|format(balance) }}</h5>
-            <small>Balance Neto (Ingresos - Gastos - Pago Docentes)</small>
+            <small>Balance Neto</small>
         </div>
     </div>
     <div class="col-md-6">
@@ -86,18 +86,22 @@
     </div>
 </div>
 
-<!-- ========== GRÁFICOS ========== -->
+<!-- ========== GRÁFICOS CON TAMAÑO MEDIANO ========== -->
 <div class="row mb-4">
     <div class="col-md-6">
         <div class="card shadow h-100">
             <div class="card-header bg-primary text-white"><strong>💰 Ingresos por Tipo de Sesión</strong></div>
-            <div class="card-body"><canvas id="chartIngresos"></canvas></div>
+            <div class="card-body" style="height: 350px;">
+                <canvas id="chartIngresos" style="max-height: 280px; width: 100%;"></canvas>
+            </div>
         </div>
     </div>
     <div class="col-md-6">
         <div class="card shadow h-100">
             <div class="card-header bg-success text-white"><strong>✅ Cumplimiento de Sesiones</strong></div>
-            <div class="card-body"><canvas id="chartCumplimiento"></canvas></div>
+            <div class="card-body" style="height: 350px;">
+                <canvas id="chartCumplimiento" style="max-height: 280px; width: 100%;"></canvas>
+            </div>
         </div>
     </div>
 </div>
@@ -106,13 +110,17 @@
     <div class="col-md-6">
         <div class="card shadow h-100">
             <div class="card-header bg-danger text-white"><strong>📊 Gastos por Categoría</strong></div>
-            <div class="card-body"><canvas id="chartGastos"></canvas></div>
+            <div class="card-body" style="height: 350px;">
+                <canvas id="chartGastos" style="max-height: 280px; width: 100%;"></canvas>
+            </div>
         </div>
     </div>
     <div class="col-md-6">
         <div class="card shadow h-100">
             <div class="card-header bg-info text-white"><strong>📚 Horas por Materia/Terapia</strong></div>
-            <div class="card-body"><canvas id="chartMaterias" style="max-height:250px;"></canvas></div>
+            <div class="card-body" style="height: 350px;">
+                <canvas id="chartMaterias" style="max-height: 280px; width: 100%;"></canvas>
+            </div>
         </div>
     </div>
 </div>
@@ -124,7 +132,9 @@
     </div>
     <div class="collapse show" id="secComparativo">
         <div class="card-body">
-            <canvas id="chartComparativo" style="height:300px;"></canvas>
+            <div style="height: 350px;">
+                <canvas id="chartComparativo" style="max-height: 300px; width: 100%;"></canvas>
+            </div>
             <div class="row mt-4">
                 <div class="col-md-4">
                     <div class="alert alert-success">
@@ -156,7 +166,7 @@
 <!-- ========== REPORTE 2: PAGOS A DOCENTES Y PSICÓLOGOS ========== -->
 <div class="card shadow mb-4">
     <div class="card-header bg-secondary text-white" data-bs-toggle="collapse" data-bs-target="#secPagosDocentes" style="cursor:pointer;">
-        <strong>👨‍🏫 REPORTE DE PAGOS A DOCENTES Y PSICÓLOGOS (Sesiones Realizadas)</strong>
+        <strong>👨‍🏫 REPORTE DE PAGOS A DOCENTES Y PSICÓLOGOS</strong>
     </div>
     <div class="collapse show" id="secPagosDocentes">
         <div class="card-body">
@@ -183,9 +193,9 @@
                             <td class="text-center">{{ datos.sesiones_terapia }}</td>
                             <td class="text-center">{{ datos.horas_clase }}</td>
                             <td class="text-center">{{ datos.horas_terapia }}</td>
-                            <td class="text-primary text-end">${{ "%.2f"|format(datos.pago_docencia) }}</td>
-                            <td class="text-success text-end">${{ "%.2f"|format(datos.pago_psicologia) }}</td>
-                            <td class="fw-bold text-end">${{ "%.2f"|format(datos.total_pagar) }}</td>
+                            <td class="text-end text-primary">${{ "%.2f"|format(datos.pago_docencia) }}</td>
+                            <td class="text-end text-success">${{ "%.2f"|format(datos.pago_psicologia) }}</td>
+                            <td class="text-end fw-bold">${{ "%.2f"|format(datos.total_pagar) }}</td>
                             <td class="text-center">{{ (datos.total_pagar / total_pago_docentes * 100)|round(1) if total_pago_docentes>0 else 0 }}%</td>
                         </tr>
                         {% endfor %}
@@ -234,24 +244,24 @@
                         {% for d in datos_estudiantes %}
                         <tr>
                             <td>{{ d.estudiante }}</td>
-                            <td>{{ d.horas_plan }}</td>
-                            <td>{{ d.horas_real }}</td>
+                            <td class="text-center">{{ d.horas_plan }}</td>
+                            <td class="text-center">{{ d.horas_real }}</td>
                             <td class="text-center">{{ (d.horas_real / d.horas_plan * 100)|round(1) if d.horas_plan>0 else 0 }}%</td>
                             <td class="text-end">${{ "%.2f"|format(d.cobrar) }}</td>
                             <td class="text-end">${{ "%.2f"|format(d.pagado) }}</td>
                             <td class="text-center">{{ (d.pagado / d.cobrar * 100)|round(1) if d.cobrar>0 else 0 }}%</td>
-                            <td class="text-{{ 'danger' if d.saldo>0 else 'success' }} text-end">${{ "%.2f"|format(d.saldo|abs) }}</td>
+                            <td class="text-end text-{{ 'danger' if d.saldo>0 else 'success' }}">${{ "%.2f"|format(d.saldo|abs) }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
                     <tfoot class="table-dark">
                         <tr>
                             <td><strong>TOTALES</strong></td>
-                            <td><strong>{{ datos_estudiantes|sum(attribute='horas_plan') }}</strong></td>
-                            <td><strong>{{ datos_estudiantes|sum(attribute='horas_real') }}</strong></td>
+                            <td class="text-center"><strong>{{ datos_estudiantes|sum(attribute='horas_plan') }}</strong></td>
+                            <td class="text-center"><strong>{{ datos_estudiantes|sum(attribute='horas_real') }}</strong></td>
                             <td class="text-center"><strong>{{ porcentaje_cumplimiento }}%</strong></td>
-                            <td><strong>${{ "%.2f"|format(total_cobrar_estudiantes) }}</strong></td>
-                            <td><strong>${{ "%.2f"|format(total_pagado_estudiantes) }}</strong></td>
+                            <td class="text-end"><strong>${{ "%.2f"|format(total_cobrar_estudiantes) }}</strong></td>
+                            <td class="text-end"><strong>${{ "%.2f"|format(total_pagado_estudiantes) }}</strong></td>
                             <td class="text-center"><strong>{{ porcentaje_cobrado }}%</strong></td>
                             <td class="text-end"><strong>${{ "%.2f"|format(total_por_pagar_estudiantes) }}</strong></td>
                         </tr>
@@ -284,9 +294,9 @@
                         {% for a, i in asignaturas_detalle.items() %}
                         <tr>
                             <td>{{ a }}</td>
-                            <td>{{ i.plan }}</td>
-                            <td>{{ i.real }}</td>
-                            <td>{{ i.canc }}</td>
+                            <td class="text-center">{{ i.plan }}</td>
+                            <td class="text-center">{{ i.real }}</td>
+                            <td class="text-center">{{ i.canc }}</td>
                             <td class="text-center">{{ (i.real / i.plan * 100)|round(1) if i.plan>0 else 0 }}%</td>
                         </tr>
                         {% endfor %}
@@ -320,7 +330,7 @@
                             <td>{{ g.get('persona','') }}</td>
                             <td class="text-end">${{ "%.2f"|format(g.monto) }}</td>
                             <td class="text-center">{{ (g.monto / total_gastos * 100)|round(1) if total_gastos>0 else 0 }}%</td>
-                            <td>{% if g.get('reembolso') %}🔄 Sí{% else %}-{% endif %}</td>
+                            <td class="text-center">{% if g.get('reembolso') %}🔄 Sí{% else %}-{% endif %}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -404,7 +414,7 @@
             <div class="table-responsive">
                 <table class="table table-sm">
                     <thead><tr><th>Fecha</th><th>Pago</th><th>$ Anterior</th><th>$ Nuevo</th><th>Responsable</th><th>Motivo</th></tr></thead>
-                    <tbody>{% for c in correcciones %}<tr><td>{{ c.get('fecha_correccion','')[:10] }}</td><td>{{ c.pago_id }}</td><td>${{ "%.2f"|format(c.monto_anterior) }}</td><td>${{ "%.2f"|format(c.monto_nuevo) }}</td><td>{{ c.cambiado_por }}</td><td>{{ c.motivo[:50] }}</td></tr>{% endfor %}</tbody>
+                    <tbody>{% for c in correcciones %}</tr><td>{{ c.get('fecha_correccion','')[:10] }}</td><td>{{ c.pago_id }}</td><td>${{ "%.2f"|format(c.monto_anterior) }}</td><td>${{ "%.2f"|format(c.monto_nuevo) }}</td><td>{{ c.cambiado_por }}</td><td>{{ c.motivo[:50] }}</td></tr>{% endfor %}</tbody>
                 </table>
             </div>
             {% else %}<p class="text-muted">Sin correcciones registradas</p>{% endif %}
@@ -444,6 +454,13 @@ new Chart(document.getElementById('chartIngresos'),{
             data:[{% for t,v in ingresos_por_tipo.items() %}{{ v }},{% endfor %}],
             backgroundColor:colors
         }]
+    },
+    options:{
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+            legend: { position: 'bottom' }
+        }
     }
 });
 
@@ -456,6 +473,13 @@ new Chart(document.getElementById('chartCumplimiento'),{
             data:[{{ cumplimiento.get('realizado',0) }},{{ cumplimiento.get('planificado',0) }},{{ cumplimiento.get('cancelado',0) }}],
             backgroundColor:['#0f9d58','#f4b400','#db4437']
         }]
+    },
+    options:{
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+            legend: { position: 'bottom' }
+        }
     }
 });
 
@@ -468,6 +492,13 @@ new Chart(document.getElementById('chartGastos'),{
             data:[{% for c,v in gastos_por_categoria.items() %}{{ v }},{% endfor %}],
             backgroundColor:colors
         }]
+    },
+    options:{
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+            legend: { position: 'bottom' }
+        }
     }
 });
 
@@ -481,6 +512,13 @@ new Chart(document.getElementById('chartMaterias'),{
             data:[{% for m,h in horas_por_materia.items() %}{{ h }},{% endfor %}],
             backgroundColor:'#1a73e8'
         }]
+    },
+    options:{
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+            legend: { position: 'top' }
+        }
     }
 });
 
@@ -494,6 +532,13 @@ new Chart(document.getElementById('chartComparativo'),{
             data:[{{ total_cobrar_estudiantes }}, {{ total_pago_docentes }}, {{ total_gastos }}, {{ balance }}],
             backgroundColor:['#28a745','#ffc107','#dc3545','#17a2b8']
         }]
+    },
+    options:{
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+            legend: { position: 'top' }
+        }
     }
 });
 </script>
