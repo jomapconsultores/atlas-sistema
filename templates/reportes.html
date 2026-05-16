@@ -22,7 +22,7 @@
     </div>
 </form>
 
-<!-- ========== TARJETAS DE RESUMEN CON PORCENTAJES ========== -->
+<!-- ========== TARJETAS DE RESUMEN ========== -->
 <div class="row mb-4">
     <div class="col-md-3">
         <div class="card bg-primary text-white text-center p-2">
@@ -38,47 +38,55 @@
     </div>
     <div class="col-md-3">
         <div class="card bg-info text-white text-center p-2">
-            <h5>${{ "%.0f"|format(total_cobrar_estudiantes) }}</h5>
+            <h5>${{ "%.2f"|format(total_cobrar_estudiantes) }}</h5>
             <small>Total a Cobrar</small>
         </div>
     </div>
     <div class="col-md-3">
         <div class="card bg-warning text-dark text-center p-2">
-            <h5>${{ "%.0f"|format(total_pagado_estudiantes) }}</h5>
-            <small>Total Pagado</small>
-            <small class="d-block">{{ porcentaje_cobrado }}% del total</small>
+            <h5>${{ "%.2f"|format(total_pagado_estudiantes) }}</h5>
+            <small>Total Pagado ({{ porcentaje_cobrado }}%)</small>
         </div>
     </div>
 </div>
 
 <div class="row mb-4">
-    <div class="col-md-3">
+    <div class="col-md-4">
         <div class="card bg-danger text-white text-center p-2">
-            <h5>${{ "%.0f"|format(total_por_pagar_estudiantes) }}</h5>
+            <h5>${{ "%.2f"|format(total_por_pagar_estudiantes) }}</h5>
             <small>Por Cobrar</small>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-4">
         <div class="card bg-secondary text-white text-center p-2">
-            <h5>${{ "%.0f"|format(total_pago_docentes) }}</h5>
-            <small>Pago Docentes</small>
+            <h5>${{ "%.2f"|format(total_pago_docentes) }}</h5>
+            <small>Pago Docentes ({{ porcentaje_gastos_docentes_vs_ingresos }}% ingresos)</small>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-4">
         <div class="card bg-dark text-white text-center p-2">
-            <h5>${{ "%.0f"|format(total_gastos) }}</h5>
+            <h5>${{ "%.2f"|format(total_gastos) }}</h5>
             <small>Gastos Operativos</small>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card bg-{{ 'success' if balance>=0 else 'danger' }} text-white text-center p-2">
-            <h5>${{ "%.0f"|format(balance) }}</h5>
-            <small>Balance Neto</small>
         </div>
     </div>
 </div>
 
-<!-- ========== GRÁFICOS PRINCIPALES ========== -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card bg-{{ 'success' if balance>=0 else 'danger' }} text-white text-center p-2">
+            <h5>${{ "%.2f"|format(balance) }}</h5>
+            <small>Balance Neto (Ingresos - Gastos - Pago Docentes)</small>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card bg-primary text-white text-center p-2">
+            <h5>{{ porcentaje_cumplimiento }}%</h5>
+            <small>Cumplimiento de Sesiones</small>
+        </div>
+    </div>
+</div>
+
+<!-- ========== GRÁFICOS ========== -->
 <div class="row mb-4">
     <div class="col-md-6">
         <div class="card shadow h-100">
@@ -121,7 +129,7 @@
                 <div class="col-md-4">
                     <div class="alert alert-success">
                         <strong>✅ INGRESOS POR ESTUDIANTES</strong><br>
-                        Total: <strong>${{ "%.2f"|format(total_cobrar_estudiantes) }}</strong><br>
+                        Total a Cobrar: <strong>${{ "%.2f"|format(total_cobrar_estudiantes) }}</strong><br>
                         Pagado: <strong>${{ "%.2f"|format(total_pagado_estudiantes) }}</strong> ({{ porcentaje_cobrado }}%)<br>
                         Por Cobrar: <strong>${{ "%.2f"|format(total_por_pagar_estudiantes) }}</strong>
                     </div>
@@ -148,7 +156,7 @@
 <!-- ========== REPORTE 2: PAGOS A DOCENTES Y PSICÓLOGOS ========== -->
 <div class="card shadow mb-4">
     <div class="card-header bg-secondary text-white" data-bs-toggle="collapse" data-bs-target="#secPagosDocentes" style="cursor:pointer;">
-        <strong>👨‍🏫 REPORTE DE PAGOS A DOCENTES Y PSICÓLOGOS</strong>
+        <strong>👨‍🏫 REPORTE DE PAGOS A DOCENTES Y PSICÓLOGOS (Sesiones Realizadas)</strong>
     </div>
     <div class="collapse show" id="secPagosDocentes">
         <div class="card-body">
@@ -175,10 +183,10 @@
                             <td class="text-center">{{ datos.sesiones_terapia }}</td>
                             <td class="text-center">{{ datos.horas_clase }}</td>
                             <td class="text-center">{{ datos.horas_terapia }}</td>
-                            <td class="text-primary">${{ "%.2f"|format(datos.pago_docencia) }}</td>
-                            <td class="text-success">${{ "%.2f"|format(datos.pago_psicologia) }}</td>
-                            <td class="fw-bold">${{ "%.2f"|format(datos.total_pagar) }}</td>
-                            <td class="text-info">{{ (datos.total_pagar / total_pago_docentes * 100)|round(1) if total_pago_docentes>0 else 0 }}%</td>
+                            <td class="text-primary text-end">${{ "%.2f"|format(datos.pago_docencia) }}</td>
+                            <td class="text-success text-end">${{ "%.2f"|format(datos.pago_psicologia) }}</td>
+                            <td class="fw-bold text-end">${{ "%.2f"|format(datos.total_pagar) }}</td>
+                            <td class="text-center">{{ (datos.total_pagar / total_pago_docentes * 100)|round(1) if total_pago_docentes>0 else 0 }}%</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -189,11 +197,11 @@
                             <td class="text-center"><strong>{{ total_sesiones_terapia }}</strong></td>
                             <td class="text-center"><strong>{{ total_horas_clase }}</strong></td>
                             <td class="text-center"><strong>{{ total_horas_terapia }}</strong></td>
-                            <td class="text-primary"><strong>${{ "%.2f"|format(total_docencia) }}</strong></td>
-                            <td class="text-success"><strong>${{ "%.2f"|format(total_psicologia) }}</strong></td>
-                            <td class="fw-bold"><strong>${{ "%.2f"|format(total_pago_docentes) }}</strong></td>
-                            <td class="text-info"><strong>100%</strong></td>
-                        </table>
+                            <td class="text-end"><strong>${{ "%.2f"|format(total_docencia) }}</strong></td>
+                            <td class="text-end"><strong>${{ "%.2f"|format(total_psicologia) }}</strong></td>
+                            <td class="text-end"><strong>${{ "%.2f"|format(total_pago_docentes) }}</strong></td>
+                            <td class="text-center"><strong>100%</strong></td>
+                        </tr>
                     </tfoot>
                 </table>
             </div>
@@ -229,10 +237,10 @@
                             <td>{{ d.horas_plan }}</td>
                             <td>{{ d.horas_real }}</td>
                             <td class="text-center">{{ (d.horas_real / d.horas_plan * 100)|round(1) if d.horas_plan>0 else 0 }}%</td>
-                            <td>${{ "%.2f"|format(d.cobrar) }}</td>
-                            <td>${{ "%.2f"|format(d.pagado) }}</td>
+                            <td class="text-end">${{ "%.2f"|format(d.cobrar) }}</td>
+                            <td class="text-end">${{ "%.2f"|format(d.pagado) }}</td>
                             <td class="text-center">{{ (d.pagado / d.cobrar * 100)|round(1) if d.cobrar>0 else 0 }}%</td>
-                            <td class="text-{{ 'danger' if d.saldo>0 else 'success' }}">${{ "%.2f"|format(d.saldo|abs) }}</td>
+                            <td class="text-{{ 'danger' if d.saldo>0 else 'success' }} text-end">${{ "%.2f"|format(d.saldo|abs) }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -241,11 +249,11 @@
                             <td><strong>TOTALES</strong></td>
                             <td><strong>{{ datos_estudiantes|sum(attribute='horas_plan') }}</strong></td>
                             <td><strong>{{ datos_estudiantes|sum(attribute='horas_real') }}</strong></td>
-                            <td class="text-center"><strong>{{ (total_horas_estudiantes / (datos_estudiantes|sum(attribute='horas_plan')) * 100)|round(1) if (datos_estudiantes|sum(attribute='horas_plan'))>0 else 0 }}%</strong></td>
+                            <td class="text-center"><strong>{{ porcentaje_cumplimiento }}%</strong></td>
                             <td><strong>${{ "%.2f"|format(total_cobrar_estudiantes) }}</strong></td>
                             <td><strong>${{ "%.2f"|format(total_pagado_estudiantes) }}</strong></td>
                             <td class="text-center"><strong>{{ porcentaje_cobrado }}%</strong></td>
-                            <td class="text-danger"><strong>${{ "%.2f"|format(total_por_pagar_estudiantes) }}</strong></td>
+                            <td class="text-end"><strong>${{ "%.2f"|format(total_por_pagar_estudiantes) }}</strong></td>
                         </tr>
                     </tfoot>
                 </table>
@@ -254,7 +262,7 @@
     </div>
 </div>
 
-<!-- ========== REPORTE 4: ASIGNATURAS Y TERAPIAS ========== -->
+<!-- ========== REPORTE 4: DETALLE POR ASIGNATURA / TERAPIA ========== -->
 <div class="card shadow mb-4">
     <div class="card-header bg-info text-white" data-bs-toggle="collapse" data-bs-target="#secAsignaturas" style="cursor:pointer;">
         <strong>📚 DETALLE POR ASIGNATURA / TERAPIA</strong>
@@ -270,10 +278,10 @@
                             <th>Horas Real</th>
                             <th>Horas Canc</th>
                             <th>% Cumplimiento</th>
-                        </table>
+                        </tr>
                     </thead>
                     <tbody>
-                        {% for a,i in asignaturas_detalle.items() %}
+                        {% for a, i in asignaturas_detalle.items() %}
                         <tr>
                             <td>{{ a }}</td>
                             <td>{{ i.plan }}</td>
@@ -310,8 +318,8 @@
                             <td>{{ g.concepto }}</td>
                             <td>{{ g.get('categoria','') }}</td>
                             <td>{{ g.get('persona','') }}</td>
-                            <td>${{ "%.2f"|format(g.monto) }}</td>
-                            <td>{{ (g.monto / total_gastos * 100)|round(1) if total_gastos>0 else 0 }}%</td>
+                            <td class="text-end">${{ "%.2f"|format(g.monto) }}</td>
+                            <td class="text-center">{{ (g.monto / total_gastos * 100)|round(1) if total_gastos>0 else 0 }}%</td>
                             <td>{% if g.get('reembolso') %}🔄 Sí{% else %}-{% endif %}</td>
                         </tr>
                         {% endfor %}
@@ -319,8 +327,8 @@
                     <tfoot class="table-dark">
                         <tr class="fw-bold">
                             <td colspan="4">TOTAL</td>
-                            <td>${{ "%.2f"|format(total_gastos) }}</td>
-                            <td>100%</td>
+                            <td class="text-end">${{ "%.2f"|format(total_gastos) }}</td>
+                            <td class="text-center">100%</td>
                             <td></td>
                         </tr>
                     </tfoot>
@@ -393,10 +401,12 @@
     <div class="collapse" id="secCorrecciones">
         <div class="card-body">
             {% if correcciones %}
-            <table class="table table-sm">
-                <thead><tr><th>Fecha</th><th>Pago</th><th>$ Anterior</th><th>$ Nuevo</th><th>Responsable</th><th>Motivo</th></tr></thead>
-                <tbody>{% for c in correcciones %}<tr><td>{{ c.get('fecha_correccion','')[:10] }}</td><td>{{ c.pago_id }}</td><td>${{ "%.2f"|format(c.monto_anterior) }}</td><td>${{ "%.2f"|format(c.monto_nuevo) }}</td><td>{{ c.cambiado_por }}</td><td>{{ c.motivo[:50] }}</td></tr>{% endfor %}</tbody>
-            </table>
+            <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead><tr><th>Fecha</th><th>Pago</th><th>$ Anterior</th><th>$ Nuevo</th><th>Responsable</th><th>Motivo</th></tr></thead>
+                    <tbody>{% for c in correcciones %}<tr><td>{{ c.get('fecha_correccion','')[:10] }}</td><td>{{ c.pago_id }}</td><td>${{ "%.2f"|format(c.monto_anterior) }}</td><td>${{ "%.2f"|format(c.monto_nuevo) }}</td><td>{{ c.cambiado_por }}</td><td>{{ c.motivo[:50] }}</td></tr>{% endfor %}</tbody>
+                </table>
+            </div>
             {% else %}<p class="text-muted">Sin correcciones registradas</p>{% endif %}
         </div>
     </div>
