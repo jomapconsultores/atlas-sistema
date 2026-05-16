@@ -61,18 +61,6 @@
     </div>
 </div>
 
-<!-- Resumen de filtros -->
-{% if mes or anio or fecha_desde or fecha_hasta or filtro_profesor %}
-<div class="alert alert-info small">
-    <strong>📌 Filtros aplicados:</strong>
-    {% if mes %} Mes: {{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][mes|int - 1] }}{% endif %}
-    {% if anio %} Año: {{ anio }}{% endif %}
-    {% if fecha_desde %} Desde: {{ fecha_desde }}{% endif %}
-    {% if fecha_hasta %} Hasta: {{ fecha_hasta }}{% endif %}
-    {% if filtro_profesor %} Docente: {{ filtro_profesor }}{% endif %}
-</div>
-{% endif %}
-
 <!-- Tabla de pagos detallados -->
 <div class="card shadow mb-4">
     <div class="card-header bg-secondary text-white">
@@ -93,14 +81,14 @@
                         <th>Pago Docencia ($7/h)</th>
                         <th>Pago Psicología (40.18%)</th>
                         <th>Total a Pagar</th>
-                    </table>
+                    </tr>
                 </thead>
                 <tbody>
                     {% for p in pagos %}
                     <tr>
-                        <td>{{ p.fecha }}</td>
-                        <td><strong>{{ p.profesor }}</strong></td>
-                        <td>{{ p.estudiante }}</td>
+                        <td>{{ p.fecha }}<\/td>
+                        <td><strong>{{ p.profesor }}</strong><\/td>
+                        <td>{{ p.estudiante }}<\/td>
                         <td>
                             {% if p.tipo == 'clase' %}
                                 <span class="badge bg-primary">📚 Clase</span>
@@ -111,21 +99,21 @@
                             {% else %}
                                 <span class="badge bg-secondary">🎓 Pre Universitario</span>
                             {% endif %}
-                        </td>
-                        <td class="text-center">{{ p.horas }}</td>
-                        <td class="text-end">${{ "%.2f"|format(p.valor_total) }}</td>
-                        <td class="text-end text-primary">${{ "%.2f"|format(p.pago_docente) }}</td>
-                        <td class="text-end text-success">${{ "%.2f"|format(p.pago_psicologia) }}</td>
-                        <td class="text-end fw-bold">${{ "%.2f"|format(p.total_pagar) }}</td>
+                        <\/td>
+                        <td class="text-center">{{ p.horas }}<\/td>
+                        <td class="text-end">${{ "%.2f"|format(p.valor_total) }}<\/td>
+                        <td class="text-end text-primary">${{ "%.2f"|format(p.pago_docente) }}<\/td>
+                        <td class="text-end text-success">${{ "%.2f"|format(p.pago_psicologia) }}<\/td>
+                        <td class="text-end fw-bold">${{ "%.2f"|format(p.total_pagar) }}<\/td>
                     </tr>
                     {% endfor %}
                 </tbody>
                 <tfoot class="table-dark">
                     <tr>
-                        <td colspan="6"><strong>TOTALES</strong></td>
-                        <td class="text-end"><strong>${{ "%.2f"|format(total_docencia) }}</strong></td>
-                        <td class="text-end"><strong>${{ "%.2f"|format(total_psicologia) }}</strong></td>
-                        <td class="text-end"><strong>${{ "%.2f"|format(total_adeudado) }}</strong></td>
+                        <td colspan="6"><strong>TOTALES</strong><\/td>
+                        <td class="text-end"><strong>${{ "%.2f"|format(total_docencia) }}</strong><\/td>
+                        <td class="text-end"><strong>${{ "%.2f"|format(total_psicologia) }}</strong><\/td>
+                        <td class="text-end"><strong>${{ "%.2f"|format(total_adeudado) }}</strong><\/td>
                     </tr>
                 </tfoot>
             </table>
@@ -142,7 +130,7 @@
     </div>
 </div>
 
-<!-- CONSOLIDADO POR DOCENTE/PSICÓLOGO CON ANTICIPOS -->
+<!-- Consolidado por Docente/Psicólogo -->
 <div class="card shadow">
     <div class="card-header bg-info text-white">
         <strong>📊 Consolidado por Docente / Psicólogo</strong>
@@ -153,54 +141,39 @@
                 <thead>
                     <tr class="table-dark">
                         <th>Profesional</th>
-                        <th>Sesiones Clase</th>
-                        <th>Sesiones Terapia</th>
-                        <th>Total Sesiones</th>
-                        <th>Horas Clase</th>
-                        <th>Horas Terapia</th>
-                        <th>Total Horas</th>
+                        <th>Sesiones</th>
+                        <th>Horas</th>
                         <th>$ Docencia</th>
                         <th>$ Psicología (40.18%)</th>
-                        <th>Total a Pagar</th>
+                        <th>$ Total a Pagar</th>
                         <th>Anticipo</th>
                         <th>Neto a Pagar</th>
-                        <th>%</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for nombre, datos in consolidado.items() %}
                     <tr>
-                        <td><strong>{{ nombre }}</strong></td>
-                        <td class="text-center">{{ datos.sesiones_clase }}</td>
-                        <td class="text-center">{{ datos.sesiones_terapia }}</td>
-                        <td class="text-center fw-bold">{{ datos.sesiones_clase + datos.sesiones_terapia }}</td>
-                        <td class="text-center">{{ datos.horas_clase }}</td>
-                        <td class="text-center">{{ datos.horas_terapia }}</td>
-                        <td class="text-center fw-bold">{{ datos.horas_clase + datos.horas_terapia }}</td>
-                        <td class="text-end">${{ "%.2f"|format(datos.pago_docencia) }}</td>
-                        <td class="text-end">${{ "%.2f"|format(datos.pago_psicologia) }}</td>
-                        <td class="text-end">${{ "%.2f"|format(datos.total_pagar) }}</td>
-                        <td class="text-end text-danger">${{ "%.2f"|format(datos.anticipo) }}</td>
-                        <td class="text-end fw-bold">${{ "%.2f"|format(datos.neto_a_pagar) }}</td>
-                        <td class="text-center">{{ (datos.total_pagar / total_adeudado * 100)|round(1) if total_adeudado>0 else 0 }}%</td>
+                        <td><strong>{{ nombre }}</strong><\/td>
+                        <td class="text-center">{{ datos.sesiones_clase + datos.sesiones_terapia }}<\/td>
+                        <td class="text-center">{{ datos.horas_clase + datos.horas_terapia }}<\/td>
+                        <td class="text-end">${{ "%.2f"|format(datos.pago_docencia) }}<\/td>
+                        <td class="text-end">${{ "%.2f"|format(datos.pago_psicologia) }}<\/td>
+                        <td class="text-end fw-bold">${{ "%.2f"|format(datos.total_pagar) }}<\/td>
+                        <td class="text-end text-danger">${{ "%.2f"|format(datos.anticipo) }}<\/td>
+                        <td class="text-end text-success">${{ "%.2f"|format(datos.neto_a_pagar) }}<\/td>
                     </tr>
                     {% endfor %}
                 </tbody>
                 <tfoot class="table-dark">
                     <tr>
-                        <td><strong>TOTALES</strong></td>
-                        <td class="text-center"><strong>{{ total_sesiones_clase }}</strong></td>
-                        <td class="text-center"><strong>{{ total_sesiones_terapia }}</strong></td>
-                        <td class="text-center"><strong>{{ total_sesiones_clase + total_sesiones_terapia }}</strong></td>
-                        <td class="text-center"><strong>{{ total_horas_clase }}</strong></td>
-                        <td class="text-center"><strong>{{ total_horas_terapia }}</strong></td>
-                        <td class="text-center"><strong>{{ total_horas_clase + total_horas_terapia }}</strong></td>
-                        <td class="text-end"><strong>${{ "%.2f"|format(total_docencia) }}</strong></td>
-                        <td class="text-end"><strong>${{ "%.2f"|format(total_psicologia) }}</strong></td>
-                        <td class="text-end"><strong>${{ "%.2f"|format(total_adeudado) }}</strong></td>
-                        <td class="text-end"><strong>${{ "%.2f"|format(total_anticipos) }}</strong></td>
-                        <td class="text-end"><strong>${{ "%.2f"|format(total_neto) }}</strong></td>
-                        <td class="text-center"><strong>100%</strong></td>
+                        <td><strong>TOTALES</strong><\/td>
+                        <td class="text-center"><strong>{{ total_sesiones_clase + total_sesiones_terapia }}</strong><\/td>
+                        <td class="text-center"><strong>{{ total_horas_clase + total_sesiones_terapia }}</strong><\/td>
+                        <td class="text-end"><strong>${{ "%.2f"|format(total_docencia) }}</strong><\/td>
+                        <td class="text-end"><strong>${{ "%.2f"|format(total_psicologia) }}</strong><\/td>
+                        <td class="text-end"><strong>${{ "%.2f"|format(total_adeudado) }}</strong><\/td>
+                        <td class="text-end"><strong>${{ "%.2f"|format(total_anticipos) }}</strong><\/td>
+                        <td class="text-end"><strong>${{ "%.2f"|format(total_neto) }}</strong><\/td>
                     </tr>
                 </tfoot>
             </table>

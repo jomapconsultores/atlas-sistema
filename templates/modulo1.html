@@ -64,11 +64,14 @@
             <div id="camposTerapia" style="display:none;">
                 <div class="mb-2">
                     <label class="form-label">Tipo de Atención *</label>
-                    <select name="atencion_psicologica" class="form-select">
+                    <select name="atencion_psicologica" id="atencionPsicologica" class="form-select" onchange="verificarPaquete()">
                         <option value="">Seleccionar...</option>
                         {% for item in atencion_psicologica %}
-                        <option value="{{ item['nombre'] }}" data-precio="{{ item['precio'] }}">
+                        <option value="{{ item['nombre'] }}" data-precio="{{ item['precio'] }}" data-sesiones="{{ item.get('sesiones', 1) }}">
                             {{ item['nombre'] }} - ${{ item['precio'] }}
+                            {% if item.get('sesiones', 1) > 1 %}
+                                ({{ item['sesiones'] }} sesiones)
+                            {% endif %}
                         </option>
                         {% endfor %}
                     </select>
@@ -117,18 +120,25 @@
         margin-top: 5px;
         display: none;
     }
-    .alerta-error {
-        background-color: #f8d7da;
-        border: 1px solid #f5c6cb;
-        color: #721c24;
-        padding: 10px;
-        border-radius: 5px;
-        margin-top: 10px;
-        display: none;
-    }
 </style>
 
 <script>
+// Función para verificar si es paquete de terapias
+function verificarPaquete() {
+    const select = document.getElementById('atencionPsicologica');
+    const selectedOption = select.options[select.selectedIndex];
+    const sesiones = selectedOption ? parseInt(selectedOption.dataset.sesiones) : 1;
+    
+    if (sesiones > 1) {
+        const numSesionesSelect = document.getElementById('numSesiones');
+        numSesionesSelect.value = sesiones;
+        numSesionesSelect.disabled = true;
+        mostrarFechas();
+    } else {
+        document.getElementById('numSesiones').disabled = false;
+    }
+}
+
 // ========== VARIABLES GLOBALES ==========
 let fechasValidas = {};
 
@@ -136,7 +146,6 @@ let fechasValidas = {};
 document.getElementById('formPlanificar').addEventListener('submit', function(e) {
     e.preventDefault();
     
-    // Verificar que todas las sesiones sean válidas
     let todasValidas = true;
     let errores = [];
     const numSesiones = document.getElementById('numSesiones').value;
@@ -195,7 +204,6 @@ function validarHoras(sesionNum) {
         return;
     }
     
-    // Validar que la hora de fin sea mayor que la de inicio
     if (hFin <= hIni) {
         inputIni.classList.add('hora-invalida');
         inputFin.classList.add('hora-invalida');
@@ -207,7 +215,6 @@ function validarHoras(sesionNum) {
         return;
     }
     
-    // Validar que la duración sea positiva y mayor a 0
     if (fecha && hIni && hFin) {
         const inicio = new Date(`${fecha}T${hIni}:00`);
         const fin = new Date(`${fecha}T${hFin}:00`);
@@ -218,7 +225,7 @@ function validarHoras(sesionNum) {
             inputFin.classList.add('hora-invalida');
             if (mensajeError) {
                 mensajeError.style.display = 'block';
-                mensajeError.innerHTML = '❌ La duración de la sesión debe ser mayor a 0 horas';
+                mensajeError.innerHTML = '❌ La duración debe ser mayor a 0 horas';
             }
             fechasValidas[sesionNum] = false;
             return;
@@ -229,14 +236,13 @@ function validarHoras(sesionNum) {
             inputFin.classList.add('hora-invalida');
             if (mensajeError) {
                 mensajeError.style.display = 'block';
-                mensajeError.innerHTML = '⚠️ La duración es muy corta (mínimo 30 minutos = 0.5 horas)';
+                mensajeError.innerHTML = '⚠️ Duración muy corta (mínimo 30 minutos)';
             }
             fechasValidas[sesionNum] = false;
             return;
         }
     }
     
-    // Si todo está bien, quitar clases de error
     inputIni.classList.remove('hora-invalida');
     inputFin.classList.remove('hora-invalida');
     if (mensajeError) mensajeError.style.display = 'none';
@@ -362,11 +368,8 @@ mostrarEstudiantes();
 mostrarFechas();
 
 // ========== FUNCIONES DE SINCRONIZACIÓN MASIVA ==========
-
 async function sincronizarTodoCalendario() {
-    if (!confirm('⚠️ ¿Estás seguro de sincronizar TODAS las sesiones con Google Calendar?\n\nEsto actualizará o creará eventos para todas las sesiones en estado "Realizado".\nPuede tomar varios segundos dependiendo de la cantidad de sesiones.\n\n¿Deseas continuar?')) {
-        return;
-    }
+    if (!confirm('⚠️ ¿Estás seguro de sincronizar TODAS las sesiones con Google Calendar?\n\nEsto actualizará o creará eventos para todas las sesiones en estado "Realizado".\nPuede tomar varios segundos...')) return;
     
     const btn = event.target;
     const textoOriginal = btn.innerText;
@@ -385,69 +388,37 @@ async function sincronizarTodoCalendario() {
         }
         
         let procesadas = 0, exitosas = 0, errores = 0;
-        
         const progressDiv = document.createElement('div');
         progressDiv.className = 'alert alert-info mt-3';
-        progressDiv.innerHTML = '<strong>🔄 Sincronizando...</strong><br>' +
-            '<div class="progress"><div id="syncProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%">0%</div></div>' +
-            '<p id="syncStatus" class="mt-2">Procesando 0 de ' + sesiones.length + ' sesiones...</p>';
-        
+        progressDiv.innerHTML = '<strong>🔄 Sincronizando...</strong><br><div class="progress"><div id="syncProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%">0%</div></div><p id="syncStatus" class="mt-2">Procesando 0 de ' + sesiones.length + ' sesiones...</p>';
         const formCard = document.querySelector('.card.shadow.mb-4');
-        if (formCard) {
-            formCard.parentNode.insertBefore(progressDiv, formCard.nextSibling);
-        }
+        if (formCard) formCard.parentNode.insertBefore(progressDiv, formCard.nextSibling);
         
         for (let i = 0; i < sesiones.length; i++) {
             const s = sesiones[i];
             try {
-                const syncResponse = await fetch('/api/sesion/' + s.id + '/sincronizar', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'}
-                });
+                const syncResponse = await fetch('/api/sesion/' + s.id + '/sincronizar', {method: 'POST', headers: {'Content-Type': 'application/json'}});
                 const result = await syncResponse.json();
-                if (result.success) {
-                    exitosas++;
-                } else {
-                    errores++;
-                }
-            } catch (err) {
-                errores++;
-            }
-            
+                if (result.success) exitosas++;
+                else errores++;
+            } catch (err) { errores++; }
             procesadas++;
             const porcentaje = Math.round((procesadas / sesiones.length) * 100);
             const progressBar = document.getElementById('syncProgressBar');
-            if (progressBar) {
-                progressBar.style.width = porcentaje + '%';
-                progressBar.innerText = porcentaje + '%';
-            }
+            if (progressBar) { progressBar.style.width = porcentaje + '%'; progressBar.innerText = porcentaje + '%'; }
             const statusElem = document.getElementById('syncStatus');
-            if (statusElem) {
-                statusElem.innerText = 'Procesando ' + procesadas + ' de ' + sesiones.length + ' sesiones... ✅ ' + exitosas + ' | ❌ ' + errores;
-            }
+            if (statusElem) statusElem.innerText = `Procesando ${procesadas} de ${sesiones.length}... ✅ ${exitosas} | ❌ ${errores}`;
         }
         
         const resultDiv = document.createElement('div');
-        resultDiv.className = 'alert ' + (errores === 0 ? 'alert-success' : 'alert-warning') + ' mt-3';
-        resultDiv.innerHTML = '<strong>📊 Sincronización completada</strong><br>✅ Exitosas: ' + exitosas + '<br>❌ Errores: ' + errores + '<br>📅 Total: ' + procesadas;
-        
+        resultDiv.className = `alert ${errores === 0 ? 'alert-success' : 'alert-warning'} mt-3`;
+        resultDiv.innerHTML = `<strong>📊 Sincronización completada</strong><br>✅ Exitosas: ${exitosas}<br>❌ Errores: ${errores}<br>📅 Total: ${procesadas}`;
         const existingDiv = document.querySelector('.alert-info');
-        if (existingDiv) {
-            existingDiv.replaceWith(resultDiv);
-        }
-        
-        setTimeout(function() {
-            if (resultDiv) resultDiv.remove();
-        }, 5000);
-        
-        alert('✅ Sincronización completada\n\n✅ Exitosas: ' + exitosas + '\n❌ Errores: ' + errores);
-        
-    } catch (error) {
-        alert('❌ Error: ' + error.message);
-    } finally {
-        btn.disabled = false;
-        btn.innerText = textoOriginal;
-    }
+        if (existingDiv) existingDiv.replaceWith(resultDiv);
+        setTimeout(() => resultDiv.remove(), 5000);
+        alert(`✅ Sincronización completada\n\n✅ Exitosas: ${exitosas}\n❌ Errores: ${errores}`);
+    } catch (error) { alert('❌ Error: ' + error.message); }
+    finally { btn.disabled = false; btn.innerText = textoOriginal; }
 }
 
 async function sincronizarMesActual() {
@@ -457,53 +428,28 @@ async function sincronizarMesActual() {
     const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
     const nombreMes = meses[mes - 1];
     
-    if (!confirm('⚠️ ¿Sincronizar solo las sesiones de ' + nombreMes + ' ' + anio + '?')) {
-        return;
-    }
-    
+    if (!confirm(`⚠️ ¿Sincronizar solo las sesiones de ${nombreMes} ${anio}?`)) return;
     const btn = event.target;
     const textoOriginal = btn.innerText;
     btn.disabled = true;
     btn.innerText = '⏳...';
     
     try {
-        const response = await fetch('/api/sesiones/para-sincronizar?mes=' + mes + '&anio=' + anio);
+        const response = await fetch(`/api/sesiones/para-sincronizar?mes=${mes}&anio=${anio}`);
         const sesiones = await response.json();
-        
-        if (sesiones.length === 0) {
-            alert('No hay sesiones en ' + nombreMes + ' ' + anio);
-            btn.disabled = false;
-            btn.innerText = textoOriginal;
-            return;
-        }
-        
+        if (sesiones.length === 0) { alert(`No hay sesiones en ${nombreMes} ${anio}`); btn.disabled = false; btn.innerText = textoOriginal; return; }
         let exitosas = 0, errores = 0;
-        
         for (const s of sesiones) {
             try {
-                const syncResponse = await fetch('/api/sesion/' + s.id + '/sincronizar', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'}
-                });
+                const syncResponse = await fetch('/api/sesion/' + s.id + '/sincronizar', {method: 'POST', headers: {'Content-Type': 'application/json'}});
                 const result = await syncResponse.json();
-                if (result.success) {
-                    exitosas++;
-                } else {
-                    errores++;
-                }
-            } catch (err) {
-                errores++;
-            }
+                if (result.success) exitosas++;
+                else errores++;
+            } catch (err) { errores++; }
         }
-        
-        alert('📅 ' + nombreMes + ' ' + anio + '\n✅ Exitosas: ' + exitosas + '\n❌ Errores: ' + errores);
-        
-    } catch (error) {
-        alert('❌ Error: ' + error.message);
-    } finally {
-        btn.disabled = false;
-        btn.innerText = textoOriginal;
-    }
+        alert(`📅 ${nombreMes} ${anio}\n✅ Exitosas: ${exitosas}\n❌ Errores: ${errores}`);
+    } catch (error) { alert('❌ Error: ' + error.message); }
+    finally { btn.disabled = false; btn.innerText = textoOriginal; }
 }
 </script>
 {% endblock %}
