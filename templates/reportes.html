@@ -22,189 +22,230 @@
     </div>
 </form>
 
-<!-- Tarjetas de resumen -->
+<!-- ========== TARJETAS DE RESUMEN CON PORCENTAJES ========== -->
 <div class="row mb-4">
-    <div class="col-md-2">
+    <div class="col-md-3">
         <div class="card bg-primary text-white text-center p-2">
             <h5>{{ total_estudiantes }}</h5>
-            <small>Estudiantes</small>
+            <small>Estudiantes Activos</small>
         </div>
     </div>
-    <div class="col-md-2">
+    <div class="col-md-3">
         <div class="card bg-success text-white text-center p-2">
-            <h5>{{ total_horas }}</h5>
-            <small>Horas Efectivas</small>
+            <h5>{{ total_horas_estudiantes }}</h5>
+            <small>Horas Ejecutadas</small>
         </div>
     </div>
-    <div class="col-md-2">
+    <div class="col-md-3">
         <div class="card bg-info text-white text-center p-2">
-            <h5>${{ "%.0f"|format(total_ingresos) }}</h5>
-            <small>Ingresos Reales</small>
+            <h5>${{ "%.0f"|format(total_cobrar_estudiantes) }}</h5>
+            <small>Total a Cobrar</small>
         </div>
     </div>
-    <div class="col-md-2">
-        <div class="card bg-danger text-white text-center p-2">
-            <h5>${{ "%.0f"|format(total_gastos) }}</h5>
-            <small>Gastos</small>
-        </div>
-    </div>
-    <div class="col-md-2">
+    <div class="col-md-3">
         <div class="card bg-warning text-dark text-center p-2">
+            <h5>${{ "%.0f"|format(total_pagado_estudiantes) }}</h5>
+            <small>Total Pagado</small>
+            <small class="d-block">{{ porcentaje_cobrado }}% del total</small>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-danger text-white text-center p-2">
+            <h5>${{ "%.0f"|format(total_por_pagar_estudiantes) }}</h5>
+            <small>Por Cobrar</small>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-secondary text-white text-center p-2">
             <h5>${{ "%.0f"|format(total_pago_docentes) }}</h5>
             <small>Pago Docentes</small>
         </div>
     </div>
-    <div class="col-md-2">
+    <div class="col-md-3">
+        <div class="card bg-dark text-white text-center p-2">
+            <h5>${{ "%.0f"|format(total_gastos) }}</h5>
+            <small>Gastos Operativos</small>
+        </div>
+    </div>
+    <div class="col-md-3">
         <div class="card bg-{{ 'success' if balance>=0 else 'danger' }} text-white text-center p-2">
             <h5>${{ "%.0f"|format(balance) }}</h5>
-            <small>Balance</small>
+            <small>Balance Neto</small>
         </div>
     </div>
 </div>
 
-<!-- Gráficos -->
+<!-- ========== GRÁFICOS PRINCIPALES ========== -->
 <div class="row mb-4">
-    <div class="col-md-4">
+    <div class="col-md-6">
         <div class="card shadow h-100">
-            <div class="card-header"><strong>Ingresos por Tipo</strong></div>
+            <div class="card-header bg-primary text-white"><strong>💰 Ingresos por Tipo de Sesión</strong></div>
             <div class="card-body"><canvas id="chartIngresos"></canvas></div>
         </div>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-6">
         <div class="card shadow h-100">
-            <div class="card-header"><strong>Cumplimiento</strong></div>
+            <div class="card-header bg-success text-white"><strong>✅ Cumplimiento de Sesiones</strong></div>
             <div class="card-body"><canvas id="chartCumplimiento"></canvas></div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card shadow h-100">
-            <div class="card-header"><strong>Gastos por Categoría</strong></div>
-            <div class="card-body"><canvas id="chartGastos"></canvas></div>
         </div>
     </div>
 </div>
 
 <div class="row mb-4">
-    <div class="col-12">
-        <div class="card shadow">
-            <div class="card-header"><strong>Horas por Materia</strong></div>
-            <div class="card-body"><canvas id="chartMaterias" style="max-height:300px;"></canvas></div>
+    <div class="col-md-6">
+        <div class="card shadow h-100">
+            <div class="card-header bg-danger text-white"><strong>📊 Gastos por Categoría</strong></div>
+            <div class="card-body"><canvas id="chartGastos"></canvas></div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card shadow h-100">
+            <div class="card-header bg-info text-white"><strong>📚 Horas por Materia/Terapia</strong></div>
+            <div class="card-body"><canvas id="chartMaterias" style="max-height:250px;"></canvas></div>
         </div>
     </div>
 </div>
 
-<!-- Ingresos Desglosados -->
+<!-- ========== REPORTE 1: COMPARATIVO FINANCIERO ========== -->
 <div class="card shadow mb-4">
-    <div class="card-header bg-success text-white" data-bs-toggle="collapse" data-bs-target="#secIngresos" style="cursor:pointer;">
-        <strong>💵 Ingresos Desglosados</strong>
+    <div class="card-header bg-dark text-white" data-bs-toggle="collapse" data-bs-target="#secComparativo" style="cursor:pointer;">
+        <strong>📊 COMPARATIVO FINANCIERO</strong>
     </div>
-    <div class="collapse show" id="secIngresos">
-        <div class="card-body p-2">
-            <p><strong>Total Planificado:</strong> ${{ "%.2f"|format(total_planificado) }} | <strong>Total Real:</strong> ${{ "%.2f"|format(total_ingresos) }}</p>
-            <h6>📂 Por Tipo</h6>
-            <table class="table table-sm table-striped">
-                <thead><tr><th>Tipo</th><th>$ Total</th></tr></thead>
-                <tbody>{% for t,v in ingresos_por_tipo.items() %}<tr><td>{{ t }}</td><td>${{ "%.2f"|format(v) }}</td></tr>{% endfor %}</tbody>
-            </table>
-            <hr>
-            <h6>👨‍🎓 Por Estudiante</h6>
-            <table class="table table-sm table-striped">
-                <thead><tr><th>Estudiante</th><th>H Plan</th><th>H Real</th><th>H Canc</th><th>$ Cobrar</th><th>$ Recibido</th><th>$ Saldo</th></tr></thead>
-                <tbody>{% for d in datos %}<tr><td>{{ d['estudiante'] }}</td><td>{{ d['horas_plan'] }}</td><td>{{ d['horas_real'] }}</td><td>{{ d['horas_canc'] }}</td><td>${{ "%.2f"|format(d['cobrar']) }}</td><td>${{ "%.2f"|format(d['pagado']) }}</td><td class="text-danger">${{ "%.2f"|format(d['saldo'] if d['saldo']>0 else 0) }}</td></tr>{% endfor %}</tbody>
-            </table>
+    <div class="collapse show" id="secComparativo">
+        <div class="card-body">
+            <canvas id="chartComparativo" style="height:300px;"></canvas>
+            <div class="row mt-4">
+                <div class="col-md-4">
+                    <div class="alert alert-success">
+                        <strong>✅ INGRESOS POR ESTUDIANTES</strong><br>
+                        Total: <strong>${{ "%.2f"|format(total_cobrar_estudiantes) }}</strong><br>
+                        Pagado: <strong>${{ "%.2f"|format(total_pagado_estudiantes) }}</strong> ({{ porcentaje_cobrado }}%)<br>
+                        Por Cobrar: <strong>${{ "%.2f"|format(total_por_pagar_estudiantes) }}</strong>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="alert alert-warning">
+                        <strong>👨‍🏫 GASTOS EN DOCENTES</strong><br>
+                        Total a Pagar: <strong>${{ "%.2f"|format(total_pago_docentes) }}</strong><br>
+                        <small>{{ porcentaje_gastos_docentes_vs_ingresos }}% de los ingresos</small>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="alert alert-danger">
+                        <strong>📉 GASTOS OPERATIVOS</strong><br>
+                        Total: <strong>${{ "%.2f"|format(total_gastos) }}</strong><br>
+                        <small>{{ (total_gastos / total_cobrar_estudiantes * 100)|round(1) if total_cobrar_estudiantes>0 else 0 }}% de los ingresos</small>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
 
-<!-- Detalle por Asignatura -->
-<div class="card shadow mb-4">
-    <div class="card-header bg-info text-white" data-bs-toggle="collapse" data-bs-target="#secAsignaturas" style="cursor:pointer;">
-        <strong>📚 Detalle por Asignatura</strong>
-    </div>
-    <div class="collapse" id="secAsignaturas">
-        <div class="card-body p-2">
-            <table class="table table-sm table-striped">
-                <thead><tr><th>Asignatura</th><th>H Plan</th><th>H Real</th><th>H Canc</th></tr></thead>
-                <tbody>{% for a,i in asignaturas_detalle.items() %}<tr><td>{{ a }}</td><td>{{ i['plan'] }}</td><td>{{ i['real'] }}</td><td>{{ i['canc'] }}</td></tr>{% endfor %}</tbody>
-            </table>
-        </div>
-    </div>
-</div>
-
-<!-- Gastos Clasificados -->
-<div class="card shadow mb-4">
-    <div class="card-header bg-danger text-white" data-bs-toggle="collapse" data-bs-target="#secGastos" style="cursor:pointer;">
-        <strong>📉 Gastos Clasificados</strong>
-    </div>
-    <div class="collapse" id="secGastos">
-        <div class="card-body p-2">
-            <table class="table table-sm">
-                <thead><tr><th>Fecha</th><th>Concepto</th><th>Cat</th><th>Persona</th><th>$ Monto</th><th>Reemb</th></tr></thead>
-                <tbody>{% for g in gastos %}<tr><td>{{ g['fecha'] }}</td><td>{{ g['concepto'] }}</td><td>{{ g.get('categoria','') }}</td><td>{{ g.get('persona','') }}</td><td>${{ "%.2f"|format(g['monto']) }}</td><td>{% if g.get('reembolso') %}🔄{% else %}-{% endif %}</td></tr>{% endfor %}</tbody>
-            </table>
-        </div>
-    </div>
-</div>
-
-<!-- Balance de Resultados -->
-<div class="card shadow mb-4">
-    <div class="card-header bg-dark text-white" data-bs-toggle="collapse" data-bs-target="#secBalance" style="cursor:pointer;">
-        <strong>💰 Balance de Resultados</strong>
-    </div>
-    <div class="collapse" id="secBalance">
-        <div class="card-body p-2">
-            <table class="table table-sm">
-                <tr class="table-success"><td><strong>+ Ingresos Reales</strong></td><td class="text-end"><strong>${{ "%.2f"|format(total_ingresos) }}</strong></td></tr>
-                <tr class="table-danger"><td><strong>- Gastos Operativos</strong></td><td class="text-end"><strong>${{ "%.2f"|format(total_gastos) }}</strong></td></tr>
-                <tr class="table-danger"><td><strong>- Pago Docentes/Psicólogos</strong></td><td class="text-end"><strong>${{ "%.2f"|format(total_pago_docentes) }}</strong></td></tr>
-                <tr class="{{ 'table-success' if (total_ingresos-total_gastos-total_pago_docentes)>=0 else 'table-danger' }}">
-                    <td><strong>= Resultado Neto</strong></td>
-                    <td class="text-end"><strong>${{ "%.2f"|format(total_ingresos-total_gastos-total_pago_docentes) }}</strong></td>
-                </tr>
-            </table>
-        </div>
-    </div>
-</div>
-
-<!-- Pagos a Docentes -->
+<!-- ========== REPORTE 2: PAGOS A DOCENTES Y PSICÓLOGOS ========== -->
 <div class="card shadow mb-4">
     <div class="card-header bg-secondary text-white" data-bs-toggle="collapse" data-bs-target="#secPagosDocentes" style="cursor:pointer;">
-        <strong>💲 Pagos a Docentes y Psicólogos</strong>
+        <strong>👨‍🏫 REPORTE DE PAGOS A DOCENTES Y PSICÓLOGOS</strong>
     </div>
-    <div class="collapse" id="secPagosDocentes">
+    <div class="collapse show" id="secPagosDocentes">
         <div class="card-body">
             <div class="table-responsive">
                 <table class="table table-sm table-striped">
                     <thead>
                         <tr class="table-dark">
-                            <th>Docente/Psicólogo</th>
-                            <th>Sesiones</th>
-                            <th>Horas</th>
-                            <th>$ Pago Docencia</th>
-                            <th>$ Pago Psicología</th>
+                            <th>Profesional</th>
+                            <th>Sesiones Clase</th>
+                            <th>Sesiones Terapia</th>
+                            <th>Horas Clase</th>
+                            <th>Horas Terapia</th>
+                            <th>$ Docencia ($7/h)</th>
+                            <th>$ Psicología (35%)</th>
                             <th>$ Total a Pagar</th>
+                            <th>% del Total</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for nombre, datos in pagos_por_docente.items() %}
                         <tr>
                             <td><strong>{{ nombre }}</strong></td>
-                            <td class="text-center">{{ datos.sesiones_clase + datos.sesiones_terapia }}</td>
-                            <td class="text-center">{{ datos.horas_clase + datos.horas_terapia }}</td>
+                            <td class="text-center">{{ datos.sesiones_clase }}</td>
+                            <td class="text-center">{{ datos.sesiones_terapia }}</td>
+                            <td class="text-center">{{ datos.horas_clase }}</td>
+                            <td class="text-center">{{ datos.horas_terapia }}</td>
                             <td class="text-primary">${{ "%.2f"|format(datos.pago_docencia) }}</td>
                             <td class="text-success">${{ "%.2f"|format(datos.pago_psicologia) }}</td>
                             <td class="fw-bold">${{ "%.2f"|format(datos.total_pagar) }}</td>
+                            <td class="text-info">{{ (datos.total_pagar / total_pago_docentes * 100)|round(1) if total_pago_docentes>0 else 0 }}%</td>
                         </tr>
                         {% endfor %}
                     </tbody>
                     <tfoot class="table-dark">
                         <tr>
                             <td><strong>TOTALES</strong></td>
-                            <td class="text-center"><strong>{{ total_sesiones_clase + total_sesiones_terapia }}</strong></td>
-                            <td class="text-center"><strong>{{ total_horas_clase + total_horas_terapia }}</strong></td>
+                            <td class="text-center"><strong>{{ total_sesiones_clase }}</strong></td>
+                            <td class="text-center"><strong>{{ total_sesiones_terapia }}</strong></td>
+                            <td class="text-center"><strong>{{ total_horas_clase }}</strong></td>
+                            <td class="text-center"><strong>{{ total_horas_terapia }}</strong></td>
                             <td class="text-primary"><strong>${{ "%.2f"|format(total_docencia) }}</strong></td>
                             <td class="text-success"><strong>${{ "%.2f"|format(total_psicologia) }}</strong></td>
                             <td class="fw-bold"><strong>${{ "%.2f"|format(total_pago_docentes) }}</strong></td>
+                            <td class="text-info"><strong>100%</strong></td>
+                        </table>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========== REPORTE 3: INGRESOS POR ESTUDIANTE ========== -->
+<div class="card shadow mb-4">
+    <div class="card-header bg-success text-white" data-bs-toggle="collapse" data-bs-target="#secIngresos" style="cursor:pointer;">
+        <strong>💰 INGRESOS POR ESTUDIANTE</strong>
+    </div>
+    <div class="collapse show" id="secIngresos">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-sm table-striped">
+                    <thead>
+                        <tr class="table-dark">
+                            <th>Estudiante</th>
+                            <th>H Plan</th>
+                            <th>H Real</th>
+                            <th>% Cumplimiento</th>
+                            <th>$ a Cobrar</th>
+                            <th>$ Recibido</th>
+                            <th>% Pagado</th>
+                            <th>$ Saldo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for d in datos_estudiantes %}
+                        <tr>
+                            <td>{{ d.estudiante }}</td>
+                            <td>{{ d.horas_plan }}</td>
+                            <td>{{ d.horas_real }}</td>
+                            <td class="text-center">{{ (d.horas_real / d.horas_plan * 100)|round(1) if d.horas_plan>0 else 0 }}%</td>
+                            <td>${{ "%.2f"|format(d.cobrar) }}</td>
+                            <td>${{ "%.2f"|format(d.pagado) }}</td>
+                            <td class="text-center">{{ (d.pagado / d.cobrar * 100)|round(1) if d.cobrar>0 else 0 }}%</td>
+                            <td class="text-{{ 'danger' if d.saldo>0 else 'success' }}">${{ "%.2f"|format(d.saldo|abs) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot class="table-dark">
+                        <tr>
+                            <td><strong>TOTALES</strong></td>
+                            <td><strong>{{ datos_estudiantes|sum(attribute='horas_plan') }}</strong></td>
+                            <td><strong>{{ datos_estudiantes|sum(attribute='horas_real') }}</strong></td>
+                            <td class="text-center"><strong>{{ (total_horas_estudiantes / (datos_estudiantes|sum(attribute='horas_plan')) * 100)|round(1) if (datos_estudiantes|sum(attribute='horas_plan'))>0 else 0 }}%</strong></td>
+                            <td><strong>${{ "%.2f"|format(total_cobrar_estudiantes) }}</strong></td>
+                            <td><strong>${{ "%.2f"|format(total_pagado_estudiantes) }}</strong></td>
+                            <td class="text-center"><strong>{{ porcentaje_cobrado }}%</strong></td>
+                            <td class="text-danger"><strong>${{ "%.2f"|format(total_por_pagar_estudiantes) }}</strong></td>
                         </tr>
                     </tfoot>
                 </table>
@@ -213,36 +254,169 @@
     </div>
 </div>
 
-<!-- Correcciones de Pagos -->
+<!-- ========== REPORTE 4: ASIGNATURAS Y TERAPIAS ========== -->
+<div class="card shadow mb-4">
+    <div class="card-header bg-info text-white" data-bs-toggle="collapse" data-bs-target="#secAsignaturas" style="cursor:pointer;">
+        <strong>📚 DETALLE POR ASIGNATURA / TERAPIA</strong>
+    </div>
+    <div class="collapse show" id="secAsignaturas">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-sm table-striped">
+                    <thead>
+                        <tr class="table-dark">
+                            <th>Asignatura/Terapia</th>
+                            <th>Horas Plan</th>
+                            <th>Horas Real</th>
+                            <th>Horas Canc</th>
+                            <th>% Cumplimiento</th>
+                        </table>
+                    </thead>
+                    <tbody>
+                        {% for a,i in asignaturas_detalle.items() %}
+                        <tr>
+                            <td>{{ a }}</td>
+                            <td>{{ i.plan }}</td>
+                            <td>{{ i.real }}</td>
+                            <td>{{ i.canc }}</td>
+                            <td class="text-center">{{ (i.real / i.plan * 100)|round(1) if i.plan>0 else 0 }}%</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========== REPORTE 5: GASTOS OPERATIVOS ========== -->
+<div class="card shadow mb-4">
+    <div class="card-header bg-danger text-white" data-bs-toggle="collapse" data-bs-target="#secGastos" style="cursor:pointer;">
+        <strong>📉 GASTOS OPERATIVOS DETALLADOS</strong>
+    </div>
+    <div class="collapse show" id="secGastos">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead>
+                        <tr class="table-dark">
+                            <th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Persona</th><th>Monto</th><th>% del Total</th><th>Reembolso</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for g in gastos %}
+                        <tr>
+                            <td>{{ g.fecha }}</td>
+                            <td>{{ g.concepto }}</td>
+                            <td>{{ g.get('categoria','') }}</td>
+                            <td>{{ g.get('persona','') }}</td>
+                            <td>${{ "%.2f"|format(g.monto) }}</td>
+                            <td>{{ (g.monto / total_gastos * 100)|round(1) if total_gastos>0 else 0 }}%</td>
+                            <td>{% if g.get('reembolso') %}🔄 Sí{% else %}-{% endif %}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot class="table-dark">
+                        <tr class="fw-bold">
+                            <td colspan="4">TOTAL</td>
+                            <td>${{ "%.2f"|format(total_gastos) }}</td>
+                            <td>100%</td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========== REPORTE 6: BALANCE DE RESULTADOS ========== -->
+<div class="card shadow mb-4">
+    <div class="card-header bg-dark text-white" data-bs-toggle="collapse" data-bs-target="#secBalance" style="cursor:pointer;">
+        <strong>💰 BALANCE DE RESULTADOS</strong>
+    </div>
+    <div class="collapse show" id="secBalance">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <tr class="table-success">
+                                <td><strong>+ INGRESOS POR ESTUDIANTES</strong></td>
+                                <td class="text-end"><strong>${{ "%.2f"|format(total_cobrar_estudiantes) }}</strong></td>
+                                <td class="text-end">100%</td>
+                            </tr>
+                            <tr class="table-light">
+                                <td class="ps-4">- Pagado por estudiantes</td>
+                                <td class="text-end">${{ "%.2f"|format(total_pagado_estudiantes) }}</td>
+                                <td class="text-end">{{ porcentaje_cobrado }}%</td>
+                            </tr>
+                            <tr class="table-warning">
+                                <td class="ps-4">- Por cobrar</td>
+                                <td class="text-end">${{ "%.2f"|format(total_por_pagar_estudiantes) }}</td>
+                                <td class="text-end">{{ (100 - porcentaje_cobrado) }}%</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <tr class="table-danger">
+                                <td><strong>- GASTOS OPERATIVOS</strong></td>
+                                <td class="text-end"><strong>${{ "%.2f"|format(total_gastos) }}</strong></td>
+                                <td class="text-end">{{ (total_gastos / total_cobrar_estudiantes * 100)|round(1) if total_cobrar_estudiantes>0 else 0 }}%</td>
+                            </tr>
+                            <tr class="table-danger">
+                                <td><strong>- PAGO A DOCENTES/PSICÓLOGOS</strong></td>
+                                <td class="text-end"><strong>${{ "%.2f"|format(total_pago_docentes) }}</strong></td>
+                                <td class="text-end">{{ porcentaje_gastos_docentes_vs_ingresos }}%</td>
+                            </tr>
+                            <tr class="table-{{ 'success' if balance>=0 else 'danger' }} fw-bold">
+                                <td><strong>= RESULTADO NETO</strong></td>
+                                <td class="text-end"><strong>${{ "%.2f"|format(balance) }}</strong></td>
+                                <td class="text-end">{{ (balance / total_cobrar_estudiantes * 100)|round(1) if total_cobrar_estudiantes>0 else 0 }}%</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========== REPORTE 7: CORRECCIONES Y AUDITORÍA ========== -->
 <div class="card shadow mb-4">
     <div class="card-header bg-warning text-dark" data-bs-toggle="collapse" data-bs-target="#secCorrecciones" style="cursor:pointer;">
-        <strong>🔧 Correcciones de Pagos</strong>
+        <strong>🔧 CORRECCIONES DE PAGOS</strong>
     </div>
     <div class="collapse" id="secCorrecciones">
         <div class="card-body">
             {% if correcciones %}
             <table class="table table-sm">
-                <thead><tr><th>Fecha</th><th>Pago</th><th>$ Ant</th><th>$ Nuevo</th><th>Quién</th><th>Motivo</th></tr></thead>
-                <tbody>{% for c in correcciones %}<tr><td>{{ c.get('fecha_correccion','')[:10] }}</td><td>{{ c['pago_id'] }}</td><td>${{ "%.2f"|format(c['monto_anterior']) }}</td><td>${{ "%.2f"|format(c['monto_nuevo']) }}</td><td>{{ c['cambiado_por'] }}</td><td>{{ c['motivo'][:50] }}</td></tr>{% endfor %}</tbody>
+                <thead><tr><th>Fecha</th><th>Pago</th><th>$ Anterior</th><th>$ Nuevo</th><th>Responsable</th><th>Motivo</th></tr></thead>
+                <tbody>{% for c in correcciones %}<tr><td>{{ c.get('fecha_correccion','')[:10] }}</td><td>{{ c.pago_id }}</td><td>${{ "%.2f"|format(c.monto_anterior) }}</td><td>${{ "%.2f"|format(c.monto_nuevo) }}</td><td>{{ c.cambiado_por }}</td><td>{{ c.motivo[:50] }}</td></tr>{% endfor %}</tbody>
             </table>
-            {% else %}<p class="text-muted">Sin correcciones</p>{% endif %}
+            {% else %}<p class="text-muted">Sin correcciones registradas</p>{% endif %}
         </div>
     </div>
 </div>
 
-<!-- Auditoría -->
+<!-- ========== REPORTE 8: AUDITORÍA ========== -->
 <div class="card shadow mb-4">
     <div class="card-header bg-primary text-white" data-bs-toggle="collapse" data-bs-target="#secAuditoria" style="cursor:pointer;">
-        <strong>📋 Registro de Movimientos ({{ nuevos_usuarios|length + correcciones|length + observaciones|length }})</strong>
+        <strong>📋 REGISTRO DE MOVIMIENTOS ({{ nuevos_usuarios|length + correcciones|length + observaciones|length }})</strong>
     </div>
     <div class="collapse" id="secAuditoria">
         <div class="card-body p-2">
-            <h6>👤 Nuevos Usuarios</h6>
-            {% for u in nuevos_usuarios %}<small>✅ {{ u['nombre'] }} ({{ u['rol'] }}) - {{ u['fecha_registro'][:10] }}</small><br>{% else %}<small class="text-muted">Sin registros</small>{% endfor %}
-            <hr><h6>🔧 Correcciones de Pagos</h6>
-            {% for c in correcciones %}<small>💰 Pago #{{ c['pago_id'] }}: ${{ "%.2f"|format(c['monto_anterior']) }} → ${{ "%.2f"|format(c['monto_nuevo']) }} por {{ c['cambiado_por'] }} - {{ c.get('fecha_correccion','')[:10] }}</small><br>{% else %}<small class="text-muted">Sin correcciones</small>{% endfor %}
-            <hr><h6>📝 Observaciones en Sesiones</h6>
-            {% for o in observaciones %}<small>📅 {{ o['fecha'] }} - {{ o.get('estudiantes',{}).get('apellidos','') }}: {{ o['observaciones'][:60] }}</small><br>{% else %}<small class="text-muted">Sin observaciones</small>{% endfor %}
+            <h6>👤 Nuevos Usuarios Registrados</h6>
+            {% for u in nuevos_usuarios %}<small>✅ {{ u.nombre }} ({{ u.rol }}) - {{ u.fecha_registro[:10] }}</small><br>{% else %}<small class="text-muted">Sin registros</small>{% endfor %}
+            <hr>
+            <h6>🔧 Correcciones de Pagos</h6>
+            {% for c in correcciones %}<small>💰 Pago #{{ c.pago_id }}: ${{ "%.2f"|format(c.monto_anterior) }} → ${{ "%.2f"|format(c.monto_nuevo) }} por {{ c.cambiado_por }} - {{ c.get('fecha_correccion','')[:10] }}</small><br>{% else %}<small class="text-muted">Sin correcciones</small>{% endfor %}
+            <hr>
+            <h6>📝 Observaciones en Sesiones</h6>
+            {% for o in observaciones %}<small>📅 {{ o.fecha }} - {{ o.get('estudiantes',{}).get('apellidos','') }}: {{ o.observaciones[:60] }}</small><br>{% else %}<small class="text-muted">Sin observaciones</small>{% endfor %}
         </div>
     </div>
 </div>
@@ -250,9 +424,67 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
 const colors=['#1a73e8','#0f9d58','#f4b400','#db4437','#ab47bc','#00acc1','#ff7043','#9ccc65'];
-new Chart(document.getElementById('chartIngresos'),{type:'pie',data:{labels:[{% for t,v in ingresos_por_tipo.items() %}'{{ t }}',{% endfor %}],datasets:[{data:[{% for t,v in ingresos_por_tipo.items() %}{{ v }},{% endfor %}],backgroundColor:colors}]}});
-new Chart(document.getElementById('chartCumplimiento'),{type:'doughnut',data:{labels:['Realizado','Planificado','Cancelado'],datasets:[{data:[{{ cumplimiento.get('realizado',0) }},{{ cumplimiento.get('planificado',0) }},{{ cumplimiento.get('cancelado',0) }}],backgroundColor:['#0f9d58','#f4b400','#db4437']}]}});
-new Chart(document.getElementById('chartGastos'),{type:'pie',data:{labels:[{% for c,v in gastos_por_categoria.items() %}'{{ c }}',{% endfor %}],datasets:[{data:[{% for c,v in gastos_por_categoria.items() %}{{ v }},{% endfor %}],backgroundColor:colors}]}});
-new Chart(document.getElementById('chartMaterias'),{type:'bar',data:{labels:[{% for m,h in horas_por_materia.items() %}'{{ m[:20] }}',{% endfor %}],datasets:[{label:'Horas',data:[{% for m,h in horas_por_materia.items() %}{{ h }},{% endfor %}],backgroundColor:'#1a73e8'}]}});
+
+// Gráfico de Ingresos por Tipo
+new Chart(document.getElementById('chartIngresos'),{
+    type:'pie',
+    data:{
+        labels:[{% for t,v in ingresos_por_tipo.items() %}'{{ t }}',{% endfor %}],
+        datasets:[{
+            data:[{% for t,v in ingresos_por_tipo.items() %}{{ v }},{% endfor %}],
+            backgroundColor:colors
+        }]
+    }
+});
+
+// Gráfico de Cumplimiento
+new Chart(document.getElementById('chartCumplimiento'),{
+    type:'doughnut',
+    data:{
+        labels:['Realizado','Planificado','Cancelado'],
+        datasets:[{
+            data:[{{ cumplimiento.get('realizado',0) }},{{ cumplimiento.get('planificado',0) }},{{ cumplimiento.get('cancelado',0) }}],
+            backgroundColor:['#0f9d58','#f4b400','#db4437']
+        }]
+    }
+});
+
+// Gráfico de Gastos por Categoría
+new Chart(document.getElementById('chartGastos'),{
+    type:'pie',
+    data:{
+        labels:[{% for c,v in gastos_por_categoria.items() %}'{{ c }}',{% endfor %}],
+        datasets:[{
+            data:[{% for c,v in gastos_por_categoria.items() %}{{ v }},{% endfor %}],
+            backgroundColor:colors
+        }]
+    }
+});
+
+// Gráfico de Horas por Materia
+new Chart(document.getElementById('chartMaterias'),{
+    type:'bar',
+    data:{
+        labels:[{% for m,h in horas_por_materia.items() %}'{{ m[:20] }}',{% endfor %}],
+        datasets:[{
+            label:'Horas',
+            data:[{% for m,h in horas_por_materia.items() %}{{ h }},{% endfor %}],
+            backgroundColor:'#1a73e8'
+        }]
+    }
+});
+
+// Gráfico Comparativo Financiero
+new Chart(document.getElementById('chartComparativo'),{
+    type:'bar',
+    data:{
+        labels:['Ingresos x Estudiante', 'Pago Docentes', 'Gastos Operativos', 'Resultado Neto'],
+        datasets:[{
+            label:'Monto ($)',
+            data:[{{ total_cobrar_estudiantes }}, {{ total_pago_docentes }}, {{ total_gastos }}, {{ balance }}],
+            backgroundColor:['#28a745','#ffc107','#dc3545','#17a2b8']
+        }]
+    }
+});
 </script>
 {% endblock %}

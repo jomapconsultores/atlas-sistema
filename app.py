@@ -1085,15 +1085,25 @@ def reportes():
     mes = int(request.args.get('mes', date.today().month))
     anio = int(request.args.get('anio', date.today().year))
     estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
-    datos, tc, tp, th, tp_plan = [], 0, 0, 0, 0
-    horas_por_materia = {}
-    asignaturas_detalle = {}
-    pagos_por_docente = {}
-    cumplimiento = {'planificado': 0, 'realizado': 0, 'cancelado': 0}
-    ingresos_por_tipo = {}
-    gastos_por_categoria = {}
     
-    # Variables para totales de docentes
+    # ========== DATOS GENERALES ==========
+    datos_estudiantes = []
+    total_horas_estudiantes = 0
+    total_cobrar_estudiantes = 0
+    total_pagado_estudiantes = 0
+    
+    # ========== DATOS POR ASIGNATURA ==========
+    asignaturas_detalle = {}
+    horas_por_materia = {}
+    
+    # ========== DATOS DE CUMPLIMIENTO ==========
+    cumplimiento = {'planificado': 0, 'realizado': 0, 'cancelado': 0}
+    
+    # ========== INGRESOS POR TIPO ==========
+    ingresos_por_tipo = {}
+    
+    # ========== PAGOS A DOCENTES (INDEPENDIENTE) ==========
+    pagos_por_docente = {}
     total_docencia = 0
     total_psicologia = 0
     total_sesiones_clase = 0
@@ -1101,12 +1111,17 @@ def reportes():
     total_horas_clase = 0
     total_horas_terapia = 0
     
+    # ========== GASTOS OPERATIVOS ==========
+    gastos_por_categoria = {}
+    total_gastos = 0
+    
     for e in (estudiantes.data or []):
         ses = supabase.table('sesiones').select('*').eq('estudiante_id', e['id']).execute()
         ses_todas = [s for s in (ses.data or []) if s['fecha'][:7] == f"{anio}-{mes:02d}"]
         ses_realizadas = [s for s in ses_todas if s['estado'] == 'Realizado']
         ses_canceladas = [s for s in ses_todas if s['estado'] == 'Cancelado']
         ses_planificadas = [s for s in ses_todas if s['estado'] == 'Planificado']
+        
         pag = supabase.table('pagos').select('*').eq('estudiante_id', e['id']).execute()
         pag_filtrados = [p for p in (pag.data or []) if p['fecha_pago'][:7] == f"{anio}-{mes:02d}"]
         
@@ -1116,29 +1131,37 @@ def reportes():
         cobrar = sum(s.get('valor_total', 0) or 0 for s in ses_realizadas)
         cobrar_plan = sum(s.get('valor_total', 0) or 0 for s in ses_planificadas)
         pagado = sum(p.get('monto', 0) or 0 for p in pag_filtrados)
-        tc += cobrar
-        tp += pagado
-        th += horas_real
-        tp_plan += cobrar_plan
+        
+        total_horas_estudiantes += horas_real
+        total_cobrar_estudiantes += cobrar
+        total_pagado_estudiantes += pagado
         
         for s in ses_todas:
             asig = s.get('asignatura') or s.get('tema_terapia') or 'Sin registro'
             horas_por_materia[asig] = horas_por_materia.get(asig, 0) + (s.get('horas', 0) or 0)
+            
             if asig not in asignaturas_detalle:
                 asignaturas_detalle[asig] = {'plan': 0, 'real': 0, 'canc': 0}
+            
             if s['estado'] == 'Planificado':
                 asignaturas_detalle[asig]['plan'] += s.get('horas', 0) or 0
             elif s['estado'] == 'Realizado':
                 asignaturas_detalle[asig]['real'] += s.get('horas', 0) or 0
             elif s['estado'] == 'Cancelado':
                 asignaturas_detalle[asig]['canc'] += s.get('horas', 0) or 0
+            
             cumplimiento[s.get('estado', 'Planificado').lower()] = cumplimiento.get(s.get('estado', 'Planificado').lower(), 0) + 1
             
-            # ========== CÁLCULO DE PAGOS A DOCENTES ==========
-            prof = s.get('profesor_terapeuta', 'Desconocido')
+            # ========== INGRESOS POR TIPO ==========
             tipo = s.get('tipo_sesion', 'clase')
-            horas = s.get('horas', 0) or 0
             valor = s.get('valor_total', 0) or 0
+            if tipo not in ingresos_por_tipo:
+                ingresos_por_tipo[tipo] = 0
+            ingresos_por_tipo[tipo] += valor
+            
+            # ========== PAGOS A DOCENTES (INDEPENDIENTE) ==========
+            prof = s.get('profesor_terapeuta', 'Desconocido')
+            horas = s.get('horas', 0) or 0
             
             if tipo in ['clase', 'preuniversitario']:
                 pago_docente = horas * 7
@@ -1146,7 +1169,7 @@ def reportes():
                 total_sesiones_clase += 1
                 total_horas_clase += horas
                 total_docencia += pago_docente
-            else:  # terapia o ambos
+            else:
                 pago_docente = 0
                 pago_psicologia = valor * 0.35
                 total_sesiones_terapia += 1
@@ -1176,63 +1199,73 @@ def reportes():
                 pagos_por_docente[prof]['pago_psicologia'] += pago_psicologia
             
             pagos_por_docente[prof]['total_pagar'] += total_pagar
-            
-            if tipo not in ingresos_por_tipo:
-                ingresos_por_tipo[tipo] = 0
-            ingresos_por_tipo[tipo] += valor
         
         if cobrar > 0 or pagado > 0 or horas_real > 0:
-            datos.append({
-                'id': e['id'], 
+            datos_estudiantes.append({
+                'id': e['id'],
                 'estudiante': f"{e['apellidos']} {e['nombres']}",
-                'horas_plan': horas_plan, 
-                'horas_real': horas_real, 
+                'horas_plan': horas_plan,
+                'horas_real': horas_real,
                 'horas_canc': horas_canc,
-                'cobrar': cobrar, 
-                'pagado': pagado, 
+                'cobrar': cobrar,
+                'pagado': pagado,
                 'saldo': cobrar - pagado
             })
     
+    # ========== GASTOS OPERATIVOS ==========
     gastos_mes = supabase.table('gastos').select('*').eq('mes', mes).eq('anio', anio).order('fecha').execute()
     total_gastos = sum(g.get('monto', 0) or 0 for g in (gastos_mes.data or []))
     for g in (gastos_mes.data or []):
         cat = g.get('categoria', 'Sin categoría')
         gastos_por_categoria[cat] = gastos_por_categoria.get(cat, 0) + (g.get('monto', 0) or 0)
     
-    pagos_mes = supabase.table('pagos').select('*').gte('fecha_pago', f"{anio}-{mes:02d}-01").lte('fecha_pago', f"{anio}-{mes:02d}-31").execute()
-    total_ingresos = sum(p.get('monto', 0) or 0 for p in (pagos_mes.data or []))
+    # ========== CÁLCULO DE PORCENTAJES ==========
+    total_ingresos_estudiantes = total_pagado_estudiantes
+    total_por_pagar_estudiantes = total_cobrar_estudiantes - total_pagado_estudiantes
     total_pago_docentes = sum(d['total_pagar'] for d in pagos_por_docente.values())
     
-    # Calcular porcentajes
     porcentaje_cumplimiento = 0
     if cumplimiento.get('planificado', 0) > 0:
         porcentaje_cumplimiento = round((cumplimiento.get('realizado', 0) / cumplimiento.get('planificado', 0)) * 100, 2)
     
-    porcentaje_ingresos_vs_plan = 0
-    if tp_plan > 0:
-        porcentaje_ingresos_vs_plan = round((total_ingresos / tp_plan) * 100, 2)
+    porcentaje_ingresos_vs_gastos = 0
+    if total_gastos > 0:
+        porcentaje_ingresos_vs_gastos = round((total_ingresos_estudiantes / total_gastos) * 100, 2)
     
-    porcentaje_gastos_vs_ingresos = 0
-    if total_ingresos > 0:
-        porcentaje_gastos_vs_ingresos = round((total_gastos / total_ingresos) * 100, 2)
+    porcentaje_gastos_docentes_vs_ingresos = 0
+    if total_ingresos_estudiantes > 0:
+        porcentaje_gastos_docentes_vs_ingresos = round((total_pago_docentes / total_ingresos_estudiantes) * 100, 2)
+    
+    porcentaje_cobrado = 0
+    if total_cobrar_estudiantes > 0:
+        porcentaje_cobrado = round((total_pagado_estudiantes / total_cobrar_estudiantes) * 100, 2)
     
     correcciones = supabase.table('correcciones_pagos').select('*').order('fecha_correccion', desc=True).limit(30).execute()
     observaciones = supabase.table('sesiones').select('*, estudiantes(apellidos, nombres)').not_.is_('observaciones', 'null').order('fecha', desc=True).limit(30).execute()
     nuevos_usuarios = supabase.table('usuarios').select('*').gte('fecha_registro', f"{anio}-{mes:02d}-01").lte('fecha_registro', f"{anio}-{mes:02d}-31").execute()
     
     return render_template('reportes.html',
-                         datos=datos,
-                         total_estudiantes=len(datos),
-                         total_horas=th,
-                         total_ingresos=total_ingresos,
-                         total_gastos=total_gastos,
-                         balance=total_ingresos - total_gastos,
-                         gastos=gastos_mes.data or [],
-                         mes=mes,
-                         anio=anio,
-                         ingresos_por_tipo=ingresos_por_tipo,
-                         horas_por_materia=horas_por_materia,
+                         # Datos estudiantes
+                         datos_estudiantes=datos_estudiantes,
+                         total_estudiantes=len(datos_estudiantes),
+                         total_horas_estudiantes=total_horas_estudiantes,
+                         total_cobrar_estudiantes=total_cobrar_estudiantes,
+                         total_pagado_estudiantes=total_pagado_estudiantes,
+                         total_por_pagar_estudiantes=total_por_pagar_estudiantes,
+                         porcentaje_cobrado=porcentaje_cobrado,
+                         
+                         # Asignaturas
                          asignaturas_detalle=asignaturas_detalle,
+                         horas_por_materia=horas_por_materia,
+                         
+                         # Cumplimiento
+                         cumplimiento=cumplimiento,
+                         porcentaje_cumplimiento=porcentaje_cumplimiento,
+                         
+                         # Ingresos por tipo
+                         ingresos_por_tipo=ingresos_por_tipo,
+                         
+                         # Pagos a docentes (independiente)
                          pagos_por_docente=pagos_por_docente,
                          total_pago_docentes=total_pago_docentes,
                          total_docencia=total_docencia,
@@ -1241,17 +1274,24 @@ def reportes():
                          total_sesiones_terapia=total_sesiones_terapia,
                          total_horas_clase=total_horas_clase,
                          total_horas_terapia=total_horas_terapia,
-                         cumplimiento=cumplimiento,
-                         porcentaje_cumplimiento=porcentaje_cumplimiento,
-                         porcentaje_ingresos_vs_plan=porcentaje_ingresos_vs_plan,
-                         porcentaje_gastos_vs_ingresos=porcentaje_gastos_vs_ingresos,
+                         
+                         # Gastos
+                         gastos=gastos_mes.data or [],
+                         total_gastos=total_gastos,
+                         gastos_por_categoria=gastos_por_categoria,
+                         porcentaje_ingresos_vs_gastos=porcentaje_ingresos_vs_gastos,
+                         porcentaje_gastos_docentes_vs_ingresos=porcentaje_gastos_docentes_vs_ingresos,
+                         
+                         # Balance
+                         balance=total_ingresos_estudiantes - total_gastos - total_pago_docentes,
+                         
+                         # Otros
+                         mes=mes,
+                         anio=anio,
                          correcciones=correcciones.data or [],
                          observaciones=observaciones.data or [],
-                         nuevos_usuarios=nuevos_usuarios.data or [],
-                         gastos_por_categoria=gastos_por_categoria,
-                         total_planificado=tp_plan,
-                         total_cobrar=tc,
-                         total_pagado=tp)
+                         nuevos_usuarios=nuevos_usuarios.data or [])
+
 # ========== GASTOS ==========
 
 @app.route('/gastos', methods=['GET', 'POST'])
