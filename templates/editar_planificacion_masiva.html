@@ -5,7 +5,7 @@
 <h3>✏️ Edición Masiva de Planificación</h3>
 <p class="text-muted">Selecciona una planificación existente para modificarla completamente.</p>
 
-<!-- Filtros mejorados -->
+<!-- Filtros mejorados con datos de la BD -->
 <div class="card shadow mb-4">
     <div class="card-header bg-primary text-white">
         <strong>🔍 Filtros de búsqueda</strong>
@@ -14,14 +14,27 @@
         <div class="row g-3">
             <div class="col-md-4">
                 <label class="form-label">📚 Asignatura/Terapia</label>
-                <input type="text" id="filtro_materia" class="form-control" placeholder="Ej: Matemáticas, Biología...">
+                <select id="filtro_materia" class="form-select">
+                    <option value="">Todas</option>
+                    {% for a in asignaturas %}
+                    <option value="{{ a }}">{{ a }}</option>
+                    {% endfor %}
+                    {% for item in atencion_psicologica %}
+                    <option value="{{ item.nombre }}">{{ item.nombre }} (Terapia)</option>
+                    {% endfor %}
+                </select>
             </div>
             <div class="col-md-4">
                 <label class="form-label">👨‍🏫 Profesor/Psicólogo</label>
-                <input type="text" id="filtro_profesor" class="form-control" placeholder="Ej: Carmen Reinoso...">
+                <select id="filtro_profesor" class="form-select">
+                    <option value="">Todos</option>
+                    {% for p in profesores %}
+                    <option value="{{ p }}">{{ p }}</option>
+                    {% endfor %}
+                </select>
             </div>
             <div class="col-md-4">
-                <label class="form-label">📅 Fecha (desde/hasta)</label>
+                <label class="form-label">📅 Fecha</label>
                 <div class="d-flex gap-2">
                     <input type="date" id="fecha_desde" class="form-control" placeholder="Desde">
                     <input type="date" id="fecha_hasta" class="form-control" placeholder="Hasta">
@@ -58,7 +71,7 @@
                         <option value="">Primero selecciona un estudiante</option>
                     </select>
                 </div>
-                <button type="button" class="btn btn-primary w-100" onclick="cargarSesion()">📋 Cargar sesión</button>
+                <button type="button" class="btn btn-primary w-100" onclick="cargarSesionSeleccionada()">📋 Cargar sesión</button>
             </div>
         </div>
     </div>
@@ -85,7 +98,7 @@
             <strong>📊 Sesión Seleccionada</strong>
         </div>
         <div class="card-body" id="resumenActual">
-            <p class="text-muted">Selecciona una sesión de la lista para ver el resumen</p>
+            <p class="text-muted">Selecciona una sesión de la lista o elige una del desplegable</p>
         </div>
     </div>
 </div>
@@ -214,6 +227,7 @@
 let todasSesiones = [];
 let sesionOriginal = null;
 
+// Cargar todas las sesiones al inicio
 async function cargarTodasSesiones() {
     try {
         const response = await fetch('/api/sesiones/todas');
@@ -238,7 +252,7 @@ function mostrarListaSesiones(sesiones) {
     for (const s of sesiones) {
         const materia = s.asignatura || s.tema_terapia || 'Sin asignatura';
         html += `
-            <div class="list-group-item list-group-item-action" onclick="seleccionarSesion(${s.id})" style="cursor: pointer;">
+            <div class="list-group-item list-group-item-action" onclick="seleccionarSesionDeLista(${s.id})" style="cursor: pointer;">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
                         <strong>📅 ${s.fecha}</strong> - ${s.hora_inicio} a ${s.hora_fin}<br>
@@ -258,6 +272,7 @@ function mostrarListaSesiones(sesiones) {
     container.innerHTML = html;
 }
 
+// Filtrar sesiones
 function filtrarSesiones() {
     const filtroMateria = document.getElementById('filtro_materia').value.toLowerCase();
     const filtroProfesor = document.getElementById('filtro_profesor').value.toLowerCase();
@@ -302,7 +317,55 @@ function recargarSesiones() {
     cargarTodasSesiones();
 }
 
-async function seleccionarSesion(id) {
+// Cargar sesiones del estudiante seleccionado
+document.getElementById('selectEstudiante').addEventListener('change', async function() {
+    const estudianteId = this.value;
+    const selectSesion = document.getElementById('selectSesion');
+    
+    if (!estudianteId) {
+        selectSesion.innerHTML = '<option value="">Primero selecciona un estudiante</option>';
+        selectSesion.disabled = true;
+        return;
+    }
+    
+    selectSesion.disabled = false;
+    selectSesion.innerHTML = '<option value="">Cargando sesiones...</option>';
+    
+    try {
+        const response = await fetch(`/api/estudiante/${estudianteId}/sesiones`);
+        const sesiones = await response.json();
+        
+        if (sesiones.length === 0) {
+            selectSesion.innerHTML = '<option value="">No hay sesiones para este estudiante</option>';
+            selectSesion.disabled = true;
+        } else {
+            let options = '<option value="">Seleccionar sesión...</option>';
+            for (const s of sesiones) {
+                const materia = s.asignatura || s.tema_terapia || 'Sin asignatura';
+                options += `<option value="${s.id}">📅 ${s.fecha} - ${s.hora_inicio} a ${s.hora_fin} - ${s.tipo_sesion} - ${materia} - $${s.valor_total}</option>`;
+            }
+            selectSesion.innerHTML = options;
+            selectSesion.disabled = false;
+        }
+    } catch (error) {
+        selectSesion.innerHTML = '<option value="">Error al cargar sesiones</option>';
+        selectSesion.disabled = true;
+        console.error(error);
+    }
+});
+
+// Cargar sesión desde el select del estudiante
+async function cargarSesionSeleccionada() {
+    const sesionId = document.getElementById('selectSesion').value;
+    if (!sesionId) {
+        alert('❌ Selecciona una sesión del desplegable');
+        return;
+    }
+    await seleccionarSesionDeLista(sesionId);
+}
+
+// Seleccionar sesión (desde lista o desde select)
+async function seleccionarSesionDeLista(id) {
     try {
         const response = await fetch('/api/sesion/' + id);
         sesionOriginal = await response.json();
@@ -339,6 +402,12 @@ async function seleccionarSesion(id) {
         mostrarCampos();
         document.getElementById('formEdicion').style.display = 'block';
         document.getElementById('formEdicion').scrollIntoView({behavior: 'smooth'});
+        
+        // También seleccionar en el select si existe
+        const selectSesion = document.getElementById('selectSesion');
+        if (selectSesion) {
+            selectSesion.value = id;
+        }
     } catch (error) {
         alert('Error al cargar la sesión: ' + error);
     }
@@ -375,6 +444,11 @@ function guardarEdicionMasiva() {
     
     if (nuevos.hora_fin <= nuevos.hora_inicio) {
         alert('❌ ERROR: La hora de fin debe ser mayor que la hora de inicio.');
+        return;
+    }
+    
+    if (nuevos.valor_total < 0) {
+        alert('❌ ERROR: El valor total no puede ser negativo.');
         return;
     }
     
@@ -423,6 +497,7 @@ function guardarEdicionMasiva() {
     });
 }
 
+// Inicializar
 cargarTodasSesiones();
 </script>
 {% endblock %}
