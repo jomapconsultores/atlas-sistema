@@ -5,33 +5,18 @@
 <h3>✏️ Editor de Planificaciones</h3>
 <p class="text-muted">Aquí puedes modificar todas las sesiones planificadas.</p>
 
-<!-- DEBUG: Verificar variable -->
-<div class="alert alert-info small mb-3">
-    <strong>🔍 Debug:</strong> 
-    {% if atencion_psicologica %}
-        ✅ Terapias cargadas: {{ atencion_psicologica|length }} 
-        <ul class="mb-0">
-        {% for item in atencion_psicologica %}
-            <li>{{ item.nombre }} - ${{ item.precio }}</li>
-        {% endfor %}
-        </ul>
-    {% else %}
-        <span class="text-danger">❌ Variable 'atencion_psicologica' NO está llegando al template. Verifica app.py</span>
-    {% endif %}
-</div>
-
-<!-- Filtros mejorados -->
+<!-- Filtros -->
 <div class="card shadow mb-4">
     <div class="card-header bg-primary text-white">
         <strong>🔍 Filtros de búsqueda</strong>
     </div>
     <div class="card-body">
         <div class="row g-3">
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label class="form-label">Fecha desde</label>
                 <input type="date" id="fecha_desde" class="form-control">
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label class="form-label">Fecha hasta</label>
                 <input type="date" id="fecha_hasta" class="form-control">
             </div>
@@ -44,7 +29,7 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label class="form-label">Estado</label>
                 <select id="filtro_estado" class="form-select">
                     <option value="">Todos</option>
@@ -56,10 +41,6 @@
             <div class="col-md-3">
                 <label class="form-label">📚 Asignatura/Terapia</label>
                 <input type="text" id="filtro_materia" class="form-control" placeholder="Ej: Matemáticas, Biología...">
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">👨‍🏫 Profesor/Psicólogo</label>
-                <input type="text" id="filtro_profesor" class="form-control" placeholder="Ej: Carmen Reinoso...">
             </div>
             <div class="col-md-12 mt-2">
                 <button class="btn btn-primary" onclick="filtrarSesiones()">🔍 Filtrar</button>
@@ -86,7 +67,7 @@
     </div>
 </div>
 
-<!-- Modal para editar sesión (igual que antes) -->
+<!-- Modal para editar sesión -->
 <div class="modal fade" id="modalEditarSesion" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -148,15 +129,11 @@
                         <label class="form-label">Tipo de Atención Psicológica</label>
                         <select id="edit_tema_terapia" class="form-select">
                             <option value="">Seleccionar atención...</option>
-                            {% if atencion_psicologica %}
-                                {% for item in atencion_psicologica %}
-                                <option value="{{ item.nombre }}" data-precio="{{ item.precio }}">
-                                    {{ item.nombre }} - ${{ item.precio }}
-                                </option>
-                                {% endfor %}
-                            {% else %}
-                                <option value="" disabled>⚠️ No hay opciones cargadas</option>
-                            {% endif %}
+                            {% for item in atencion_psicologica %}
+                            <option value="{{ item.nombre }}" data-precio="{{ item.precio }}">
+                                {{ item.nombre }} - ${{ item.precio }}
+                            </option>
+                            {% endfor %}
                         </select>
                     </div>
                 </div>
@@ -229,34 +206,12 @@
         transition: all 0.2s;
         cursor: pointer;
     }
-    .sesion-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    }
-    .sesion-card.faltan-datos {
-        background-color: #ffcccc;
-        border-left: 5px solid #dc3545;
-    }
-    .sesion-card.realizado {
-        background-color: #d4edda;
-        border-left: 5px solid #28a745;
-    }
-    .sesion-card.cancelado {
-        background-color: #f8d7da;
-        border-left: 5px solid #dc3545;
-    }
-    .sesion-card.planificado {
-        background-color: #fff3cd;
-        border-left: 5px solid #ffc107;
-    }
-    .badge-falta {
-        background-color: #dc3545;
-        color: white;
-        font-size: 10px;
-        padding: 2px 6px;
-        border-radius: 10px;
-        margin-left: 5px;
-    }
+    .sesion-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    .sesion-card.faltan-datos { background-color: #ffcccc; border-left: 5px solid #dc3545; }
+    .sesion-card.realizado { background-color: #d4edda; border-left: 5px solid #28a745; }
+    .sesion-card.cancelado { background-color: #f8d7da; border-left: 5px solid #dc3545; }
+    .sesion-card.planificado { background-color: #fff3cd; border-left: 5px solid #ffc107; }
+    .badge-falta { background-color: #dc3545; color: white; font-size: 10px; padding: 2px 6px; border-radius: 10px; margin-left: 5px; }
 </style>
 
 <script>
@@ -277,7 +232,6 @@ async function cargarSesiones() {
 
 function mostrarSesiones(sesiones) {
     const container = document.getElementById('sesionesContainer');
-    
     if (sesiones.length === 0) {
         container.innerHTML = '<div class="text-center py-5 text-muted">No hay sesiones que coincidan con los filtros</div>';
         return;
@@ -310,11 +264,7 @@ function mostrarSesiones(sesiones) {
                     <div><strong>👨‍🏫</strong> ${s.profesor_terapeuta || '<span class="text-danger">FALTA</span>'}</div>
                     <div><strong>🔑</strong> ${s.encargado_apertura || '<span class="text-danger">FALTA</span>'}</div>
                     <div><strong>💰 Valor:</strong> $${(s.valor_total || 0).toFixed(2)}</div>
-                    <div class="mt-2">
-                        <span class="badge bg-${estadoClass === 'realizado' ? 'success' : estadoClass === 'cancelado' ? 'danger' : 'warning'}">
-                            ${s.estado || 'Planificado'}
-                        </span>
-                    </div>
+                    <div class="mt-2"><span class="badge bg-${estadoClass === 'realizado' ? 'success' : estadoClass === 'cancelado' ? 'danger' : 'warning'}">${s.estado || 'Planificado'}</span></div>
                 </div>
             </div>
         `;
@@ -328,26 +278,13 @@ function filtrarSesiones() {
     const estudianteId = document.getElementById('filtro_estudiante').value;
     const estado = document.getElementById('filtro_estado').value;
     const filtroMateria = document.getElementById('filtro_materia').value.toLowerCase();
-    const filtroProfesor = document.getElementById('filtro_profesor').value.toLowerCase();
     
     let filtradas = [...todasSesiones];
-    
     if (fechaDesde) filtradas = filtradas.filter(s => s.fecha >= fechaDesde);
     if (fechaHasta) filtradas = filtradas.filter(s => s.fecha <= fechaHasta);
     if (estudianteId) filtradas = filtradas.filter(s => s.estudiante_id == estudianteId);
     if (estado) filtradas = filtradas.filter(s => s.estado === estado);
-    if (filtroMateria) {
-        filtradas = filtradas.filter(s => {
-            const materia = (s.asignatura || s.tema_terapia || '').toLowerCase();
-            return materia.includes(filtroMateria);
-        });
-    }
-    if (filtroProfesor) {
-        filtradas = filtradas.filter(s => {
-            const profesor = (s.profesor_terapeuta || '').toLowerCase();
-            return profesor.includes(filtroProfesor);
-        });
-    }
+    if (filtroMateria) filtradas = filtradas.filter(s => (s.asignatura || s.tema_terapia || '').toLowerCase().includes(filtroMateria));
     
     mostrarSesiones(filtradas);
     document.getElementById('conteo_sesiones').innerText = filtradas.length + ' sesiones';
@@ -359,7 +296,6 @@ function limpiarFiltros() {
     document.getElementById('filtro_estudiante').value = '';
     document.getElementById('filtro_estado').value = '';
     document.getElementById('filtro_materia').value = '';
-    document.getElementById('filtro_profesor').value = '';
     mostrarSesiones(todasSesiones);
     document.getElementById('conteo_sesiones').innerText = todasSesiones.length + ' sesiones';
 }
@@ -372,39 +308,16 @@ function marcarTodasCompletas() {
         const onclickAttr = card.getAttribute('onclick');
         if (onclickAttr) {
             const id = onclickAttr.match(/\d+/)[0];
-            fetch('/api/sesion/' + id + '/toggle', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({estado: 'Realizado'})
-            }).then(() => {
-                procesadas++;
-                if (procesadas === sesionesMostradas.length) {
-                    alert('✅ Todas las sesiones marcadas como realizadas');
-                    cargarSesiones();
-                }
-            });
+            fetch('/api/sesion/' + id + '/toggle', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({estado: 'Realizado'})})
+                .then(() => { procesadas++; if (procesadas === sesionesMostradas.length) { alert('✅ Todas marcadas'); cargarSesiones(); } });
         }
     }
 }
 
 function toggleCamposEdicion() {
     const tipo = document.getElementById('edit_tipo_sesion').value;
-    const claseDiv = document.getElementById('edit_campos_clase');
-    const terapiaDiv = document.getElementById('edit_campos_terapia');
-    
-    if (tipo === 'clase' || tipo === 'preuniversitario') {
-        claseDiv.style.display = 'block';
-        terapiaDiv.style.display = 'none';
-    } else if (tipo === 'terapia') {
-        claseDiv.style.display = 'none';
-        terapiaDiv.style.display = 'block';
-    } else if (tipo === 'ambos') {
-        claseDiv.style.display = 'block';
-        terapiaDiv.style.display = 'block';
-    } else {
-        claseDiv.style.display = 'none';
-        terapiaDiv.style.display = 'none';
-    }
+    document.getElementById('edit_campos_clase').style.display = (tipo === 'clase' || tipo === 'ambos' || tipo === 'preuniversitario') ? 'block' : 'none';
+    document.getElementById('edit_campos_terapia').style.display = (tipo === 'terapia' || tipo === 'ambos') ? 'block' : 'none';
 }
 
 async function abrirEdicion(id) {
@@ -429,9 +342,7 @@ async function abrirEdicion(id) {
         
         toggleCamposEdicion();
         new bootstrap.Modal(document.getElementById('modalEditarSesion')).show();
-    } catch (error) {
-        alert('Error al cargar la sesión: ' + error);
-    }
+    } catch (error) { alert('Error al cargar la sesión: ' + error); }
 }
 
 async function guardarEdicionSesion() {
@@ -448,100 +359,46 @@ async function guardarEdicionSesion() {
     const precioHora = parseFloat(document.getElementById('edit_precio_hora').value) || 10;
     const responsable = document.getElementById('edit_responsable').value;
     
-    if (!fecha || !hIni || !hFin) {
-        alert('❌ Fecha, hora inicio y hora fin son obligatorios');
-        return;
-    }
-    if (!estudianteSelect.value) {
-        alert('❌ Selecciona un estudiante');
-        return;
-    }
-    if (!profesor) {
-        alert('❌ El profesor es obligatorio');
-        return;
-    }
-    if (!encargado) {
-        alert('❌ El encargado de apertura es obligatorio');
-        return;
-    }
+    if (!fecha || !hIni || !hFin) { alert('❌ Fecha, hora inicio y hora fin son obligatorios'); return; }
+    if (!estudianteSelect.value) { alert('❌ Selecciona un estudiante'); return; }
+    if (!profesor) { alert('❌ El profesor es obligatorio'); return; }
+    if (!encargado) { alert('❌ El encargado de apertura es obligatorio'); return; }
     
     const inicio = new Date(`${fecha}T${hIni}:00`);
     const fin = new Date(`${fecha}T${hFin}:00`);
     let horas = (fin - inicio) / 3600000;
-    
-    if (horas <= 0) {
-        alert('❌ ERROR: La hora de fin debe ser mayor que la hora de inicio.');
-        return;
-    }
+    if (horas <= 0) { alert('❌ ERROR: La hora de fin debe ser mayor que la hora de inicio.'); return; }
     
     const esTerapia = (tipo === 'terapia' || tipo === 'ambos');
-    if (horas < 0.5) {
-        alert('❌ ERROR: La duración mínima es de 30 minutos (0.5 horas).');
-        return;
-    }
+    if (horas < 0.5) { alert('❌ ERROR: La duración mínima es de 30 minutos (0.5 horas).'); return; }
+    if (valorTotal < 0) { alert('❌ ERROR: El valor total no puede ser negativo.'); return; }
     
-    if (valorTotal < 0) {
-        alert('❌ ERROR: El valor total no puede ser negativo.');
-        return;
-    }
+    let pagoDocente = esTerapia ? valorTotal * 0.4018 : horas * 7;
     
-    let resumen = '📋 RESUMEN DE CAMBIOS\n\n';
-    resumen += `👤 Responsable: ${responsable}\n`;
-    resumen += `📅 Fecha: ${fecha}\n`;
-    resumen += `🕐 Horario: ${hIni} - ${hFin}\n`;
-    resumen += `⏱️ Duración: ${horas.toFixed(2)} horas\n`;
-    resumen += `👨‍🎓 Estudiante: ${estudianteNombre}\n`;
-    resumen += `📚 Tipo: ${tipo}\n`;
-    resumen += `👨‍🏫 Profesor: ${profesor}\n`;
-    resumen += `🔑 Encargado: ${encargado}\n`;
-    resumen += `💰 Precio por hora: $${precioHora.toFixed(2)}\n`;
-    resumen += `💵 Valor total: $${valorTotal.toFixed(2)}\n`;
-    resumen += `\n✅ ¿Confirmas guardar estos cambios?`;
-    
+    let resumen = `📋 RESUMEN DE CAMBIOS\n\n👤 Responsable: ${responsable}\n📅 Fecha: ${fecha}\n🕐 Horario: ${hIni} - ${hFin}\n⏱️ Duración: ${horas.toFixed(2)} horas\n👨‍🎓 Estudiante: ${estudianteNombre}\n📚 Tipo: ${tipo}\n👨‍🏫 Profesor: ${profesor}\n🔑 Encargado: ${encargado}\n💰 Precio por hora: $${precioHora.toFixed(2)}\n💵 Valor total: $${valorTotal.toFixed(2)}\n💰 Pago docente: $${pagoDocente.toFixed(2)}\n\n✅ ¿Confirmas guardar estos cambios?`;
     if (!confirm(resumen)) return;
     
-    const data = {
-        fecha: fecha,
-        hora_inicio: hIni,
-        hora_fin: hFin,
-        horas: parseFloat(horas.toFixed(2)),
-        tipo_sesion: tipo,
-        estudiante_id: parseInt(estudianteSelect.value),
-        asignatura: document.getElementById('edit_asignatura').value,
-        tema_terapia: document.getElementById('edit_tema_terapia').value,
-        profesor_terapeuta: profesor,
-        encargado_apertura: encargado,
-        estado: document.getElementById('edit_estado').value,
-        observaciones: document.getElementById('edit_observaciones').value,
-        valor_total: valorTotal,
-        precio_hora: precioHora,
-        responsable: responsable
-    };
+    const data = { fecha, hora_inicio: hIni, hora_fin: hFin, horas: parseFloat(horas.toFixed(2)), tipo_sesion: tipo,
+        estudiante_id: parseInt(estudianteSelect.value), asignatura: document.getElementById('edit_asignatura').value,
+        tema_terapia: document.getElementById('edit_tema_terapia').value, profesor_terapeuta: profesor,
+        encargado_apertura: encargado, estado: document.getElementById('edit_estado').value,
+        observaciones: document.getElementById('edit_observaciones').value, valor_total: valorTotal,
+        precio_hora: precioHora, responsable: responsable };
     
     try {
-        const response = await fetch('/api/sesion/' + id + '/editar', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(data)
-        });
+        const response = await fetch('/api/sesion/' + id + '/editar', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)});
         const result = await response.json();
-        
         if (result.success) {
             bootstrap.Modal.getInstance(document.getElementById('modalEditarSesion')).hide();
             alert('✅ Sesión actualizada correctamente!\n👤 Responsable: ' + responsable);
             cargarSesiones();
-        } else {
-            alert('❌ Error: ' + (result.error || 'Desconocido'));
-        }
-    } catch (error) {
-        alert('❌ Error al guardar: ' + error);
-    }
+        } else { alert('❌ Error: ' + (result.error || 'Desconocido')); }
+    } catch (error) { alert('❌ Error al guardar: ' + error); }
 }
 
 async function eliminarSesionModal() {
     const id = document.getElementById('edit_sesion_id').value;
     if (!confirm('🗑️ ¿Eliminar esta sesión permanentemente?')) return;
-    
     try {
         const response = await fetch('/api/sesion/' + id + '/eliminar', {method: 'POST'});
         const result = await response.json();
@@ -549,12 +406,8 @@ async function eliminarSesionModal() {
             bootstrap.Modal.getInstance(document.getElementById('modalEditarSesion')).hide();
             alert('✅ Sesión eliminada');
             cargarSesiones();
-        } else {
-            alert('❌ Error: ' + (result.error || 'Desconocido'));
-        }
-    } catch (error) {
-        alert('❌ Error al eliminar: ' + error);
-    }
+        } else { alert('❌ Error: ' + (result.error || 'Desconocido')); }
+    } catch (error) { alert('❌ Error al eliminar: ' + error); }
 }
 
 cargarSesiones();

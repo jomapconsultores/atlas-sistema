@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}Gestión de Anticipos - Atlas{% endblock %}
+
+{% block content %}
+<h3>📋 Gestión de Solicitudes de Anticipo</h3>
+<p class="text-muted">Aprueba o rechaza las solicitudes de anticipo de docentes y psicólogos</p>
+
+<div class="card shadow mb-4">
+    <div class="card-header bg-primary text-white">
+        <strong>Solicitudes Pendientes</strong>
+        <span class="badge bg-light text-dark ms-2">{{ solicitudes|selectattr('estado', 'equalto', 'pendiente')|list|length }} pendientes</span>
+    </div>
+    <div class="card-body">
+        {% set pendientes = solicitudes|selectattr('estado', 'equalto', 'pendiente')|list %}
+        {% if pendientes %}
+        <div class="table-responsive">
+            <table class="table table-sm table-striped">
+                <thead>
+                    <tr class="table-dark">
+                        <th>Fecha</th>
+                        <th>Solicitante</th>
+                        <th>Monto</th>
+                        <th>Motivo</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in pendientes %}
+                    <tr>
+                        <td>{{ s.fecha_solicitud }}</td>
+                        <td><strong>{{ s.usuario_nombre }}</strong></td>
+                        <td class="fw-bold text-primary">${{ "%.2f"|format(s.monto) }}</td>
+                        <td>{{ s.motivo[:80] }}{% if s.motivo|length > 80 %}...{% endif %}</td>
+                        <td>
+                            <form method="POST" action="{{ url_for('aprobar_anticipo', id=s.id) }}" style="display:inline;">
+                                <button type="submit" class="btn btn-success btn-sm" onclick="return confirm('¿Aprobar anticipo de ${{ "%.2f"|format(s.monto) }} para {{ s.usuario_nombre }}?')">✅ Aprobar</button>
+                            </form>
+                            <button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#modalRechazo{{ s.id }}">❌ Rechazar</button>
+                            
+                            <!-- Modal Rechazo -->
+                            <div class="modal fade" id="modalRechazo{{ s.id }}" tabindex="-1">
+                                <div class="modal-dialog">
+                                    <div class="modal-content">
+                                        <form method="POST" action="{{ url_for('rechazar_anticipo', id=s.id) }}">
+                                            <div class="modal-header bg-danger text-white">
+                                                <h5 class="modal-title">Rechazar Solicitud</h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <p><strong>Solicitante:</strong> {{ s.usuario_nombre }}</p>
+                                                <p><strong>Monto:</strong> ${{ "%.2f"|format(s.monto) }}</p>
+                                                <p><strong>Motivo:</strong> {{ s.motivo }}</p>
+                                                <div class="mb-2">
+                                                    <label class="form-label">Motivo del rechazo *</label>
+                                                    <textarea name="motivo_rechazo" class="form-control" rows="3" required></textarea>
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                                <button type="submit" class="btn btn-danger">Rechazar</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted">No hay solicitudes pendientes</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card shadow">
+    <div class="card-header bg-info text-white">
+        <strong>Historial de Solicitudes</strong>
+    </div>
+    <div class="card-body">
+        {% set resueltas = solicitudes|selectattr('estado', 'ne', 'pendiente')|list %}
+        {% if resueltas %}
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead>
+                    <tr class="table-dark">
+                        <th>Fecha</th>
+                        <th>Solicitante</th>
+                        <th>Monto</th>
+                        <th>Estado</th>
+                        <th>Respuesta</th>
+                    比
+                </thead>
+                <tbody>
+                    {% for s in resueltas %}
+                    <tr>
+                        <td>{{ s.fecha_solicitud }}</td>
+                        <td>{{ s.usuario_nombre }}</td>
+                        <td>${{ "%.2f"|format(s.monto) }}</td>
+                        <td>
+                            {% if s.estado == 'aprobado' %}
+                                <span class="badge bg-success">✅ Aprobado</span>
+                            {% else %}
+                                <span class="badge bg-danger">❌ Rechazado</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if s.estado == 'aprobado' %}
+                                Aprobado por: {{ s.aprobado_por }}<br>
+                                <small>{{ s.fecha_aprobacion }}</small>
+                            {% else %}
+                                <small class="text-danger">{{ s.motivo_rechazo[:50] }}</small>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted">No hay solicitudes resueltas</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="mt-3">
+    <a href="/dashboard" class="btn btn-outline-secondary">← Volver al Dashboard</a>
+</div>
+{% endblock %}

@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Mis Anticipos - Atlas{% endblock %}
+
+{% block content %}
+<h3>💰 Mis Solicitudes de Anticipo</h3>
+<p class="text-muted">Solicita anticipos de tus pagos pendientes</p>
+
+<div class="row">
+    <div class="col-md-4 mb-4">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <strong>📊 Resumen del Mes Actual</strong>
+            </div>
+            <div class="card-body">
+                <p><strong>Total a pagar este mes:</strong> <span class="float-end">${{ "%.2f"|format(total_pagar_mes) }}</span></p>
+                <p><strong>Anticipos aprobados:</strong> <span class="float-end">${{ "%.2f"|format(anticipos_aprobados) }}</span></p>
+                <hr>
+                <p><strong>Disponible para anticipo:</strong> <span class="float-end fw-bold text-success">${{ "%.2f"|format(disponible) }}</span></p>
+                <p class="small text-muted mt-3">⚠️ Máximo disponible: 50% del total a pagar</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-8 mb-4">
+        <div class="card shadow">
+            <div class="card-header bg-success text-white">
+                <strong>➕ Solicitar Nuevo Anticipo</strong>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('solicitar_anticipo') }}">
+                    <div class="mb-3">
+                        <label class="form-label">Monto a solicitar *</label>
+                        <input type="number" name="monto" class="form-control" step="0.01" required max="{{ disponible }}" min="5">
+                        <small class="text-muted">Máximo disponible: ${{ "%.2f"|format(disponible) }}</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Motivo de la solicitud *</label>
+                        <textarea name="motivo" class="form-control" rows="3" required placeholder="Explique el motivo del anticipo..."></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-success w-100">📤 Solicitar Anticipo</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow">
+    <div class="card-header bg-info text-white">
+        <strong>📋 Historial de Solicitudes</strong>
+    </div>
+    <div class="card-body">
+        {% if anticipos %}
+        <div class="table-responsive">
+            <table class="table table-sm table-striped">
+                <thead>
+                    <tr class="table-dark">
+                        <th>Fecha</th>
+                        <th>Monto</th>
+                        <th>Motivo</th>
+                        <th>Estado</th>
+                        <th>Respuesta</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for a in anticipos %}
+                    <tr>
+                        <td>{{ a.fecha_solicitud }}</td>
+                        <td class="fw-bold">${{ "%.2f"|format(a.monto) }}</td>
+                        <td>{{ a.motivo[:50] }}{% if a.motivo|length > 50 %}...{% endif %}</td>
+                        <td>
+                            {% if a.estado == 'pendiente' %}
+                                <span class="badge bg-warning">⏳ Pendiente</span>
+                            {% elif a.estado == 'aprobado' %}
+                                <span class="badge bg-success">✅ Aprobado</span>
+                            {% else %}
+                                <span class="badge bg-danger">❌ Rechazado</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if a.estado == 'aprobado' %}
+                                Aprobado por: {{ a.aprobado_por }}<br>
+                                <small>{{ a.fecha_aprobacion }}</small>
+                            {% elif a.estado == 'rechazado' %}
+                                <small class="text-danger">{{ a.motivo_rechazo[:50] }}</small>
+                            {% else %}
+                                <span class="text-muted">En espera...</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted">No tienes solicitudes de anticipo</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="mt-3">
+    <a href="/dashboard" class="btn btn-outline-secondary">← Volver al Dashboard</a>
+</div>
+{% endblock %}

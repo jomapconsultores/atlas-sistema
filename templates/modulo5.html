@@ -61,7 +61,7 @@
     </div>
 </div>
 
-<!-- Resumen de filtros aplicados -->
+<!-- Resumen de filtros -->
 {% if mes or anio or fecha_desde or fecha_hasta or filtro_profesor %}
 <div class="alert alert-info small">
     <strong>📌 Filtros aplicados:</strong>
@@ -91,7 +91,7 @@
                         <th>Horas</th>
                         <th>Valor Total</th>
                         <th>Pago Docencia ($7/h)</th>
-                        <th>Pago Psicología (35%)</th>
+                        <th>Pago Psicología (40.18%)</th>
                         <th>Total a Pagar</th>
                     </tr>
                 </thead>
@@ -114,20 +114,8 @@
                         </td>
                         <td class="text-center">{{ p.horas }}</td>
                         <td class="text-end">${{ "%.2f"|format(p.valor_total) }}</td>
-                        <td class="text-end text-primary">
-                            {% if p.tipo in ['clase', 'preuniversitario'] %}
-                                ${{ "%.2f"|format(p.pago_docente) }}
-                            {% else %}
-                                $0.00
-                            {% endif %}
-                        </td>
-                        <td class="text-end text-success">
-                            {% if p.tipo in ['terapia', 'ambos'] %}
-                                ${{ "%.2f"|format(p.pago_psicologia) }}
-                            {% else %}
-                                $0.00
-                            {% endif %}
-                        </td>
+                        <td class="text-end text-primary">${{ "%.2f"|format(p.pago_docente) }}</td>
+                        <td class="text-end text-success">${{ "%.2f"|format(p.pago_psicologia) }}</td>
                         <td class="text-end fw-bold">${{ "%.2f"|format(p.total_pagar) }}</td>
                     </tr>
                     {% endfor %}
@@ -147,13 +135,14 @@
             <strong>💡 Información:</strong>
             <ul class="mb-0">
                 <li><strong>Docencia (Clases y Pre Universitario):</strong> $7 por hora</li>
-                <li><strong>Psicología (Terapias y Ambos):</strong> 35% del valor de la sesión</li>
+                <li><strong>Psicología (Terapias y Ambos):</strong> 40.18% del valor de la sesión</li>
+                <li><strong>Los anticipos se descuentan automáticamente del total a pagar</strong></li>
             </ul>
         </div>
     </div>
 </div>
 
-<!-- CONSOLIDADO POR DOCENTE/PSICÓLOGO -->
+<!-- CONSOLIDADO POR DOCENTE/PSICÓLOGO CON ANTICIPOS -->
 <div class="card shadow">
     <div class="card-header bg-info text-white">
         <strong>📊 Consolidado por Docente / Psicólogo</strong>
@@ -170,10 +159,12 @@
                         <th>Horas Clase</th>
                         <th>Horas Terapia</th>
                         <th>Total Horas</th>
-                        <th>$ Docencia ($7/h)</th>
-                        <th>$ Psicología (35%)</th>
-                        <th>$ Total a Pagar</th>
-                        <th>% del Total</th>
+                        <th>$ Docencia</th>
+                        <th>$ Psicología</th>
+                        <th>Total a Pagar</th>
+                        <th>Anticipo</th>
+                        <th>Neto a Pagar</th>
+                        <th>%</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -186,9 +177,11 @@
                         <td class="text-center">{{ datos.horas_clase }}</td>
                         <td class="text-center">{{ datos.horas_terapia }}</td>
                         <td class="text-center fw-bold">{{ datos.horas_clase + datos.horas_terapia }}</td>
-                        <td class="text-end text-primary">${{ "%.2f"|format(datos.pago_docencia) }}</td>
-                        <td class="text-end text-success">${{ "%.2f"|format(datos.pago_psicologia) }}</td>
-                        <td class="text-end fw-bold">${{ "%.2f"|format(datos.total_pagar) }}</td>
+                        <td class="text-end">${{ "%.2f"|format(datos.pago_docencia) }}</td>
+                        <td class="text-end">${{ "%.2f"|format(datos.pago_psicologia) }}</td>
+                        <td class="text-end">${{ "%.2f"|format(datos.total_pagar) }}</td>
+                        <td class="text-end text-danger">${{ "%.2f"|format(datos.anticipo) }}</td>
+                        <td class="text-end fw-bold">${{ "%.2f"|format(datos.neto_a_pagar) }}</td>
                         <td class="text-center">{{ (datos.total_pagar / total_adeudado * 100)|round(1) if total_adeudado>0 else 0 }}%</td>
                     </tr>
                     {% endfor %}
@@ -205,6 +198,8 @@
                         <td class="text-end"><strong>${{ "%.2f"|format(total_docencia) }}</strong></td>
                         <td class="text-end"><strong>${{ "%.2f"|format(total_psicologia) }}</strong></td>
                         <td class="text-end"><strong>${{ "%.2f"|format(total_adeudado) }}</strong></td>
+                        <td class="text-end"><strong>${{ "%.2f"|format(total_anticipos) }}</strong></td>
+                        <td class="text-end"><strong>${{ "%.2f"|format(total_neto) }}</strong></td>
                         <td class="text-center"><strong>100%</strong></td>
                     </tr>
                 </tfoot>

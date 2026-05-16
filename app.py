@@ -39,6 +39,7 @@ def socio_admin_required(f):
         return f(*args, **kwargs)
     return decorated
 
+# ========== CONSTANTES ==========
 ASIGNATURAS = [
     'Contabilidad general', 'Contabilidad de costos', 'Matemáticas', 'Geometría',
     'Cálculo diferencial', 'Cálculo integral', 'Física', 'Química', 'Biología',
@@ -62,6 +63,16 @@ PROFESORES = ['Carmen Reinoso', 'Rosalía Moscoso', 'Marco Antonio Posligua',
               'Edwin Rumipulla', 'Catherine Alvear', 'Alexander Nivelo',
               'Daniel Castillo', 'Johanna Nievecela']
 ENCARGADOS = ['CARMEN', 'ROSALÍA', 'EDWIN', 'MAP', 'JOHANNA']
+
+# ========== CONSTANTES DE PAGOS ==========
+PAGO_DOCENCIA_POR_HORA = 7  # $7 por hora para clases
+PORCENTAJE_PSICOLOGIA = 0.4018  # 40.18% para terapias psicológicas
+COMISION_CLIENTE_EXTERNO = 0.25  # 25% para clientes externos (psicología especial)
+PAQUETE_TERAPIAS = {
+    'cantidad': 4,
+    'precio_total': 160,
+    'precio_por_sesion': 40
+}
 
 # ========== RUTAS PRINCIPALES ==========
 
@@ -113,7 +124,225 @@ def logout():
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    return render_template('dashboard.html', rol=current_user.rol)
+    # Contar solicitudes pendientes para mostrar badge
+    solicitudes_pendientes = 0
+    if current_user.rol in ['admin', 'socio']:
+        solicitudes = supabase.table('anticipos_solicitudes').select('*').eq('estado', 'pendiente').execute()
+        solicitudes_pendientes = len(solicitudes.data or [])
+    return render_template('dashboard.html', rol=current_user.rol, solicitudes_pendientes=solicitudes_pendientes)
+
+# ========== ANTICIPOS PARA DOCENTES/PSICÓLOGOS ==========
+
+@app.route('/mis-anticipos')
+@login_required
+def mis_anticipos():
+    """Vista para que docentes/psicólogos vean y soliciten anticipos"""
+    if current_user.rol not in ['profesor', 'psicologo', 'admin', 'socio']:
+        flash('❌ Acceso restringido', 'error')
+        return redirect(url_for('dashboard'))
+    
+    # Obtener anticipos del usuario actual
+    anticipos = supabase.table('anticipos_solicitudes').select('*').eq('usuario_id', current_user.id).order('fecha_solicitud', desc=True).execute()
+    
+    # Calcular total de pagos del mes actual para el docente
+    mes_actual = date.today().month
+    anio_actual = date.today().year
+    sesiones = supabase.table('sesiones').select('*').eq('estado', 'Realizado').eq('profesor_terapeuta', current_user.nombre).execute()
+    
+    total_pagar_mes = 0
+    for s in (sesiones.data or []):
+        fecha = s.get('fecha', '')
+        if fecha and fecha[:7] == f"{anio_actual}-{mes_actual:02d}":
+            tipo = s.get('tipo_sesion', 'clase')
+            horas = s.get('horas', 0) or 0
+            valor = s.get('valor_total', 0) or 0
+            if tipo in ['clase', 'preuniversitario']:
+                total_pagar_mes += horas * PAGO_DOCENCIA_POR_HORA
+            else:
+                total_pagar_mes += valor * PORCENTAJE_PSICOLOGIA
+    
+    # Calcular anticipos ya aprobados del mes
+    anticipos_aprobados = sum(a.get('monto', 0) for a in (anticipos.data or []) if a.get('estado') == 'aprobado')
+    
+    return render_template('mis_anticipos.html', 
+                         anticipos=anticipos.data or [],
+                         total_pagar_mes=total_pagar_mes,
+                         anticipos_aprobados=anticipos_aprobados,
+                         disponible=total_pagar_mes - anticipos_aprobados)
+
+@app.route('/solicitar-anticipo', methods=['POST'])
+@login_required
+def solicitar_anticipo():
+    """Solicitar un anticipo"""
+    if current_user.rol not in ['profesor', 'psicologo']:
+        flash('❌ Solo docentes y psicólogos pueden solicitar anticipos', 'error')
+        return redirect(url_for('dashboard'))
+    
+    try:
+        monto = float(request.form['monto'])
+        motivo = request.form['motivo']
+        
+        supabase.table('anticipos_solicitudes').insert({
+            'usuario_id': current_user.id,
+            'usuario_nombre': current_user.nombre,
+            'monto': monto,
+            'motivo': motivo,
+            'estado': 'pendiente',
+            'fecha_solicitud': date.today().isoformat()
+        }).execute()
+        
+        flash('✅ Solicitud de anticipo enviada. Espera aprobación.', 'success')
+    except Exception as e:
+        flash(f'❌ Error: {str(e)}', 'error')
+    
+    return redirect(url_for('mis_anticipos'))
+
+@app.route('/gestion-anticipos')
+@login_required
+@socio_admin_required
+def gestion_anticipos():
+    """Vista para que administradores/socios aprueben/rechacen anticipos"""
+    solicitudes = supabase.table('anticipos_solicitudes').select('*').order('fecha_solicitud', desc=True).execute()
+    return render_template('gestion_anticipos.html', solicitudes=solicitudes.data or [])
+
+@app.route('/aprobar-anticipo/<int:id>', methods=['POST'])
+@login_required
+@socio_admin_required
+def aprobar_anticipo(id):
+    try:
+        supabase.table('anticipos_solicitudes').update({
+            'estado': 'aprobado',
+            'fecha_aprobacion': date.today().isoformat(),
+            'aprobado_por': current_user.nombre
+        }).eq('id', id).execute()
+        flash('✅ Anticipo aprobado', 'success')
+    except Exception as e:
+        flash(f'❌ Error: {str(e)}', 'error')
+    return redirect(url_for('gestion_anticipos'))
+
+@app.route('/rechazar-anticipo/<int:id>', methods=['POST'])
+@login_required
+@socio_admin_required
+def rechazar_anticipo(id):
+    try:
+        motivo_rechazo = request.form.get('motivo_rechazo', 'Sin motivo especificado')
+        supabase.table('anticipos_solicitudes').update({
+            'estado': 'rechazado',
+            'motivo_rechazo': motivo_rechazo
+        }).eq('id', id).execute()
+        flash('❌ Anticipo rechazado', 'info')
+    except Exception as e:
+        flash(f'❌ Error: {str(e)}', 'error')
+    return redirect(url_for('gestion_anticipos'))
+
+# ========== MÓDULO DE PSICOLOGÍA ESPECIAL (CLIENTES EXTERNOS) ==========
+
+@app.route('/psicologia-especial')
+@login_required
+@socio_admin_required
+def psicologia_especial():
+    """Módulo para gestionar clientes externos de psicología"""
+    clientes = supabase.table('clientes_externos').select('*').eq('activo', True).order('nombre').execute()
+    citas = supabase.table('citas_psicologia').select('*, clientes_externos(*)').order('fecha', desc=True).execute()
+    psicologos = supabase.table('usuarios').select('id, nombre').eq('rol', 'psicologo').eq('activo', True).execute()
+    
+    # Calcular totales
+    total_citas = len(citas.data or [])
+    total_pagado = sum(c.get('monto_pagado', 0) or 0 for c in (citas.data or []))
+    total_comision_centro = sum(c.get('monto_pagado', 0) or 0 for c in (citas.data or [])) * COMISION_CLIENTE_EXTERNO
+    
+    return render_template('psicologia_especial.html',
+                         clientes=clientes.data or [],
+                         citas=citas.data or [],
+                         psicologos=psicologos.data or [],
+                         total_citas=total_citas,
+                         total_pagado=total_pagado,
+                         total_comision_centro=total_comision_centro,
+                         comision_porcentaje=int(COMISION_CLIENTE_EXTERNO * 100))
+
+@app.route('/api/cliente-externo', methods=['POST'])
+@login_required
+@socio_admin_required
+def crear_cliente_externo():
+    try:
+        data = request.get_json()
+        result = supabase.table('clientes_externos').insert({
+            'nombre': data['nombre'],
+            'telefono': data.get('telefono', ''),
+            'email': data.get('email', ''),
+            'activo': True,
+            'usuario_id': current_user.id
+        }).execute()
+        return jsonify({'success': True, 'id': result.data[0]['id'] if result.data else None})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/cita-psicologia', methods=['POST'])
+@login_required
+@socio_admin_required
+def crear_cita_psicologia():
+    try:
+        data = request.get_json()
+        valor_cita = data.get('valor', 0)
+        comision_centro = valor_cita * COMISION_CLIENTE_EXTERNO
+        pago_psicologo = valor_cita - comision_centro
+        
+        result = supabase.table('citas_psicologia').insert({
+            'cliente_id': data['cliente_id'],
+            'psicologo_id': data['psicologo_id'],
+            'psicologo_nombre': data['psicologo_nombre'],
+            'fecha': data['fecha'],
+            'hora_inicio': data['hora_inicio'],
+            'hora_fin': data['hora_fin'],
+            'valor': valor_cita,
+            'monto_pagado': 0,
+            'comision_centro': comision_centro,
+            'pago_psicologo': pago_psicologo,
+            'estado': 'agendada',
+            'usuario_id': current_user.id
+        }).execute()
+        return jsonify({'success': True, 'id': result.data[0]['id'] if result.data else None})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/cita/<int:id>/pagar', methods=['POST'])
+@login_required
+@socio_admin_required
+def registrar_pago_cita(id):
+    try:
+        data = request.get_json()
+        monto = data.get('monto', 0)
+        
+        # Obtener cita
+        cita = supabase.table('citas_psicologia').select('*').eq('id', id).execute()
+        if not cita.data:
+            return jsonify({'success': False, 'error': 'Cita no encontrada'})
+        
+        c = cita.data[0]
+        nuevo_pagado = (c.get('monto_pagado', 0) or 0) + monto
+        nuevo_estado = 'pagada' if nuevo_pagado >= c.get('valor', 0) else 'parcial'
+        
+        supabase.table('citas_psicologia').update({
+            'monto_pagado': nuevo_pagado,
+            'estado': nuevo_estado
+        }).eq('id', id).execute()
+        
+        return jsonify({'success': True, 'nuevo_estado': nuevo_estado, 'pagado': nuevo_pagado})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/cita/<int:id>/completar', methods=['POST'])
+@login_required
+@socio_admin_required
+def completar_cita(id):
+    try:
+        supabase.table('citas_psicologia').update({
+            'estado': 'realizada',
+            'fecha_realizacion': date.today().isoformat()
+        }).eq('id', id).execute()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 # ========== MÓDULO 1: PLANIFICACIÓN ==========
 
@@ -128,7 +357,7 @@ def modulo1():
             num_estudiantes = int(request.form.get('num_estudiantes', 1))
             primera_fecha = None
             
-            # ========== VALIDACIONES DE HORAS ==========
+            # Validaciones de horas
             for sesion_num in range(1, num_sesiones + 1):
                 fecha = request.form.get(f'fecha_{sesion_num}')
                 h_ini = request.form.get(f'hora_inicio_{sesion_num}')
@@ -149,7 +378,6 @@ def modulo1():
                     
                     if horas_val < 0.5:
                         flash(f'⚠️ Advertencia en Sesión {sesion_num}: La duración es muy corta ({horas_val} horas). Mínimo recomendado: 0.5 horas', 'warning')
-            # ========== FIN VALIDACIONES ==========
             
             for sesion_num in range(1, num_sesiones + 1):
                 fecha = request.form.get(f'fecha_{sesion_num}')
@@ -224,6 +452,141 @@ def modulo1():
                          precios_pension=PRECIOS_PENSION, profesores=PROFESORES,
                          encargados=ENCARGADOS, today=date.today())
 
+# ========== MÓDULO 5: PAGOS DOCENTES ==========
+
+@app.route('/modulo5')
+@login_required
+def modulo5():
+    mes = request.args.get('mes', '')
+    anio = request.args.get('anio', '')
+    fecha_desde = request.args.get('fecha_desde', '')
+    fecha_hasta = request.args.get('fecha_hasta', '')
+    filtro_profesor = request.args.get('filtro_profesor', '')
+    
+    query = supabase.table('sesiones').select('*, estudiantes(*)').eq('estado', 'Realizado')
+    
+    if mes and mes != '':
+        mes_int = int(mes)
+        anio_int = int(anio) if anio else date.today().year
+        fecha_inicio = f"{anio_int}-{mes_int:02d}-01"
+        ultimo_dia = monthrange(anio_int, mes_int)[1]
+        fecha_fin = f"{anio_int}-{mes_int:02d}-{ultimo_dia}"
+        query = query.gte('fecha', fecha_inicio).lte('fecha', fecha_fin)
+    
+    if fecha_desde:
+        query = query.gte('fecha', fecha_desde)
+    if fecha_hasta:
+        query = query.lte('fecha', fecha_hasta)
+    
+    sesiones = query.order('fecha', desc=True).execute()
+    sesiones_data = sesiones.data or []
+    
+    if filtro_profesor and filtro_profesor != '':
+        sesiones_filtradas = []
+        for s in sesiones_data:
+            profesor = s.get('profesor_terapeuta', '')
+            if filtro_profesor.lower() in profesor.lower():
+                sesiones_filtradas.append(s)
+        sesiones_data = sesiones_filtradas
+    
+    # Obtener anticipos aprobados del mes para cada docente
+    anticipos_aprobados_por_docente = {}
+    anticipos = supabase.table('anticipos_solicitudes').select('*').eq('estado', 'aprobado').execute()
+    for a in (anticipos.data or []):
+        docente = a.get('usuario_nombre', '')
+        if docente not in anticipos_aprobados_por_docente:
+            anticipos_aprobados_por_docente[docente] = 0
+        anticipos_aprobados_por_docente[docente] += a.get('monto', 0)
+    
+    pagos = []
+    total_docencia = 0
+    total_psicologia = 0
+    total_adeudado = 0
+    total_anticipos = 0
+    consolidado = {}
+    total_sesiones_clase = 0
+    total_sesiones_terapia = 0
+    total_horas_clase = 0
+    total_horas_terapia = 0
+    profesores_lista = set()
+    
+    for s in sesiones_data:
+        horas = s.get('horas', 0) or 0
+        valor = s.get('valor_total', 0) or 0
+        tipo = s.get('tipo_sesion', 'clase')
+        profesor = s.get('profesor_terapeuta', 'Desconocido')
+        
+        profesores_lista.add(profesor)
+        
+        if tipo in ['clase', 'preuniversitario']:
+            pago_docente = horas * PAGO_DOCENCIA_POR_HORA
+            pago_psicologia = 0
+            total_docencia += pago_docente
+            total_horas_clase += horas
+            total_sesiones_clase += 1
+        else:
+            pago_docente = 0
+            pago_psicologia = valor * PORCENTAJE_PSICOLOGIA
+            total_psicologia += pago_psicologia
+            total_sesiones_terapia += 1
+        
+        total_pagar = pago_docente + pago_psicologia
+        total_adeudado += total_pagar
+        
+        est = s.get('estudiantes', {})
+        pagos.append({
+            'fecha': s['fecha'],
+            'profesor': profesor,
+            'estudiante': f"{est.get('apellidos', '')} {est.get('nombres', '')}",
+            'tipo': tipo,
+            'horas': horas if tipo in ['clase', 'preuniversitario'] else 1,
+            'valor_total': valor,
+            'pago_docente': pago_docente,
+            'pago_psicologia': pago_psicologia,
+            'total_pagar': total_pagar,
+            'anticipo_descontado': 0
+        })
+        
+        if profesor not in consolidado:
+            consolidado[profesor] = {
+                'sesiones_clase': 0, 'sesiones_terapia': 0,
+                'horas_clase': 0, 'horas_terapia': 0,
+                'pago_docencia': 0, 'pago_psicologia': 0,
+                'total_pagar': 0, 'anticipo': 0, 'neto_a_pagar': 0
+            }
+        
+        if tipo in ['clase', 'preuniversitario']:
+            consolidado[profesor]['sesiones_clase'] += 1
+            consolidado[profesor]['horas_clase'] += horas
+            consolidado[profesor]['pago_docencia'] += pago_docente
+        else:
+            consolidado[profesor]['sesiones_terapia'] += 1
+            consolidado[profesor]['horas_terapia'] += 1
+            consolidado[profesor]['pago_psicologia'] += pago_psicologia
+        
+        consolidado[profesor]['total_pagar'] += total_pagar
+    
+    # Aplicar anticipos al consolidado
+    for prof in consolidado:
+        anticipo = anticipos_aprobados_por_docente.get(prof, 0)
+        consolidado[prof]['anticipo'] = anticipo
+        consolidado[prof]['neto_a_pagar'] = consolidado[prof]['total_pagar'] - anticipo
+        total_anticipos += anticipo
+    
+    total_neto = total_adeudado - total_anticipos
+    
+    return render_template('modulo5.html', 
+                         pagos=pagos, total_docencia=total_docencia,
+                         total_psicologia=total_psicologia, total_adeudado=total_adeudado,
+                         total_anticipos=total_anticipos, total_neto=total_neto,
+                         consolidado=consolidado, total_sesiones_clase=total_sesiones_clase,
+                         total_sesiones_terapia=total_sesiones_terapia,
+                         total_horas_clase=total_horas_clase,
+                         total_horas_terapia=total_sesiones_terapia,
+                         mes=mes, anio=anio, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta,
+                         filtro_profesor=filtro_profesor,
+                         profesores_lista=sorted(list(profesores_lista)))
+
 # ========== EDITOR DE PLANIFICACIONES ==========
 
 @app.route('/editar-planificaciones')
@@ -232,19 +595,6 @@ def modulo1():
 def editar_planificaciones():
     estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
     return render_template('editar_planificaciones.html', 
-                         estudiantes=estudiantes.data or [],
-                         asignaturas=ASIGNATURAS,
-                         atencion_psicologica=ATENCION_PSICOLOGICA,  # ← DEBE ESTAR ESTA LÍNEA
-                         profesores=PROFESORES,
-                         encargados=ENCARGADOS,
-                         today=date.today().isoformat())
-
-@app.route('/editar-planificacion-masiva')
-@login_required
-@socio_admin_required
-def editar_planificacion_masiva():
-    estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
-    return render_template('editar_planificacion_masiva.html',
                          estudiantes=estudiantes.data or [],
                          asignaturas=ASIGNATURAS,
                          atencion_psicologica=ATENCION_PSICOLOGICA,
@@ -287,25 +637,6 @@ def api_sesiones_todas():
         })
     return jsonify(resultado)
 
-@app.route('/api/estudiante/<int:id>/sesiones')
-@login_required
-@socio_admin_required
-def api_estudiante_sesiones(id):
-    sesiones = supabase.table('sesiones').select('id, fecha, hora_inicio, hora_fin, tipo_sesion, valor_total, asignatura, tema_terapia').eq('estudiante_id', id).order('fecha', desc=True).execute()
-    resultado = []
-    for s in (sesiones.data or []):
-        resultado.append({
-            'id': s['id'],
-            'fecha': s.get('fecha'),
-            'hora_inicio': (s.get('hora_inicio') or '')[:5],
-            'hora_fin': (s.get('hora_fin') or '')[:5],
-            'tipo_sesion': s.get('tipo_sesion'),
-            'valor_total': s.get('valor_total', 0),
-            'asignatura': s.get('asignatura', ''),
-            'tema_terapia': s.get('tema_terapia', '')
-        })
-    return jsonify(resultado)
-
 @app.route('/api/sesion/<int:id>')
 @login_required
 def api_sesion_unica(id):
@@ -327,25 +658,19 @@ def api_sesion_unica(id):
 def api_editar_sesion(id):
     try:
         data = request.get_json()
-        
-        # Obtener responsable (del JSON o usar el usuario logueado)
         responsable = data.get('responsable', current_user.nombre)
         
-        # Limpiar formatos de hora
         hora_inicio = data['hora_inicio'].split(':')[:2]
         hora_fin = data['hora_fin'].split(':')[:2]
         hora_inicio_str = f"{hora_inicio[0]}:{hora_inicio[1]}"
         hora_fin_str = f"{hora_fin[0]}:{hora_fin[1]}"
         
-        # Calcular horas
         inicio = datetime.strptime(f"{data['fecha']} {hora_inicio_str}", '%Y-%m-%d %H:%M')
         fin = datetime.strptime(f"{data['fecha']} {hora_fin_str}", '%Y-%m-%d %H:%M')
         horas = round((fin - inicio).total_seconds() / 3600, 2)
         
-        # ========== VALIDACIONES ==========
         if horas <= 0:
             return jsonify({'success': False, 'error': 'La duración de la sesión debe ser mayor a 0 horas'})
-        
         if horas < 0.5:
             return jsonify({'success': False, 'error': 'La duración mínima de la sesión es 30 minutos (0.5 horas)'})
         
@@ -359,19 +684,15 @@ def api_editar_sesion(id):
         
         es_terapia = data['tipo_sesion'] in ['terapia', 'ambos']
         if es_terapia:
-            pago_docente = valor_total * 0.35
+            pago_docente = 0
+            pago_psicologia = valor_total * PORCENTAJE_PSICOLOGIA
         else:
-            pago_docente = horas * 7
+            pago_docente = horas * PAGO_DOCENCIA_POR_HORA
+            pago_psicologia = 0
         
-        if pago_docente < 0:
-            return jsonify({'success': False, 'error': 'El cálculo del pago al docente resultó negativo. Verifica los valores.'})
-        # ========== FIN VALIDACIONES ==========
-        
-        # Obtener sesión anterior para auditoría
         sesion_anterior = supabase.table('sesiones').select('*').eq('id', id).execute()
         datos_anteriores = sesion_anterior.data[0] if sesion_anterior.data else {}
         
-        # Guardar auditoría con el responsable
         supabase.table('correcciones_pagos').insert({
             'pago_id': id,
             'monto_anterior': datos_anteriores.get('valor_total', 0),
@@ -380,7 +701,6 @@ def api_editar_sesion(id):
             'motivo': f'EDICION SESION #{id} - Cambios: horas={horas}, precio={precio_hora}, valor_total={valor_total}'
         }).execute()
         
-        # Actualizar en BD
         updates = {
             'fecha': data['fecha'],
             'hora_inicio': hora_inicio_str,
@@ -401,68 +721,69 @@ def api_editar_sesion(id):
         
         supabase.table('sesiones').update(updates).eq('id', id).execute()
         
-        # Si está realizado, actualizar Google Calendar
-        if data.get('estado') == 'Realizado':
+        if data.get('estado') == 'Realizado' and crear_o_actualizar_evento_calendar:
             sesion = supabase.table('sesiones').select('*, estudiantes(apellidos, nombres)').eq('id', id).execute()
             if sesion.data:
                 s = sesion.data[0]
                 est = s.get('estudiantes', {})
-                nombre_est = f"{est.get('apellidos', '')} {est.get('nombres', '')}".strip()
-                if not nombre_est:
-                    nombre_est = 'Sin nombre'
-                
-                if crear_o_actualizar_evento_calendar:
-                    evento_id = crear_o_actualizar_evento_calendar({
-                        'asignatura': s.get('asignatura') or s.get('tema_terapia') or 'Sesión',
-                        'profesor': s.get('profesor_terapeuta', ''),
-                        'estudiantes': nombre_est,
-                        'fecha': s['fecha'],
-                        'hora_inicio': s['hora_inicio'][:5],
-                        'hora_fin': s['hora_fin'][:5],
-                        'encargado_apertura': s.get('encargado_apertura', ''),
-                        'valor_total': valor_total
-                    }, s.get('evento_calendar_id'))
-                    
-                    if evento_id:
-                        supabase.table('sesiones').update({'evento_calendar_id': evento_id}).eq('id', id).execute()
+                nombre_est = f"{est.get('apellidos', '')} {est.get('nombres', '')}".strip() or 'Sin nombre'
+                evento_id = crear_o_actualizar_evento_calendar({
+                    'asignatura': s.get('asignatura') or s.get('tema_terapia') or 'Sesión',
+                    'profesor': s.get('profesor_terapeuta', ''),
+                    'estudiantes': nombre_est,
+                    'fecha': s['fecha'],
+                    'hora_inicio': s['hora_inicio'][:5],
+                    'hora_fin': s['hora_fin'][:5],
+                    'encargado_apertura': s.get('encargado_apertura', ''),
+                    'valor_total': valor_total
+                }, s.get('evento_calendar_id'))
+                if evento_id:
+                    supabase.table('sesiones').update({'evento_calendar_id': evento_id}).eq('id', id).execute()
         
-        return jsonify({'success': True, 'mensaje': f'✅ Sesión actualizada - Responsable: {responsable} - Nuevo valor: ${valor_total}'})
+        return jsonify({'success': True, 'mensaje': f'✅ Sesión actualizada - Responsable: {responsable}'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
-@app.route('/api/sesiones/para-sincronizar')
+# ========== MÓDULO 2: CALENDARIO ==========
+
+@app.route('/modulo2')
 @login_required
-@socio_admin_required
-def api_sesiones_para_sincronizar():
-    mes = request.args.get('mes')
-    anio = request.args.get('anio')
-    
-    query = supabase.table('sesiones').select(
-        'id, fecha, hora_inicio, hora_fin, asignatura, tema_terapia, profesor_terapeuta, encargado_apertura, valor_total, estudiantes(apellidos, nombres)'
-    ).eq('estado', 'Realizado')
-    
-    if mes and anio:
-        query = query.gte('fecha', f"{anio}-{int(mes):02d}-01")
-        ultimo_dia = monthrange(int(anio), int(mes))[1]
-        query = query.lte('fecha', f"{anio}-{int(mes):02d}-{ultimo_dia}")
-    
-    sesiones = query.execute()
-    
-    resultado = []
-    for s in (sesiones.data or []):
+def modulo2():
+    fecha = request.args.get('fecha', str(date.today()))
+    estudiantes_lista = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute().data or []
+    if current_user.rol in ['admin', 'socio']:
+        sesiones = supabase.table('sesiones').select('*, estudiantes(*)').eq('fecha', fecha).order('hora_inicio').execute()
+        return render_template('modulo2.html', sesiones=sesiones.data or [], fecha=fecha,
+                             estudiantes=estudiantes_lista, profesores=PROFESORES)
+    nombre_usuario = current_user.nombre.strip().lower()
+    palabras_usuario = nombre_usuario.split()
+    todas = supabase.table('sesiones').select('*, estudiantes(*)').eq('fecha', fecha).order('hora_inicio').execute()
+    sesiones_filtradas = []
+    for s in (todas.data or []):
+        profesor = (s.get('profesor_terapeuta') or '').strip().lower()
         est = s.get('estudiantes', {})
-        resultado.append({
-            'id': s['id'],
-            'fecha': s.get('fecha'),
-            'hora_inicio': s.get('hora_inicio', '')[:5] if s.get('hora_inicio') else '',
-            'hora_fin': s.get('hora_fin', '')[:5] if s.get('hora_fin') else '',
-            'asignatura': s.get('asignatura') or s.get('tema_terapia') or 'Sesión',
-            'profesor': s.get('profesor_terapeuta', ''),
-            'estudiante': f"{est.get('apellidos', '')} {est.get('nombres', '')}".strip(),
-            'encargado': s.get('encargado_apertura', ''),
-            'valor_total': s.get('valor_total', 0)
-        })
-    return jsonify(resultado)
+        nombre_est = f"{est.get('apellidos', '')} {est.get('nombres', '')}".strip().lower()
+        apellidos_est = (est.get('apellidos', '') or '').strip().lower()
+        nombres_est = (est.get('nombres', '') or '').strip().lower()
+        if current_user.rol in ['profesor', 'psicologo']:
+            if nombre_usuario in profesor or profesor in nombre_usuario:
+                sesiones_filtradas.append(s)
+            else:
+                for palabra in palabras_usuario:
+                    if len(palabra) >= 3 and palabra in profesor:
+                        sesiones_filtradas.append(s)
+                        break
+        elif current_user.rol in ['estudiante', 'padre']:
+            if nombre_usuario in nombre_est or nombre_est in nombre_usuario:
+                sesiones_filtradas.append(s)
+            else:
+                for palabra in palabras_usuario:
+                    if len(palabra) >= 3:
+                        if palabra in apellidos_est or palabra in nombres_est:
+                            sesiones_filtradas.append(s)
+                            break
+    return render_template('modulo2.html', sesiones=sesiones_filtradas, fecha=fecha,
+                         estudiantes=estudiantes_lista, profesores=PROFESORES)
 
 @app.route('/api/sesion/<int:id>/sincronizar', methods=['POST'])
 @login_required
@@ -534,59 +855,6 @@ def eliminar_sesion(id):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
-@app.route('/api/sesion/<int:id>/modificar', methods=['POST'])
-@login_required
-@socio_admin_required
-def modificar_sesion(id):
-    try:
-        data = request.get_json()
-        fecha = data.get('fecha')
-        h_ini = data.get('hora_inicio', '')[:5]
-        h_fin = data.get('hora_fin', '')[:5]
-        
-        # ========== VALIDACIÓN DE HORAS ==========
-        if not fecha or not h_ini or not h_fin:
-            return jsonify({'success': False, 'error': 'Faltan datos de fecha u hora'})
-        
-        if h_fin <= h_ini:
-            return jsonify({'success': False, 'error': 'La hora de fin debe ser mayor a la hora de inicio'})
-        
-        inicio = datetime.strptime(f"{fecha} {h_ini}", '%Y-%m-%d %H:%M')
-        fin = datetime.strptime(f"{fecha} {h_fin}", '%Y-%m-%d %H:%M')
-        horas = round((fin - inicio).total_seconds() / 3600, 2)
-        
-        if horas <= 0:
-            return jsonify({'success': False, 'error': 'La duración de la sesión debe ser mayor a 0 horas'})
-        
-        if horas < 0.5:
-            return jsonify({'success': False, 'error': 'La duración mínima es de 30 minutos (0.5 horas)'})
-        # ========== FIN VALIDACIÓN ==========
-        
-        updates = {'fecha': fecha, 'hora_inicio': h_ini, 'hora_fin': h_fin, 'horas': horas}
-        supabase.table('sesiones').update(updates).eq('id', id).execute()
-        
-        sesion = supabase.table('sesiones').select('evento_calendar_id, asignatura, tema_terapia, profesor_terapeuta, encargado_apertura, estudiantes(apellidos, nombres)').eq('id', id).execute()
-        if sesion.data and sesion.data[0].get('evento_calendar_id') and eliminar_evento_calendar and crear_evento_calendar:
-            s = sesion.data[0]
-            try:
-                eliminar_evento_calendar(s['evento_calendar_id'])
-                est = s.get('estudiantes', {})
-                nuevo_id = crear_evento_calendar({
-                    'asignatura': s.get('asignatura') or s.get('tema_terapia') or 'Sesión',
-                    'profesor': s.get('profesor_terapeuta', ''),
-                    'estudiantes': f"{est.get('apellidos', '')} {est.get('nombres', '')}" if est else '',
-                    'fecha': fecha, 'hora_inicio': h_ini, 'hora_fin': h_fin,
-                    'encargado_apertura': s.get('encargado_apertura', '')
-                })
-                if nuevo_id:
-                    supabase.table('sesiones').update({'evento_calendar_id': nuevo_id}).eq('id', id).execute()
-            except:
-                pass
-        
-        return jsonify({'success': True})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
-
 @app.route('/api/sesion/<int:id>/toggle', methods=['POST'])
 @login_required
 def toggle_sesion(id):
@@ -616,187 +884,6 @@ def toggle_sesion(id):
     
     supabase.table('sesiones').update(updates).eq('id', id).execute()
     return jsonify({'success': True})
-
-@app.route('/api/sesion/<int:id>/cambiar-estudiante', methods=['POST'])
-@login_required
-@socio_admin_required
-def cambiar_estudiante_sesion(id):
-    try:
-        data = request.get_json()
-        estudiante_id = data.get('estudiante_id')
-        nuevo_nombre = data.get('nuevo_nombre', '')
-        nuevo_apellido = data.get('nuevo_apellido', '')
-        
-        if estudiante_id == 'nuevo' and nuevo_nombre and nuevo_apellido:
-            result = supabase.table('estudiantes').insert({
-                'nombres': nuevo_nombre, 'apellidos': nuevo_apellido,
-                'nivel_curso': data.get('nuevo_nivel', ''), 'procedencia': data.get('nuevo_procedencia', ''),
-                'activo': True, 'usuario_id': int(current_user.id)
-            }).execute()
-            if result.data:
-                estudiante_id = result.data[0]['id']
-            else:
-                return jsonify({'success': False, 'error': 'No se pudo crear'})
-        
-        if not estudiante_id or estudiante_id == 'nuevo':
-            return jsonify({'success': False, 'error': 'ID requerido'})
-        
-        estudiante_id = int(estudiante_id)
-        est = supabase.table('estudiantes').select('apellidos, nombres').eq('id', estudiante_id).execute()
-        nombre_est = f"{est.data[0]['apellidos']} {est.data[0]['nombres']}" if est.data else ''
-        
-        supabase.table('sesiones').update({'estudiante_id': estudiante_id}).eq('id', id).execute()
-        supabase.table('sesiones').update({
-            'observaciones': f"CAMBIO ESTUDIANTE por {current_user.nombre} el {datetime.now().strftime('%Y-%m-%d %H:%M')}"
-        }).eq('id', id).execute()
-        
-        sesion = supabase.table('sesiones').select('*').eq('id', id).execute()
-        if sesion.data:
-            s = sesion.data[0]
-            if s.get('evento_calendar_id') and eliminar_evento_calendar and crear_evento_calendar:
-                try:
-                    eliminar_evento_calendar(s['evento_calendar_id'])
-                    nuevo_id = crear_evento_calendar({
-                        'asignatura': s.get('asignatura') or s.get('tema_terapia') or 'Sesión',
-                        'profesor': s.get('profesor_terapeuta', ''),
-                        'estudiantes': nombre_est,
-                        'fecha': s['fecha'], 'hora_inicio': s['hora_inicio'],
-                        'hora_fin': s['hora_fin'], 'encargado_apertura': s.get('encargado_apertura', '')
-                    })
-                    if nuevo_id:
-                        supabase.table('sesiones').update({'evento_calendar_id': nuevo_id}).eq('id', id).execute()
-                except:
-                    pass
-        
-        return jsonify({'success': True, 'nombre': nombre_est})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
-
-@app.route('/api/sesion/<int:id>/cambiar-profesor', methods=['POST'])
-@login_required
-@socio_admin_required
-def cambiar_profesor_sesion(id):
-    try:
-        data = request.get_json()
-        nuevo_profesor = data.get('profesor', '')
-        if not nuevo_profesor:
-            return jsonify({'success': False, 'error': 'Nombre requerido'})
-        
-        profesor_anterior = supabase.table('sesiones').select('profesor_terapeuta').eq('id', id).execute()
-        anterior = profesor_anterior.data[0]['profesor_terapeuta'] if profesor_anterior.data else ''
-        
-        supabase.table('sesiones').update({'profesor_terapeuta': nuevo_profesor}).eq('id', id).execute()
-        supabase.table('sesiones').update({
-            'observaciones': f"CAMBIO PROFESOR: {anterior} → {nuevo_profesor} por {current_user.nombre} el {datetime.now().strftime('%Y-%m-%d %H:%M')}"
-        }).eq('id', id).execute()
-        
-        sesion = supabase.table('sesiones').select('*, estudiantes(apellidos, nombres)').eq('id', id).execute()
-        if sesion.data:
-            s = sesion.data[0]
-            if s.get('evento_calendar_id') and eliminar_evento_calendar and crear_evento_calendar:
-                try:
-                    eliminar_evento_calendar(s['evento_calendar_id'])
-                    est = s.get('estudiantes', {})
-                    nuevo_id = crear_evento_calendar({
-                        'asignatura': s.get('asignatura') or s.get('tema_terapia') or 'Sesión',
-                        'profesor': nuevo_profesor,
-                        'estudiantes': f"{est.get('apellidos', '')} {est.get('nombres', '')}" if est else '',
-                        'fecha': s['fecha'], 'hora_inicio': s['hora_inicio'],
-                        'hora_fin': s['hora_fin'], 'encargado_apertura': s.get('encargado_apertura', '')
-                    })
-                    if nuevo_id:
-                        supabase.table('sesiones').update({'evento_calendar_id': nuevo_id}).eq('id', id).execute()
-                except:
-                    pass
-        
-        return jsonify({'success': True, 'profesor': nuevo_profesor})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
-
-@app.route('/api/sesiones/pendientes')
-@login_required
-def api_sesiones_pendientes():
-    query = supabase.table('sesiones').select('*, estudiantes(*)').eq('estado', 'Planificado')
-    nombre_usuario = current_user.nombre.strip().lower()
-    palabras_usuario = nombre_usuario.split()
-    if current_user.rol in ['admin', 'socio']:
-        sesiones = query.order('fecha').order('hora_inicio').execute()
-        sesiones_data = sesiones.data or []
-    else:
-        todas = query.order('fecha').order('hora_inicio').execute()
-        sesiones_data = []
-        for s in (todas.data or []):
-            profesor = (s.get('profesor_terapeuta') or '').strip().lower()
-            est = s.get('estudiantes', {})
-            nombre_est = f"{est.get('apellidos', '')} {est.get('nombres', '')}".strip().lower()
-            apellidos_est = (est.get('apellidos', '') or '').strip().lower()
-            nombres_est = (est.get('nombres', '') or '').strip().lower()
-            if current_user.rol in ['profesor', 'psicologo']:
-                if nombre_usuario in profesor or profesor in nombre_usuario:
-                    sesiones_data.append(s)
-                else:
-                    for p in palabras_usuario:
-                        if len(p) >= 3 and p in profesor:
-                            sesiones_data.append(s)
-                            break
-            elif current_user.rol in ['estudiante', 'padre']:
-                if nombre_usuario in nombre_est or nombre_est in nombre_usuario:
-                    sesiones_data.append(s)
-                else:
-                    for p in palabras_usuario:
-                        if len(p) >= 3 and (p in apellidos_est or p in nombres_est):
-                            sesiones_data.append(s)
-                            break
-    resultado = []
-    for s in sesiones_data:
-        est = s.get('estudiantes', {})
-        resultado.append({'id': s['id'], 'fecha': s['fecha'], 'hora_inicio': s['hora_inicio'], 'hora_fin': s['hora_fin'],
-                         'estudiante': f"{est.get('apellidos', '')} {est.get('nombres', '')}",
-                         'estudiante_id': s['estudiante_id'], 'tipo_sesion': s['tipo_sesion'],
-                         'asignatura': s.get('asignatura', ''), 'tema_terapia': s.get('tema_terapia', ''),
-                         'profesor_terapeuta': s['profesor_terapeuta']})
-    return jsonify(resultado)
-
-# ========== MÓDULO 2: CALENDARIO ==========
-
-@app.route('/modulo2')
-@login_required
-def modulo2():
-    fecha = request.args.get('fecha', str(date.today()))
-    estudiantes_lista = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute().data or []
-    if current_user.rol in ['admin', 'socio']:
-        sesiones = supabase.table('sesiones').select('*, estudiantes(*)').eq('fecha', fecha).order('hora_inicio').execute()
-        return render_template('modulo2.html', sesiones=sesiones.data or [], fecha=fecha,
-                             estudiantes=estudiantes_lista, profesores=PROFESORES)
-    nombre_usuario = current_user.nombre.strip().lower()
-    palabras_usuario = nombre_usuario.split()
-    todas = supabase.table('sesiones').select('*, estudiantes(*)').eq('fecha', fecha).order('hora_inicio').execute()
-    sesiones_filtradas = []
-    for s in (todas.data or []):
-        profesor = (s.get('profesor_terapeuta') or '').strip().lower()
-        est = s.get('estudiantes', {})
-        nombre_est = f"{est.get('apellidos', '')} {est.get('nombres', '')}".strip().lower()
-        apellidos_est = (est.get('apellidos', '') or '').strip().lower()
-        nombres_est = (est.get('nombres', '') or '').strip().lower()
-        if current_user.rol in ['profesor', 'psicologo']:
-            if nombre_usuario in profesor or profesor in nombre_usuario:
-                sesiones_filtradas.append(s)
-            else:
-                for palabra in palabras_usuario:
-                    if len(palabra) >= 3 and palabra in profesor:
-                        sesiones_filtradas.append(s)
-                        break
-        elif current_user.rol in ['estudiante', 'padre']:
-            if nombre_usuario in nombre_est or nombre_est in nombre_usuario:
-                sesiones_filtradas.append(s)
-            else:
-                for palabra in palabras_usuario:
-                    if len(palabra) >= 3:
-                        if palabra in apellidos_est or palabra in nombres_est:
-                            sesiones_filtradas.append(s)
-                            break
-    return render_template('modulo2.html', sesiones=sesiones_filtradas, fecha=fecha,
-                         estudiantes=estudiantes_lista, profesores=PROFESORES)
 
 # ========== MÓDULO 3: PAGOS ==========
 
@@ -843,7 +930,6 @@ def modulo3():
             nueva_h_ini = request.form['nueva_hora_inicio']
             nueva_h_fin = request.form['nueva_hora_fin']
             
-            # ========== VALIDACIÓN DE HORAS ==========
             if nueva_h_fin <= nueva_h_ini:
                 flash('❌ Error: La hora de fin debe ser mayor a la hora de inicio', 'error')
                 return redirect(url_for('modulo3'))
@@ -858,7 +944,6 @@ def modulo3():
             
             if nuevas_horas < 0.5:
                 flash('⚠️ Advertencia: La duración es muy corta (mínimo 30 minutos)', 'warning')
-            # ========== FIN VALIDACIÓN ==========
             
             sesion_actual = supabase.table('sesiones').select('*').eq('id', sesion_id).execute()
             if sesion_actual.data:
@@ -898,145 +983,6 @@ def modulo4():
     estudiantes_lista = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute().data or []
     return render_template('modulo4.html', sesiones=sesiones.data or [], reuniones=reuniones.data if reuniones else [],
                          estudiantes=estudiantes_lista, profesores=PROFESORES)
-
-# ========== MÓDULO 5: PAGOS DOCENTES ==========
-
-@app.route('/modulo5')
-@login_required
-def modulo5():
-    # Obtener parámetros de filtro
-    mes = request.args.get('mes', '')
-    anio = request.args.get('anio', '')
-    fecha_desde = request.args.get('fecha_desde', '')
-    fecha_hasta = request.args.get('fecha_hasta', '')
-    filtro_profesor = request.args.get('filtro_profesor', '')
-    
-    # Construir consulta base
-    query = supabase.table('sesiones').select('*, estudiantes(*)').eq('estado', 'Realizado')
-    
-    # Aplicar filtro por mes/año
-    if mes and mes != '':
-        mes_int = int(mes)
-        anio_int = int(anio) if anio else date.today().year
-        fecha_inicio = f"{anio_int}-{mes_int:02d}-01"
-        from calendar import monthrange
-        ultimo_dia = monthrange(anio_int, mes_int)[1]
-        fecha_fin = f"{anio_int}-{mes_int:02d}-{ultimo_dia}"
-        query = query.gte('fecha', fecha_inicio).lte('fecha', fecha_fin)
-    
-    # Aplicar filtros por rango de fechas
-    if fecha_desde:
-        query = query.gte('fecha', fecha_desde)
-    if fecha_hasta:
-        query = query.lte('fecha', fecha_hasta)
-    
-    # Ejecutar consulta
-    sesiones = query.order('fecha', desc=True).execute()
-    sesiones_data = sesiones.data or []
-    
-    # Aplicar filtro por profesor (en memoria, después de obtener datos)
-    if filtro_profesor and filtro_profesor != '':
-        sesiones_filtradas = []
-        for s in sesiones_data:
-            profesor = s.get('profesor_terapeuta', '')
-            if filtro_profesor.lower() in profesor.lower():
-                sesiones_filtradas.append(s)
-        sesiones_data = sesiones_filtradas
-    
-    # Variables para cálculos
-    pagos = []
-    total_docencia = 0
-    total_psicologia = 0
-    total_adeudado = 0
-    consolidado = {}
-    total_sesiones_clase = 0
-    total_sesiones_terapia = 0
-    total_horas_clase = 0
-    total_horas_terapia = 0
-    
-    # Lista de profesores para el filtro
-    profesores_lista = set()
-    for s in sesiones_data:
-        prof = s.get('profesor_terapeuta', 'Desconocido')
-        if prof and prof != 'Desconocido':
-            profesores_lista.add(prof)
-    profesores_ordenados = sorted(list(profesores_lista))
-    
-    for s in sesiones_data:
-        horas = s.get('horas', 0) or 0
-        valor = s.get('valor_total', 0) or 0
-        tipo = s.get('tipo_sesion', 'clase')
-        profesor = s.get('profesor_terapeuta', 'Desconocido')
-        
-        # Calcular pagos según tipo
-        if tipo in ['clase', 'preuniversitario']:
-            pago_docente = horas * 7
-            pago_psicologia = 0
-            total_docencia += pago_docente
-            total_horas_clase += horas
-            total_sesiones_clase += 1
-        else:  # terapia o ambos
-            pago_docente = 0
-            pago_psicologia = valor * 0.35
-            total_psicologia += pago_psicologia
-            total_horas_terapia += horas
-            total_sesiones_terapia += 1
-        
-        total_pagar = pago_docente + pago_psicologia
-        total_adeudado += total_pagar
-        
-        est = s.get('estudiantes', {})
-        pagos.append({
-            'fecha': s['fecha'],
-            'profesor': profesor,
-            'estudiante': f"{est.get('apellidos', '')} {est.get('nombres', '')}",
-            'tipo': tipo,
-            'horas': horas,
-            'valor_total': valor,
-            'pago_docente': pago_docente,
-            'pago_psicologia': pago_psicologia,
-            'total_pagar': total_pagar
-        })
-        
-        # Consolidado por docente
-        if profesor not in consolidado:
-            consolidado[profesor] = {
-                'sesiones_clase': 0,
-                'sesiones_terapia': 0,
-                'horas_clase': 0,
-                'horas_terapia': 0,
-                'pago_docencia': 0,
-                'pago_psicologia': 0,
-                'total_pagar': 0
-            }
-        
-        if tipo in ['clase', 'preuniversitario']:
-            consolidado[profesor]['sesiones_clase'] += 1
-            consolidado[profesor]['horas_clase'] += horas
-            consolidado[profesor]['pago_docencia'] += pago_docente
-        else:
-            consolidado[profesor]['sesiones_terapia'] += 1
-            consolidado[profesor]['horas_terapia'] += horas
-            consolidado[profesor]['pago_psicologia'] += pago_psicologia
-        
-        consolidado[profesor]['total_pagar'] += total_pagar
-    
-    return render_template('modulo5.html', 
-                         pagos=pagos,
-                         total_docencia=total_docencia,
-                         total_psicologia=total_psicologia,
-                         total_adeudado=total_adeudado,
-                         consolidado=consolidado,
-                         total_sesiones_clase=total_sesiones_clase,
-                         total_sesiones_terapia=total_sesiones_terapia,
-                         total_horas_clase=total_horas_clase,
-                         total_horas_terapia=total_horas_terapia,
-                         mes=mes,
-                         anio=anio,
-                         fecha_desde=fecha_desde,
-                         fecha_hasta=fecha_hasta,
-                         filtro_profesor=filtro_profesor,
-                         profesores_lista=profesores_ordenados)
 
 # ========== MÓDULO 6: REUNIONES ==========
 
@@ -1129,23 +1075,14 @@ def reportes():
     anio = int(request.args.get('anio', date.today().year))
     estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
     
-    # ========== DATOS GENERALES ==========
     datos_estudiantes = []
     total_horas_estudiantes = 0
     total_cobrar_estudiantes = 0
     total_pagado_estudiantes = 0
-    
-    # ========== DATOS POR ASIGNATURA ==========
     asignaturas_detalle = {}
     horas_por_materia = {}
-    
-    # ========== DATOS DE CUMPLIMIENTO ==========
     cumplimiento = {'planificado': 0, 'realizado': 0, 'cancelado': 0}
-    
-    # ========== INGRESOS POR TIPO ==========
     ingresos_por_tipo = {}
-    
-    # ========== PAGOS A DOCENTES (SOLO REALIZADAS) ==========
     pagos_por_docente = {}
     total_docencia = 0
     total_psicologia = 0
@@ -1153,8 +1090,6 @@ def reportes():
     total_sesiones_terapia = 0
     total_horas_clase = 0
     total_horas_terapia = 0
-    
-    # ========== GASTOS OPERATIVOS ==========
     gastos_por_categoria = {}
     total_gastos = 0
     
@@ -1162,8 +1097,8 @@ def reportes():
         ses = supabase.table('sesiones').select('*').eq('estudiante_id', e['id']).execute()
         ses_todas = [s for s in (ses.data or []) if s['fecha'][:7] == f"{anio}-{mes:02d}"]
         ses_realizadas = [s for s in ses_todas if s['estado'] == 'Realizado']
-        ses_canceladas = [s for s in ses_todas if s['estado'] == 'Cancelado']
         ses_planificadas = [s for s in ses_todas if s['estado'] == 'Planificado']
+        ses_canceladas = [s for s in ses_todas if s['estado'] == 'Cancelado']
         
         pag = supabase.table('pagos').select('*').eq('estudiante_id', e['id']).execute()
         pag_filtrados = [p for p in (pag.data or []) if p['fecha_pago'][:7] == f"{anio}-{mes:02d}"]
@@ -1194,45 +1129,33 @@ def reportes():
             
             cumplimiento[s.get('estado', 'Planificado').lower()] = cumplimiento.get(s.get('estado', 'Planificado').lower(), 0) + 1
             
-            # ========== INGRESOS POR TIPO (SOLO REALIZADAS) ==========
             if s['estado'] == 'Realizado':
                 tipo = s.get('tipo_sesion', 'clase')
                 valor = s.get('valor_total', 0) or 0
-                if tipo not in ingresos_por_tipo:
-                    ingresos_por_tipo[tipo] = 0
-                ingresos_por_tipo[tipo] += valor
-            
-            # ========== PAGOS A DOCENTES (SOLO REALIZADAS) ==========
-            if s['estado'] == 'Realizado':
+                ingresos_por_tipo[tipo] = ingresos_por_tipo.get(tipo, 0) + valor
+                
                 prof = s.get('profesor_terapeuta', 'Desconocido')
-                tipo = s.get('tipo_sesion', 'clase')
                 horas = s.get('horas', 0) or 0
-                valor = s.get('valor_total', 0) or 0
                 
                 if tipo in ['clase', 'preuniversitario']:
-                    pago_docente = horas * 7
+                    pago_docente = horas * PAGO_DOCENCIA_POR_HORA
                     pago_psicologia = 0
                     total_sesiones_clase += 1
                     total_horas_clase += horas
                     total_docencia += pago_docente
-                else:  # terapia o ambos
+                else:
                     pago_docente = 0
-                    pago_psicologia = valor * 0.35
+                    pago_psicologia = valor * PORCENTAJE_PSICOLOGIA
                     total_sesiones_terapia += 1
-                    total_horas_terapia += horas
                     total_psicologia += pago_psicologia
                 
                 total_pagar = pago_docente + pago_psicologia
                 
                 if prof not in pagos_por_docente:
                     pagos_por_docente[prof] = {
-                        'sesiones_clase': 0,
-                        'sesiones_terapia': 0,
-                        'horas_clase': 0,
-                        'horas_terapia': 0,
-                        'pago_docencia': 0,
-                        'pago_psicologia': 0,
-                        'total_pagar': 0
+                        'sesiones_clase': 0, 'sesiones_terapia': 0,
+                        'horas_clase': 0, 'horas_terapia': 0,
+                        'pago_docencia': 0, 'pago_psicologia': 0, 'total_pagar': 0
                     }
                 
                 if tipo in ['clase', 'preuniversitario']:
@@ -1241,83 +1164,99 @@ def reportes():
                     pagos_por_docente[prof]['pago_docencia'] += pago_docente
                 else:
                     pagos_por_docente[prof]['sesiones_terapia'] += 1
-                    pagos_por_docente[prof]['horas_terapia'] += horas
+                    pagos_por_docente[prof]['horas_terapia'] += 1
                     pagos_por_docente[prof]['pago_psicologia'] += pago_psicologia
                 
                 pagos_por_docente[prof]['total_pagar'] += total_pagar
         
         if cobrar > 0 or pagado > 0 or horas_real > 0:
             datos_estudiantes.append({
-                'id': e['id'],
-                'estudiante': f"{e['apellidos']} {e['nombres']}",
-                'horas_plan': horas_plan,
-                'horas_real': horas_real,
-                'horas_canc': horas_canc,
-                'cobrar': cobrar,
-                'pagado': pagado,
-                'saldo': cobrar - pagado
+                'id': e['id'], 'estudiante': f"{e['apellidos']} {e['nombres']}",
+                'horas_plan': horas_plan, 'horas_real': horas_real, 'horas_canc': horas_canc,
+                'cobrar': cobrar, 'pagado': pagado, 'saldo': cobrar - pagado
             })
     
-    # ========== GASTOS OPERATIVOS ==========
-    gastos_mes = supabase.table('gastos').select('*').eq('mes', mes).eq('anio', anio).order('fecha').execute()
+    gastos_mes = supabase.table('gastos').select('*').eq('mes', mes).eq('anio', anio).execute()
     total_gastos = sum(g.get('monto', 0) or 0 for g in (gastos_mes.data or []))
     for g in (gastos_mes.data or []):
         cat = g.get('categoria', 'Sin categoría')
         gastos_por_categoria[cat] = gastos_por_categoria.get(cat, 0) + (g.get('monto', 0) or 0)
     
-    # ========== CÁLCULO DE PORCENTAJES ==========
     total_pago_docentes = sum(d['total_pagar'] for d in pagos_por_docente.values())
     total_por_pagar_estudiantes = total_cobrar_estudiantes - total_pagado_estudiantes
     balance = total_pagado_estudiantes - total_gastos - total_pago_docentes
     
-    porcentaje_cumplimiento = 0
-    if cumplimiento.get('planificado', 0) > 0:
-        porcentaje_cumplimiento = round((cumplimiento.get('realizado', 0) / cumplimiento.get('planificado', 0)) * 100, 2)
+    porcentaje_cumplimiento = round((cumplimiento.get('realizado', 0) / max(cumplimiento.get('planificado', 1), 1)) * 100, 2)
+    porcentaje_cobrado = round((total_pagado_estudiantes / max(total_cobrar_estudiantes, 1)) * 100, 2)
+    porcentaje_gastos_docentes = round((total_pago_docentes / max(total_cobrar_estudiantes, 1)) * 100, 2)
     
-    porcentaje_cobrado = 0
-    if total_cobrar_estudiantes > 0:
-        porcentaje_cobrado = round((total_pagado_estudiantes / total_cobrar_estudiantes) * 100, 2)
-    
-    porcentaje_gastos_docentes_vs_ingresos = 0
-    if total_cobrar_estudiantes > 0:
-        porcentaje_gastos_docentes_vs_ingresos = round((total_pago_docentes / total_cobrar_estudiantes) * 100, 2)
-    
-    # ========== OBTENER DATOS ADICIONALES ==========
     correcciones = supabase.table('correcciones_pagos').select('*').order('fecha_correccion', desc=True).limit(30).execute()
     observaciones = supabase.table('sesiones').select('*, estudiantes(apellidos, nombres)').not_.is_('observaciones', 'null').order('fecha', desc=True).limit(30).execute()
     nuevos_usuarios = supabase.table('usuarios').select('*').gte('fecha_registro', f"{anio}-{mes:02d}-01").lte('fecha_registro', f"{anio}-{mes:02d}-31").execute()
     
     return render_template('reportes.html',
-                         datos_estudiantes=datos_estudiantes,
-                         total_estudiantes=len(datos_estudiantes),
+                         datos_estudiantes=datos_estudiantes, total_estudiantes=len(datos_estudiantes),
                          total_horas_estudiantes=total_horas_estudiantes,
                          total_cobrar_estudiantes=total_cobrar_estudiantes,
                          total_pagado_estudiantes=total_pagado_estudiantes,
                          total_por_pagar_estudiantes=total_por_pagar_estudiantes,
                          porcentaje_cobrado=porcentaje_cobrado,
-                         asignaturas_detalle=asignaturas_detalle,
-                         horas_por_materia=horas_por_materia,
-                         cumplimiento=cumplimiento,
-                         porcentaje_cumplimiento=porcentaje_cumplimiento,
+                         asignaturas_detalle=asignaturas_detalle, horas_por_materia=horas_por_materia,
+                         cumplimiento=cumplimiento, porcentaje_cumplimiento=porcentaje_cumplimiento,
                          ingresos_por_tipo=ingresos_por_tipo,
-                         pagos_por_docente=pagos_por_docente,
-                         total_pago_docentes=total_pago_docentes,
-                         total_docencia=total_docencia,
-                         total_psicologia=total_psicologia,
+                         pagos_por_docente=pagos_por_docente, total_pago_docentes=total_pago_docentes,
+                         total_docencia=total_docencia, total_psicologia=total_psicologia,
                          total_sesiones_clase=total_sesiones_clase,
                          total_sesiones_terapia=total_sesiones_terapia,
                          total_horas_clase=total_horas_clase,
-                         total_horas_terapia=total_horas_terapia,
-                         gastos=gastos_mes.data or [],
-                         total_gastos=total_gastos,
+                         total_horas_terapia=total_sesiones_terapia,
+                         gastos=gastos_mes.data or [], total_gastos=total_gastos,
                          gastos_por_categoria=gastos_por_categoria,
-                         porcentaje_gastos_docentes_vs_ingresos=porcentaje_gastos_docentes_vs_ingresos,
-                         balance=balance,
-                         mes=mes,
-                         anio=anio,
+                         porcentaje_gastos_docentes_vs_ingresos=porcentaje_gastos_docentes,
+                         balance=balance, mes=mes, anio=anio,
                          correcciones=correcciones.data or [],
                          observaciones=observaciones.data or [],
                          nuevos_usuarios=nuevos_usuarios.data or [])
+
+# ========== GASTOS ==========
+
+@app.route('/gastos', methods=['GET', 'POST'])
+@login_required
+@socio_admin_required
+def gestion_gastos():
+    if request.method == 'POST':
+        fecha = request.form['fecha']
+        fecha_obj = datetime.strptime(fecha, '%Y-%m-%d')
+        reembolso = request.form.get('reembolso') == 'true'
+        
+        supabase.table('gastos').insert({
+            'concepto': request.form['concepto'],
+            'monto': float(request.form['monto']),
+            'fecha': fecha,
+            'categoria': request.form.get('categoria', ''),
+            'persona': request.form.get('persona', ''),
+            'reembolso': reembolso,
+            'reembolsado_a': request.form.get('reembolsado_a', '') if reembolso else '',
+            'registrado_por': current_user.nombre,
+            'mes': fecha_obj.month,
+            'anio': fecha_obj.year
+        }).execute()
+        flash('✅ Gasto registrado', 'success')
+        return redirect(url_for('gestion_gastos'))
+    
+    mes = int(request.args.get('mes', date.today().month))
+    anio = int(request.args.get('anio', date.today().year))
+    gastos = supabase.table('gastos').select('*').eq('mes', mes).eq('anio', anio).order('fecha', desc=True).execute()
+    total = sum(g.get('monto', 0) or 0 for g in (gastos.data or []))
+    
+    return render_template('gastos.html', gastos=gastos.data or [], total=total, mes=mes, anio=anio, today=date.today())
+
+@app.route('/api/gasto/<int:id>/eliminar', methods=['POST'])
+@login_required
+@socio_admin_required
+def eliminar_gasto(id):
+    supabase.table('gastos').delete().eq('id', id).execute()
+    return jsonify({'success': True})
 
 # ========== ESTUDIANTES ==========
 
