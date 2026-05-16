@@ -1,46 +1,18 @@
 {% extends "base.html" %}
-{% block title %}Psicología Especial - Atlas{% endblock %}
+{% block title %}Mis Clientes - Atlas{% endblock %}
 
 {% block content %}
-<h3>🧠 Módulo de Psicología Especial</h3>
-<p class="text-muted">Gestión de clientes externos y citas psicológicas (Comisión centro: 25%)</p>
-
-<!-- Tarjetas de resumen -->
-<div class="row mb-4">
-    <div class="col-md-3">
-        <div class="card bg-primary text-white text-center p-2">
-            <h5>{{ total_citas }}</h5>
-            <small>Total Citas</small>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card bg-success text-white text-center p-2">
-            <h5>${{ "%.2f"|format(total_pagado) }}</h5>
-            <small>Total Pagado</small>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card bg-warning text-dark text-center p-2">
-            <h5>${{ "%.2f"|format(total_comision_centro) }}</h5>
-            <small>Comisión Centro (25%)</small>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card bg-info text-white text-center p-2">
-            <h5>{{ psicologos|length }}</h5>
-            <small>Psicólogos</small>
-        </div>
-    </div>
-</div>
+<h3>🧠 Mis Clientes de Psicología</h3>
+<p class="text-muted">Gestiona tus clientes externos y agenda sus citas (Comisión centro: 25%)</p>
 
 <div class="row">
-    <!-- Clientes Externos -->
-    <div class="col-md-4 mb-4">
+    <!-- Clientes -->
+    <div class="col-md-5 mb-4">
         <div class="card shadow">
             <div class="card-header bg-primary text-white">
-                <strong>👥 Clientes Externos</strong>
+                <strong>👥 Mis Clientes</strong>
             </div>
-            <div class="card-body" style="max-height: 350px; overflow-y: auto;">
+            <div class="card-body" style="max-height: 400px; overflow-y: auto;">
                 <button type="button" class="btn btn-success btn-sm w-100 mb-2" data-bs-toggle="modal" data-bs-target="#modalCliente">
                     ➕ Nuevo Cliente
                 </button>
@@ -54,17 +26,17 @@
                     {% endfor %}
                 </div>
                 {% else %}
-                <p class="text-muted">No hay clientes registrados</p>
+                <p class="text-muted">No tienes clientes registrados</p>
                 {% endif %}
             </div>
         </div>
     </div>
     
     <!-- Agendar Cita -->
-    <div class="col-md-4 mb-4">
+    <div class="col-md-7 mb-4">
         <div class="card shadow">
             <div class="card-header bg-success text-white">
-                <strong>📅 Agendar Cita</strong>
+                <strong>📅 Agendar Cita con Cliente</strong>
             </div>
             <div class="card-body">
                 <div class="mb-2">
@@ -73,15 +45,6 @@
                         <option value="">Seleccionar...</option>
                         {% for c in clientes %}
                         <option value="{{ c.id }}">{{ c.nombre }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="mb-2">
-                    <label class="form-label">Psicólogo *</label>
-                    <select id="psicologo_id" class="form-select" required>
-                        <option value="">Seleccionar...</option>
-                        {% for p in psicologos %}
-                        <option value="{{ p.id }}">{{ p.nombre }}</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -102,51 +65,62 @@
                 <div class="mb-2">
                     <label class="form-label">Valor de la cita *</label>
                     <input type="number" id="valor_cita" class="form-control" step="0.01" required placeholder="0.00">
-                    <small class="text-muted">Comisión del centro: 25% | Pago al psicólogo: 75%</small>
+                    <small class="text-muted">Comisión del centro: 25% | Tu pago: 75% del valor</small>
                 </div>
                 <button type="button" class="btn btn-success w-100 mt-2" onclick="agendarCita()">📅 Agendar Cita</button>
             </div>
         </div>
     </div>
-    
-    <!-- Citas Programadas -->
-    <div class="col-md-4 mb-4">
-        <div class="card shadow">
-            <div class="card-header bg-info text-white">
-                <strong>📋 Citas Programadas</strong>
-            </div>
-            <div class="card-body" style="max-height: 400px; overflow-y: auto;">
-                {% if citas %}
-                <div class="list-group">
+</div>
+
+<!-- Citas Programadas -->
+<div class="card shadow">
+    <div class="card-header bg-info text-white">
+        <strong>📋 Mis Citas Programadas</strong>
+    </div>
+    <div class="card-body">
+        {% if citas %}
+        <div class="table-responsive">
+            <table class="table table-sm table-striped">
+                <thead>
+                    <tr class="table-dark">
+                        <th>Fecha</th>
+                        <th>Hora</th>
+                        <th>Cliente</th>
+                        <th>Valor</th>
+                        <th>Comisión Centro (25%)</th>
+                        <th>Mi Pago (75%)</th>
+                        <th>Estado</th>
+                        <th>Pagado</th>
+                    </tr>
+                </thead>
+                <tbody>
                     {% for c in citas %}
-                    <div class="list-group-item">
-                        <div class="d-flex justify-content-between">
-                            <strong>{{ c.clientes_externos.nombre }}</strong>
-                            <span class="badge bg-{{ 'success' if c.estado == 'pagada' else 'warning' if c.estado == 'agendada' else 'secondary' }}">
-                                {{ c.estado }}
-                            </span>
-                        </div>
-                        <div>📅 {{ c.fecha }} | {{ c.hora_inicio }} - {{ c.hora_fin }}</div>
-                        <div>🧠 {{ c.psicologo_nombre }}</div>
-                        <div>💰 Valor: ${{ "%.2f"|format(c.valor) }} | Pagado: ${{ "%.2f"|format(c.monto_pagado) }}</div>
-                        <div>🏢 Comisión centro (25%): ${{ "%.2f"|format(c.comision_centro) }}</div>
-                        <div>💵 Pago al psicólogo (75%): ${{ "%.2f"|format(c.pago_psicologo) }}</div>
-                        <div class="mt-2">
-                            {% if c.estado != 'pagada' and c.monto_pagado < c.valor %}
-                            <button class="btn btn-primary btn-sm" onclick="registrarPago({{ c.id }}, {{ c.valor - c.monto_pagado }})">💰 Pago</button>
+                    <tr>
+                        <td>{{ c.fecha }}</td>
+                        <td>{{ c.hora_inicio }} - {{ c.hora_fin }}</td>
+                        <td>{{ c.clientes_externos.nombre }}</td>
+                        <td>${{ "%.2f"|format(c.valor) }}</td>
+                        <td>${{ "%.2f"|format(c.comision_centro) }}</td>
+                        <td class="fw-bold text-success">${{ "%.2f"|format(c.pago_psicologo) }}</td>
+                        <td>
+                            {% if c.estado == 'pagada' %}
+                                <span class="badge bg-success">✅ Pagada</span>
+                            {% elif c.estado == 'realizada' %}
+                                <span class="badge bg-info">📌 Realizada</span>
+                            {% else %}
+                                <span class="badge bg-warning">⏳ Agendada</span>
                             {% endif %}
-                            {% if c.estado == 'agendada' %}
-                            <button class="btn btn-success btn-sm" onclick="completarCita({{ c.id }})">✅ Realizada</button>
-                            {% endif %}
-                        </div>
-                    </div>
+                        </td>
+                        <td>${{ "%.2f"|format(c.monto_pagado) }}</td>
+                    </tr>
                     {% endfor %}
-                </div>
-                {% else %}
-                <p class="text-muted">No hay citas programadas</p>
-                {% endif %}
-            </div>
+                </tbody>
+            </table>
         </div>
+        {% else %}
+        <p class="text-muted">No tienes citas programadas</p>
+        {% endif %}
     </div>
 </div>
 
@@ -155,7 +129,7 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title">➕ Nuevo Cliente Externo</h5>
+                <h5 class="modal-title">➕ Nuevo Cliente</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
@@ -185,7 +159,7 @@ async function crearCliente() {
     const nombre = document.getElementById('cliente_nombre').value;
     if (!nombre) { alert('Ingrese el nombre del cliente'); return; }
     
-    const response = await fetch('/api/cliente-externo', {
+    const response = await fetch('/api/mi-cliente', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
@@ -205,25 +179,21 @@ async function crearCliente() {
 
 async function agendarCita() {
     const cliente_id = document.getElementById('cliente_id').value;
-    const psicologo_id = document.getElementById('psicologo_id').value;
-    const psicologo_nombre = document.getElementById('psicologo_id').options[document.getElementById('psicologo_id').selectedIndex]?.text;
     const fecha = document.getElementById('fecha_cita').value;
     const hora_inicio = document.getElementById('hora_inicio').value;
     const hora_fin = document.getElementById('hora_fin').value;
     const valor = parseFloat(document.getElementById('valor_cita').value);
     
-    if (!cliente_id || !psicologo_id || !fecha || !hora_inicio || !hora_fin || !valor) {
+    if (!cliente_id || !fecha || !hora_inicio || !hora_fin || !valor) {
         alert('Complete todos los campos');
         return;
     }
     
-    const response = await fetch('/api/cita-psicologia', {
+    const response = await fetch('/api/mi-cita', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
             cliente_id: parseInt(cliente_id),
-            psicologo_id: parseInt(psicologo_id),
-            psicologo_nombre: psicologo_nombre,
             fecha: fecha,
             hora_inicio: hora_inicio,
             hora_fin: hora_fin,
@@ -233,38 +203,6 @@ async function agendarCita() {
     const result = await response.json();
     if (result.success) {
         alert('✅ Cita agendada correctamente');
-        location.reload();
-    } else {
-        alert('❌ Error: ' + result.error);
-    }
-}
-
-async function registrarPago(id, montoRestante) {
-    let monto = prompt('Ingrese el monto a pagar:', montoRestante);
-    if (!monto) return;
-    monto = parseFloat(monto);
-    if (isNaN(monto) || monto <= 0) { alert('Monto inválido'); return; }
-    
-    const response = await fetch(`/api/cita/${id}/pagar`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({monto: monto})
-    });
-    const result = await response.json();
-    if (result.success) {
-        alert(`✅ Pago registrado. Estado: ${result.nuevo_estado}`);
-        location.reload();
-    } else {
-        alert('❌ Error: ' + result.error);
-    }
-}
-
-async function completarCita(id) {
-    if (!confirm('¿Marcar esta cita como realizada?')) return;
-    const response = await fetch(`/api/cita/${id}/completar`, {method: 'POST'});
-    const result = await response.json();
-    if (result.success) {
-        alert('✅ Cita completada');
         location.reload();
     } else {
         alert('❌ Error: ' + result.error);
