@@ -1093,6 +1093,11 @@ def reportes():
     ingresos_por_tipo = {}
     gastos_por_categoria = {}
     
+    # Variables para totales de docentes
+    total_docencia = 0
+    total_psicologia = 0
+    total_pagado_docentes = 0
+    
     for e in (estudiantes.data or []):
         ses = supabase.table('sesiones').select('*').eq('estudiante_id', e['id']).execute()
         ses_todas = [s for s in (ses.data or []) if s['fecha'][:7] == f"{anio}-{mes:02d}"]
@@ -1125,15 +1130,45 @@ def reportes():
             elif s['estado'] == 'Cancelado':
                 asignaturas_detalle[asig]['canc'] += s.get('horas', 0) or 0
             cumplimiento[s.get('estado', 'Planificado').lower()] = cumplimiento.get(s.get('estado', 'Planificado').lower(), 0) + 1
+            
+            # ========== CÁLCULO DE PAGOS A DOCENTES ==========
             prof = s.get('profesor_terapeuta', 'Desconocido')
             tipo = s.get('tipo_sesion', 'clase')
+            horas = s.get('horas', 0) or 0
             valor = s.get('valor_total', 0) or 0
-            pago = (s.get('horas', 0) or 0) * 7 if tipo in ['clase', 'preuniversitario'] else valor * 0.35
+            
+            # Calcular pagos según tipo
+            if tipo in ['clase', 'preuniversitario']:
+                pago_docente = horas * 7  # $7 por hora
+                pago_psicologia = 0
+            else:  # terapia o ambos
+                pago_docente = 0
+                pago_psicologia = valor * 0.35  # 35%
+            
+            total_pagar = pago_docente + pago_psicologia
+            
             if prof not in pagos_por_docente:
-                pagos_por_docente[prof] = {'horas': 0, 'pago': 0, 'sesiones': 0, 'pagado': 0}
-            pagos_por_docente[prof]['horas'] += s.get('horas', 0) or 0
-            pagos_por_docente[prof]['pago'] += pago
+                pagos_por_docente[prof] = {
+                    'sesiones': 0,
+                    'horas': 0,
+                    'horas_totales': 0,
+                    'pago_docencia': 0,
+                    'pago_psicologia': 0,
+                    'total_pagar': 0,
+                    'pagado_hasta_fecha': 0  # Este se calculará después
+                }
+            
             pagos_por_docente[prof]['sesiones'] += 1
+            pagos_por_docente[prof]['horas'] += horas
+            pagos_por_docente[prof]['horas_totales'] += horas
+            pagos_por_docente[prof]['pago_docencia'] += pago_docente
+            pagos_por_docente[prof]['pago_psicologia'] += pago_psicologia
+            pagos_por_docente[prof]['total_pagar'] += total_pagar
+            
+            total_docencia += pago_docente
+            total_psicologia += pago_psicologia
+            # ========== FIN CÁLCULO ==========
+            
             if tipo not in ingresos_por_tipo:
                 ingresos_por_tipo[tipo] = 0
             ingresos_por_tipo[tipo] += valor
@@ -1143,17 +1178,23 @@ def reportes():
                          'horas_plan': horas_plan, 'horas_real': horas_real, 'horas_canc': horas_canc,
                          'cobrar': cobrar, 'pagado': pagado, 'saldo': cobrar - pagado})
     
+    # Calcular pagos a docentes realizados hasta la fecha (desde tabla pagos_docentes si existe)
+    # Por ahora, simulamos que no hay pagos registrados
+    # Si tienes una tabla de pagos_docentes, puedes consultarla aquí
+    
     gastos_mes = supabase.table('gastos').select('*').eq('mes', mes).eq('anio', anio).order('fecha').execute()
     total_gastos = sum(g.get('monto', 0) or 0 for g in (gastos_mes.data or []))
     for g in (gastos_mes.data or []):
         cat = g.get('categoria', 'Sin categoría')
         gastos_por_categoria[cat] = gastos_por_categoria.get(cat, 0) + (g.get('monto', 0) or 0)
+    
     pagos_mes = supabase.table('pagos').select('*').gte('fecha_pago', f"{anio}-{mes:02d}-01").lte('fecha_pago', f"{anio}-{mes:02d}-31").execute()
     total_ingresos = sum(p.get('monto', 0) or 0 for p in (pagos_mes.data or []))
+    
     correcciones = supabase.table('correcciones_pagos').select('*').order('fecha_correccion', desc=True).limit(30).execute()
     observaciones = supabase.table('sesiones').select('*, estudiantes(apellidos, nombres)').not_.is_('observaciones', 'null').order('fecha', desc=True).limit(30).execute()
     nuevos_usuarios = supabase.table('usuarios').select('*').gte('fecha_registro', f"{anio}-{mes:02d}-01").lte('fecha_registro', f"{anio}-{mes:02d}-31").execute()
-    total_pago_docentes = sum(d['pago'] for d in pagos_por_docente.values())
+    total_pago_docentes = sum(d['total_pagar'] for d in pagos_por_docente.values())
     
     return render_template('reportes.html',
                          datos=datos, total_estudiantes=len(datos),
@@ -1165,13 +1206,14 @@ def reportes():
                          asignaturas_detalle=asignaturas_detalle,
                          pagos_por_docente=pagos_por_docente,
                          total_pago_docentes=total_pago_docentes,
+                         total_docencia=total_docencia,
+                         total_psicologia=total_psicologia,
                          cumplimiento=cumplimiento,
                          correcciones=correcciones.data or [],
                          observaciones=observaciones.data or [],
                          nuevos_usuarios=nuevos_usuarios.data or [],
                          gastos_por_categoria=gastos_por_categoria,
                          total_planificado=tp_plan)
-
 # ========== GASTOS ==========
 
 @app.route('/gastos', methods=['GET', 'POST'])
