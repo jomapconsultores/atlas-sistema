@@ -602,21 +602,21 @@ def modulo5():
     total_neto = total_adeudado - total_anticipos
     
     return render_template('modulo5.html', 
-                         pagos=pagos,
-                         total_docencia=total_docencia,
-                         total_psicologia=total_psicologia,
-                         total_adeudado=total_adeudado,
-                         total_anticipos=total_anticipos,
-                         total_neto=total_neto,
-                         consolidado=consolidado,
-                         total_sesiones_clase=total_sesiones_clase,
-                         total_sesiones_terapia=total_sesiones_terapia,
-                         total_horas_clase=total_horas_clase,
-                         total_horas_terapia=total_sesiones_terapia,
-                         mes=mes, anio=anio,
-                         fecha_desde=fecha_desde, fecha_hasta=fecha_hasta,
-                         filtro_profesor=filtro_profesor,
-                         profesores_lista=sorted(list(profesores_lista)) if current_user.rol in ['admin', 'socio'] else [])
+                     pagos=pagos,
+                     total_docencia=total_docencia,
+                     total_psicologia=total_psicologia,
+                     total_adeudado=total_adeudado,
+                     total_anticipos=total_anticipos,
+                     total_neto=total_neto,
+                     consolidado=consolidado,
+                     total_sesiones_clase=total_sesiones_clase,
+                     total_sesiones_terapia=total_sesiones_terapia,
+                     total_horas_clase=total_horas_clase,
+                     total_horas_terapia=total_sesiones_terapia,
+                     mes=mes, anio=anio,
+                     fecha_desde=fecha_desde, fecha_hasta=fecha_hasta,
+                     filtro_profesor=filtro_profesor,
+                     profesores_lista=sorted(list(profesores_lista)) if current_user.rol in ['admin', 'socio'] else [])
 
 # ========== MÓDULO 2: CALENDARIO ==========
 
