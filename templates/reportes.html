@@ -93,8 +93,6 @@
     </div>
 </div>
 
-<!-- ========== REPORTES DESPLEGABLES ========== -->
-
 <!-- Ingresos Desglosados -->
 <div class="card shadow mb-4">
     <div class="card-header bg-success text-white" data-bs-toggle="collapse" data-bs-target="#secIngresos" style="cursor:pointer;">
@@ -180,10 +178,8 @@
                     <thead>
                         <tr class="table-dark">
                             <th>Docente/Psicólogo</th>
-                            <th>Sesiones Clase</th>
-                            <th>Sesiones Terapia</th>
-                            <th>Horas Clase</th>
-                            <th>Horas Terapia</th>
+                            <th>Sesiones</th>
+                            <th>Horas</th>
                             <th>$ Pago Docencia</th>
                             <th>$ Pago Psicología</th>
                             <th>$ Total a Pagar</th>
@@ -193,10 +189,8 @@
                         {% for nombre, datos in pagos_por_docente.items() %}
                         <tr>
                             <td><strong>{{ nombre }}</strong></td>
-                            <td class="text-center">{{ datos.sesiones_clase }}</td>
-                            <td class="text-center">{{ datos.sesiones_terapia }}</td>
-                            <td class="text-center">{{ datos.horas_clase }}</td>
-                            <td class="text-center">{{ datos.horas_terapia }}</td>
+                            <td class="text-center">{{ datos.sesiones_clase + datos.sesiones_terapia }}</td>
+                            <td class="text-center">{{ datos.horas_clase + datos.horas_terapia }}</td>
                             <td class="text-primary">${{ "%.2f"|format(datos.pago_docencia) }}</td>
                             <td class="text-success">${{ "%.2f"|format(datos.pago_psicologia) }}</td>
                             <td class="fw-bold">${{ "%.2f"|format(datos.total_pagar) }}</td>
@@ -206,10 +200,8 @@
                     <tfoot class="table-dark">
                         <tr>
                             <td><strong>TOTALES</strong></td>
-                            <td class="text-center"><strong>{{ total_sesiones_clase }}</strong></td>
-                            <td class="text-center"><strong>{{ total_sesiones_terapia }}</strong></td>
-                            <td class="text-center"><strong>{{ total_horas_clase }}</strong></td>
-                            <td class="text-center"><strong>{{ total_horas_terapia }}</strong></td>
+                            <td class="text-center"><strong>{{ total_sesiones_clase + total_sesiones_terapia }}</strong></td>
+                            <td class="text-center"><strong>{{ total_horas_clase + total_horas_terapia }}</strong></td>
                             <td class="text-primary"><strong>${{ "%.2f"|format(total_docencia) }}</strong></td>
                             <td class="text-success"><strong>${{ "%.2f"|format(total_psicologia) }}</strong></td>
                             <td class="fw-bold"><strong>${{ "%.2f"|format(total_pago_docentes) }}</strong></td>

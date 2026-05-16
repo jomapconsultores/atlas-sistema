@@ -1163,8 +1163,7 @@ def reportes():
                     'horas_terapia': 0,
                     'pago_docencia': 0,
                     'pago_psicologia': 0,
-                    'total_pagar': 0,
-                    'pagado_hasta_fecha': 0
+                    'total_pagar': 0
                 }
             
             if tipo in ['clase', 'preuniversitario']:
@@ -1183,9 +1182,16 @@ def reportes():
             ingresos_por_tipo[tipo] += valor
         
         if cobrar > 0 or pagado > 0 or horas_real > 0:
-            datos.append({'id': e['id'], 'estudiante': f"{e['apellidos']} {e['nombres']}",
-                         'horas_plan': horas_plan, 'horas_real': horas_real, 'horas_canc': horas_canc,
-                         'cobrar': cobrar, 'pagado': pagado, 'saldo': cobrar - pagado})
+            datos.append({
+                'id': e['id'], 
+                'estudiante': f"{e['apellidos']} {e['nombres']}",
+                'horas_plan': horas_plan, 
+                'horas_real': horas_real, 
+                'horas_canc': horas_canc,
+                'cobrar': cobrar, 
+                'pagado': pagado, 
+                'saldo': cobrar - pagado
+            })
     
     gastos_mes = supabase.table('gastos').select('*').eq('mes', mes).eq('anio', anio).order('fecha').execute()
     total_gastos = sum(g.get('monto', 0) or 0 for g in (gastos_mes.data or []))
@@ -1246,7 +1252,6 @@ def reportes():
                          total_planificado=tp_plan,
                          total_cobrar=tc,
                          total_pagado=tp)
-
 # ========== GASTOS ==========
 
 @app.route('/gastos', methods=['GET', 'POST'])
