@@ -62,7 +62,7 @@
     </div>
 </div>
 
-<!-- Gráficos más pequeños -->
+<!-- Gráficos -->
 <div class="row mb-4">
     <div class="col-md-4">
         <div class="card shadow h-100">
@@ -101,7 +101,7 @@
     </div>
 </div>
 
-<!-- Ingresos Desglosados (sin etiquetas HTML visibles) -->
+<!-- Ingresos Desglosados -->
 <div class="card shadow mb-4">
     <div class="card-header bg-success text-white" data-bs-toggle="collapse" data-bs-target="#secIngresos" style="cursor:pointer;">
         <strong>💵 Ingresos Desglosados</strong>
@@ -112,22 +112,8 @@
             <h6>📂 Por Tipo</h6>
             <div class="table-responsive">
                 <table class="table table-sm table-striped">
-                    <thead>
-                        <tr>
-                            <th>Tipo</th>
-                            <th>$ Total</th>
-                            <th>%</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for t,v in ingresos_por_tipo.items() %}
-                        <tr>
-                            <td>{{ t }}</td>
-                            <td class="text-end">${{ "%.2f"|format(v) }}</td>
-                            <td class="text-center">{{ (v / total_ingresos * 100)|round(1) if total_ingresos>0 else 0 }}%</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
+                    <thead><tr><th>Tipo</th><th>$ Total</th><th>%</th></tr></thead>
+                    <tbody>{% for t,v in ingresos_por_tipo.items() %}<tr><td>{{ t }}</td><td class="text-end">${{ "%.2f"|format(v) }}</td><td class="text-center">{{ (v / total_ingresos * 100)|round(1) if total_ingresos>0 else 0 }}%<\/td></tr>{% endfor %}</tbody>
                 </table>
             </div>
             <hr>
@@ -136,27 +122,21 @@
                 <table class="table table-sm table-striped">
                     <thead>
                         <tr>
-                            <th>Estudiante</th>
-                            <th>H Plan</th>
-                            <th>H Real</th>
-                            <th>%</th>
-                            <th>$ Cobrar</th>
-                            <th>$ Recibido</th>
-                            <th>%</th>
-                            <th>$ Saldo</th>
+                            <th>Estudiante</th><th>H Plan</th><th>H Real</th><th>%</th>
+                            <th>$ Cobrar</th><th>$ Recibido</th><th>%</th><th>$ Saldo</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for d in datos_estudiantes|default(datos, true) %}
                         <tr>
-                            <td>{{ d.estudiante|title }}</td>
-                            <td class="text-center">{{ d.horas_plan }}</td>
-                            <td class="text-center">{{ d.horas_real }}</td>
-                            <td class="text-center">{{ (d.horas_real / d.horas_plan * 100)|round(1) if d.horas_plan>0 else 0 }}%</td>
-                            <td class="text-end">${{ "%.2f"|format(d.cobrar) }}</td>
-                            <td class="text-end">${{ "%.2f"|format(d.pagado) }}</td>
-                            <td class="text-center">{{ (d.pagado / d.cobrar * 100)|round(1) if d.cobrar>0 else 0 }}%</td>
-                            <td class="text-end text-{{ 'danger' if d.saldo>0 else 'success' }}">${{ "%.2f"|format(d.saldo|abs) }}</td>
+                            <td>{{ d.estudiante|title }}<\/td>
+                            <td class="text-center">{{ d.horas_plan }}<\/td>
+                            <td class="text-center">{{ d.horas_real }}<\/td>
+                            <td class="text-center">{{ (d.horas_real / d.horas_plan * 100)|round(1) if d.horas_plan>0 else 0 }}%<\/td>
+                            <td class="text-end">${{ "%.2f"|format(d.cobrar) }}<\/td>
+                            <td class="text-end">${{ "%.2f"|format(d.pagado) }}<\/td>
+                            <td class="text-center">{{ (d.pagado / d.cobrar * 100)|round(1) if d.cobrar>0 else 0 }}%<\/td>
+                            <td class="text-end text-{{ 'danger' if d.saldo>0 else 'success' }}">${{ "%.2f"|format(d.saldo|abs) }}<\/td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -175,27 +155,9 @@
         <div class="card-body p-2">
             <div class="table-responsive">
                 <table class="table table-sm table-striped">
-                    <thead>
-                        <tr>
-                            <th>Asignatura/Terapia</th>
-                            <th>H Plan</th>
-                            <th>H Real</th>
-                            <th>H Canc</th>
-                            <th>%</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for a,i in asignaturas_detalle.items() %}
-                        <tr>
-                            <td>{{ a }}</td>
-                            <td class="text-center">{{ i.plan }}</td>
-                            <td class="text-center">{{ i.real }}</td>
-                            <td class="text-center">{{ i.canc }}</td>
-                            <td class="text-center">{{ (i.real / i.plan * 100)|round(1) if i.plan>0 else 0 }}%</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                    <thead><tr><th>Asignatura/Terapia</th><th>H Plan</th><th>H Real</th><th>H Canc</th><th>%</th></tr></thead>
+                    <tbody>{% for a,i in asignaturas_detalle.items() %}<tr><td>{{ a }}<\/td><td class="text-center">{{ i.plan }}<\/td><td class="text-center">{{ i.real }}<\/td><td class="text-center">{{ i.canc }}<\/td><td class="text-center">{{ (i.real / i.plan * 100)|round(1) if i.plan>0 else 0 }}%<\/td></tr>{% endfor %}</tbody>
+                </tr>
             </div>
         </div>
     </div>
@@ -210,30 +172,8 @@
         <div class="card-body p-2">
             <div class="table-responsive">
                 <table class="table table-sm">
-                    <thead>
-                        <tr>
-                            <th>Fecha</th>
-                            <th>Concepto</th>
-                            <th>Categoría</th>
-                            <th>Persona</th>
-                            <th>Monto</th>
-                            <th>%</th>
-                            <th>Reemb</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for g in gastos %}
-                        <tr>
-                            <td>{{ g.fecha }}</td>
-                            <td>{{ g.concepto }}</td>
-                            <td>{{ g.get('categoria','') }}</td>
-                            <td>{{ g.get('persona','') }}</td>
-                            <td class="text-end">${{ "%.2f"|format(g.monto) }}</td>
-                            <td class="text-center">{{ (g.monto / total_gastos * 100)|round(1) if total_gastos>0 else 0 }}%</td>
-                            <td>{% if g.get('reembolso') %}🔄{% else %}-{% endif %}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
+                    <thead><tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Persona</th><th>Monto</th><th>%</th><th>Reemb</th></tr></thead>
+                    <tbody>{% for g in gastos %}<tr><td>{{ g.fecha }}<\/td><td>{{ g.concepto }}<\/td><td>{{ g.get('categoria','') }}<\/td><td>{{ g.get('persona','') }}<\/td><td class="text-end">${{ "%.2f"|format(g.monto) }}<\/td><td class="text-center">{{ (g.monto / total_gastos * 100)|round(1) if total_gastos>0 else 0 }}%<\/td><td>{% if g.get('reembolso') %}🔄{% else %}-{% endif %}<\/td></tr>{% endfor %}</tbody>
                 </table>
             </div>
         </div>
@@ -248,33 +188,20 @@
     <div class="collapse" id="secBalance">
         <div class="card-body p-2">
             <table class="table table-sm">
-                <tr class="table-success">
-                    <td><strong>+ Ingresos Reales</strong></td>
-                    <td class="text-end"><strong>${{ "%.2f"|format(total_ingresos) }}</strong></td>
-                    <td class="text-end">100%</td>
-                </tr>
-                <tr class="table-danger">
-                    <td><strong>- Gastos Operativos</strong></td>
-                    <td class="text-end"><strong>${{ "%.2f"|format(total_gastos) }}</strong></td>
-                    <td class="text-end">{{ (total_gastos / total_ingresos * 100)|round(1) if total_ingresos>0 else 0 }}%</td>
-                </tr>
-                <tr class="table-danger">
-                    <td><strong>- Pago Docentes/Psicólogos</strong></td>
-                    <td class="text-end"><strong>${{ "%.2f"|format(total_pago_docentes) }}</strong></td>
-                    <td class="text-end">{{ (total_pago_docentes / total_ingresos * 100)|round(1) if total_ingresos>0 else 0 }}%</td>
-                </tr>
+                <tr class="table-success"><td><strong>+ Ingresos Reales</strong></td><td class="text-end"><strong>${{ "%.2f"|format(total_ingresos) }}</strong></td><td class="text-end">100%<\/td></tr>
+                <tr class="table-danger"><td><strong>- Gastos Operativos</strong></td><td class="text-end"><strong>${{ "%.2f"|format(total_gastos) }}</strong></td><td class="text-end">{{ (total_gastos / total_ingresos * 100)|round(1) if total_ingresos>0 else 0 }}%<\/td></tr>
+                <tr class="table-danger"><td><strong>- Pago Docentes/Psicólogos</strong></td><td class="text-end"><strong>${{ "%.2f"|format(total_pago_docentes) }}</strong></td><td class="text-end">{{ (total_pago_docentes / total_ingresos * 100)|round(1) if total_ingresos>0 else 0 }}%<\/td></tr>
                 <tr class="{{ 'table-success' if (total_ingresos-total_gastos-total_pago_docentes)>=0 else 'table-danger' }}">
                     <td><strong>= Resultado Neto</strong></td>
                     <td class="text-end"><strong>${{ "%.2f"|format(total_ingresos-total_gastos-total_pago_docentes) }}</strong></td>
-                    <td class="text-end">{{ ((total_ingresos-total_gastos-total_pago_docentes) / total_ingresos * 100)|round(1) if total_ingresos>0 else 0 }}%</td>
+                    <td class="text-end">{{ ((total_ingresos-total_gastos-total_pago_docentes) / total_ingresos * 100)|round(1) if total_ingresos>0 else 0 }}%<\/td>
                 </tr>
             </table>
         </div>
     </div>
 </div>
 
-<!-- Pagos a Docentes (solo para admin/socio) -->
-{% if current_user.rol in ['admin', 'socio'] %}
+<!-- Pagos a Docentes -->
 <div class="card shadow mb-4">
     <div class="card-header bg-secondary text-white" data-bs-toggle="collapse" data-bs-target="#secPagosDocentes" style="cursor:pointer;">
         <strong>💲 Pagos a Docentes y Psicólogos (40.18%)</strong>
@@ -284,7 +211,7 @@
             <div class="table-responsive">
                 <table class="table table-sm">
                     <thead>
-                        <tr>
+                        <tr class="table-dark">
                             <th>Profesional</th>
                             <th>Sesiones</th>
                             <th>Horas</th>
@@ -296,12 +223,12 @@
                     <tbody>
                         {% for nombre, datos in pagos_por_docente.items() %}
                         <tr>
-                            <td><strong>{{ nombre }}</strong></td>
-                            <td class="text-center">{{ datos.sesiones_clase + datos.sesiones_terapia }}</td>
-                            <td class="text-center">{{ datos.horas_clase + datos.horas_terapia }}</td>
-                            <td class="text-end text-primary">${{ "%.2f"|format(datos.pago_docencia) }}</td>
-                            <td class="text-end text-success">${{ "%.2f"|format(datos.pago_psicologia) }}</td>
-                            <td class="text-end fw-bold">${{ "%.2f"|format(datos.total_pagar) }}</td>
+                            <td><strong>{{ nombre }}</strong><\/td>
+                            <td class="text-center">{{ datos.sesiones_clase + datos.sesiones_terapia }}<\/td>
+                            <td class="text-center">{{ datos.horas_clase + datos.horas_terapia }}<\/td>
+                            <td class="text-end text-primary">${{ "%.2f"|format(datos.pago_docencia) }}<\/td>
+                            <td class="text-end text-success">${{ "%.2f"|format(datos.pago_psicologia) }}<\/td>
+                            <td class="text-end fw-bold">${{ "%.2f"|format(datos.total_pagar) }}<\/td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -310,7 +237,6 @@
         </div>
     </div>
 </div>
-{% endif %}
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>

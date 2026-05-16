@@ -352,7 +352,6 @@ def rechazar_anticipo(id):
     return redirect(url_for('gestion_anticipos'))
 
 # ========== MIS CLIENTES (SOLO PARA PSICÓLOGOS) ==========
-# ESTA ES LA ÚNICA VERSIÓN QUE DEBE EXISTIR (cerca de la línea 495)
 
 @app.route('/mis-clientes')
 @login_required
@@ -1159,10 +1158,18 @@ def mi_reporte():
     mes = int(request.args.get('mes', date.today().month))
     anio = int(request.args.get('anio', date.today().year))
     datos = []
-    total_cobrar = total_pagado = total_horas = 0
+    total_horas = 0
+    total_a_pagar = 0
+    anticipos_aprobados = 0
     nombre_usuario = current_user.nombre.strip().lower()
     palabras_usuario = nombre_usuario.split()
+    
     sesiones = supabase.table('sesiones').select('*, estudiantes(*)').eq('estado', 'Realizado').order('fecha', desc=True).execute()
+    
+    # Obtener anticipos aprobados
+    anticipos = supabase.table('anticipos_solicitudes').select('*').eq('usuario_id', current_user.id).eq('estado', 'aprobado').execute()
+    for a in (anticipos.data or []):
+        anticipos_aprobados += a.get('monto', 0)
     
     for s in (sesiones.data or []):
         if mes != 0 and s['fecha'][:7] != f"{anio}-{mes:02d}":
@@ -1192,15 +1199,40 @@ def mi_reporte():
                         break
         
         if incluir:
-            datos.append({'fecha': s['fecha'], 'estudiante': nombre_est, 'tipo': s['tipo_sesion'],
-                         'asignatura': s.get('asignatura') or s.get('tema_terapia') or '-',
-                         'horas': s.get('horas', 0) or 0, 'valor': s.get('valor_total', 0) or 0, 'estado': s['estado']})
-            total_horas += s.get('horas', 0) or 0
-            total_cobrar += s.get('valor_total', 0) or 0
+            horas = s.get('horas', 0) or 0
+            valor = s.get('valor_total', 0) or 0
+            tipo = s.get('tipo_sesion', 'clase')
+            
+            # Calcular pago del docente (NO lo que cobró el centro)
+            if tipo in ['clase', 'preuniversitario']:
+                mi_pago = horas * 7
+            else:
+                mi_pago = valor * 0.4018
+            
+            total_a_pagar += mi_pago
+            total_horas += horas
+            
+            datos.append({
+                'fecha': s['fecha'],
+                'estudiante': nombre_est,
+                'tipo': tipo,
+                'asignatura': s.get('asignatura') or s.get('tema_terapia') or '-',
+                'horas': horas,
+                'valor': valor,
+                'mi_pago': mi_pago,
+                'estado': s['estado']
+            })
     
-    return render_template('mi_reporte.html', datos=datos, total_cobrar=total_cobrar,
-                         total_pagado=total_pagado, total_horas=total_horas, mes=mes, anio=anio,
-                         saldo=total_cobrar - total_pagado)
+    neto_a_recibir = total_a_pagar - anticipos_aprobados
+    
+    return render_template('mi_reporte.html', 
+                         datos=datos,
+                         total_horas=total_horas,
+                         total_a_pagar=total_a_pagar,
+                         anticipos_aprobados=anticipos_aprobados,
+                         neto_a_recibir=neto_a_recibir,
+                         mes=mes,
+                         anio=anio)
 
 # ========== EDITAR PERFIL ==========
 

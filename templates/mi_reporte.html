@@ -27,50 +27,39 @@
     </div>
 </form>
 
-<!-- Tarjetas de resumen -->
+<!-- Tarjetas de resumen para docentes/psicólogos -->
 <div class="row mb-4">
     <div class="col-md-3">
         <div class="card bg-primary text-white text-center p-3">
             <h4>{{ datos|length }}</h4>
-            <small>Sesiones</small>
+            <small>Sesiones Realizadas</small>
         </div>
     </div>
     <div class="col-md-3">
         <div class="card bg-success text-white text-center p-3">
             <h4>{{ total_horas }}</h4>
-            <small>Horas</small>
+            <small>Horas Totales</small>
         </div>
     </div>
     <div class="col-md-3">
         <div class="card bg-info text-white text-center p-3">
-            <h4>${{ "%.2f"|format(total_cobrar) }}</h4>
-            <small>Total a Pagar</small>
+            <h4>${{ "%.2f"|format(total_a_pagar) }}</h4>
+            <small>💰 MI PAGO TOTAL</small>
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card bg-{{ 'danger' if saldo > 0 else 'success' }} text-white text-center p-3">
-            <h4>${{ "%.2f"|format(saldo|abs) }}</h4>
-            <small>{{ 'Pendiente' if saldo > 0 else 'Pagado' }}</small>
+        <div class="card bg-warning text-dark text-center p-3">
+            <h4>${{ "%.2f"|format(anticipos_aprobados) }}</h4>
+            <small>Anticipos Aprobados</small>
         </div>
     </div>
 </div>
 
-<!-- Gráficos para estudiantes -->
-<div class="row mb-4">
+<div class="row mb-3">
     <div class="col-md-6">
-        <div class="card shadow h-100">
-            <div class="card-header bg-primary text-white"><strong>📚 Clases por Materia</strong></div>
-            <div class="card-body" style="height: 300px;">
-                <canvas id="chartMateriasEstudiante"></canvas>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-6">
-        <div class="card shadow h-100">
-            <div class="card-header bg-success text-white"><strong>👨‍🏫 Clases por Profesor</strong></div>
-            <div class="card-body" style="height: 300px;">
-                <canvas id="chartProfesoresEstudiante"></canvas>
-            </div>
+        <div class="card bg-secondary text-white text-center p-2">
+            <h5>${{ "%.2f"|format(neto_a_recibir) }}</h5>
+            <small>💰 NETO A RECIBIR (Total - Anticipos)</small>
         </div>
     </div>
 </div>
@@ -78,7 +67,7 @@
 <!-- Tabla de sesiones -->
 <div class="card shadow">
     <div class="card-header bg-info text-white">
-        <strong>Detalle de Sesiones</strong>
+        <strong>Detalle de Mis Sesiones</strong>
         <span class="badge bg-light text-dark ms-2">{{ datos|length }} registros</span>
     </div>
     <div class="card-body">
@@ -86,13 +75,13 @@
         <div class="table-responsive">
             <table class="table table-striped table-sm">
                 <thead>
-                    <tr>
+                    <tr class="table-dark">
                         <th>Fecha</th>
-                        <th>Profesor</th>
+                        <th>Estudiante</th>
                         <th>Tipo</th>
                         <th>Asignatura/Terapia</th>
                         <th>Horas</th>
-                        <th>Valor</th>
+                        <th>MI PAGO</th>
                         <th>Estado</th>
                     </tr>
                 </thead>
@@ -100,7 +89,7 @@
                     {% for d in datos %}
                     <tr>
                         <td>{{ d.fecha }}</td>
-                        <td>{{ d.profesor|title if d.profesor else 'No asignado' }}</td>
+                        <td>{{ d.estudiante|title }}</td>
                         <td>
                             {% if d.tipo == 'clase' %}
                                 <span class="badge bg-primary">📚 Clase</span>
@@ -114,15 +103,21 @@
                         </td>
                         <td>{{ d.asignatura }}</td>
                         <td class="text-center">{{ d.horas }}</td>
-                        <td class="text-end">${{ "%.2f"|format(d.valor) }}</td>
-                        <td><span class="badge bg-{{ 'success' if d.estado == 'Realizado' else 'warning' }}">{{ d.estado }}</span></td>
+                        <td class="text-end fw-bold text-success">
+                            {% if d.tipo in ['clase', 'preuniversitario'] %}
+                                ${{ "%.2f"|format(d.horas * 7) }}
+                            {% else %}
+                                ${{ "%.2f"|format(d.valor * 0.4018) }}
+                            {% endif %}
+                        </td>
+                        <td><span class="badge bg-success">Realizado</span></td>
                     </tr>
                     {% endfor %}
                 </tbody>
                 <tfoot class="table-dark">
                     <tr>
-                        <td colspan="5"><strong>TOTALES</strong></td>
-                        <td class="text-end"><strong>${{ "%.2f"|format(total_cobrar) }}</strong></td>
+                        <td colspan="5"><strong>TOTAL</strong></td>
+                        <td class="text-end"><strong>${{ "%.2f"|format(total_a_pagar) }}</strong></td>
                         <td></td>
                     </tr>
                 </tfoot>
@@ -134,48 +129,50 @@
     </div>
 </div>
 
+<!-- Gráfico de evolución de ingresos -->
+<div class="card shadow mt-4">
+    <div class="card-header bg-primary text-white">
+        <strong>📈 Evolución de mis ingresos</strong>
+    </div>
+    <div class="card-body">
+        <canvas id="chartMiReporte" style="height: 300px;"></canvas>
+    </div>
+</div>
+
 <a href="/dashboard" class="btn btn-outline-secondary mt-3">← Dashboard</a>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
-// Datos para el gráfico de materias
-const materias = {};
-const profesores = {};
+// Datos para el gráfico de ingresos mensuales
+const ingresosPorMes = {};
 {% for d in datos %}
-    const materia = '{{ d.asignatura }}';
-    const profesor = '{{ d.profesor|title if d.profesor else "No asignado" }}';
-    const horas = {{ d.horas }};
-    
-    if (!materias[materia]) materias[materia] = 0;
-    materias[materia] += horas;
-    
-    if (!profesores[profesor]) profesores[profesor] = 0;
-    profesores[profesor] += horas;
+    const mes = '{{ d.fecha[:7] }}';
+    let miPago = 0;
+    {% if d.tipo in ['clase', 'preuniversitario'] %}
+        miPago = {{ d.horas }} * 7;
+    {% else %}
+        miPago = {{ d.valor }} * 0.4018;
+    {% endif %}
+    if (!ingresosPorMes[mes]) ingresosPorMes[mes] = 0;
+    ingresosPorMes[mes] += miPago;
 {% endfor %}
 
-new Chart(document.getElementById('chartMateriasEstudiante'), {
-    type: 'bar',
+new Chart(document.getElementById('chartMiReporte'), {
+    type: 'line',
     data: {
-        labels: Object.keys(materias),
+        labels: Object.keys(ingresosPorMes),
         datasets: [{
-            label: 'Horas por Materia',
-            data: Object.values(materias),
-            backgroundColor: '#1a73e8'
+            label: 'Mis ingresos ($)',
+            data: Object.values(ingresosPorMes),
+            borderColor: '#1a73e8',
+            backgroundColor: 'rgba(26, 115, 232, 0.1)',
+            fill: true
         }]
     },
-    options: { responsive: true, maintainAspectRatio: true }
-});
-
-new Chart(document.getElementById('chartProfesoresEstudiante'), {
-    type: 'pie',
-    data: {
-        labels: Object.keys(profesores),
-        datasets: [{
-            data: Object.values(profesores),
-            backgroundColor: ['#1a73e8', '#0f9d58', '#f4b400', '#db4437', '#ab47bc']
-        }]
-    },
-    options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom' } } }
+    options: {
+        responsive: true,
+        maintainAspectRatio: true
+    }
 });
 </script>
 {% endblock %}

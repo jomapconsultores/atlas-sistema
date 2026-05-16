@@ -8,7 +8,7 @@
     <input type="date" name="fecha" value="{{ fecha }}" class="form-control d-inline w-auto" onchange="this.form.submit()">
     <a href="/modulo2" class="btn btn-outline-secondary btn-sm">Todas las fechas</a>
     {% if current_user.rol in ['admin','socio'] %}
-    <button type="button" class="btn btn-outline-primary btn-sm" onclick="sincronizarTodos()" title="Sincronizar todas las sesiones de esta fecha con Google Calendar">🔄 Sincronizar Fecha</button>
+    <button type="button" class="btn btn-outline-primary btn-sm" onclick="sincronizarTodos()">🔄 Sincronizar Fecha</button>
     {% endif %}
 </form>
 
@@ -23,6 +23,13 @@
         margin-top: 5px;
         display: none;
     }
+    .pendiente-card {
+        background-color: #fff3cd;
+        border-left: 5px solid #ffc107;
+        margin-bottom: 10px;
+        padding: 10px;
+        border-radius: 5px;
+    }
 </style>
 
 <div class="card shadow mb-4">
@@ -34,137 +41,56 @@
                 <thead>
                     <tr>
                         <th>Fecha</th><th>Hora</th><th>Estudiante</th><th>Tipo</th><th>Asig/Tema</th><th>Prof</th>
-                        <th>Estado</th><th>Valor</th><th>✅</th><th>❌</th>
-                        {% if current_user.rol in ['admin','socio'] %}<th>✏️</th><th>🗑️</th><th>🔄 Est.</th><th>👨‍🏫 Prof.</th>{% endif %}
+                        <th>Estado</th><th>✅</th><th>❌</th>
+                        {% if current_user.rol in ['admin','socio'] %}<th>✏️</th><th>🗑️</th>{% endif %}
                     </tr>
                 </thead>
                 <tbody>
                     {% for s in sesiones %}
-                    <tr id="fila-{{ s['id'] }}">
-                        <td>{{ s['fecha'] }}</td>
-                        <td>
-                            <span class="hora-texto-{{ s['id'] }}">{{ s['hora_inicio'] }} - {{ s['hora_fin'] }}</span>
-                            {% if current_user.rol in ['admin','socio'] %}
-                            <div class="hora-input-{{ s['id'] }}" style="display:none;">
-                                <input type="time" id="hini-{{ s['id'] }}" value="{{ s['hora_inicio'] }}" class="form-control form-control-sm" style="width:100px; display:inline-block;">
-                                <input type="time" id="hfin-{{ s['id'] }}" value="{{ s['hora_fin'] }}" class="form-control form-control-sm" style="width:100px; display:inline-block;">
-                                <div id="error-{{ s['id'] }}" class="error-msg"></div>
-                            </div>
-                            {% endif %}
-                        </td>
-                        <td>{% if s.get('estudiantes') %}{{ s['estudiantes']['apellidos'] }} {{ s['estudiantes']['nombres'] }}{% else %}ID: {{ s['estudiante_id'] }}{% endif %}</td>
-                        <td>{{ s['tipo_sesion'] }}</td>
+                    <tr id="fila-{{ s.id }}">
+                        <td>{{ s.fecha }}</td>
+                        <td>{{ s.hora_inicio }} - {{ s.hora_fin }}</td>
+                        <td>{% if s.estudiantes %}{{ s.estudiantes.apellidos }} {{ s.estudiantes.nombres }}{% else %}ID: {{ s.estudiante_id }}{% endif %}</td>
+                        <td>{{ s.tipo_sesion }}</td>
                         <td>{{ s.get('asignatura') or s.get('tema_terapia') or '-' }}</td>
-                        <td>{{ s['profesor_terapeuta'] }}</td>
+                        <td>{{ s.profesor_terapeuta }}</td>
                         <td>
-                            <span class="badge bg-{{ 'success' if s['estado']=='Realizado' else 'danger' if s['estado']=='Cancelado' else 'warning' }}">{{ s['estado'] }}</span>
-                            {% if current_user.rol in ['admin','socio'] %}
-                                {% if s.get('evento_calendario_id') %}
-                                <span class="badge bg-success" title="Sincronizado">📅</span>
-                                {% else %}
-                                <button class="btn btn-outline-success btn-sm" onclick="sincronizarEvento({{ s['id'] }})" title="Sincronizar ahora">🔄</button>
-                                {% endif %}
-                            {% endif %}
+                            <span class="badge bg-{{ 'success' if s.estado=='Realizado' else 'danger' if s.estado=='Cancelado' else 'warning' }}">{{ s.estado }}</span>
                         </td>
-                        <td>{% if s['estado']=='Realizado' %}${{ "%.2f"|format(s.get('valor_total',0) or 0) }}{% else %}-{% endif %}</td>
-                        <td><input type="radio" name="est_{{ s['id'] }}" class="radio-sesion" data-id="{{ s['id'] }}" data-estado="Realizado" {{ 'checked' if s['estado']=='Realizado' }}></td>
-                        <td><input type="radio" name="est_{{ s['id'] }}" class="radio-sesion" data-id="{{ s['id'] }}" data-estado="Cancelado" {{ 'checked' if s['estado']=='Cancelado' }}></td>
+                        <td><input type="radio" name="est_{{ s.id }}" class="radio-sesion" data-id="{{ s.id }}" data-estado="Realizado" {{ 'checked' if s.estado=='Realizado' }}></td>
+                        <td><input type="radio" name="est_{{ s.id }}" class="radio-sesion" data-id="{{ s.id }}" data-estado="Cancelado" {{ 'checked' if s.estado=='Cancelado' }}></td>
                         {% if current_user.rol in ['admin','socio'] %}
-                        <td>
-                            <button class="btn btn-warning btn-sm" onclick="editarSesion({{ s['id'] }})">✏️</button>
-                            <button class="btn btn-success btn-sm" id="guardar-{{ s['id'] }}" style="display:none;" onclick="guardarModificacion({{ s['id'] }})">✅</button>
-                            <button class="btn btn-secondary btn-sm" id="cancelar-{{ s['id'] }}" style="display:none;" onclick="cancelarEdicion({{ s['id'] }})">❌</button>
-                        </td>
-                        <td><button class="btn btn-danger btn-sm" onclick="eliminarSesion({{ s['id'] }})">🗑️</button></td>
-                        <td><button class="btn btn-outline-primary btn-sm" onclick="abrirModalEstudiante({{ s['id'] }})">🔄</button></td>
-                        <td><button class="btn btn-outline-warning btn-sm" onclick="abrirModalProfesor({{ s['id'] }}, '{{ s['profesor_terapeuta'] }}')">👨‍🏫</button></td>
+                        <td><button class="btn btn-danger btn-sm" onclick="eliminarSesion({{ s.id }})">🗑️</button></td>
                         {% endif %}
-                    </tr>
+                     </tr>
                     {% endfor %}
                 </tbody>
-            </table>
+             </table>
         </div>
         {% else %}<p class="text-muted">No hay sesiones. {% if current_user.rol in ['admin','socio'] %}<a href="/modulo1">¿Planificar?</a>{% endif %}</p>
         {% endif %}
     </div>
 </div>
 
+<!-- Pendientes - CORREGIDO -->
 <div class="card shadow mb-4">
-    <div class="card-header bg-warning text-dark"><strong>⏳ Pendientes</strong></div>
-    <div class="card-body"><div id="pendientesContainer">Cargando...</div></div>
+    <div class="card-header bg-warning text-dark">
+        <strong>⏳ Sesiones Pendientes por Marcar</strong>
+        <span class="badge bg-dark ms-2" id="pendientesCount">0</span>
+    </div>
+    <div class="card-body">
+        <div id="pendientesContainer">
+            <div class="text-center py-3">
+                <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                    <span class="ms-2">Cargando pendientes...</span>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
-// Función para validar horas
-function validarHorasEdicion(hIni, hFin, id) {
-    if (hFin <= hIni) {
-        document.getElementById(`hini-${id}`).classList.add('hora-invalida');
-        document.getElementById(`hfin-${id}`).classList.add('hora-invalida');
-        document.getElementById(`error-${id}`).innerHTML = '❌ La hora de fin debe ser mayor a la hora de inicio';
-        document.getElementById(`error-${id}`).style.display = 'block';
-        return false;
-    } else {
-        document.getElementById(`hini-${id}`).classList.remove('hora-invalida');
-        document.getElementById(`hfin-${id}`).classList.remove('hora-invalida');
-        document.getElementById(`error-${id}`).style.display = 'none';
-        return true;
-    }
-}
-
-function editarSesion(id) {
-    document.querySelector(`.hora-texto-${id}`).style.display = 'none';
-    document.querySelector(`.hora-input-${id}`).style.display = 'block';
-    document.querySelector(`#guardar-${id}`).style.display = 'inline-block';
-    document.querySelector(`#cancelar-${id}`).style.display = 'inline-block';
-    document.querySelector(`button[onclick="editarSesion(${id})"]`).style.display = 'none';
-    
-    // Agregar event listeners para validación en tiempo real
-    document.getElementById(`hini-${id}`).addEventListener('change', function() {
-        validarHorasEdicion(this.value, document.getElementById(`hfin-${id}`).value, id);
-    });
-    document.getElementById(`hfin-${id}`).addEventListener('change', function() {
-        validarHorasEdicion(document.getElementById(`hini-${id}`).value, this.value, id);
-    });
-}
-
-function cancelarEdicion(id) {
-    location.reload();
-}
-
-async function guardarModificacion(id) {
-    const hIni = document.getElementById(`hini-${id}`).value;
-    const hFin = document.getElementById(`hfin-${id}`).value;
-    
-    if (!validarHorasEdicion(hIni, hFin, id)) {
-        alert('❌ Corrige las horas antes de guardar. La hora de fin debe ser mayor a la hora de inicio.');
-        return;
-    }
-    
-    if (!confirm('¿Confirmas los cambios de horario?')) return;
-    
-    try {
-        const response = await fetch('/api/sesion/' + id + '/modificar', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                hora_inicio: hIni,
-                hora_fin: hFin,
-                fecha: document.querySelector(`#fila-${id} td:first-child`).innerText
-            })
-        });
-        const result = await response.json();
-        if (result.success) {
-            alert('✅ Horario actualizado');
-            location.reload();
-        } else {
-            alert('❌ Error: ' + (result.error || 'Desconocido'));
-        }
-    } catch (error) {
-        alert('❌ Error al guardar: ' + error);
-    }
-}
-
-// Función para toggle de estado
+// Función para cambiar estado de sesión
 document.querySelectorAll('.radio-sesion').forEach(r => {
     r.addEventListener('change', function() {
         if (!this.checked) return;
@@ -181,76 +107,108 @@ document.querySelectorAll('.radio-sesion').forEach(r => {
     });
 });
 
-{% if current_user.rol in ['admin','socio'] %}
-function eliminarSesion(id) {
-    if (!confirm('🗑️ ¿Eliminar esta sesión?')) return;
-    fetch('/api/sesion/' + id + '/eliminar', {method: 'POST'}).then(() => location.reload());
+// Cargar pendientes
+async function cargarPendientes() {
+    try {
+        const response = await fetch('/api/sesiones/pendientes');
+        const pendientes = await response.json();
+        
+        const container = document.getElementById('pendientesContainer');
+        const countSpan = document.getElementById('pendientesCount');
+        
+        if (!container) return;
+        
+        if (pendientes.length === 0) {
+            container.innerHTML = '<div class="alert alert-success mb-0">✅ No hay sesiones pendientes. Todas están marcadas.</div>';
+            if (countSpan) countSpan.innerText = '0';
+            return;
+        }
+        
+        if (countSpan) countSpan.innerText = pendientes.length;
+        
+        let html = '<div class="list-group">';
+        for (const s of pendientes) {
+            html += `
+                <div class="list-group-item pendiente-card" id="pend-${s.id}">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>📅 ${s.fecha}</strong> - ${s.hora_inicio} a ${s.hora_fin}<br>
+                            <small>👨‍🎓 ${s.estudiante}</small><br>
+                            <small>📚 ${s.asignatura || s.tema_terapia || 'Sin asignatura'}</small><br>
+                            <small>👨‍🏫 ${s.profesor_terapeuta}</small>
+                        </div>
+                        <div>
+                            <button class="btn btn-success btn-sm me-1" onclick="marcarPendiente(${s.id}, 'Realizado')">✅ Marcar Realizado</button>
+                            <button class="btn btn-warning btn-sm" onclick="marcarPendiente(${s.id}, 'Cancelado')">❌ Marcar Cancelado</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        html += '</div>';
+        container.innerHTML = html;
+    } catch (error) {
+        console.error('Error cargando pendientes:', error);
+        document.getElementById('pendientesContainer').innerHTML = '<div class="alert alert-danger">Error al cargar pendientes</div>';
+    }
 }
 
-async function sincronizarEvento(id) {
-    if (!confirm('¿Sincronizar esta sesión con Google Calendar?')) return;
-    const btn = event.target;
-    btn.disabled = true;
-    btn.textContent = '⏳';
+async function marcarPendiente(id, estado) {
+    if (!confirm(`¿Marcar esta sesión como ${estado}?`)) return;
     try {
-        const r = await fetch('/api/sesion/' + id + '/sincronizar', {method: 'POST', headers: {'Content-Type': 'application/json'}});
-        const d = await r.json();
-        if (d.success) alert('✅ Sincronizado');
-        else alert('❌ ' + (d.error || 'Error'));
+        const response = await fetch('/api/sesion/' + id + '/toggle', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({estado: estado})
+        });
+        const result = await response.json();
+        if (result.success) {
+            document.getElementById(`pend-${id}`)?.remove();
+            const remaining = document.querySelectorAll('.pendiente-card').length;
+            document.getElementById('pendientesCount').innerText = remaining;
+            if (remaining === 0) {
+                document.getElementById('pendientesContainer').innerHTML = '<div class="alert alert-success mb-0">✅ No hay sesiones pendientes. Todas están marcadas.</div>';
+            }
+            // Recargar la tabla principal
+            location.reload();
+        } else {
+            alert('Error: ' + (result.error || 'Desconocido'));
+        }
+    } catch (error) {
+        alert('Error al marcar: ' + error);
+    }
+}
+
+{% if current_user.rol in ['admin','socio'] %}
+async function eliminarSesion(id) {
+    if (!confirm('🗑️ ¿Eliminar esta sesión permanentemente?')) return;
+    try {
+        await fetch('/api/sesion/' + id + '/eliminar', {method: 'POST'});
         location.reload();
-    } catch(e) { alert('❌ Error'); }
-    btn.disabled = false;
+    } catch (error) {
+        alert('Error al eliminar');
+    }
 }
 
 async function sincronizarTodos() {
-    if (!confirm('¿Sincronizar TODAS las sesiones de esta fecha?')) return;
-    const btns = document.querySelectorAll('button[onclick^="sincronizarEvento"]');
+    if (!confirm('¿Sincronizar TODAS las sesiones de esta fecha con Google Calendar?')) return;
+    const btns = document.querySelectorAll('.radio-sesion');
     let ok = 0;
-    for (let b of btns) {
-        const id = b.getAttribute('onclick').match(/\d+/)[0];
-        try {
-            const r = await fetch('/api/sesion/' + id + '/sincronizar', {method: 'POST', headers: {'Content-Type': 'application/json'}});
-            if ((await r.json()).success) ok++;
-        } catch(e) {}
+    for (let btn of btns) {
+        const id = btn.dataset.id;
+        if (id) {
+            try {
+                const r = await fetch('/api/sesion/' + id + '/sincronizar', {method: 'POST', headers: {'Content-Type': 'application/json'}});
+                if ((await r.json()).success) ok++;
+            } catch(e) {}
+        }
     }
-    alert('✅ ' + ok + ' sincronizadas');
+    alert('✅ ' + ok + ' sesiones sincronizadas');
     location.reload();
-}
-
-// Funciones para modales (estudiante y profesor)
-function abrirModalEstudiante(id) {
-    // Implementar según necesidad
-    alert('Funcionalidad en desarrollo');
-}
-
-function abrirModalProfesor(id, actual) {
-    // Implementar según necesidad
-    alert('Funcionalidad en desarrollo');
 }
 {% endif %}
 
-function cargarPendientes() {
-    fetch('/api/sesiones/pendientes').then(r => r.json()).then(d => {
-        let h = d.length === 0 ? '<p class="text-success">✅ Todas marcadas</p>' : '<table class="table table-sm"><thead><tr><th>Fecha</th><th>Hora</th><th>Est</th><th>Tipo</th><th>Asig</th><th>Prof</th><th>✅</th><th>❌</th></tr></thead><tbody>';
-        d.forEach(s => h += `<tr id="pend-${s.id}"><td>${s.fecha}</td><td>${s.hora_inicio}</td><td>${s.estudiante}</td><td>${s.tipo_sesion}</td><td>${s.asignatura||'-'}</td><td>${s.profesor_terapeuta}</td><td><button class="btn btn-success btn-sm" onclick="marcar(${s.id},'Realizado')">✅</button></td><td><button class="btn btn-warning btn-sm" onclick="marcar(${s.id},'Cancelado')">❌</button></td></tr>`);
-        h += '</tbody></table>';
-        document.getElementById('pendientesContainer').innerHTML = h;
-    });
-}
-
-function marcar(id, e) {
-    if (!confirm('¿Confirmas?')) return;
-    fetch('/api/sesion/' + id + '/toggle', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({estado: e})
-    }).then(() => {
-        document.getElementById('pend-' + id)?.remove();
-        if (!document.querySelector('#pendientesContainer tbody tr')) 
-            document.getElementById('pendientesContainer').innerHTML = '<p class="text-success">✅ Todas marcadas</p>';
-    });
-}
-
+// Inicializar
 cargarPendientes();
 </script>
 
@@ -260,10 +218,4 @@ cargarPendientes();
     <a href="/modulo4" class="btn btn-outline-info mb-1">M4</a>
     <a href="/modulo5" class="btn btn-outline-warning mb-1">M5</a>
 </div>
-
-<!-- Modales (simplificados) -->
-{% if current_user.rol in ['admin','socio'] %}
-<div class="modal fade" id="modalCambiarEstudiante" tabindex="-1"><div class="modal-dialog"><div class="modal-content">...</div></div></div>
-<div class="modal fade" id="modalCambiarProfesor" tabindex="-1"><div class="modal-dialog"><div class="modal-content">...</div></div></div>
-{% endif %}
 {% endblock %}
