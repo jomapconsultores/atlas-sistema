@@ -20,7 +20,7 @@
     {% endif %}
 </div>
 
-<!-- Filtros -->
+<!-- Filtros mejorados -->
 <div class="card shadow mb-4">
     <div class="card-header bg-primary text-white">
         <strong>🔍 Filtros de búsqueda</strong>
@@ -53,6 +53,14 @@
                     <option value="Cancelado">❌ Cancelado</option>
                 </select>
             </div>
+            <div class="col-md-3">
+                <label class="form-label">📚 Asignatura/Terapia</label>
+                <input type="text" id="filtro_materia" class="form-control" placeholder="Ej: Matemáticas, Biología...">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">👨‍🏫 Profesor/Psicólogo</label>
+                <input type="text" id="filtro_profesor" class="form-control" placeholder="Ej: Carmen Reinoso...">
+            </div>
             <div class="col-md-12 mt-2">
                 <button class="btn btn-primary" onclick="filtrarSesiones()">🔍 Filtrar</button>
                 <button class="btn btn-outline-secondary" onclick="limpiarFiltros()">🗑️ Limpiar</button>
@@ -78,7 +86,7 @@
     </div>
 </div>
 
-<!-- Modal para editar sesión -->
+<!-- Modal para editar sesión (igual que antes) -->
 <div class="modal fade" id="modalEditarSesion" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -123,7 +131,6 @@
                     </div>
                 </div>
                 
-                <!-- Campos para Clase -->
                 <div id="edit_campos_clase" style="display:none;">
                     <div class="mb-2">
                         <label class="form-label">Asignatura</label>
@@ -136,7 +143,6 @@
                     </div>
                 </div>
                 
-                <!-- Campos para Terapia - CORREGIDO -->
                 <div id="edit_campos_terapia" style="display:none;">
                     <div class="mb-2">
                         <label class="form-label">Tipo de Atención Psicológica</label>
@@ -149,13 +155,12 @@
                                 </option>
                                 {% endfor %}
                             {% else %}
-                                <option value="" disabled>⚠️ No hay opciones cargadas - Contacte al administrador</option>
+                                <option value="" disabled>⚠️ No hay opciones cargadas</option>
                             {% endif %}
                         </select>
                     </div>
                 </div>
                 
-                <!-- Profesor -->
                 <div class="mb-2">
                     <label class="form-label">Profesor/Terapeuta *</label>
                     <select id="edit_profesor" class="form-select" required>
@@ -166,7 +171,6 @@
                     </select>
                 </div>
                 
-                <!-- Encargado Apertura -->
                 <div class="mb-2">
                     <label class="form-label">Encargado apertura *</label>
                     <select id="edit_encargado" class="form-select" required>
@@ -177,7 +181,6 @@
                     </select>
                 </div>
                 
-                <!-- Precios -->
                 <div class="row">
                     <div class="col-md-6 mb-2">
                         <label class="form-label">💵 Precio por hora *</label>
@@ -189,7 +192,6 @@
                     </div>
                 </div>
 
-                <!-- Estado -->
                 <div class="mb-2">
                     <label class="form-label">Estado</label>
                     <select id="edit_estado" class="form-select">
@@ -199,13 +201,11 @@
                     </select>
                 </div>
                 
-                <!-- Observaciones -->
                 <div class="mb-2">
                     <label class="form-label">Observaciones</label>
                     <textarea id="edit_observaciones" class="form-control" rows="2" placeholder="Notas adicionales..."></textarea>
                 </div>
                 
-                <!-- Responsable - Solo lectura -->
                 <div class="mb-2">
                     <label class="form-label">👤 Responsable del cambio</label>
                     <input type="text" id="edit_responsable" class="form-control" value="{{ current_user.nombre }}" readonly disabled style="background-color: #e9ecef;">
@@ -327,14 +327,30 @@ function filtrarSesiones() {
     const fechaHasta = document.getElementById('fecha_hasta').value;
     const estudianteId = document.getElementById('filtro_estudiante').value;
     const estado = document.getElementById('filtro_estado').value;
+    const filtroMateria = document.getElementById('filtro_materia').value.toLowerCase();
+    const filtroProfesor = document.getElementById('filtro_profesor').value.toLowerCase();
     
     let filtradas = [...todasSesiones];
+    
     if (fechaDesde) filtradas = filtradas.filter(s => s.fecha >= fechaDesde);
     if (fechaHasta) filtradas = filtradas.filter(s => s.fecha <= fechaHasta);
     if (estudianteId) filtradas = filtradas.filter(s => s.estudiante_id == estudianteId);
     if (estado) filtradas = filtradas.filter(s => s.estado === estado);
+    if (filtroMateria) {
+        filtradas = filtradas.filter(s => {
+            const materia = (s.asignatura || s.tema_terapia || '').toLowerCase();
+            return materia.includes(filtroMateria);
+        });
+    }
+    if (filtroProfesor) {
+        filtradas = filtradas.filter(s => {
+            const profesor = (s.profesor_terapeuta || '').toLowerCase();
+            return profesor.includes(filtroProfesor);
+        });
+    }
     
     mostrarSesiones(filtradas);
+    document.getElementById('conteo_sesiones').innerText = filtradas.length + ' sesiones';
 }
 
 function limpiarFiltros() {
@@ -342,7 +358,10 @@ function limpiarFiltros() {
     document.getElementById('fecha_hasta').value = '';
     document.getElementById('filtro_estudiante').value = '';
     document.getElementById('filtro_estado').value = '';
+    document.getElementById('filtro_materia').value = '';
+    document.getElementById('filtro_profesor').value = '';
     mostrarSesiones(todasSesiones);
+    document.getElementById('conteo_sesiones').innerText = todasSesiones.length + ' sesiones';
 }
 
 function marcarTodasCompletas() {

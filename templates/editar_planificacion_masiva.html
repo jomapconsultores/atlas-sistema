@@ -5,6 +5,37 @@
 <h3>✏️ Edición Masiva de Planificación</h3>
 <p class="text-muted">Selecciona una planificación existente para modificarla completamente.</p>
 
+<!-- Filtros mejorados -->
+<div class="card shadow mb-4">
+    <div class="card-header bg-primary text-white">
+        <strong>🔍 Filtros de búsqueda</strong>
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">📚 Asignatura/Terapia</label>
+                <input type="text" id="filtro_materia" class="form-control" placeholder="Ej: Matemáticas, Biología...">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">👨‍🏫 Profesor/Psicólogo</label>
+                <input type="text" id="filtro_profesor" class="form-control" placeholder="Ej: Carmen Reinoso...">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">📅 Fecha (desde/hasta)</label>
+                <div class="d-flex gap-2">
+                    <input type="date" id="fecha_desde" class="form-control" placeholder="Desde">
+                    <input type="date" id="fecha_hasta" class="form-control" placeholder="Hasta">
+                </div>
+            </div>
+            <div class="col-md-12 mt-2">
+                <button class="btn btn-primary" onclick="filtrarSesiones()">🔍 Filtrar</button>
+                <button class="btn btn-outline-secondary" onclick="limpiarFiltros()">🗑️ Limpiar</button>
+                <button class="btn btn-outline-success" onclick="recargarSesiones()">🔄 Recargar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="row">
     <div class="col-md-5 mb-4">
         <div class="card shadow">
@@ -35,11 +66,26 @@
     <div class="col-md-7 mb-4">
         <div class="card shadow">
             <div class="card-header bg-info text-white">
-                <strong>📊 Resumen de la sesión actual</strong>
+                <strong>📊 Lista de Sesiones</strong>
+                <span id="conteo_sesiones" class="badge bg-light text-dark ms-2">0 sesiones</span>
             </div>
-            <div class="card-body" id="resumenActual">
-                <p class="text-muted">Selecciona una sesión para ver el resumen actual</p>
+            <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                <div id="sesionesLista">
+                    <p class="text-muted">Cargando sesiones...</p>
+                </div>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Resumen de la sesión seleccionada -->
+<div id="resumenSeleccion" style="display:none;">
+    <div class="card shadow mb-4">
+        <div class="card-header bg-success text-white">
+            <strong>📊 Sesión Seleccionada</strong>
+        </div>
+        <div class="card-body" id="resumenActual">
+            <p class="text-muted">Selecciona una sesión de la lista para ver el resumen</p>
         </div>
     </div>
 </div>
@@ -76,7 +122,6 @@
                 </div>
             </div>
             
-            <!-- Campos para Terapia - CORREGIDO -->
             <div id="camposTerapia" style="display:none;">
                 <div class="mb-2">
                     <label class="form-label">Tipo de Atención Psicológica</label>
@@ -95,7 +140,6 @@
                 </div>
             </div>
             
-            <!-- Profesor -->
             <div class="mb-2">
                 <label class="form-label">Profesor/Terapeuta *</label>
                 <select id="profesor" class="form-select" required>
@@ -106,7 +150,6 @@
                 </select>
             </div>
             
-            <!-- Encargado Apertura -->
             <div class="mb-2">
                 <label class="form-label">Encargado Apertura *</label>
                 <select id="encargado" class="form-select" required>
@@ -157,7 +200,6 @@
                 <textarea id="observaciones" class="form-control" rows="2"></textarea>
             </div>
             
-            <!-- Responsable - Solo lectura -->
             <div class="mb-2">
                 <label class="form-label">👤 Responsable del cambio</label>
                 <input type="text" id="responsable" class="form-control" value="{{ current_user.nombre }}" readonly disabled style="background-color: #e9ecef;">
@@ -169,60 +211,116 @@
 </div>
 
 <script>
+let todasSesiones = [];
 let sesionOriginal = null;
 
-document.getElementById('selectEstudiante').addEventListener('change', async function() {
-    const estudianteId = this.value;
-    const selectSesion = document.getElementById('selectSesion');
-    if (!estudianteId) {
-        selectSesion.innerHTML = '<option value="">Primero selecciona un estudiante</option>';
-        selectSesion.disabled = true;
-        return;
-    }
-    selectSesion.disabled = false;
-    selectSesion.innerHTML = '<option value="">Cargando sesiones...</option>';
+async function cargarTodasSesiones() {
     try {
-        const response = await fetch(`/api/estudiante/${estudianteId}/sesiones`);
-        const sesiones = await response.json();
-        if (sesiones.length === 0) {
-            selectSesion.innerHTML = '<option value="">No hay sesiones para este estudiante</option>';
-            selectSesion.disabled = true;
-        } else {
-            let options = '<option value="">Seleccionar sesión...</option>';
-            for (const s of sesiones) {
-                options += `<option value="${s.id}">📅 ${s.fecha} - ${s.hora_inicio} a ${s.hora_fin} - ${s.tipo_sesion} - $${s.valor_total}</option>`;
-            }
-            selectSesion.innerHTML = options;
-            selectSesion.disabled = false;
-        }
+        const response = await fetch('/api/sesiones/todas');
+        todasSesiones = await response.json();
+        document.getElementById('conteo_sesiones').innerText = todasSesiones.length + ' sesiones';
+        mostrarListaSesiones(todasSesiones);
     } catch (error) {
-        selectSesion.innerHTML = '<option value="">Error al cargar sesiones</option>';
-        selectSesion.disabled = true;
+        console.error('Error:', error);
+        document.getElementById('sesionesLista').innerHTML = '<div class="alert alert-danger">Error al cargar sesiones</div>';
     }
-});
+}
 
-async function cargarSesion() {
-    const sesionId = document.getElementById('selectSesion').value;
-    if (!sesionId) {
-        alert('❌ Selecciona una sesión');
+function mostrarListaSesiones(sesiones) {
+    const container = document.getElementById('sesionesLista');
+    
+    if (sesiones.length === 0) {
+        container.innerHTML = '<p class="text-muted">No hay sesiones que coincidan con los filtros</p>';
         return;
     }
+    
+    let html = '<div class="list-group">';
+    for (const s of sesiones) {
+        const materia = s.asignatura || s.tema_terapia || 'Sin asignatura';
+        html += `
+            <div class="list-group-item list-group-item-action" onclick="seleccionarSesion(${s.id})" style="cursor: pointer;">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>📅 ${s.fecha}</strong> - ${s.hora_inicio} a ${s.hora_fin}<br>
+                        <small>👨‍🎓 ${s.estudiante_nombre}</small><br>
+                        <small>📚 ${materia}</small><br>
+                        <small>👨‍🏫 ${s.profesor_terapeuta}</small>
+                    </div>
+                    <div>
+                        <span class="badge bg-primary">$${s.valor_total}</span>
+                        <span class="badge bg-secondary">${s.estado}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+function filtrarSesiones() {
+    const filtroMateria = document.getElementById('filtro_materia').value.toLowerCase();
+    const filtroProfesor = document.getElementById('filtro_profesor').value.toLowerCase();
+    const fechaDesde = document.getElementById('fecha_desde').value;
+    const fechaHasta = document.getElementById('fecha_hasta').value;
+    
+    let filtradas = [...todasSesiones];
+    
+    if (filtroMateria) {
+        filtradas = filtradas.filter(s => {
+            const materia = (s.asignatura || s.tema_terapia || '').toLowerCase();
+            return materia.includes(filtroMateria);
+        });
+    }
+    if (filtroProfesor) {
+        filtradas = filtradas.filter(s => {
+            const profesor = (s.profesor_terapeuta || '').toLowerCase();
+            return profesor.includes(filtroProfesor);
+        });
+    }
+    if (fechaDesde) {
+        filtradas = filtradas.filter(s => s.fecha >= fechaDesde);
+    }
+    if (fechaHasta) {
+        filtradas = filtradas.filter(s => s.fecha <= fechaHasta);
+    }
+    
+    mostrarListaSesiones(filtradas);
+    document.getElementById('conteo_sesiones').innerText = filtradas.length + ' sesiones';
+}
+
+function limpiarFiltros() {
+    document.getElementById('filtro_materia').value = '';
+    document.getElementById('filtro_profesor').value = '';
+    document.getElementById('fecha_desde').value = '';
+    document.getElementById('fecha_hasta').value = '';
+    mostrarListaSesiones(todasSesiones);
+    document.getElementById('conteo_sesiones').innerText = todasSesiones.length + ' sesiones';
+}
+
+function recargarSesiones() {
+    cargarTodasSesiones();
+}
+
+async function seleccionarSesion(id) {
     try {
-        const response = await fetch(`/api/sesion/${sesionId}`);
+        const response = await fetch('/api/sesion/' + id);
         sesionOriginal = await response.json();
         
         const resumenHtml = `
-            <div style="background-color:#f8f9fa; border-radius:8px; padding:10px; margin-bottom:10px;">
-                <p><strong>📅 Fecha:</strong> ${sesionOriginal.fecha || 'No definida'}</p>
-                <p><strong>🕐 Horario:</strong> ${(sesionOriginal.hora_inicio || '???').substring(0,5)} - ${(sesionOriginal.hora_fin || '???').substring(0,5)}</p>
-                <p><strong>📚 Tipo:</strong> ${sesionOriginal.tipo_sesion || 'No definido'}</p>
-                <p><strong>👨‍🏫 Profesor:</strong> ${sesionOriginal.profesor_terapeuta || 'No definido'}</p>
-                <p><strong>🔑 Encargado:</strong> ${sesionOriginal.encargado_apertura || 'No definido'}</p>
-                <p><strong>💰 Valor:</strong> $${(sesionOriginal.valor_total || 0).toFixed(2)}</p>
-                <p><strong>📌 Estado:</strong> ${sesionOriginal.estado || 'Planificado'}</p>
+            <div class="alert alert-info">
+                <strong>📅 Fecha:</strong> ${sesionOriginal.fecha || 'No definida'}<br>
+                <strong>🕐 Horario:</strong> ${(sesionOriginal.hora_inicio || '???').substring(0,5)} - ${(sesionOriginal.hora_fin || '???').substring(0,5)}<br>
+                <strong>📚 Tipo:</strong> ${sesionOriginal.tipo_sesion || 'No definido'}<br>
+                <strong>📖 Asignatura/Tema:</strong> ${sesionOriginal.asignatura || sesionOriginal.tema_terapia || 'No definido'}<br>
+                <strong>👨‍🏫 Profesor:</strong> ${sesionOriginal.profesor_terapeuta || 'No definido'}<br>
+                <strong>🔑 Encargado:</strong> ${sesionOriginal.encargado_apertura || 'No definido'}<br>
+                <strong>💰 Valor:</strong> $${(sesionOriginal.valor_total || 0).toFixed(2)}<br>
+                <strong>📌 Estado:</strong> ${sesionOriginal.estado || 'Planificado'}
             </div>
         `;
         document.getElementById('resumenActual').innerHTML = resumenHtml;
+        document.getElementById('resumenSeleccion').style.display = 'block';
         
         document.getElementById('sesion_id').value = sesionOriginal.id;
         document.getElementById('tipoSesion').value = sesionOriginal.tipo_sesion || '';
@@ -252,9 +350,9 @@ function mostrarCampos() {
     document.getElementById('camposTerapia').style.display = (tipo === 'terapia' || tipo === 'ambos') ? 'block' : 'none';
 }
 
-async function guardarEdicionMasiva() {
+function guardarEdicionMasiva() {
     if (!sesionOriginal) {
-        alert('❌ No hay sesión cargada');
+        alert('❌ No hay sesión seleccionada');
         return;
     }
     
@@ -277,11 +375,6 @@ async function guardarEdicionMasiva() {
     
     if (nuevos.hora_fin <= nuevos.hora_inicio) {
         alert('❌ ERROR: La hora de fin debe ser mayor que la hora de inicio.');
-        return;
-    }
-    
-    if (nuevos.valor_total < 0) {
-        alert('❌ ERROR: El valor total no puede ser negativo.');
         return;
     }
     
@@ -313,22 +406,23 @@ async function guardarEdicionMasiva() {
         responsable: responsable
     };
     
-    try {
-        const response = await fetch('/api/sesion/' + sesionOriginal.id + '/editar', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(data)
-        });
-        const result = await response.json();
+    fetch('/api/sesion/' + sesionOriginal.id + '/editar', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    }).then(response => response.json())
+    .then(result => {
         if (result.success) {
             alert('✅ Sesión actualizada correctamente!\n👤 Responsable: ' + responsable);
             location.reload();
         } else {
             alert('❌ Error: ' + (result.error || 'Desconocido'));
         }
-    } catch (error) {
+    }).catch(error => {
         alert('❌ Error al guardar: ' + error);
-    }
+    });
 }
+
+cargarTodasSesiones();
 </script>
 {% endblock %}
