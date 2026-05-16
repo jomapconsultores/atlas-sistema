@@ -351,11 +351,13 @@ def rechazar_anticipo(id):
         flash(f'❌ Error: {str(e)}', 'error')
     return redirect(url_for('gestion_anticipos'))
 
-# ========== MIS CLIENTES (PARA PSICÓLOGOS) ==========
+# ========== MIS CLIENTES (SOLO PARA PSICÓLOGOS) ==========
+# ESTA ES LA ÚNICA VERSIÓN QUE DEBE EXISTIR (cerca de la línea 495)
 
 @app.route('/mis-clientes')
 @login_required
 def mis_clientes():
+    """Vista para que psicólogos vean y gestionen sus clientes externos"""
     if current_user.rol != 'psicologo':
         flash('❌ Solo psicólogos pueden acceder', 'error')
         return redirect(url_for('dashboard'))
@@ -367,57 +369,6 @@ def mis_clientes():
                          clientes=clientes.data or [],
                          citas=citas.data or [],
                          today=date.today().isoformat())
-
-@app.route('/api/mi-cliente', methods=['POST'])
-@login_required
-def crear_mi_cliente():
-    if current_user.rol != 'psicologo':
-        return jsonify({'success': False, 'error': 'Solo psicólogos pueden crear clientes'})
-    
-    try:
-        data = request.get_json()
-        result = supabase.table('clientes_externos').insert({
-            'nombre': data['nombre'],
-            'telefono': data.get('telefono', ''),
-            'email': data.get('email', ''),
-            'psicologo_id': current_user.id,
-            'psicologo_nombre': current_user.nombre,
-            'activo': True,
-            'usuario_id': current_user.id
-        }).execute()
-        return jsonify({'success': True, 'id': result.data[0]['id'] if result.data else None})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
-
-@app.route('/api/mi-cita', methods=['POST'])
-@login_required
-def crear_mi_cita():
-    if current_user.rol != 'psicologo':
-        return jsonify({'success': False, 'error': 'Solo psicólogos pueden agendar citas'})
-    
-    try:
-        data = request.get_json()
-        valor_cita = data.get('valor', 0)
-        comision_centro = valor_cita * COMISION_CLIENTE_EXTERNO
-        pago_psicologo = valor_cita - comision_centro
-        
-        result = supabase.table('citas_psicologia').insert({
-            'cliente_id': data['cliente_id'],
-            'psicologo_id': current_user.id,
-            'psicologo_nombre': current_user.nombre,
-            'fecha': data['fecha'],
-            'hora_inicio': data['hora_inicio'],
-            'hora_fin': data['hora_fin'],
-            'valor': valor_cita,
-            'monto_pagado': 0,
-            'comision_centro': comision_centro,
-            'pago_psicologo': pago_psicologo,
-            'estado': 'agendada',
-            'usuario_id': current_user.id
-        }).execute()
-        return jsonify({'success': True, 'id': result.data[0]['id'] if result.data else None})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
 
 # ========== PSICOLOGÍA ESPECIAL (ADMIN) ==========
 
@@ -614,7 +565,7 @@ def modulo5():
         pagos.append({
             'fecha': s['fecha'],
             'profesor': profesor,
-            'estudiante': f"{est.get('apellidos', '')} {est.get('nombres', '')}",
+            'estudiante': f"{est.get('apellidos', '')} {est.get('nombres', '')}".title(),
             'tipo': tipo,
             'horas': horas if tipo in ['clase', 'preuniversitario'] else 1,
             'valor_total': valor,
@@ -1303,6 +1254,77 @@ def agregar_observacion(id):
         return jsonify({'success': False, 'error': str(e)})
 
 # ========== INICIALIZACIÓN ==========
+
+# ========== MIS CLIENTES (SOLO PARA PSICÓLOGOS) ==========
+
+@app.route('/mis-clientes')
+@login_required
+def mis_clientes():
+    """Vista para que psicólogos vean y gestionen sus clientes externos"""
+    if current_user.rol != 'psicologo':
+        flash('❌ Solo psicólogos pueden acceder', 'error')
+        return redirect(url_for('dashboard'))
+    
+    clientes = supabase.table('clientes_externos').select('*').eq('psicologo_id', current_user.id).eq('activo', True).order('nombre').execute()
+    citas = supabase.table('citas_psicologia').select('*, clientes_externos(*)').eq('psicologo_id', current_user.id).order('fecha', desc=True).execute()
+    
+    return render_template('mis_clientes.html', 
+                         clientes=clientes.data or [],
+                         citas=citas.data or [],
+                         today=date.today().isoformat())
+
+
+@app.route('/api/mi-cliente', methods=['POST'])
+@login_required
+def crear_mi_cliente():
+    if current_user.rol != 'psicologo':
+        return jsonify({'success': False, 'error': 'Solo psicólogos pueden crear clientes'})
+    
+    try:
+        data = request.get_json()
+        result = supabase.table('clientes_externos').insert({
+            'nombre': data['nombre'],
+            'telefono': data.get('telefono', ''),
+            'email': data.get('email', ''),
+            'psicologo_id': current_user.id,
+            'psicologo_nombre': current_user.nombre,
+            'activo': True,
+            'usuario_id': current_user.id
+        }).execute()
+        return jsonify({'success': True, 'id': result.data[0]['id'] if result.data else None})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/mi-cita', methods=['POST'])
+@login_required
+def crear_mi_cita():
+    if current_user.rol != 'psicologo':
+        return jsonify({'success': False, 'error': 'Solo psicólogos pueden agendar citas'})
+    
+    try:
+        data = request.get_json()
+        valor_cita = data.get('valor', 0)
+        comision_centro = valor_cita * 0.25
+        pago_psicologo = valor_cita - comision_centro
+        
+        result = supabase.table('citas_psicologia').insert({
+            'cliente_id': data['cliente_id'],
+            'psicologo_id': current_user.id,
+            'psicologo_nombre': current_user.nombre,
+            'fecha': data['fecha'],
+            'hora_inicio': data['hora_inicio'],
+            'hora_fin': data['hora_fin'],
+            'valor': valor_cita,
+            'monto_pagado': 0,
+            'comision_centro': comision_centro,
+            'pago_psicologo': pago_psicologo,
+            'estado': 'agendada',
+            'usuario_id': current_user.id
+        }).execute()
+        return jsonify({'success': True, 'id': result.data[0]['id'] if result.data else None})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

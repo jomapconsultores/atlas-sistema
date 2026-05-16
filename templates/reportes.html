@@ -20,18 +20,6 @@
             {% endfor %}
         </select>
     </div>
-    <div class="col-auto">
-        <input type="date" name="fecha_desde" class="form-control" value="{{ fecha_desde }}" placeholder="Fecha desde">
-    </div>
-    <div class="col-auto">
-        <input type="date" name="fecha_hasta" class="form-control" value="{{ fecha_hasta }}" placeholder="Fecha hasta">
-    </div>
-    <div class="col-auto">
-        <button type="submit" class="btn btn-primary">🔍 Filtrar</button>
-    </div>
-    <div class="col-auto">
-        <a href="/reportes" class="btn btn-outline-secondary">🗑️ Limpiar</a>
-    </div>
 </form>
 
 <!-- Tarjetas de resumen -->
@@ -74,24 +62,30 @@
     </div>
 </div>
 
-<!-- Gráficos -->
+<!-- Gráficos más pequeños -->
 <div class="row mb-4">
     <div class="col-md-4">
         <div class="card shadow h-100">
             <div class="card-header bg-primary text-white"><strong>💰 Ingresos por Tipo</strong></div>
-            <div class="card-body"><canvas id="chartIngresos" style="height: 250px;"></canvas></div>
+            <div class="card-body" style="height: 280px;">
+                <canvas id="chartIngresos" style="max-height: 220px; width: 100%;"></canvas>
+            </div>
         </div>
     </div>
     <div class="col-md-4">
         <div class="card shadow h-100">
             <div class="card-header bg-success text-white"><strong>✅ Cumplimiento</strong></div>
-            <div class="card-body"><canvas id="chartCumplimiento" style="height: 250px;"></canvas></div>
+            <div class="card-body" style="height: 280px;">
+                <canvas id="chartCumplimiento" style="max-height: 220px; width: 100%;"></canvas>
+            </div>
         </div>
     </div>
     <div class="col-md-4">
         <div class="card shadow h-100">
             <div class="card-header bg-danger text-white"><strong>📊 Gastos por Categoría</strong></div>
-            <div class="card-body"><canvas id="chartGastos" style="height: 250px;"></canvas></div>
+            <div class="card-body" style="height: 280px;">
+                <canvas id="chartGastos" style="max-height: 220px; width: 100%;"></canvas>
+            </div>
         </div>
     </div>
 </div>
@@ -100,24 +94,40 @@
     <div class="col-12">
         <div class="card shadow">
             <div class="card-header bg-info text-white"><strong>📚 Horas por Materia</strong></div>
-            <div class="card-body"><canvas id="chartMaterias" style="height: 300px;"></canvas></div>
+            <div class="card-body" style="height: 300px;">
+                <canvas id="chartMaterias" style="max-height: 250px; width: 100%;"></canvas>
+            </div>
         </div>
     </div>
 </div>
 
-<!-- Ingresos Desglosados -->
+<!-- Ingresos Desglosados (sin etiquetas HTML visibles) -->
 <div class="card shadow mb-4">
     <div class="card-header bg-success text-white" data-bs-toggle="collapse" data-bs-target="#secIngresos" style="cursor:pointer;">
         <strong>💵 Ingresos Desglosados</strong>
     </div>
     <div class="collapse show" id="secIngresos">
         <div class="card-body p-2">
-            <p><strong>Total Planificado:</strong> ${{ "%.2f"|format(total_planificado) }} | <strong>Total Real:</strong> ${{ "%.2f"|format(total_ingresos) }} | <strong>% Cumplimiento:</strong> {{ (total_ingresos / total_planificado * 100)|round(1) if total_planificado>0 else 0 }}%</p>
+            <p><strong>Total Planificado:</strong> ${{ "%.2f"|format(total_planificado) }} | <strong>Total Real:</strong> ${{ "%.2f"|format(total_ingresos) }}</p>
             <h6>📂 Por Tipo</h6>
             <div class="table-responsive">
                 <table class="table table-sm table-striped">
-                    <thead><tr><th>Tipo</th><th>$ Total</th><th>%</th></tr></thead>
-                    <tbody>{% for t,v in ingresos_por_tipo.items() %}<tr><td>{{ t }}<\/td><td class="text-end">${{ "%.2f"|format(v) }}<\/td><td class="text-center">{{ (v / total_ingresos * 100)|round(1) if total_ingresos>0 else 0 }}%<\/td></tr>{% endfor %}</tbody>
+                    <thead>
+                        <tr>
+                            <th>Tipo</th>
+                            <th>$ Total</th>
+                            <th>%</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for t,v in ingresos_por_tipo.items() %}
+                        <tr>
+                            <td>{{ t }}</td>
+                            <td class="text-end">${{ "%.2f"|format(v) }}</td>
+                            <td class="text-center">{{ (v / total_ingresos * 100)|round(1) if total_ingresos>0 else 0 }}%</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
                 </table>
             </div>
             <hr>
@@ -126,36 +136,30 @@
                 <table class="table table-sm table-striped">
                     <thead>
                         <tr>
-                            <th>Estudiante</th><th>H Plan</th><th>H Real</th><th>% Cumpl</th>
-                            <th>$ Cobrar</th><th>$ Recibido</th><th>% Pagado</th><th>$ Saldo</th>
+                            <th>Estudiante</th>
+                            <th>H Plan</th>
+                            <th>H Real</th>
+                            <th>%</th>
+                            <th>$ Cobrar</th>
+                            <th>$ Recibido</th>
+                            <th>%</th>
+                            <th>$ Saldo</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for d in datos_estudiantes|default(datos, true) %}
                         <tr>
-                            <td>{{ d.estudiante }}<\/td>
-                            <td class="text-center">{{ d.horas_plan }}<\/td>
-                            <td class="text-center">{{ d.horas_real }}<\/td>
-                            <td class="text-center">{{ (d.horas_real / d.horas_plan * 100)|round(1) if d.horas_plan>0 else 0 }}%<\/td>
-                            <td class="text-end">${{ "%.2f"|format(d.cobrar) }}<\/td>
-                            <td class="text-end">${{ "%.2f"|format(d.pagado) }}<\/td>
-                            <td class="text-center">{{ (d.pagado / d.cobrar * 100)|round(1) if d.cobrar>0 else 0 }}%<\/td>
-                            <td class="text-end text-{{ 'danger' if d.saldo>0 else 'success' }}">${{ "%.2f"|format(d.saldo|abs) }}<\/td>
+                            <td>{{ d.estudiante|title }}</td>
+                            <td class="text-center">{{ d.horas_plan }}</td>
+                            <td class="text-center">{{ d.horas_real }}</td>
+                            <td class="text-center">{{ (d.horas_real / d.horas_plan * 100)|round(1) if d.horas_plan>0 else 0 }}%</td>
+                            <td class="text-end">${{ "%.2f"|format(d.cobrar) }}</td>
+                            <td class="text-end">${{ "%.2f"|format(d.pagado) }}</td>
+                            <td class="text-center">{{ (d.pagado / d.cobrar * 100)|round(1) if d.cobrar>0 else 0 }}%</td>
+                            <td class="text-end text-{{ 'danger' if d.saldo>0 else 'success' }}">${{ "%.2f"|format(d.saldo|abs) }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
-                    <tfoot class="table-dark">
-                        <tr>
-                            <td><strong>TOTALES</strong><\/td>
-                            <td class="text-center"><strong>{{ datos_estudiantes|sum(attribute='horas_plan') if datos_estudiantes else 0 }}</strong><\/td>
-                            <td class="text-center"><strong>{{ total_horas_estudiantes|default(total_horas, true) }}</strong><\/td>
-                            <td class="text-center"><strong>{{ (total_horas_estudiantes|default(total_horas, true) / (datos_estudiantes|sum(attribute='horas_plan') if datos_estudiantes else 1) * 100)|round(1) if (datos_estudiantes|sum(attribute='horas_plan') if datos_estudiantes else 0)>0 else 0 }}%<\/strong><\/td>
-                            <td class="text-end"><strong>${{ "%.2f"|format(total_cobrar_estudiantes|default(total_cobrar, true)) }}</strong><\/td>
-                            <td class="text-end"><strong>${{ "%.2f"|format(total_pagado_estudiantes|default(total_pagado, true)) }}</strong><\/td>
-                            <td class="text-center"><strong>{{ (total_pagado_estudiantes|default(total_pagado, true) / total_cobrar_estudiantes|default(total_cobrar, true) * 100)|round(1) if total_cobrar_estudiantes|default(total_cobrar, true)>0 else 0 }}%<\/strong><\/td>
-                            <td class="text-end"><strong>${{ "%.2f"|format(total_por_pagar_estudiantes|default(total_por_pagar, true)) }}</strong><\/td>
-                        </tr>
-                    </tfoot>
                 </table>
             </div>
         </div>
@@ -172,22 +176,22 @@
             <div class="table-responsive">
                 <table class="table table-sm table-striped">
                     <thead>
-                        <tr class="table-dark">
+                        <tr>
                             <th>Asignatura/Terapia</th>
                             <th>H Plan</th>
                             <th>H Real</th>
                             <th>H Canc</th>
-                            <th>% Cumplimiento</th>
+                            <th>%</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for a,i in asignaturas_detalle.items() %}
                         <tr>
-                            <td>{{ a }}<\/td>
-                            <td class="text-center">{{ i.plan }}<\/td>
-                            <td class="text-center">{{ i.real }}<\/td>
-                            <td class="text-center">{{ i.canc }}<\/td>
-                            <td class="text-center">{{ (i.real / i.plan * 100)|round(1) if i.plan>0 else 0 }}%<\/td>
+                            <td>{{ a }}</td>
+                            <td class="text-center">{{ i.plan }}</td>
+                            <td class="text-center">{{ i.real }}</td>
+                            <td class="text-center">{{ i.canc }}</td>
+                            <td class="text-center">{{ (i.real / i.plan * 100)|round(1) if i.plan>0 else 0 }}%</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -207,26 +211,29 @@
             <div class="table-responsive">
                 <table class="table table-sm">
                     <thead>
-                        <tr class="table-dark">
-                            <th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Persona</th><th>Monto</th><th>%</th><th>Reemb</th>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Concepto</th>
+                            <th>Categoría</th>
+                            <th>Persona</th>
+                            <th>Monto</th>
+                            <th>%</th>
+                            <th>Reemb</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for g in gastos %}
                         <tr>
-                            <td>{{ g.fecha }}<\/td>
-                            <td>{{ g.concepto }}<\/td>
-                            <td>{{ g.get('categoria','') }}<\/td>
-                            <td>{{ g.get('persona','') }}<\/td>
-                            <td class="text-end">${{ "%.2f"|format(g.monto) }}<\/td>
-                            <td class="text-center">{{ (g.monto / total_gastos * 100)|round(1) if total_gastos>0 else 0 }}%<\/td>
-                            <td>{% if g.get('reembolso') %}🔄{% else %}-{% endif %}<\/td>
+                            <td>{{ g.fecha }}</td>
+                            <td>{{ g.concepto }}</td>
+                            <td>{{ g.get('categoria','') }}</td>
+                            <td>{{ g.get('persona','') }}</td>
+                            <td class="text-end">${{ "%.2f"|format(g.monto) }}</td>
+                            <td class="text-center">{{ (g.monto / total_gastos * 100)|round(1) if total_gastos>0 else 0 }}%</td>
+                            <td>{% if g.get('reembolso') %}🔄{% else %}-{% endif %}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
-                    <tfoot class="table-dark">
-                        <tr><td colspan="4"><strong>TOTAL<\/strong><\/td><td class="text-end"><strong>${{ "%.2f"|format(total_gastos) }}</strong><\/td><td class="text-center"><strong>100%<\/strong><\/td><td><\/td><\/tr>
-                    </tfoot>
                 </table>
             </div>
         </div>
@@ -240,23 +247,34 @@
     </div>
     <div class="collapse" id="secBalance">
         <div class="card-body p-2">
-            <div class="table-responsive">
-                <table class="table table-sm">
-                    <tr class="table-success"><td><strong>+ Ingresos Reales</strong><\/td><td class="text-end"><strong>${{ "%.2f"|format(total_ingresos) }}</strong><\/td><td class="text-end">100%<\/td><\/tr>
-                    <tr class="table-danger"><td><strong>- Gastos Operativos</strong><\/td><td class="text-end"><strong>${{ "%.2f"|format(total_gastos) }}</strong><\/td><td class="text-end">{{ (total_gastos / total_ingresos * 100)|round(1) if total_ingresos>0 else 0 }}%<\/td><\/tr>
-                    <tr class="table-danger"><td><strong>- Pago Docentes/Psicólogos</strong><\/td><td class="text-end"><strong>${{ "%.2f"|format(total_pago_docentes) }}</strong><\/td><td class="text-end">{{ (total_pago_docentes / total_ingresos * 100)|round(1) if total_ingresos>0 else 0 }}%<\/td><\/tr>
-                    <tr class="{{ 'table-success' if (total_ingresos-total_gastos-total_pago_docentes)>=0 else 'table-danger' }}">
-                        <td><strong>= Resultado Neto</strong><\/td>
-                        <td class="text-end"><strong>${{ "%.2f"|format(total_ingresos-total_gastos-total_pago_docentes) }}</strong><\/td>
-                        <td class="text-end">{{ ((total_ingresos-total_gastos-total_pago_docentes) / total_ingresos * 100)|round(1) if total_ingresos>0 else 0 }}%<\/td>
-                    <\/tr>
-                </table>
-            </div>
+            <table class="table table-sm">
+                <tr class="table-success">
+                    <td><strong>+ Ingresos Reales</strong></td>
+                    <td class="text-end"><strong>${{ "%.2f"|format(total_ingresos) }}</strong></td>
+                    <td class="text-end">100%</td>
+                </tr>
+                <tr class="table-danger">
+                    <td><strong>- Gastos Operativos</strong></td>
+                    <td class="text-end"><strong>${{ "%.2f"|format(total_gastos) }}</strong></td>
+                    <td class="text-end">{{ (total_gastos / total_ingresos * 100)|round(1) if total_ingresos>0 else 0 }}%</td>
+                </tr>
+                <tr class="table-danger">
+                    <td><strong>- Pago Docentes/Psicólogos</strong></td>
+                    <td class="text-end"><strong>${{ "%.2f"|format(total_pago_docentes) }}</strong></td>
+                    <td class="text-end">{{ (total_pago_docentes / total_ingresos * 100)|round(1) if total_ingresos>0 else 0 }}%</td>
+                </tr>
+                <tr class="{{ 'table-success' if (total_ingresos-total_gastos-total_pago_docentes)>=0 else 'table-danger' }}">
+                    <td><strong>= Resultado Neto</strong></td>
+                    <td class="text-end"><strong>${{ "%.2f"|format(total_ingresos-total_gastos-total_pago_docentes) }}</strong></td>
+                    <td class="text-end">{{ ((total_ingresos-total_gastos-total_pago_docentes) / total_ingresos * 100)|round(1) if total_ingresos>0 else 0 }}%</td>
+                </tr>
+            </table>
         </div>
     </div>
 </div>
 
-<!-- Pagos a Docentes -->
+<!-- Pagos a Docentes (solo para admin/socio) -->
+{% if current_user.rol in ['admin', 'socio'] %}
 <div class="card shadow mb-4">
     <div class="card-header bg-secondary text-white" data-bs-toggle="collapse" data-bs-target="#secPagosDocentes" style="cursor:pointer;">
         <strong>💲 Pagos a Docentes y Psicólogos (40.18%)</strong>
@@ -266,144 +284,60 @@
             <div class="table-responsive">
                 <table class="table table-sm">
                     <thead>
-                        <tr class="table-dark">
+                        <tr>
                             <th>Profesional</th>
-                            <th>Sesiones Clase</th>
-                            <th>Sesiones Terapia</th>
-                            <th>Horas Clase</th>
-                            <th>Horas Terapia</th>
+                            <th>Sesiones</th>
+                            <th>Horas</th>
                             <th>$ Docencia ($7/h)</th>
                             <th>$ Psicología (40.18%)</th>
                             <th>$ Total a Pagar</th>
-                            <th>%</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for nombre, datos in pagos_por_docente.items() %}
                         <tr>
-                            <td><strong>{{ nombre }}</strong><\/td>
-                            <td class="text-center">{{ datos.sesiones_clase }}<\/td>
-                            <td class="text-center">{{ datos.sesiones_terapia }}<\/td>
-                            <td class="text-center">{{ datos.horas_clase }}<\/td>
-                            <td class="text-center">{{ datos.horas_terapia|default(0) }}<\/td>
-                            <td class="text-end text-primary">${{ "%.2f"|format(datos.pago_docencia) }}<\/td>
-                            <td class="text-end text-success">${{ "%.2f"|format(datos.pago_psicologia) }}<\/td>
-                            <td class="text-end fw-bold">${{ "%.2f"|format(datos.total_pagar) }}<\/td>
-                            <td class="text-center">{{ (datos.total_pagar / total_pago_docentes * 100)|round(1) if total_pago_docentes>0 else 0 }}%<\/td>
+                            <td><strong>{{ nombre }}</strong></td>
+                            <td class="text-center">{{ datos.sesiones_clase + datos.sesiones_terapia }}</td>
+                            <td class="text-center">{{ datos.horas_clase + datos.horas_terapia }}</td>
+                            <td class="text-end text-primary">${{ "%.2f"|format(datos.pago_docencia) }}</td>
+                            <td class="text-end text-success">${{ "%.2f"|format(datos.pago_psicologia) }}</td>
+                            <td class="text-end fw-bold">${{ "%.2f"|format(datos.total_pagar) }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
-                    <tfoot class="table-dark">
-                        <tr>
-                            <td colspan="5"><strong>TOTALES<\/strong><\/td>
-                            <td class="text-end"><strong>${{ "%.2f"|format(total_docencia|default(0)) }}</strong><\/td>
-                            <td class="text-end"><strong>${{ "%.2f"|format(total_psicologia|default(0)) }}</strong><\/td>
-                            <td class="text-end"><strong>${{ "%.2f"|format(total_pago_docentes) }}</strong><\/td>
-                            <td class="text-center"><strong>100%<\/strong><\/td>
-                        </tr>
-                    </tfoot>
                 </table>
             </div>
-            <div class="alert alert-info mt-2">
-                <strong>📌 Información:</strong> Psicología = 40.18% del valor de la sesión | Docencia = $7 por hora
-            </div>
         </div>
     </div>
 </div>
-
-<!-- Correcciones de Pagos -->
-<div class="card shadow mb-4">
-    <div class="card-header bg-warning text-dark" data-bs-toggle="collapse" data-bs-target="#secCorrecciones" style="cursor:pointer;">
-        <strong>🔧 Correcciones de Pagos</strong>
-    </div>
-    <div class="collapse" id="secCorrecciones">
-        <div class="card-body">
-            {% if correcciones %}
-            <div class="table-responsive">
-                <table class="table table-sm">
-                    <thead><tr><th>Fecha</th><th>Pago</th><th>$ Ant</th><th>$ Nuevo</th><th>Quién</th><th>Motivo</th></tr></thead>
-                    <tbody>{% for c in correcciones %}<tr><td>{{ c.get('fecha_correccion','')[:10] }}<\/td><td>{{ c.pago_id }}<\/td><td class="text-end">${{ "%.2f"|format(c.monto_anterior) }}<\/td><td class="text-end">${{ "%.2f"|format(c.monto_nuevo) }}<\/td><td>{{ c.cambiado_por }}<\/td><td>{{ c.motivo[:50] }}<\/td></tr>{% endfor %}</tbody>
-                </table>
-            </div>
-            {% else %}<p class="text-muted">Sin correcciones registradas</p>{% endif %}
-        </div>
-    </div>
-</div>
-
-<!-- Auditoría -->
-<div class="card shadow mb-4">
-    <div class="card-header bg-primary text-white" data-bs-toggle="collapse" data-bs-target="#secAuditoria" style="cursor:pointer;">
-        <strong>📋 Registro de Movimientos ({{ nuevos_usuarios|length + correcciones|length + observaciones|length }})</strong>
-    </div>
-    <div class="collapse" id="secAuditoria">
-        <div class="card-body p-2">
-            <h6>👤 Nuevos Usuarios</h6>
-            {% for u in nuevos_usuarios %}<small>✅ {{ u.nombre }} ({{ u.rol }}) - {{ u.fecha_registro[:10] }}</small><br>{% else %}<small class="text-muted">Sin registros</small>{% endfor %}
-            <hr>
-            <h6>🔧 Correcciones de Pagos</h6>
-            {% for c in correcciones %}<small>💰 Pago #{{ c.pago_id }}: ${{ "%.2f"|format(c.monto_anterior) }} → ${{ "%.2f"|format(c.monto_nuevo) }} por {{ c.cambiado_por }} - {{ c.get('fecha_correccion','')[:10] }}</small><br>{% else %}<small class="text-muted">Sin correcciones</small>{% endfor %}
-            <hr>
-            <h6>📝 Observaciones en Sesiones</h6>
-            {% for o in observaciones %}<small>📅 {{ o.fecha }} - {{ o.get('estudiantes',{}).get('apellidos','') }}: {{ o.observaciones[:60] }}</small><br>{% else %}<small class="text-muted">Sin observaciones</small>{% endfor %}
-        </div>
-    </div>
-</div>
+{% endif %}
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
 const colors=['#1a73e8','#0f9d58','#f4b400','#db4437','#ab47bc','#00acc1','#ff7043','#9ccc65'];
 
-// Gráfico de Ingresos por Tipo
 new Chart(document.getElementById('chartIngresos'),{
     type:'pie',
-    data:{
-        labels:[{% for t,v in ingresos_por_tipo.items() %}'{{ t }}',{% endfor %}],
-        datasets:[{
-            data:[{% for t,v in ingresos_por_tipo.items() %}{{ v }},{% endfor %}],
-            backgroundColor:colors
-        }]
-    },
-    options:{ responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom' } } }
+    data:{labels:[{% for t,v in ingresos_por_tipo.items() %}'{{ t }}',{% endfor %}],datasets:[{data:[{% for t,v in ingresos_por_tipo.items() %}{{ v }},{% endfor %}],backgroundColor:colors}]},
+    options:{responsive:true, maintainAspectRatio:true, plugins:{legend:{position:'bottom'}}}
 });
 
-// Gráfico de Cumplimiento
 new Chart(document.getElementById('chartCumplimiento'),{
     type:'doughnut',
-    data:{
-        labels:['Realizado','Planificado','Cancelado'],
-        datasets:[{
-            data:[{{ cumplimiento.get('realizado',0) }},{{ cumplimiento.get('planificado',0) }},{{ cumplimiento.get('cancelado',0) }}],
-            backgroundColor:['#0f9d58','#f4b400','#db4437']
-        }]
-    },
-    options:{ responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom' } } }
+    data:{labels:['Realizado','Planificado','Cancelado'],datasets:[{data:[{{ cumplimiento.get('realizado',0) }},{{ cumplimiento.get('planificado',0) }},{{ cumplimiento.get('cancelado',0) }}],backgroundColor:['#0f9d58','#f4b400','#db4437']}]},
+    options:{responsive:true, maintainAspectRatio:true, plugins:{legend:{position:'bottom'}}}
 });
 
-// Gráfico de Gastos por Categoría
 new Chart(document.getElementById('chartGastos'),{
     type:'pie',
-    data:{
-        labels:[{% for c,v in gastos_por_categoria.items() %}'{{ c }}',{% endfor %}],
-        datasets:[{
-            data:[{% for c,v in gastos_por_categoria.items() %}{{ v }},{% endfor %}],
-            backgroundColor:colors
-        }]
-    },
-    options:{ responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom' } } }
+    data:{labels:[{% for c,v in gastos_por_categoria.items() %}'{{ c }}',{% endfor %}],datasets:[{data:[{% for c,v in gastos_por_categoria.items() %}{{ v }},{% endfor %}],backgroundColor:colors}]},
+    options:{responsive:true, maintainAspectRatio:true, plugins:{legend:{position:'bottom'}}}
 });
 
-// Gráfico de Horas por Materia
 new Chart(document.getElementById('chartMaterias'),{
     type:'bar',
-    data:{
-        labels:[{% for m,h in horas_por_materia.items() %}'{{ m[:20] }}',{% endfor %}],
-        datasets:[{
-            label:'Horas',
-            data:[{% for m,h in horas_por_materia.items() %}{{ h }},{% endfor %}],
-            backgroundColor:'#1a73e8'
-        }]
-    },
-    options:{ responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'top' } } }
+    data:{labels:[{% for m,h in horas_por_materia.items() %}'{{ m[:20] }}',{% endfor %}],datasets:[{label:'Horas',data:[{% for m,h in horas_por_materia.items() %}{{ h }},{% endfor %}],backgroundColor:'#1a73e8'}]},
+    options:{responsive:true, maintainAspectRatio:true, plugins:{legend:{position:'top'}}}
 });
 </script>
 {% endblock %}
