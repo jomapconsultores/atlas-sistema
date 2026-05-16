@@ -1100,10 +1100,6 @@ def reportes():
     total_sesiones_terapia = 0
     total_horas_clase = 0
     total_horas_terapia = 0
-    total_pagado_docentes = 0
-    
-    # Obtener pagos reales a docentes (si existe tabla de pagos_docentes)
-    # Por ahora calculamos solo lo que se debe pagar
     
     for e in (estudiantes.data or []):
         ses = supabase.table('sesiones').select('*').eq('estudiante_id', e['id']).execute()
@@ -1158,7 +1154,6 @@ def reportes():
                 total_psicologia += pago_psicologia
             
             total_pagar = pago_docente + pago_psicologia
-            total_pago_docentes += total_pagar
             
             if prof not in pagos_por_docente:
                 pagos_por_docente[prof] = {
@@ -1200,6 +1195,7 @@ def reportes():
     
     pagos_mes = supabase.table('pagos').select('*').gte('fecha_pago', f"{anio}-{mes:02d}-01").lte('fecha_pago', f"{anio}-{mes:02d}-31").execute()
     total_ingresos = sum(p.get('monto', 0) or 0 for p in (pagos_mes.data or []))
+    total_pago_docentes = sum(d['total_pagar'] for d in pagos_por_docente.values())
     
     # Calcular porcentajes
     porcentaje_cumplimiento = 0
@@ -1219,10 +1215,15 @@ def reportes():
     nuevos_usuarios = supabase.table('usuarios').select('*').gte('fecha_registro', f"{anio}-{mes:02d}-01").lte('fecha_registro', f"{anio}-{mes:02d}-31").execute()
     
     return render_template('reportes.html',
-                         datos=datos, total_estudiantes=len(datos),
-                         total_horas=th, total_ingresos=total_ingresos,
-                         total_gastos=total_gastos, balance=total_ingresos - total_gastos,
-                         gastos=gastos_mes.data or [], mes=mes, anio=anio,
+                         datos=datos,
+                         total_estudiantes=len(datos),
+                         total_horas=th,
+                         total_ingresos=total_ingresos,
+                         total_gastos=total_gastos,
+                         balance=total_ingresos - total_gastos,
+                         gastos=gastos_mes.data or [],
+                         mes=mes,
+                         anio=anio,
                          ingresos_por_tipo=ingresos_por_tipo,
                          horas_por_materia=horas_por_materia,
                          asignaturas_detalle=asignaturas_detalle,
