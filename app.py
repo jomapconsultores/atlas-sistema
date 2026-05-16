@@ -917,16 +917,83 @@ def modulo5():
     else:
         sesiones = query.order('fecha', desc=True).execute()
         sesiones_data = sesiones.data or []
-    pagos, total = [], 0
+    
+    pagos = []
+    total_docencia = 0
+    total_psicologia = 0
+    total_adeudado = 0
+    consolidado = {}
+    total_sesiones_clase = 0
+    total_sesiones_terapia = 0
+    total_horas_clase = 0
+    total_horas_terapia = 0
+    
     for s in sesiones_data:
-        horas, valor, tipo = s.get('horas', 0) or 0, s.get('valor_total', 0) or 0, s.get('tipo_sesion', 'clase')
+        horas = s.get('horas', 0) or 0
+        valor = s.get('valor_total', 0) or 0
+        tipo = s.get('tipo_sesion', 'clase')
         profesor = s.get('profesor_terapeuta', 'Desconocido')
-        pago = horas * 7 if tipo in ['clase', 'preuniversitario'] else valor * 0.35
-        total += pago
+        
+        # Calcular pagos según tipo
+        if tipo in ['clase', 'preuniversitario']:
+            pago_docente = horas * 7  # $7 por hora para docencia
+            pago_psicologia = 0
+            total_docencia += pago_docente
+            total_horas_clase += horas
+            total_sesiones_clase += 1
+        else:  # terapia o ambos
+            pago_docente = 0
+            pago_psicologia = valor * 0.35  # 35% para psicología
+            total_psicologia += pago_psicologia
+            total_horas_terapia += horas
+            total_sesiones_terapia += 1
+        
+        total_pagar = pago_docente + pago_psicologia
+        total_adeudado += total_pagar
+        
         est = s.get('estudiantes', {})
-        pagos.append({'fecha': s['fecha'], 'profesor': profesor, 'estudiante': f"{est.get('apellidos', '')} {est.get('nombres', '')}",
-                     'tipo': tipo, 'horas': horas, 'valor_total': valor, 'pago_docente': pago})
-    return render_template('modulo5.html', pagos=pagos, total_adeudado=total)
+        pagos.append({
+            'fecha': s['fecha'],
+            'profesor': profesor,
+            'estudiante': f"{est.get('apellidos', '')} {est.get('nombres', '')}",
+            'tipo': tipo,
+            'horas': horas,
+            'valor_total': valor,
+            'pago_docente': pago_docente,
+            'pago_psicologia': pago_psicologia,
+            'total_pagar': total_pagar
+        })
+        
+        # Consolidado por docente/psicólogo
+        if profesor not in consolidado:
+            consolidado[profesor] = {
+                'sesiones_clase': 0,
+                'sesiones_terapia': 0,
+                'horas_clase': 0,
+                'horas_terapia': 0,
+                'pago_docencia': 0,
+                'pago_psicologia': 0
+            }
+        
+        if tipo in ['clase', 'preuniversitario']:
+            consolidado[profesor]['sesiones_clase'] += 1
+            consolidado[profesor]['horas_clase'] += horas
+            consolidado[profesor]['pago_docencia'] += pago_docente
+        else:
+            consolidado[profesor]['sesiones_terapia'] += 1
+            consolidado[profesor]['horas_terapia'] += horas
+            consolidado[profesor]['pago_psicologia'] += pago_psicologia
+    
+    return render_template('modulo5.html', 
+                         pagos=pagos,
+                         total_docencia=total_docencia,
+                         total_psicologia=total_psicologia,
+                         total_adeudado=total_adeudado,
+                         consolidado=consolidado,
+                         total_sesiones_clase=total_sesiones_clase,
+                         total_sesiones_terapia=total_sesiones_terapia,
+                         total_horas_clase=total_horas_clase,
+                         total_horas_terapia=total_horas_terapia)
 
 # ========== MÓDULO 6: REUNIONES ==========
 

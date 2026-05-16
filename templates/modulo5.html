@@ -2,69 +2,136 @@
 {% block title %}Pagos Docentes - Atlas{% endblock %}
 
 {% block content %}
-<h3>💵 Pagos a Docentes</h3>
+<h3>💵 Pagos a Docentes y Psicólogos</h3>
 
 <div class="card shadow mb-4">
     <div class="card-body">
         <div class="table-responsive">
             <table class="table table-striped table-sm">
                 <thead>
-                    <tr><th>Fecha</th><th>Profesor</th><th>Estudiante</th><th>Tipo</th><th>Horas</th><th>Valor Total</th><th>Pago Docente</th></tr>
+                    <tr class="table-dark">
+                        <th>Fecha</th>
+                        <th>Profesor/Psicólogo</th>
+                        <th>Estudiante</th>
+                        <th>Tipo</th>
+                        <th>Horas</th>
+                        <th>Valor Total</th>
+                        <th>Pago Docencia ($7/hora)</th>
+                        <th>Pago Psicología (35%)</th>
+                        <th>Total a Pagar</th>
+                    </tr>
                 </thead>
                 <tbody>
                     {% for p in pagos %}
                     <tr>
                         <td>{{ p['fecha'] }}</td>
-                        <td>{{ p['profesor'] }}</td>
+                        <td><strong>{{ p['profesor'] }}</strong></td>
                         <td>{{ p['estudiante'] }}</td>
-                        <td>{{ p['tipo'] }}</td>
+                        <td>
+                            {% if p['tipo'] == 'clase' %}
+                                <span class="badge bg-primary">📚 Clase</span>
+                            {% elif p['tipo'] == 'terapia' %}
+                                <span class="badge bg-success">🧠 Terapia</span>
+                            {% elif p['tipo'] == 'ambos' %}
+                                <span class="badge bg-warning">📚🧠 Ambos</span>
+                            {% else %}
+                                <span class="badge bg-secondary">🎓 Pre Universitario</span>
+                            {% endif %}
+                        </td>
                         <td>{{ p['horas'] }}</td>
                         <td>${{ "%.2f"|format(p['valor_total']) }}</td>
-                        <td class="fw-bold">${{ "%.2f"|format(p['pago_docente']) }}</td>
+                        <td class="text-primary">
+                            {% if p['tipo'] in ['clase', 'preuniversitario'] %}
+                                ${{ "%.2f"|format(p['pago_docente']) }}
+                            {% else %}
+                                $0.00
+                            {% endif %}
+                        </td>
+                        <td class="text-success">
+                            {% if p['tipo'] in ['terapia', 'ambos'] %}
+                                ${{ "%.2f"|format(p['pago_psicologia']) }}
+                            {% else %}
+                                $0.00
+                            {% endif %}
+                        </td>
+                        <td class="fw-bold">${{ "%.2f"|format(p['total_pagar']) }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
+                <tfoot class="table-dark">
+                    <tr>
+                        <td colspan="6"><strong>TOTALES</strong></td>
+                        <td><strong>${{ "%.2f"|format(total_docencia) }}</strong></td>
+                        <td><strong>${{ "%.2f"|format(total_psicologia) }}</strong></td>
+                        <td><strong>${{ "%.2f"|format(total_adeudado) }}</strong></td>
+                    </tr>
+                </tfoot>
             </table>
         </div>
-        <p class="small text-muted">💡 Profesores: $7/hora | Psicólogos: 35% del valor</p>
         
-        <div class="alert alert-warning">
-            <h5>💰 Total Adeudado a Docentes: <strong>${{ "%.2f"|format(total_adeudado) }}</strong></h5>
+        <div class="alert alert-info mt-3">
+            <strong>💡 Información:</strong>
+            <ul class="mb-0">
+                <li><strong>Docencia (Clases y Pre Universitario):</strong> $7 por hora</li>
+                <li><strong>Psicología (Terapias):</strong> 35% del valor de la sesión</li>
+                <li><strong>Total Adeudado:</strong> Suma de pagos de docencia + psicología</li>
+            </ul>
         </div>
     </div>
 </div>
 
-<!-- CONSOLIDADO POR DOCENTE -->
+<!-- CONSOLIDADO POR DOCENTE/PSICÓLOGO -->
 <div class="card shadow">
-    <div class="card-header bg-info text-white"><strong>📊 Consolidado por Docente</strong></div>
+    <div class="card-header bg-info text-white">
+        <strong>📊 Consolidado por Docente / Psicólogo</strong>
+    </div>
     <div class="card-body">
         <div class="table-responsive">
-            <table class="table table-sm">
+            <table class="table table-striped table-hover">
                 <thead>
-                    <tr><th>Docente</th><th>Total Sesiones</th><th>Total Horas</th><th>Total a Pagar</th></tr>
+                    <tr class="table-dark">
+                        <th>Docente/Psicólogo</th>
+                        <th>Sesiones Clase</th>
+                        <th>Sesiones Terapia</th>
+                        <th>Total Sesiones</th>
+                        <th>Horas Clase</th>
+                        <th>Horas Terapia</th>
+                        <th>Total Horas</th>
+                        <th>Pago Docencia</th>
+                        <th>Pago Psicología</th>
+                        <th>Total a Pagar</th>
+                    </tr>
                 </thead>
                 <tbody>
-                    {% set docentes = {} %}
-                    {% for p in pagos %}
-                        {% if p['profesor'] not in docentes %}
-                            {% set _ = docentes.update({p['profesor']: {'sesiones': 0, 'horas': 0, 'pago': 0}}) %}
-                        {% endif %}
-                        {% set _ = docentes[p['profesor']].update({
-                            'sesiones': docentes[p['profesor']]['sesiones'] + 1,
-                            'horas': docentes[p['profesor']]['horas'] + p['horas'],
-                            'pago': docentes[p['profesor']]['pago'] + p['pago_docente']
-                        }) %}
-                    {% endfor %}
-                    
-                    {% for nombre, datos in docentes.items() %}
+                    {% for nombre, datos in consolidado.items() %}
                     <tr>
                         <td><strong>{{ nombre }}</strong></td>
-                        <td>{{ datos['sesiones'] }}</td>
-                        <td>{{ datos['horas'] }}</td>
-                        <td class="fw-bold text-primary">${{ "%.2f"|format(datos['pago']) }}</td>
+                        <td class="text-center">{{ datos.sesiones_clase }}</td>
+                        <td class="text-center">{{ datos.sesiones_terapia }}</td>
+                        <td class="text-center fw-bold">{{ datos.sesiones_clase + datos.sesiones_terapia }}</td>
+                        <td class="text-center">{{ datos.horas_clase|round(2) }}</td>
+                        <td class="text-center">{{ datos.horas_terapia|round(2) }}</td>
+                        <td class="text-center fw-bold">{{ (datos.horas_clase + datos.horas_terapia)|round(2) }}</td>
+                        <td class="text-primary">${{ "%.2f"|format(datos.pago_docencia) }}</td>
+                        <td class="text-success">${{ "%.2f"|format(datos.pago_psicologia) }}</td>
+                        <td class="fw-bold bg-light">${{ "%.2f"|format(datos.pago_docencia + datos.pago_psicologia) }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
+                <tfoot class="table-dark">
+                    <tr>
+                        <td><strong>TOTALES</strong></td>
+                        <td class="text-center"><strong>{{ total_sesiones_clase }}</strong></td>
+                        <td class="text-center"><strong>{{ total_sesiones_terapia }}</strong></td>
+                        <td class="text-center"><strong>{{ total_sesiones_clase + total_sesiones_terapia }}</strong></td>
+                        <td class="text-center"><strong>{{ total_horas_clase|round(2) }}</strong></td>
+                        <td class="text-center"><strong>{{ total_horas_terapia|round(2) }}</strong></td>
+                        <td class="text-center"><strong>{{ (total_horas_clase + total_horas_terapia)|round(2) }}</strong></td>
+                        <td class="text-primary"><strong>${{ "%.2f"|format(total_docencia) }}</strong></td>
+                        <td class="text-success"><strong>${{ "%.2f"|format(total_psicologia) }}</strong></td>
+                        <td class="fw-bold"><strong>${{ "%.2f"|format(total_adeudado) }}</strong></td>
+                    </tr>
+                </tfoot>
             </table>
         </div>
     </div>
