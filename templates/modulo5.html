@@ -16,7 +16,7 @@
                 <select name="mes" class="form-select">
                     <option value="">Todos</option>
                     {% for m in range(1,13) %}
-                    <option value="{{ m }}" {{ 'selected' if m == mes }}>{{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][m-1] }}</option>
+                    <option value="{{ m }}" {{ 'selected' if mes|string == m|string }}>{{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][m-1] }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -25,7 +25,7 @@
                 <select name="anio" class="form-select">
                     <option value="">Todos</option>
                     {% for a in range(2025,2031) %}
-                    <option value="{{ a }}" {{ 'selected' if a == anio }}>{{ a }}</option>
+                    <option value="{{ a }}" {{ 'selected' if anio|string == a|string }}>{{ a }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -40,23 +40,36 @@
             <div class="col-md-2 d-flex align-items-end">
                 <button type="submit" class="btn btn-primary w-100">🔍 Filtrar</button>
             </div>
+            <div class="col-md-12">
+                <label class="form-label">👨‍🏫 Filtrar por Docente/Psicólogo</label>
+                <div class="input-group">
+                    <select name="filtro_profesor" class="form-select">
+                        <option value="">Todos los profesionales</option>
+                        {% for p in profesores_lista %}
+                        <option value="{{ p }}" {{ 'selected' if filtro_profesor == p }}>{{ p }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="btn btn-outline-primary">Filtrar</button>
+                </div>
+            </div>
         </form>
         <div class="row mt-2">
             <div class="col-12">
-                <a href="{{ url_for('modulo5') }}" class="btn btn-outline-secondary btn-sm">🗑️ Limpiar filtros</a>
+                <a href="{{ url_for('modulo5') }}" class="btn btn-outline-secondary btn-sm">🗑️ Limpiar todos los filtros</a>
             </div>
         </div>
     </div>
 </div>
 
 <!-- Resumen de filtros aplicados -->
-{% if mes or anio or fecha_desde or fecha_hasta %}
+{% if mes or anio or fecha_desde or fecha_hasta or filtro_profesor %}
 <div class="alert alert-info small">
     <strong>📌 Filtros aplicados:</strong>
-    {% if mes %} Mes: {{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][mes-1] }}{% endif %}
+    {% if mes %} Mes: {{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][mes|int - 1] }}{% endif %}
     {% if anio %} Año: {{ anio }}{% endif %}
     {% if fecha_desde %} Desde: {{ fecha_desde }}{% endif %}
     {% if fecha_hasta %} Hasta: {{ fecha_hasta }}{% endif %}
+    {% if filtro_profesor %} Docente: {{ filtro_profesor }}{% endif %}
 </div>
 {% endif %}
 
@@ -64,6 +77,7 @@
 <div class="card shadow mb-4">
     <div class="card-header bg-secondary text-white">
         <strong>📋 Detalle de Pagos</strong>
+        <span class="badge bg-light text-dark ms-2">{{ pagos|length }} registros</span>
     </div>
     <div class="card-body">
         <div class="table-responsive">
