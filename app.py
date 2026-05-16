@@ -993,7 +993,131 @@ def modulo5():
                          total_sesiones_clase=total_sesiones_clase,
                          total_sesiones_terapia=total_sesiones_terapia,
                          total_horas_clase=total_horas_clase,
-                         total_horas_terapia=total_horas_terapia)
+                         total_horas_terapia=total_horas_terapia)@app.route('/modulo5')
+@login_required
+def modulo5():
+    # Obtener parámetros de filtro
+    mes = request.args.get('mes', '')
+    anio = request.args.get('anio', '')
+    fecha_desde = request.args.get('fecha_desde', '')
+    fecha_hasta = request.args.get('fecha_hasta', '')
+    
+    # Construir consulta base
+    query = supabase.table('sesiones').select('*, estudiantes(*)').eq('estado', 'Realizado')
+    
+    # Aplicar filtros
+    if mes and mes != '':
+        mes_int = int(mes)
+        anio_int = int(anio) if anio else date.today().year
+        fecha_inicio = f"{anio_int}-{mes_int:02d}-01"
+        from calendar import monthrange
+        ultimo_dia = monthrange(anio_int, mes_int)[1]
+        fecha_fin = f"{anio_int}-{mes_int:02d}-{ultimo_dia}"
+        query = query.gte('fecha', fecha_inicio).lte('fecha', fecha_fin)
+    
+    if fecha_desde:
+        query = query.gte('fecha', fecha_desde)
+    if fecha_hasta:
+        query = query.lte('fecha', fecha_hasta)
+    
+    # Ejecutar consulta según rol
+    if current_user.rol in ['profesor', 'psicologo']:
+        nombre_usuario = current_user.nombre.strip().lower()
+        todas = query.order('fecha', desc=True).execute()
+        sesiones_filtradas = []
+        for s in (todas.data or []):
+            profesor = (s.get('profesor_terapeuta') or '').strip().lower()
+            if nombre_usuario in profesor or profesor in nombre_usuario:
+                sesiones_filtradas.append(s)
+        sesiones_data = sesiones_filtradas
+    else:
+        sesiones = query.order('fecha', desc=True).execute()
+        sesiones_data = sesiones.data or []
+    
+    # Variables para cálculos
+    pagos = []
+    total_docencia = 0
+    total_psicologia = 0
+    total_adeudado = 0
+    consolidado = {}
+    total_sesiones_clase = 0
+    total_sesiones_terapia = 0
+    total_horas_clase = 0
+    total_horas_terapia = 0
+    
+    for s in sesiones_data:
+        horas = s.get('horas', 0) or 0
+        valor = s.get('valor_total', 0) or 0
+        tipo = s.get('tipo_sesion', 'clase')
+        profesor = s.get('profesor_terapeuta', 'Desconocido')
+        
+        # Calcular pagos según tipo
+        if tipo in ['clase', 'preuniversitario']:
+            pago_docente = horas * 7
+            pago_psicologia = 0
+            total_docencia += pago_docente
+            total_horas_clase += horas
+            total_sesiones_clase += 1
+        else:  # terapia o ambos
+            pago_docente = 0
+            pago_psicologia = valor * 0.35
+            total_psicologia += pago_psicologia
+            total_horas_terapia += horas
+            total_sesiones_terapia += 1
+        
+        total_pagar = pago_docente + pago_psicologia
+        total_adeudado += total_pagar
+        
+        est = s.get('estudiantes', {})
+        pagos.append({
+            'fecha': s['fecha'],
+            'profesor': profesor,
+            'estudiante': f"{est.get('apellidos', '')} {est.get('nombres', '')}",
+            'tipo': tipo,
+            'horas': horas,
+            'valor_total': valor,
+            'pago_docente': pago_docente,
+            'pago_psicologia': pago_psicologia,
+            'total_pagar': total_pagar
+        })
+        
+        # Consolidado por docente
+        if profesor not in consolidado:
+            consolidado[profesor] = {
+                'sesiones_clase': 0,
+                'sesiones_terapia': 0,
+                'horas_clase': 0,
+                'horas_terapia': 0,
+                'pago_docencia': 0,
+                'pago_psicologia': 0,
+                'total_pagar': 0
+            }
+        
+        if tipo in ['clase', 'preuniversitario']:
+            consolidado[profesor]['sesiones_clase'] += 1
+            consolidado[profesor]['horas_clase'] += horas
+            consolidado[profesor]['pago_docencia'] += pago_docente
+        else:
+            consolidado[profesor]['sesiones_terapia'] += 1
+            consolidado[profesor]['horas_terapia'] += horas
+            consolidado[profesor]['pago_psicologia'] += pago_psicologia
+        
+        consolidado[profesor]['total_pagar'] += total_pagar
+    
+    return render_template('modulo5.html', 
+                         pagos=pagos,
+                         total_docencia=total_docencia,
+                         total_psicologia=total_psicologia,
+                         total_adeudado=total_adeudado,
+                         consolidado=consolidado,
+                         total_sesiones_clase=total_sesiones_clase,
+                         total_sesiones_terapia=total_sesiones_terapia,
+                         total_horas_clase=total_horas_clase,
+                         total_horas_terapia=total_horas_terapia,
+                         mes=mes,
+                         anio=anio,
+                         fecha_desde=fecha_desde,
+                         fecha_hasta=fecha_hasta)
 
 # ========== MÓDULO 6: REUNIONES ==========
 
