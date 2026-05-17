@@ -72,7 +72,7 @@
 <!-- ========== VISTA PARA ESTUDIANTES Y PADRES ========== -->
 {% if current_user.rol in ['estudiante', 'padre'] %}
 
-<!-- Tarjetas de resumen simplificadas (sin anticipos ni neto) -->
+<!-- Tarjetas de resumen simplificadas -->
 <div class="row mb-4">
     <div class="col-md-4">
         <div class="card bg-primary text-white text-center p-3">
@@ -113,7 +113,11 @@
                         <th>Tipo</th>
                         <th>Asignatura/Terapia</th>
                         <th>Horas</th>
+                        {% if current_user.rol in ['profesor', 'psicologo'] %}
                         <th>MI PAGO</th>
+                        {% else %}
+                        <th>Valor</th>
+                        {% endif %}
                         <th>Estado</th>
                     </tr>
                 </thead>
@@ -136,10 +140,14 @@
                         <td>{{ d.asignatura }}</td>
                         <td class="text-center">{{ d.horas }}</td>
                         <td class="text-end fw-bold text-success">
-                            {% if d.tipo in ['clase', 'preuniversitario'] %}
-                                ${{ "%.2f"|format(d.horas * 7) }}
+                            {% if current_user.rol in ['profesor', 'psicologo'] %}
+                                {% if d.tipo in ['clase', 'preuniversitario'] %}
+                                    ${{ "%.2f"|format(d.horas * 7) }}
+                                {% else %}
+                                    ${{ "%.2f"|format(d.valor * 0.4018) }}
+                                {% endif %}
                             {% else %}
-                                ${{ "%.2f"|format(d.valor * 0.4018) }}
+                                ${{ "%.2f"|format(d.valor) }}
                             {% endif %}
                         </td>
                         <td><span class="badge bg-success">Realizado</span></td>
@@ -178,7 +186,6 @@
 {% if current_user.rol in ['profesor', 'psicologo'] %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
-// Datos para el gráfico de ingresos mensuales
 const ingresosPorMes = {};
 {% for d in datos %}
     const mes = '{{ d.fecha[:7] }}';

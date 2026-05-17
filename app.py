@@ -609,6 +609,10 @@ def modulo4():
 @app.route('/modulo5')
 @login_required
 def modulo5():
+    # Si es profesor o psicólogo, mostrar SOLO sus pagos (redirigir a mi-reporte)
+    if current_user.rol in ['profesor', 'psicologo']:
+        return redirect(url_for('mi_reporte'))
+    
     mes = request.args.get('mes', '')
     anio = request.args.get('anio', '')
     fecha_desde = request.args.get('fecha_desde', '')
@@ -616,9 +620,6 @@ def modulo5():
     filtro_profesor = request.args.get('filtro_profesor', '')
     
     query = supabase.table('sesiones').select('*, estudiantes(*)').eq('estado', 'Realizado')
-    
-    if current_user.rol in ['profesor', 'psicologo']:
-        query = query.eq('profesor_terapeuta', current_user.nombre)
     
     if mes and mes != '':
         mes_int = int(mes)

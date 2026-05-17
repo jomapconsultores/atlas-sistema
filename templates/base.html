@@ -23,6 +23,18 @@
             </div>
         </div>
     </nav>
+    
+    <!-- Menú rápido para profesores y psicólogos -->
+    {% if current_user.rol in ['profesor', 'psicologo'] %}
+    <div class="container mt-3">
+        <div class="d-flex flex-wrap gap-2 justify-content-center">
+            <a href="/mi-reporte" class="btn btn-outline-primary btn-sm">📊 Mi Reporte</a>
+            <a href="/modulo5" class="btn btn-outline-success btn-sm">💵 Mis Pagos</a>
+            <a href="/mis-anticipos" class="btn btn-outline-warning btn-sm">🏦 Mis Anticipos</a>
+            <a href="/modulo2" class="btn btn-outline-info btn-sm">📅 Calendario</a>
+        </div>
+    </div>
+    {% endif %}
     {% endif %}
     
     <div class="container mt-4">

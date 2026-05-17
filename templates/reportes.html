@@ -123,7 +123,7 @@
                     <thead>
                         <tr>
                             <th>Estudiante</th><th>H Plan</th><th>H Real</th><th>%</th>
-                            <th>$ Cobrar</th><th>$ Recibido</th><th>%</th><th>$ Saldo</th>
+                            <th>$ Cobrar</th><th>$ Saldo</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -134,8 +134,6 @@
                             <td class="text-center">{{ d.horas_real }}</td>
                             <td class="text-center">{{ (d.horas_real / d.horas_plan * 100)|round(1) if d.horas_plan>0 else 0 }}%</td>
                             <td class="text-end">${{ "%.2f"|format(d.cobrar) }}</td>
-                            <td class="text-end">${{ "%.2f"|format(d.pagado) }}</td>
-                            <td class="text-center">{{ (d.pagado / d.cobrar * 100)|round(1) if d.cobrar>0 else 0 }}%</td>
                             <td class="text-end text-{{ 'danger' if d.saldo>0 else 'success' }}">${{ "%.2f"|format(d.saldo|abs) }}</td>
                         </tr>
                         {% endfor %}
@@ -201,7 +199,7 @@
     </div>
 </div>
 
-<!-- Pagos a Docentes -->
+<!-- Pagos a Docentes (SOLO valores a pagar, sin filtro) -->
 <div class="card shadow mb-4">
     <div class="card-header bg-secondary text-white" data-bs-toggle="collapse" data-bs-target="#secPagosDocentes" style="cursor:pointer;">
         <strong>💲 Pagos a Docentes y Psicólogos (40.18%)</strong>

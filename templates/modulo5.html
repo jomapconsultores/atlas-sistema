@@ -2,7 +2,8 @@
 {% block title %}Pagos Docentes - Atlas{% endblock %}
 
 {% block content %}
-<h3>💵 Pagos a Docentes y Psicólogos</h3>
+<h3>💵 Mis Pagos</h3>
+<p class="text-muted">{{ current_user.nombre }} ({{ current_user.rol }})</p>
 
 <!-- Filtros -->
 <div class="card shadow mb-4">
@@ -11,7 +12,7 @@
     </div>
     <div class="card-body">
         <form method="GET" action="{{ url_for('modulo5') }}" class="row g-3">
-            <div class="col-md-3">
+            <div class="col-md-4">
                 <label class="form-label">Mes</label>
                 <select name="mes" class="form-select">
                     <option value="">Todos</option>
@@ -20,7 +21,7 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-4">
                 <label class="form-label">Año</label>
                 <select name="anio" class="form-select">
                     <option value="">Todos</option>
@@ -29,51 +30,26 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-3">
-                <label class="form-label">Fecha desde</label>
-                <input type="date" name="fecha_desde" class="form-control" value="{{ fecha_desde }}">
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Fecha hasta</label>
-                <input type="date" name="fecha_hasta" class="form-control" value="{{ fecha_hasta }}">
-            </div>
-            <div class="col-md-12">
-                <div class="row">
-                    <div class="col-md-6">
-                        <label class="form-label">👨‍🏫 Filtrar por Docente/Psicólogo</label>
-                        <select name="filtro_profesor" class="form-select">
-                            <option value="">Todos los profesionales</option>
-                            {% for p in profesores_lista %}
-                            <option value="{{ p }}" {{ 'selected' if filtro_profesor == p }}>{{ p }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-6 d-flex align-items-end">
-                        <button type="submit" class="btn btn-primary w-100 me-2">🔍 Filtrar</button>
-                        <a href="{{ url_for('modulo5') }}" class="btn btn-outline-secondary w-100">🗑️ Limpiar</a>
-                    </div>
-                </div>
+            <div class="col-md-4 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">🔍 Filtrar</button>
             </div>
         </form>
     </div>
 </div>
 
 <!-- Resumen de filtros -->
-{% if mes or anio or fecha_desde or fecha_hasta or filtro_profesor %}
+{% if mes or anio %}
 <div class="alert alert-info small">
     <strong>📌 Filtros aplicados:</strong>
     {% if mes %} Mes: {{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][mes|int - 1] }}{% endif %}
     {% if anio %} Año: {{ anio }}{% endif %}
-    {% if fecha_desde %} Desde: {{ fecha_desde }}{% endif %}
-    {% if fecha_hasta %} Hasta: {{ fecha_hasta }}{% endif %}
-    {% if filtro_profesor %} Docente: {{ filtro_profesor }}{% endif %}
 </div>
 {% endif %}
 
 <!-- Tabla de pagos detallada -->
 <div class="card shadow mb-4">
     <div class="card-header bg-secondary text-white">
-        <strong>📋 Detalle de Pagos</strong>
+        <strong>📋 Detalle de Mis Pagos</strong>
         <span class="badge bg-light text-dark ms-2">{{ pagos|length }} registros</span>
     </div>
     <div class="card-body">
@@ -83,7 +59,6 @@
                 <thead>
                     <tr class="table-dark">
                         <th>Fecha</th>
-                        <th>Profesor/Psicólogo</th>
                         <th>Estudiante</th>
                         <th>Tipo</th>
                         <th>Horas</th>
@@ -97,7 +72,6 @@
                     {% for p in pagos %}
                     <tr>
                         <td>{{ p.fecha }}</td>
-                        <td><strong>{{ p.profesor }}</strong></td>
                         <td>{{ p.estudiante|title }}</td>
                         <td>
                             {% if p.tipo == 'clase' %}
@@ -120,7 +94,7 @@
                 </tbody>
                 <tfoot class="table-dark">
                     <tr>
-                        <td colspan="6"><strong>TOTALES</strong></td>
+                        <td colspan="5"><strong>TOTALES</strong></td>
                         <td class="text-end"><strong>${{ "%.2f"|format(total_docencia) }}</strong></td>
                         <td class="text-end"><strong>${{ "%.2f"|format(total_psicologia) }}</strong></td>
                         <td class="text-end"><strong>${{ "%.2f"|format(total_adeudado) }}</strong></td>
@@ -134,30 +108,6 @@
     </div>
 </div>
 
-<!-- Búsqueda Rápida por Profesor -->
-{% if current_user.rol in ['admin', 'socio'] %}
-<div class="card shadow mt-4">
-    <div class="card-header bg-warning text-dark">
-        <strong>🔍 Búsqueda Rápida por Profesor</strong>
-    </div>
-    <div class="card-body">
-        <div class="row">
-            <div class="col-md-6">
-                <select id="filtroProfesorRapido" class="form-select" onchange="window.location.href='/modulo5?filtro_profesor=' + this.value">
-                    <option value="">Seleccionar profesor...</option>
-                    {% for p in profesores_lista %}
-                    <option value="{{ p }}" {{ 'selected' if filtro_profesor == p }}>{{ p }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-6">
-                <a href="/modulo5" class="btn btn-outline-secondary w-100">Mostrar todos</a>
-            </div>
-        </div>
-    </div>
-</div>
-{% endif %}
-
 <!-- Información de tarifas -->
 <div class="alert alert-info mt-3">
     <strong>💡 Información:</strong>
@@ -168,10 +118,9 @@
 </div>
 
 <div class="mt-4 d-flex flex-wrap justify-content-between">
-    <a href="/modulo1" class="btn btn-outline-primary mb-1">M1: Planificar</a>
-    <a href="/modulo2" class="btn btn-outline-success mb-1">M2: Calendario</a>
-    <a href="/modulo3" class="btn btn-outline-info mb-1">M3: Pagos</a>
-    <a href="/modulo4" class="btn btn-outline-warning mb-1">M4: Público</a>
-    <a href="/modulo5" class="btn btn-outline-danger mb-1">M5: Docentes</a>
+    <a href="/mi-reporte" class="btn btn-outline-primary mb-1">📊 Mi Reporte</a>
+    <a href="/mis-anticipos" class="btn btn-outline-warning mb-1">💵 Mis Anticipos</a>
+    <a href="/modulo2" class="btn btn-outline-success mb-1">📅 Calendario</a>
+    <a href="/editar-perfil" class="btn btn-outline-secondary mb-1">⚙️ Perfil</a>
 </div>
 {% endblock %}
