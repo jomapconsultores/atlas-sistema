@@ -27,7 +27,10 @@
     </div>
 </form>
 
-<!-- Tarjetas de resumen para docentes/psicólogos -->
+<!-- ========== VISTA PARA PROFESORES Y PSICÓLOGOS ========== -->
+{% if current_user.rol in ['profesor', 'psicologo'] %}
+
+<!-- Tarjetas de resumen -->
 <div class="row mb-4">
     <div class="col-md-3">
         <div class="card bg-primary text-white text-center p-3">
@@ -63,6 +66,35 @@
         </div>
     </div>
 </div>
+
+{% endif %}
+
+<!-- ========== VISTA PARA ESTUDIANTES Y PADRES ========== -->
+{% if current_user.rol in ['estudiante', 'padre'] %}
+
+<!-- Tarjetas de resumen simplificadas (sin anticipos ni neto) -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card bg-primary text-white text-center p-3">
+            <h4>{{ datos|length }}</h4>
+            <small>Sesiones Realizadas</small>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-success text-white text-center p-3">
+            <h4>{{ total_horas }}</h4>
+            <small>Horas Totales</small>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-info text-white text-center p-3">
+            <h4>${{ "%.2f"|format(total_a_pagar) }}</h4>
+            <small>💰 Total Facturado</small>
+        </div>
+    </div>
+</div>
+
+{% endif %}
 
 <!-- Tabla de sesiones -->
 <div class="card shadow">
@@ -129,7 +161,8 @@
     </div>
 </div>
 
-<!-- Gráfico de evolución de ingresos -->
+<!-- Gráfico de evolución de ingresos (SOLO para profesores y psicólogos) -->
+{% if current_user.rol in ['profesor', 'psicologo'] %}
 <div class="card shadow mt-4">
     <div class="card-header bg-primary text-white">
         <strong>📈 Evolución de mis ingresos</strong>
@@ -138,9 +171,11 @@
         <canvas id="chartMiReporte" style="height: 300px;"></canvas>
     </div>
 </div>
+{% endif %}
 
 <a href="/dashboard" class="btn btn-outline-secondary mt-3">← Dashboard</a>
 
+{% if current_user.rol in ['profesor', 'psicologo'] %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
 // Datos para el gráfico de ingresos mensuales
@@ -175,4 +210,5 @@ new Chart(document.getElementById('chartMiReporte'), {
     }
 });
 </script>
+{% endif %}
 {% endblock %}
