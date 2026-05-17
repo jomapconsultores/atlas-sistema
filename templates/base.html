@@ -10,6 +10,7 @@
         body { padding-bottom: 70px; background-color: #f5f5f5; }
         .navbar { background: #1a73e8 !important; }
         .navbar-brand { color: white !important; font-weight: bold; }
+        .menu-profesor .btn { white-space: nowrap; }
     </style>
 </head>
 <body>
@@ -24,14 +25,22 @@
         </div>
     </nav>
     
-    <!-- Menú rápido para profesores y psicólogos - 4 EN UNA LÍNEA -->
+    <!-- Menú rápido para profesores y psicólogos -->
     {% if current_user.rol in ['profesor', 'psicologo'] %}
     <div class="container mt-3">
-        <div class="d-flex justify-content-center gap-2">
-            <a href="/mi-reporte" class="btn btn-outline-primary btn-sm flex-fill text-center">📊 Mi Reporte</a>
-            <a href="/modulo5" class="btn btn-outline-success btn-sm flex-fill text-center">💵 Mis Pagos</a>
-            <a href="/mis-anticipos" class="btn btn-outline-warning btn-sm flex-fill text-center">🏦 Mis Anticipos</a>
-            <a href="/modulo2" class="btn btn-outline-info btn-sm flex-fill text-center">📅 Calendario</a>
+        <div class="menu-profesor row g-2">
+            <div class="col-3">
+                <a href="/mi-reporte" class="btn btn-outline-primary btn-sm w-100">📊 Mi Reporte</a>
+            </div>
+            <div class="col-3">
+                <a href="/modulo5" class="btn btn-outline-success btn-sm w-100">💵 Mis Pagos</a>
+            </div>
+            <div class="col-3">
+                <a href="/mis-anticipos" class="btn btn-outline-warning btn-sm w-100">🏦 Mis Anticipos</a>
+            </div>
+            <div class="col-3">
+                <a href="/modulo2" class="btn btn-outline-info btn-sm w-100">📅 Calendario</a>
+            </div>
         </div>
     </div>
     {% endif %}
