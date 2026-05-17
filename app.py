@@ -644,14 +644,14 @@ def modulo5():
             if filtro_profesor.lower() in s.get('profesor_terapeuta', '').lower():
                 sesiones_filtradas.append(s)
         sesiones_data = sesiones_filtradas
-
-   if filtro_estudiante and filtro_estudiante != '':
+    
+    if filtro_estudiante and filtro_estudiante != '':
         sesiones_filtradas_est = []
         for s in sesiones_data:
-        est = s.get('estudiantes', {})
-        nombre_est = f"{est.get('apellidos', '')} {est.get('nombres', '')}".lower()
-        if filtro_estudiante.lower() in nombre_est:
-            sesiones_filtradas_est.append(s)
+            est = s.get('estudiantes', {})
+            nombre_est = f"{est.get('apellidos', '')} {est.get('nombres', '')}".lower()
+            if filtro_estudiante.lower() in nombre_est:
+                sesiones_filtradas_est.append(s)
         sesiones_data = sesiones_filtradas_est
     
     anticipos = supabase.table('anticipos_solicitudes').select('*').eq('estado', 'aprobado').execute()
@@ -719,8 +719,8 @@ def modulo5():
                          consolidado=consolidado,
                          profesores_lista=sorted(list(profesores_lista)) if current_user.rol in ['admin', 'socio'] else [],
                          mes=mes, anio=anio, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta,
-                         filtro_profesor=filtro_profesor)
-                         filtro_estudiante=filtro_estudiante,
+                         filtro_profesor=filtro_profesor,
+                         filtro_estudiante=filtro_estudiante)
 
 # ========== MÓDULO 6: REUNIONES ==========
 @app.route('/modulo6', methods=['GET', 'POST'])
@@ -921,7 +921,7 @@ def mis_clientes():
         return redirect(url_for('dashboard'))
     clientes = supabase.table('clientes_externos').select('*').eq('psicologo_id', current_user.id).eq('activo', True).order('nombre').execute()
     citas = supabase.table('citas_psicologia').select('*, clientes_externos(*)').eq('psicologo_id', current_user.id).order('fecha', desc=True).execute()
-    return render_template('mis_clientes.html',
+        return render_template('mis_clientes.html',
                          clientes=clientes.data or [], citas=citas.data or [],
                          today=date.today().isoformat())
 
