@@ -181,6 +181,24 @@
 </div>
 {% endif %}
 
+<!-- Menú de 4 módulos en una línea -->
+<div class="mt-4">
+    <div class="row g-2">
+        <div class="col-3">
+            <a href="/mi-reporte" class="btn btn-outline-primary btn-sm w-100">📊 Mi Reporte</a>
+        </div>
+        <div class="col-3">
+            <a href="/modulo5" class="btn btn-outline-success btn-sm w-100">💵 Mis Pagos</a>
+        </div>
+        <div class="col-3">
+            <a href="/mis-anticipos" class="btn btn-outline-warning btn-sm w-100">🏦 Mis Anticipos</a>
+        </div>
+        <div class="col-3">
+            <a href="/modulo2" class="btn btn-outline-info btn-sm w-100">📅 Calendario</a>
+        </div>
+    </div>
+</div>
+
 <a href="/dashboard" class="btn btn-outline-secondary mt-3">← Dashboard</a>
 
 {% if current_user.rol in ['profesor', 'psicologo'] %}

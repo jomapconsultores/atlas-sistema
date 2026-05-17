@@ -618,6 +618,7 @@ def modulo5():
     fecha_desde = request.args.get('fecha_desde', '')
     fecha_hasta = request.args.get('fecha_hasta', '')
     filtro_profesor = request.args.get('filtro_profesor', '')
+    filtro_estudiante = request.args.get('filtro_estudiante', '')
     
     query = supabase.table('sesiones').select('*, estudiantes(*)').eq('estado', 'Realizado')
     
@@ -643,6 +644,15 @@ def modulo5():
             if filtro_profesor.lower() in s.get('profesor_terapeuta', '').lower():
                 sesiones_filtradas.append(s)
         sesiones_data = sesiones_filtradas
+
+   if filtro_estudiante and filtro_estudiante != '':
+        sesiones_filtradas_est = []
+        for s in sesiones_data:
+        est = s.get('estudiantes', {})
+        nombre_est = f"{est.get('apellidos', '')} {est.get('nombres', '')}".lower()
+        if filtro_estudiante.lower() in nombre_est:
+            sesiones_filtradas_est.append(s)
+        sesiones_data = sesiones_filtradas_est
     
     anticipos = supabase.table('anticipos_solicitudes').select('*').eq('estado', 'aprobado').execute()
     anticipos_por_docente = {}
@@ -710,6 +720,7 @@ def modulo5():
                          profesores_lista=sorted(list(profesores_lista)) if current_user.rol in ['admin', 'socio'] else [],
                          mes=mes, anio=anio, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta,
                          filtro_profesor=filtro_profesor)
+                         filtro_estudiante=filtro_estudiante,
 
 # ========== MÓDULO 6: REUNIONES ==========
 @app.route('/modulo6', methods=['GET', 'POST'])

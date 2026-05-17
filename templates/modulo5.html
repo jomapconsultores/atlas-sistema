@@ -2,8 +2,7 @@
 {% block title %}Pagos Docentes - Atlas{% endblock %}
 
 {% block content %}
-<h3>💵 Mis Pagos</h3>
-<p class="text-muted">{{ current_user.nombre }} ({{ current_user.rol }})</p>
+<h3>💵 Pagos a Docentes y Psicólogos</h3>
 
 <!-- Filtros -->
 <div class="card shadow mb-4">
@@ -12,7 +11,7 @@
     </div>
     <div class="card-body">
         <form method="GET" action="{{ url_for('modulo5') }}" class="row g-3">
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <label class="form-label">Mes</label>
                 <select name="mes" class="form-select">
                     <option value="">Todos</option>
@@ -21,7 +20,7 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <label class="form-label">Año</label>
                 <select name="anio" class="form-select">
                     <option value="">Todos</option>
@@ -30,26 +29,42 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-4 d-flex align-items-end">
-                <button type="submit" class="btn btn-primary w-100">🔍 Filtrar</button>
+            <div class="col-md-3">
+                <label class="form-label">👨‍🎓 Estudiante</label>
+                <input type="text" name="filtro_estudiante" class="form-control" placeholder="Nombre del estudiante" value="{{ filtro_estudiante }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">👨‍🏫 Docente/Psicólogo</label>
+                <select name="filtro_profesor" class="form-select">
+                    <option value="">Todos los profesionales</option>
+                    {% for p in profesores_lista %}
+                    <option value="{{ p }}" {{ 'selected' if filtro_profesor == p }}>{{ p }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-12 text-end">
+                <button type="submit" class="btn btn-primary">🔍 Filtrar</button>
+                <a href="{{ url_for('modulo5') }}" class="btn btn-outline-secondary">🗑️ Limpiar</a>
             </div>
         </form>
     </div>
 </div>
 
 <!-- Resumen de filtros -->
-{% if mes or anio %}
+{% if mes or anio or filtro_estudiante or filtro_profesor %}
 <div class="alert alert-info small">
     <strong>📌 Filtros aplicados:</strong>
     {% if mes %} Mes: {{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][mes|int - 1] }}{% endif %}
     {% if anio %} Año: {{ anio }}{% endif %}
+    {% if filtro_estudiante %} Estudiante: {{ filtro_estudiante }}{% endif %}
+    {% if filtro_profesor %} Docente: {{ filtro_profesor }}{% endif %}
 </div>
 {% endif %}
 
 <!-- Tabla de pagos detallada -->
 <div class="card shadow mb-4">
     <div class="card-header bg-secondary text-white">
-        <strong>📋 Detalle de Mis Pagos</strong>
+        <strong>📋 Detalle de Pagos</strong>
         <span class="badge bg-light text-dark ms-2">{{ pagos|length }} registros</span>
     </div>
     <div class="card-body">
@@ -59,6 +74,7 @@
                 <thead>
                     <tr class="table-dark">
                         <th>Fecha</th>
+                        <th>Profesor/Psicólogo</th>
                         <th>Estudiante</th>
                         <th>Tipo</th>
                         <th>Horas</th>
@@ -72,6 +88,7 @@
                     {% for p in pagos %}
                     <tr>
                         <td>{{ p.fecha }}</td>
+                        <td><strong>{{ p.profesor }}</strong></td>
                         <td>{{ p.estudiante|title }}</td>
                         <td>
                             {% if p.tipo == 'clase' %}
@@ -94,7 +111,7 @@
                 </tbody>
                 <tfoot class="table-dark">
                     <tr>
-                        <td colspan="5"><strong>TOTALES</strong></td>
+                        <td colspan="6"><strong>TOTALES</strong></td>
                         <td class="text-end"><strong>${{ "%.2f"|format(total_docencia) }}</strong></td>
                         <td class="text-end"><strong>${{ "%.2f"|format(total_psicologia) }}</strong></td>
                         <td class="text-end"><strong>${{ "%.2f"|format(total_adeudado) }}</strong></td>
@@ -103,7 +120,56 @@
             </table>
         </div>
         {% else %}
-        <p class="text-muted">No hay pagos registrados para el período seleccionado.</p>
+        <p class="text-muted">No hay pagos registrados para los filtros seleccionados.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ========== REPORTE AGRUPADO POR DOCENTE ========== -->
+<div class="card shadow mb-4">
+    <div class="card-header bg-info text-white">
+        <strong>📊 Reporte Agrupado por Docente / Psicólogo</strong>
+    </div>
+    <div class="card-body">
+        {% if consolidado %}
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr class="table-dark">
+                        <th>Docente / Psicólogo</th>
+                        <th>Horas Totales</th>
+                        <th>Pago Docencia</th>
+                        <th>Pago Psicología</th>
+                        <th>Total a Pagar</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% set total_horas_agrupado = namespace(valor=0) %}
+                    {% for nombre, datos in consolidado.items() %}
+                    {% set horas_docente = pagos | selectattr('profesor', 'equalto', nombre) | sum(attribute='horas') %}
+                    {% set total_horas_agrupado.valor = total_horas_agrupado.valor + horas_docente %}
+                    <tr>
+                        <td><strong>{{ nombre }}</strong></td>
+                        <td class="text-center">{{ horas_docente }}</td>
+                        <td class="text-end text-primary">${{ "%.2f"|format(datos.pago_docencia) }}</td>
+                        <td class="text-end text-success">${{ "%.2f"|format(datos.pago_psicologia) }}</td>
+                        <td class="text-end fw-bold">${{ "%.2f"|format(datos.total_pagar) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-dark">
+                    <tr>
+                        <td><strong>TOTALES</strong></td>
+                        <td class="text-center"><strong>{{ total_horas_agrupado.valor }}</strong></td>
+                        <td class="text-end"><strong>${{ "%.2f"|format(total_docencia) }}</strong></td>
+                        <td class="text-end"><strong>${{ "%.2f"|format(total_psicologia) }}</strong></td>
+                        <td class="text-end"><strong>${{ "%.2f"|format(total_adeudado) }}</strong></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted">No hay datos agrupados para mostrar.</p>
         {% endif %}
     </div>
 </div>
@@ -117,19 +183,20 @@
     </ul>
 </div>
 
+<!-- Botones de navegación inferiores -->
 <div class="mt-4">
     <div class="row g-2">
         <div class="col-3">
             <a href="/mi-reporte" class="btn btn-outline-primary btn-sm w-100">📊 Mi Reporte</a>
         </div>
         <div class="col-3">
-            <a href="/mis-anticipos" class="btn btn-outline-warning btn-sm w-100">💵 Mis Anticipos</a>
+            <a href="/modulo5" class="btn btn-outline-success btn-sm w-100">💵 Mis Pagos</a>
         </div>
         <div class="col-3">
-            <a href="/modulo2" class="btn btn-outline-success btn-sm w-100">📅 Calendario</a>
+            <a href="/mis-anticipos" class="btn btn-outline-warning btn-sm w-100">🏦 Mis Anticipos</a>
         </div>
         <div class="col-3">
-            <a href="/editar-perfil" class="btn btn-outline-secondary btn-sm w-100">⚙️ Perfil</a>
+            <a href="/modulo2" class="btn btn-outline-info btn-sm w-100">📅 Calendario</a>
         </div>
     </div>
 </div>
