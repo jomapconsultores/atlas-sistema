@@ -921,7 +921,7 @@ def mis_clientes():
         return redirect(url_for('dashboard'))
     clientes = supabase.table('clientes_externos').select('*').eq('psicologo_id', current_user.id).eq('activo', True).order('nombre').execute()
     citas = supabase.table('citas_psicologia').select('*, clientes_externos(*)').eq('psicologo_id', current_user.id).order('fecha', desc=True).execute()
-        return render_template('mis_clientes.html',
+    return render_template('mis_clientes.html',
                          clientes=clientes.data or [], citas=citas.data or [],
                          today=date.today().isoformat())
 
