@@ -57,11 +57,15 @@
                         <datalist id="listaAsistentes"></datalist>
                     </div>
                     
-                    <!-- Encargado (CAMPO DE TEXTO LIBRE) -->
+                    <!-- Encargado con lista de Supabase + opción de crear -->
                     <div class="mb-2">
                         <label class="form-label">Encargado *</label>
-                        <input type="text" name="encargado" id="encargado" class="form-control text-uppercase" required list="listaEncargados" autocomplete="off" placeholder="Escribe o selecciona el nombre del encargado" oninput="aprender('encargados',this.value)">
-                        <datalist id="listaEncargados"></datalist>
+                        <div class="input-group">
+                            <input type="text" name="encargado" id="encargado" class="form-control text-uppercase" required list="listaEncargados" autocomplete="off" placeholder="Selecciona o escribe un nuevo encargado">
+                            <datalist id="listaEncargados"></datalist>
+                            <button type="button" class="btn btn-outline-success" onclick="crearNuevoEncargado()" title="Guardar nuevo encargado">➕</button>
+                        </div>
+                        <small class="text-muted">Escribe un nombre nuevo y presiona ➕ para guardarlo</small>
                     </div>
                     
                     <button type="submit" class="btn btn-dark w-100" id="btnSubmit">✅ Programar Reunión</button>
@@ -126,11 +130,61 @@
 </div>
 
 <script>
+// Cargar encargados desde Supabase
+async function cargarEncargados() {
+    try {
+        const response = await fetch('/api/encargados');
+        const encargados = await response.json();
+        const datalist = document.getElementById('listaEncargados');
+        datalist.innerHTML = encargados.map(n => `<option value="${n}">`).join('');
+    } catch (e) {
+        console.error('Error cargando encargados:', e);
+    }
+}
+
+// Crear nuevo encargado y guardarlo en Supabase
+async function crearNuevoEncargado() {
+    const input = document.getElementById('encargado');
+    const nombre = input.value.trim().toUpperCase();
+    
+    if (!nombre || nombre.length < 2) {
+        alert('⚠️ Escribe un nombre válido para el encargado');
+        return;
+    }
+    
+    // Verificar si ya existe en la lista
+    const options = document.querySelectorAll('#listaEncargados option');
+    for (let opt of options) {
+        if (opt.value === nombre) {
+            alert('ℹ️ Este encargado ya existe en la lista');
+            return;
+        }
+    }
+    
+    try {
+        const response = await fetch('/api/encargados/crear', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({nombre: nombre})
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            alert('✅ Encargado "' + nombre + '" guardado correctamente');
+            cargarEncargados(); // Recargar la lista
+        } else {
+            alert('❌ Error: ' + (result.error || 'No se pudo guardar'));
+        }
+    } catch (e) {
+        alert('❌ Error de conexión');
+    }
+}
+
 const DB_KEY='atlas_reuniones_db';
-let db=JSON.parse(localStorage.getItem(DB_KEY)||'{"titulos":["REUNIÓN","WEBINAR","ASISTENCIA"],"asistentes":[],"temas":[],"encargados":["CARMEN","ROSALÍA","JOHANNA","MAP"]}');
+let db=JSON.parse(localStorage.getItem(DB_KEY)||'{"titulos":["REUNIÓN","WEBINAR","ASISTENCIA"],"asistentes":[],"temas":[]}');
 
 function cargarSugerencias(){
-    ['temas','asistentes','encargados'].forEach(t=>{
+    ['temas','asistentes'].forEach(t=>{
         const c=t.charAt(0).toUpperCase()+t.slice(1);
         const dl=document.getElementById('lista'+c);
         if(dl)dl.innerHTML=[...new Set(db[t])].map(v=>`<option value="${v}">`).join('');
@@ -213,6 +267,8 @@ async function sincronizarTodasReuniones(){
     location.reload();
 }
 
+// Inicializar
+cargarEncargados();
 cargarSugerencias();
 </script>
 {% endblock %}

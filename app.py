@@ -722,6 +722,29 @@ def modulo5():
                          filtro_profesor=filtro_profesor,
                          filtro_estudiante=filtro_estudiante)
 
+# ========== API ENCARGADOS ==========
+@app.route('/api/encargados')
+@login_required
+def api_encargados():
+    encargados = supabase.table('encargados').select('*').order('nombre').execute()
+    return jsonify([e['nombre'] for e in (encargados.data or [])])
+
+@app.route('/api/encargados/crear', methods=['POST'])
+@login_required
+def api_crear_encargado():
+    data = request.get_json()
+    nombre = data.get('nombre', '').strip().upper()
+    if not nombre:
+        return jsonify({'success': False, 'error': 'Nombre requerido'})
+    try:
+        supabase.table('encargados').insert({
+            'nombre': nombre,
+            'creado_por': current_user.id
+        }).execute()
+        return jsonify({'success': True, 'nombre': nombre})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
 # ========== MÓDULO 6: REUNIONES ==========
 @app.route('/modulo6', methods=['GET', 'POST'])
 @login_required
