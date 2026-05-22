@@ -70,6 +70,27 @@ PAGO_DOCENCIA_POR_HORA = 7
 PORCENTAJE_PSICOLOGIA = 0.4018  # 40.18%
 COMISION_CLIENTE_EXTERNO = 0.25
 
+# ========== CARGAR COSTOS DESDE SUPABASE ==========
+def cargar_costos():
+    try:
+        costos = supabase.table('costos_config').select('*').eq('activo', True).execute()
+        psicologia = []
+        precios_clase = []
+        precios_matricula = []
+        precios_pension = []
+        for c in (costos.data or []):
+            if c['tipo'] == 'psicologia':
+                psicologia.append({'nombre': c['concepto'], 'precio': float(c['precio']), 'sesiones': 4 if 'paquete' in c['concepto'].lower() else 1})
+            elif c['tipo'] == 'clase':
+                precios_clase.append(float(c['precio']))
+            elif c['tipo'] == 'matricula':
+                precios_matricula.append(float(c['precio']))
+            elif c['tipo'] == 'pension':
+                precios_pension.append(float(c['precio']))
+        return psicologia, precios_clase or [10], precios_matricula or [0, 18, 20], precios_pension or [99, 100, 110]
+    except:
+        return ATENCION_PSICOLOGICA, PRECIOS_CLASE, PRECIOS_MATRICULA, PRECIOS_PENSION
+
 # ========== RUTAS PRINCIPALES ==========
 @app.route('/')
 def inicio():
@@ -130,6 +151,8 @@ def dashboard():
 @login_required
 @socio_admin_required
 def modulo1():
+    psicologia, precios_clase, precios_matricula, precios_pension = cargar_costos()
+    
     if request.method == 'POST':
         try:
             tipo = request.form.get('tipo_sesion', 'clase')
@@ -173,7 +196,7 @@ def modulo1():
                     if tema == 'Paquete 4 terapias':
                         precio = 160 / 4
                     else:
-                        precio = next((item['precio'] for item in ATENCION_PSICOLOGICA if item['nombre'] == tema), 40)
+                        precio = next((item['precio'] for item in psicologia if item['nombre'] == tema), 40)
                     valor_inicial = precio
                 else:
                     asignatura = request.form.get('asignatura', '')
@@ -225,9 +248,9 @@ def modulo1():
     
     estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
     return render_template('modulo1.html', estudiantes=estudiantes.data or [],
-                         asignaturas=ASIGNATURAS, atencion_psicologica=ATENCION_PSICOLOGICA,
-                         precios_clase=PRECIOS_CLASE, precios_matricula=PRECIOS_MATRICULA,
-                         precios_pension=PRECIOS_PENSION, profesores=PROFESORES,
+                         asignaturas=ASIGNATURAS, atencion_psicologica=psicologia,
+                         precios_clase=precios_clase, precios_matricula=precios_matricula,
+                         precios_pension=precios_pension, profesores=PROFESORES,
                          encargados=ENCARGADOS, today=date.today())
 
 # ========== EDITOR DE PLANIFICACIONES ==========
@@ -235,11 +258,12 @@ def modulo1():
 @login_required
 @socio_admin_required
 def editar_planificaciones():
+    psicologia, _, _, _ = cargar_costos()
     estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
     return render_template('editar_planificaciones.html', 
                          estudiantes=estudiantes.data or [],
                          asignaturas=ASIGNATURAS,
-                         atencion_psicologica=ATENCION_PSICOLOGICA,
+                         atencion_psicologica=psicologia,
                          profesores=PROFESORES,
                          encargados=ENCARGADOS,
                          today=date.today().isoformat())
@@ -248,11 +272,12 @@ def editar_planificaciones():
 @login_required
 @socio_admin_required
 def editar_planificacion_masiva():
+    psicologia, _, _, _ = cargar_costos()
     estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
     return render_template('editar_planificacion_masiva.html',
                          estudiantes=estudiantes.data or [],
                          asignaturas=ASIGNATURAS,
-                         atencion_psicologica=ATENCION_PSICOLOGICA,
+                         atencion_psicologica=psicologia,
                          profesores=PROFESORES,
                          encargados=ENCARGADOS,
                          today=date.today().isoformat())
@@ -609,7 +634,6 @@ def modulo4():
 @app.route('/modulo5')
 @login_required
 def modulo5():
-    # Si es profesor o psicólogo, mostrar SOLO sus pagos (redirigir a mi-reporte)
     if current_user.rol in ['profesor', 'psicologo']:
         return redirect(url_for('mi_reporte'))
     
@@ -722,29 +746,6 @@ def modulo5():
                          filtro_profesor=filtro_profesor,
                          filtro_estudiante=filtro_estudiante)
 
-# ========== API ENCARGADOS ==========
-@app.route('/api/encargados')
-@login_required
-def api_encargados():
-    encargados = supabase.table('encargados').select('*').order('nombre').execute()
-    return jsonify([e['nombre'] for e in (encargados.data or [])])
-
-@app.route('/api/encargados/crear', methods=['POST'])
-@login_required
-def api_crear_encargado():
-    data = request.get_json()
-    nombre = data.get('nombre', '').strip().upper()
-    if not nombre:
-        return jsonify({'success': False, 'error': 'Nombre requerido'})
-    try:
-        supabase.table('encargados').insert({
-            'nombre': nombre,
-            'creado_por': current_user.id
-        }).execute()
-        return jsonify({'success': True, 'nombre': nombre})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
-
 # ========== MÓDULO 6: REUNIONES ==========
 @app.route('/modulo6', methods=['GET', 'POST'])
 @login_required
@@ -804,6 +805,80 @@ def sincronizar_reunion(id):
             supabase.table('reuniones').update({'evento_calendar_id': evento_id}).eq('id', id).execute()
             return jsonify({'success': True})
     return jsonify({'success': False})
+
+# ========== API ENCARGADOS ==========
+@app.route('/api/encargados')
+@login_required
+def api_encargados():
+    encargados = supabase.table('encargados').select('*').order('nombre').execute()
+    return jsonify([e['nombre'] for e in (encargados.data or [])])
+
+@app.route('/api/encargados/crear', methods=['POST'])
+@login_required
+def api_crear_encargado():
+    data = request.get_json()
+    nombre = data.get('nombre', '').strip().upper()
+    if not nombre:
+        return jsonify({'success': False, 'error': 'Nombre requerido'})
+    try:
+        supabase.table('encargados').insert({
+            'nombre': nombre,
+            'creado_por': current_user.id
+        }).execute()
+        return jsonify({'success': True, 'nombre': nombre})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+# ========== ADMINISTRACIÓN DE COSTOS ==========
+@app.route('/admin/costos')
+@login_required
+@admin_required
+def admin_costos():
+    costos = supabase.table('costos_config').select('*').order('tipo').order('concepto').execute()
+    return render_template('admin_costos.html', costos=costos.data or [])
+
+@app.route('/api/costos/crear', methods=['POST'])
+@login_required
+@admin_required
+def api_crear_costo():
+    data = request.get_json()
+    try:
+        supabase.table('costos_config').insert({
+            'concepto': data['concepto'],
+            'tipo': data.get('tipo', 'servicio'),
+            'precio': float(data['precio']),
+            'creado_por': current_user.id
+        }).execute()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/costos/<int:id>/editar', methods=['POST'])
+@login_required
+@admin_required
+def api_editar_costo(id):
+    data = request.get_json()
+    try:
+        supabase.table('costos_config').update({
+            'concepto': data['concepto'],
+            'tipo': data.get('tipo', 'servicio'),
+            'precio': float(data['precio']),
+            'fecha_actualizacion': date.today().isoformat()
+        }).eq('id', id).execute()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/costos/<int:id>/toggle', methods=['POST'])
+@login_required
+@admin_required
+def api_toggle_costo(id):
+    costo = supabase.table('costos_config').select('activo').eq('id', id).execute()
+    if costo.data:
+        nuevo_estado = not costo.data[0].get('activo', True)
+        supabase.table('costos_config').update({'activo': nuevo_estado}).eq('id', id).execute()
+        return jsonify({'success': True, 'activo': nuevo_estado})
+    return jsonify({'success': False, 'error': 'No encontrado'})
 
 # ========== ANTICIPOS ==========
 @app.route('/mis-anticipos')
@@ -1004,7 +1079,7 @@ def reportes():
     
     for e in (estudiantes.data or []):
         ses = supabase.table('sesiones').select('*').eq('estudiante_id', e['id']).execute()
-        ses_todas = [s for s in (ses.data or []) if s['fecha'][:7] == f"{anio}-{mes:02d}"]
+        ses_todas = [s for s in (ses.data or []) if s.get('fecha', '') and s['fecha'][:7] == f"{anio}-{mes:02d}"]
         ses_realizadas = [s for s in ses_todas if s['estado'] == 'Realizado']
         ses_planificadas = [s for s in ses_todas if s['estado'] == 'Planificado']
         ses_canceladas = [s for s in ses_todas if s['estado'] == 'Cancelado']
@@ -1237,7 +1312,7 @@ def mi_reporte():
         anticipos_aprobados += a.get('monto', 0)
     
     for s in (sesiones.data or []):
-        if mes != 0 and s['fecha'][:7] != f"{anio}-{mes:02d}":
+        if mes != 0 and s.get('fecha', '') and s['fecha'][:7] != f"{anio}-{mes:02d}":
             continue
         profesor = (s.get('profesor_terapeuta') or '').strip().lower()
         est = s.get('estudiantes', {})

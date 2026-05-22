@@ -130,7 +130,6 @@
 </div>
 
 <script>
-// Cargar encargados desde Supabase
 async function cargarEncargados() {
     try {
         const response = await fetch('/api/encargados');
@@ -142,7 +141,6 @@ async function cargarEncargados() {
     }
 }
 
-// Crear nuevo encargado y guardarlo en Supabase
 async function crearNuevoEncargado() {
     const input = document.getElementById('encargado');
     const nombre = input.value.trim().toUpperCase();
@@ -152,7 +150,6 @@ async function crearNuevoEncargado() {
         return;
     }
     
-    // Verificar si ya existe en la lista
     const options = document.querySelectorAll('#listaEncargados option');
     for (let opt of options) {
         if (opt.value === nombre) {
@@ -171,7 +168,7 @@ async function crearNuevoEncargado() {
         
         if (result.success) {
             alert('✅ Encargado "' + nombre + '" guardado correctamente');
-            cargarEncargados(); // Recargar la lista
+            cargarEncargados();
         } else {
             alert('❌ Error: ' + (result.error || 'No se pudo guardar'));
         }
@@ -267,7 +264,6 @@ async function sincronizarTodasReuniones(){
     location.reload();
 }
 
-// Inicializar
 cargarEncargados();
 cargarSugerencias();
 </script>
