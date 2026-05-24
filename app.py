@@ -1294,26 +1294,25 @@ def reportes():
     observaciones = supabase.table('sesiones').select('*, estudiantes(apellidos, nombres)').not_.is_('observaciones', 'null').order('fecha', desc=True).limit(30).execute()
     nuevos_usuarios = supabase.table('usuarios').select('*').gte('fecha_registro', f"{anio}-{mes:02d}-01").lte('fecha_registro', f"{anio}-{mes:02d}-31").execute()
 
-    # ========== DATOS PARA REPORTE DE GÉNERO ==========
-    estudiantes_hombres = 0
-    estudiantes_mujeres = 0
-    horas_por_estudiante = {}
-    cobrar_por_estudiante = {}
-    
+    # ========== DATOS PARA REPORTE DE ASIGNATURAS CON VALORES ==========
+    asignaturas_valores = {}
+    asignaturas_estudiantes = {}  # Diccionario para guardar estudiantes por asignatura
     for e in (estudiantes.data or []):
-        genero = (e.get('genero') or '').lower()
-        if genero in ['m', 'masculino', 'hombre']:
-            estudiantes_hombres += 1
-        elif genero in ['f', 'femenino', 'mujer']:
-            estudiantes_mujeres += 1
-        
         nombre_est = f"{e['apellidos']} {e['nombres']}"
         ses_est = supabase.table('sesiones').select('*').eq('estudiante_id', e['id']).in_('estado', ['Realizado', 'Cancelado-Pagado']).execute()
         ses_est_data = [s for s in (ses_est.data or []) if s.get('fecha', '') and s['fecha'][:7] == f"{anio}-{mes:02d}"]
-        horas_est = sum(s.get('horas', 0) or 0 for s in ses_est_data)
-        cobrar_est = sum(s.get('valor_total', 0) or 0 for s in ses_est_data)
-        horas_por_estudiante[nombre_est] = horas_est
-        cobrar_por_estudiante[nombre_est] = cobrar_est
+        for s in ses_est_data:
+            asig = s.get('asignatura') or s.get('tema_terapia') or 'Sin registro'
+            if asig not in asignaturas_valores:
+                asignaturas_valores[asig] = {'horas': 0, 'valor': 0, 'estudiantes': 0}
+                asignaturas_estudiantes[asig] = set()
+            asignaturas_valores[asig]['horas'] += s.get('horas', 0) or 0
+            asignaturas_valores[asig]['valor'] += s.get('valor_total', 0) or 0
+            asignaturas_estudiantes[asig].add(nombre_est)
+    
+    # Convertir sets a conteo
+    for asig in asignaturas_valores:
+        asignaturas_valores[asig]['estudiantes'] = len(asignaturas_estudiantes.get(asig, set()))
     
     # ========== DATOS PARA REPORTE DE ASIGNATURAS CON VALORES ==========
     asignaturas_valores = {}
@@ -1331,7 +1330,7 @@ def reportes():
     # ========== TOTALES DE PAGOS DOCENTES PARA PORCENTAJES ==========
     total_pago_docentes_general = total_docencia + total_psicologia
 
-    return render_template('reportes.html',
+        return render_template('reportes.html',
                          datos_estudiantes=datos_estudiantes, total_estudiantes=len(datos_estudiantes),
                          total_horas_estudiantes=total_horas_estudiantes,
                          total_cobrar_estudiantes=total_cobrar_estudiantes,
@@ -1356,6 +1355,7 @@ def reportes():
                          horas_por_estudiante=horas_por_estudiante,
                          cobrar_por_estudiante=cobrar_por_estudiante,
                          asignaturas_valores=asignaturas_valores,
+                         asignaturas_estudiantes=asignaturas_estudiantes,  # <-- ESTA LÍNEA
                          correcciones=correcciones.data or [], observaciones=observaciones.data or [],
                          nuevos_usuarios=nuevos_usuarios.data or [], total_planificado=0)
 
@@ -1539,7 +1539,7 @@ def gestion_usuarios():
         return redirect(url_for('gestion_usuarios'))
     usuarios = supabase.table('usuarios').select('*').order('fecha_registro', desc=True).execute()
     return render_template('usuarios.html', usuarios=usuarios.data or [])
-
+    
 # ========== MI REPORTE ==========
 @app.route('/mi-reporte')
 @login_required
