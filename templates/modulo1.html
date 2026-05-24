@@ -2,6 +2,26 @@
 {% block title %}Planificación - Atlas{% endblock %}
 
 {% block content %}
+<style>
+    .card { border-radius: 16px; border: none; box-shadow: 0 3px 15px rgba(0,0,0,0.06); transition: all 0.3s; }
+    .card:hover { box-shadow: 0 6px 25px rgba(0,0,0,0.1); }
+    .card-header { padding: 14px 20px; font-weight: 700; font-size: 15px; border-radius: 16px 16px 0 0 !important; }
+    .bg-primary { background: linear-gradient(135deg, #1a73e8, #0d47a1) !important; }
+    .form-control, .form-select { border-radius: 10px; border: 2px solid #e0e0e0; padding: 10px 14px; font-size: 13px; transition: all 0.2s; }
+    .form-control:focus, .form-select:focus { border-color: #1a73e8; box-shadow: 0 0 0 3px rgba(26,115,232,0.1); }
+    .btn-primary { background: linear-gradient(135deg, #1a73e8, #0d47a1); border: none; border-radius: 12px; font-weight: 600; padding: 12px; font-size: 14px; }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(26,115,232,0.3); }
+    .btn-warning { border-radius: 12px; font-weight: 600; }
+    .btn-secondary { border-radius: 12px; font-weight: 600; }
+    .btn-danger { border-radius: 12px; font-weight: 600; }
+    .btn-outline-danger { border-radius: 12px; }
+    .border.rounded { border-radius: 12px; border: 1px solid #e8e8e8; background: #fafafa; }
+    label { font-weight: 600; font-size: 12px; color: #555; }
+    .hora-invalida { border: 2px solid #dc3545 !important; background-color: #ffe6e6 !important; }
+    .mensaje-error { color: #dc3545; font-size: 12px; margin-top: 5px; display: none; }
+    .btn-group .btn { border-radius: 10px; margin: 0 2px; }
+</style>
+
 <!-- Botones de sincronización y edición -->
 <div class="d-flex justify-content-between mb-3 flex-wrap gap-2">
     <div>
@@ -108,19 +128,6 @@
         </form>
     </div>
 </div>
-
-<style>
-    .hora-invalida {
-        border: 2px solid #dc3545 !important;
-        background-color: #ffe6e6 !important;
-    }
-    .mensaje-error {
-        color: #dc3545;
-        font-size: 12px;
-        margin-top: 5px;
-        display: none;
-    }
-</style>
 
 <script>
 // Función para verificar si es paquete de terapias

@@ -2,6 +2,29 @@
 {% block title %}Pagos Estudiantes - Atlas{% endblock %}
 
 {% block content %}
+<style>
+    .card { border-radius: 16px; border: none; box-shadow: 0 3px 15px rgba(0,0,0,0.06); }
+    .card-header { padding: 14px 20px; font-weight: 700; font-size: 15px; border-radius: 16px 16px 0 0 !important; }
+    .bg-success { background: linear-gradient(135deg, #0f9d58, #00695c) !important; }
+    .bg-warning { background: linear-gradient(135deg, #f4b400, #e65100) !important; }
+    .bg-info { background: linear-gradient(135deg, #00acc1, #006064) !important; }
+    .bg-primary { background: linear-gradient(135deg, #1a73e8, #0d47a1) !important; }
+    .form-control, .form-select { border-radius: 10px; border: 2px solid #e0e0e0; padding: 10px 14px; font-size: 13px; }
+    .btn-success { border-radius: 10px; font-weight: 600; }
+    .btn-info { border-radius: 10px; font-weight: 600; }
+    .btn-outline-success { border-radius: 10px; font-weight: 600; }
+    .table thead th { background: #1a1a2e; color: white; font-weight: 600; font-size: 11px; border: none; padding: 10px 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .table tbody td { padding: 8px 12px; vertical-align: middle; font-size: 13px; border-bottom: 1px solid #f0f0f0; }
+    .table tbody tr:hover { background: #f8f9ff; }
+    .table tfoot td { font-weight: 700; background: #f8f9fa; border-top: 2px solid #1a1a2e; }
+    .badge { padding: 5px 10px; border-radius: 12px; font-size: 10px; font-weight: 600; }
+    .card.mb-3 { border-radius: 14px; border: 1px solid #e8e8e8; }
+    .card-header.bg-primary { cursor: pointer; }
+    .alert { border-radius: 12px; font-size: 13px; }
+    .modal-content { border-radius: 16px; border: none; }
+    .modal-header { border-radius: 16px 16px 0 0; }
+</style>
+
 <h3>💰 Módulo 3: Pagos de Estudiantes</h3>
 
 <div class="card shadow mb-4"><div class="card-header bg-success text-white"><strong>💵 Registrar Pago</strong></div><div class="card-body"><form method="POST" class="row g-2"><input type="hidden" name="accion" value="pagar"><div class="col-md-3"><label class="form-label">Estudiante *</label><select name="estudiante_id" class="form-select" required><option value="">Seleccionar...</option>{% for e in estudiantes %}<option value="{{ e.id }}">{{ e.nombre }}</option>{% endfor %}</select></div><div class="col-md-2"><label class="form-label">Fecha *</label><input type="date" name="fecha_pago" class="form-control" value="{{ today }}" required></div><div class="col-md-2"><label class="form-label">Monto *</label><input type="number" name="monto" class="form-control" step="0.01" required></div><div class="col-md-2"><label class="form-label">Tipo</label><select name="tipo_pago" class="form-select"><option value="efectivo">Efectivo</option><option value="transferencia">Transferencia</option></select></div><div class="col-md-3"><label class="form-label">Concepto</label><input type="text" name="concepto" class="form-control" placeholder="Ej: Pago mensualidad"></div><div class="col-12"><button type="submit" class="btn btn-success">✅ Registrar Pago</button></div></form></div></div>
