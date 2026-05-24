@@ -903,19 +903,20 @@ def api_crear_encargado():
 # ========== ADMINISTRACIÓN DE COSTOS ==========
 @app.route('/admin/costos')
 @login_required
-@socio_admin_required
+@socio_admin_required  # ← CAMBIADO
 def admin_costos():
     costos = supabase.table('costos_config').select('*').order('tipo').order('concepto').execute()
     return render_template('admin_costos.html', costos=costos.data or [])
 
 @app.route('/api/costos/crear', methods=['POST'])
 @login_required
-@socio_admin_required
+@socio_admin_required  # ← CAMBIADO
 def api_crear_costo():
     data = request.get_json()
     try:
         concepto = data['concepto'].strip()
-        concepto = concepto[0].upper() + concepto[1:].lower() if len(concepto) > 0 else concepto
+        # Formato oración: primera mayúscula, resto minúsculas
+        concepto = ' '.join([w[0].upper() + w[1:].lower() if len(w) > 1 else w.upper() for w in concepto.split()])
         
         supabase.table('costos_config').insert({
             'concepto': concepto,
@@ -931,12 +932,13 @@ def api_crear_costo():
 
 @app.route('/api/costos/<int:id>/editar', methods=['POST'])
 @login_required
-@socio_admin_required
+@socio_admin_required  # ← CAMBIADO
 def api_editar_costo(id):
     data = request.get_json()
     try:
         concepto = data['concepto'].strip()
-        concepto = concepto[0].upper() + concepto[1:].lower() if len(concepto) > 0 else concepto
+        # Formato oración: primera mayúscula, resto minúsculas
+        concepto = ' '.join([w[0].upper() + w[1:].lower() if len(w) > 1 else w.upper() for w in concepto.split()])
         
         supabase.table('costos_config').update({
             'concepto': concepto,
@@ -952,7 +954,7 @@ def api_editar_costo(id):
 
 @app.route('/api/costos/<int:id>/toggle', methods=['POST'])
 @login_required
-@socio_admin_required
+@socio_admin_required  # ← CAMBIADO
 def api_toggle_costo(id):
     costo = supabase.table('costos_config').select('activo').eq('id', id).execute()
     if costo.data:
