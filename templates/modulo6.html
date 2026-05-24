@@ -2,269 +2,62 @@
 {% block title %}Reuniones - Atlas{% endblock %}
 
 {% block content %}
-<h3>📋 Módulo 6: Programar Reuniones</h3>
+<style>
+    .card-premium { border-radius: 20px; border: none; box-shadow: 0 4px 20px rgba(0,0,0,0.06); background: white; margin-bottom: 20px; overflow: hidden; }
+    .card-header-grad { padding: 14px 20px; color: white; font-weight: 700; font-size: 15px; }
+    .grad-dark { background: linear-gradient(135deg, #263238, #111); }
+    .grad-info { background: linear-gradient(135deg, #00acc1, #006064); }
+    .form-control-premium { border-radius: 10px; border: 2px solid #e0e0e0; padding: 10px 14px; font-size: 13px; }
+    .form-select-premium { border-radius: 10px; border: 2px solid #e0e0e0; padding: 10px 14px; font-size: 13px; }
+    .btn-premium { border-radius: 12px; font-weight: 600; font-size: 13px; padding: 10px 20px; }
+    .table-premium { border-radius: 12px; overflow: hidden; border: none; margin: 0; }
+    .table-premium thead th { background: #1a1a2e; color: white; font-weight: 600; font-size: 11px; letter-spacing: 0.5px; border: none; padding: 10px 12px; text-transform: uppercase; }
+    .table-premium tbody td { padding: 8px 12px; vertical-align: middle; font-size: 12px; border-bottom: 1px solid #f0f0f0; }
+    .table-premium tbody tr:hover { background: #f8f9ff; }
+</style>
+
+<h3 style="font-weight: 800; color: #1a1a2e;">📋 Módulo 6: Reuniones</h3>
 
 <div class="row">
-    <div class="col-md-5 mb-4">
-        <div class="card shadow">
-            <div class="card-header bg-dark text-white"><strong id="formTitulo">Nueva Reunión</strong></div>
+    <div class="col-lg-5 mb-4">
+        <div class="card-premium">
+            <div class="card-header-grad grad-dark" id="formTitulo">Nueva Reunión</div>
             <div class="card-body">
                 <form method="POST" id="formReunion">
                     <input type="hidden" name="edit_id" id="edit_id" value="">
-                    
-                    <!-- Título -->
-                    <div class="mb-2">
-                        <label class="form-label">Título *</label>
-                        <select name="titulo" id="titulo" class="form-select text-uppercase" required onchange="tituloOtro(this)">
-                            <option value="">Seleccionar...</option>
-                            <option value="REUNIÓN">REUNIÓN</option>
-                            <option value="WEBINAR">WEBINAR</option>
-                            <option value="ASISTENCIA">ASISTENCIA</option>
-                            <option value="otro">➕ OTRO</option>
-                        </select>
-                        <input type="text" id="tituloOtro" name="titulo_otro" class="form-control text-uppercase mt-1" style="display:none;" placeholder="Escribe el nuevo título">
-                    </div>
-                    
-                    <!-- Tema -->
-                    <div class="mb-2">
-                        <label class="form-label">Tema *</label>
-                        <input type="text" name="tema" id="tema" class="form-control" list="listaTemas" autocomplete="off" oninput="aprender('temas',this.value)" placeholder="¿De qué trata?">
-                        <datalist id="listaTemas"></datalist>
-                    </div>
-                    
-                    <!-- Fecha -->
-                    <div class="mb-2">
-                        <label class="form-label">Fecha *</label>
-                        <input type="date" name="fecha" id="fecha" class="form-control" value="{{ today }}" required>
-                    </div>
-                    
-                    <!-- Horas -->
-                    <div class="row">
-                        <div class="col-6 mb-2">
-                            <label class="form-label">Inicio *</label>
-                            <input type="time" name="hora_inicio" id="hora_inicio" class="form-control" required>
-                        </div>
-                        <div class="col-6 mb-2">
-                            <label class="form-label">Fin *</label>
-                            <input type="time" name="hora_fin" id="hora_fin" class="form-control" required>
-                        </div>
-                    </div>
-                    
-                    <!-- Asistentes -->
-                    <div class="mb-2">
-                        <label class="form-label">Asistentes *</label>
-                        <input type="text" name="asistentes" id="asistentes" class="form-control" required list="listaAsistentes" autocomplete="off" placeholder="Nombres (separados por coma)" oninput="aprender('asistentes',this.value)">
-                        <datalist id="listaAsistentes"></datalist>
-                    </div>
-                    
-                    <!-- Encargado con lista de Supabase + opción de crear -->
-                    <div class="mb-2">
-                        <label class="form-label">Encargado *</label>
-                        <div class="input-group">
-                            <input type="text" name="encargado" id="encargado" class="form-control text-uppercase" required list="listaEncargados" autocomplete="off" placeholder="Selecciona o escribe un nuevo encargado">
-                            <datalist id="listaEncargados"></datalist>
-                            <button type="button" class="btn btn-outline-success" onclick="crearNuevoEncargado()" title="Guardar nuevo encargado">➕</button>
-                        </div>
-                        <small class="text-muted">Escribe un nombre nuevo y presiona ➕ para guardarlo</small>
-                    </div>
-                    
-                    <button type="submit" class="btn btn-dark w-100" id="btnSubmit">✅ Programar Reunión</button>
-                    <button type="button" class="btn btn-secondary w-100 mt-1 d-none" id="btnCancelar" onclick="cancelarEdicion()">❌ Cancelar Edición</button>
+                    <div class="mb-2"><label class="form-label fw-bold" style="font-size:11px;">TÍTULO</label><select name="titulo" id="titulo" class="form-select form-select-premium" onchange="tituloOtro(this)"><option value="">Seleccionar...</option><option value="REUNIÓN">REUNIÓN</option><option value="WEBINAR">WEBINAR</option><option value="ASISTENCIA">ASISTENCIA</option><option value="otro">➕ OTRO</option></select><input type="text" id="tituloOtro" name="titulo_otro" class="form-control form-control-premium mt-1" style="display:none;" placeholder="Nuevo título"></div>
+                    <div class="mb-2"><label class="form-label fw-bold" style="font-size:11px;">TEMA</label><input type="text" name="tema" class="form-control form-control-premium" placeholder="¿De qué trata?"></div>
+                    <div class="mb-2"><label class="form-label fw-bold" style="font-size:11px;">FECHA</label><input type="date" name="fecha" class="form-control form-control-premium" value="{{ today }}"></div>
+                    <div class="row"><div class="col-6"><label class="form-label fw-bold" style="font-size:11px;">INICIO</label><input type="time" name="hora_inicio" class="form-control form-control-premium"></div><div class="col-6"><label class="form-label fw-bold" style="font-size:11px;">FIN</label><input type="time" name="hora_fin" class="form-control form-control-premium"></div></div>
+                    <div class="mb-2 mt-2"><label class="form-label fw-bold" style="font-size:11px;">ASISTENTES</label><input type="text" name="asistentes" class="form-control form-control-premium" placeholder="Nombres separados por coma"></div>
+                    <div class="mb-2"><label class="form-label fw-bold" style="font-size:11px;">ENCARGADO</label><input type="text" name="encargado" class="form-control form-control-premium" list="listaEncargados" placeholder="Escribe o selecciona"><datalist id="listaEncargados"></datalist></div>
+                    <button type="submit" class="btn btn-dark btn-premium w-100" id="btnSubmit">✅ Programar</button>
+                    <button type="button" class="btn btn-secondary btn-premium w-100 mt-1 d-none" id="btnCancelar" onclick="cancelarEdicion()">❌ Cancelar</button>
                 </form>
-                {% if current_user.rol in ['admin','socio'] %}
-                <button type="button" class="btn btn-outline-primary btn-sm w-100 mt-2" onclick="sincronizarTodasReuniones()">🔄 Sincronizar Reuniones con Google Calendar</button>
-                {% endif %}
             </div>
         </div>
     </div>
-    
-    <div class="col-md-7">
-        <div class="card shadow">
-            <div class="card-header bg-info text-white"><strong>Reuniones Programadas</strong></div>
-            <div class="card-body">
+    <div class="col-lg-7">
+        <div class="card-premium">
+            <div class="card-header-grad grad-info">Reuniones Programadas</div>
+            <div class="card-body p-0">
                 {% if reuniones %}
-                <div class="table-responsive">
-                    <table class="table table-striped table-sm">
-                        <thead>
-                            <tr>
-                                <th>Fecha</th><th>Hora</th><th>Título</th><th>Tema</th><th>Asistentes</th><th>Enc</th><th>📅</th><th>✏️</th><th>🗑️</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for r in reuniones %}
-                            <tr id="fila-{{ r['id'] }}">
-                                <td>{{ r['fecha'] }}</td>
-                                <td>{{ r['hora_inicio'] }} - {{ r['hora_fin'] }}</td>
-                                <td>{{ r['titulo'] }}</td>
-                                <td>{{ r.get('tema','')[:20] }}</td>
-                                <td>{{ r.get('asistentes','')[:20] }}</td>
-                                <td>{{ r['encargado'] }}</td>
-                                <td>
-                                    {% if r.get('evento_calendario_id') %}
-                                        <span class="badge bg-success">📅</span>
-                                    {% else %}
-                                        <button class="btn btn-outline-success btn-sm" onclick="sincronizarReunion({{ r['id'] }})">🔄</button>
-                                    {% endif %}
-                                </td>
-                                <td><button class="btn btn-warning btn-sm" onclick="editarReunion({{ r['id'] }},'{{ r['titulo']|escape }}','{{ r.get('tema','')|escape }}','{{ r['fecha'] }}','{{ r['hora_inicio'] }}','{{ r['hora_fin'] }}','{{ r.get('asistentes','')|escape }}','{{ r['encargado']|escape }}')">✏️</button></td>
-                                <td><button class="btn btn-danger btn-sm" onclick="eliminarReunion({{ r['id'] }})">🗑️</button></td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% else %}
-                <p class="text-muted">No hay reuniones programadas.</p>
-                {% endif %}
+                <div class="table-responsive"><table class="table table-premium mb-0"><thead><tr><th>Fecha</th><th>Hora</th><th>Título</th><th>Tema</th><th>Asistentes</th><th>Enc</th><th>✏️</th><th>🗑️</th></tr></thead><tbody>
+                {% for r in reuniones %}<tr id="fila-{{ r['id'] }}"><td>{{ r['fecha'] }}</td><td>{{ r['hora_inicio'] }} - {{ r['hora_fin'] }}</td><td>{{ r['titulo'] }}</td><td>{{ r.get('tema','')[:15] }}</td><td>{{ r.get('asistentes','')[:15] }}</td><td>{{ r['encargado'] }}</td>
+                <td><button class="btn btn-warning btn-sm" style="border-radius:8px;" onclick="editarReunion({{ r['id'] }},'{{ r['titulo']|escape }}','{{ r.get('tema','')|escape }}','{{ r['fecha'] }}','{{ r['hora_inicio'] }}','{{ r['hora_fin'] }}','{{ r.get('asistentes','')|escape }}','{{ r['encargado']|escape }}')">✏️</button></td>
+                <td><button class="btn btn-danger btn-sm" style="border-radius:8px;" onclick="eliminarReunion({{ r['id'] }})">🗑️</button></td></tr>{% endfor %}</tbody></table></div>
+                {% else %}<div class="text-center py-4 text-muted">No hay reuniones programadas</div>{% endif %}
             </div>
         </div>
     </div>
-</div>
-
-<div class="mt-4 d-flex flex-wrap justify-content-between">
-    <a href="/modulo1" class="btn btn-outline-primary mb-1">M1</a>
-    <a href="/modulo2" class="btn btn-outline-success mb-1">M2</a>
-    <a href="/modulo3" class="btn btn-outline-info mb-1">M3</a>
-    <a href="/modulo4" class="btn btn-outline-warning mb-1">M4</a>
-    <a href="/modulo5" class="btn btn-outline-secondary mb-1">M5</a>
 </div>
 
 <script>
-async function cargarEncargados() {
-    try {
-        const response = await fetch('/api/encargados');
-        const encargados = await response.json();
-        const datalist = document.getElementById('listaEncargados');
-        datalist.innerHTML = encargados.map(n => `<option value="${n}">`).join('');
-    } catch (e) {
-        console.error('Error cargando encargados:', e);
-    }
-}
-
-async function crearNuevoEncargado() {
-    const input = document.getElementById('encargado');
-    const nombre = input.value.trim().toUpperCase();
-    
-    if (!nombre || nombre.length < 2) {
-        alert('⚠️ Escribe un nombre válido para el encargado');
-        return;
-    }
-    
-    const options = document.querySelectorAll('#listaEncargados option');
-    for (let opt of options) {
-        if (opt.value === nombre) {
-            alert('ℹ️ Este encargado ya existe en la lista');
-            return;
-        }
-    }
-    
-    try {
-        const response = await fetch('/api/encargados/crear', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({nombre: nombre})
-        });
-        const result = await response.json();
-        
-        if (result.success) {
-            alert('✅ Encargado "' + nombre + '" guardado correctamente');
-            cargarEncargados();
-        } else {
-            alert('❌ Error: ' + (result.error || 'No se pudo guardar'));
-        }
-    } catch (e) {
-        alert('❌ Error de conexión');
-    }
-}
-
-const DB_KEY='atlas_reuniones_db';
-let db=JSON.parse(localStorage.getItem(DB_KEY)||'{"titulos":["REUNIÓN","WEBINAR","ASISTENCIA"],"asistentes":[],"temas":[]}');
-
-function cargarSugerencias(){
-    ['temas','asistentes'].forEach(t=>{
-        const c=t.charAt(0).toUpperCase()+t.slice(1);
-        const dl=document.getElementById('lista'+c);
-        if(dl)dl.innerHTML=[...new Set(db[t])].map(v=>`<option value="${v}">`).join('');
-    });
-}
-
-function aprender(t,v){
-    if(v&&v.length>=2&&!db[t].includes(v.toUpperCase())){
-        db[t].push(v.toUpperCase());
-        if(db[t].length>30)db[t].shift();
-        localStorage.setItem(DB_KEY,JSON.stringify(db));
-        cargarSugerencias();
-    }
-}
-
-function tituloOtro(s){
-    const i=document.getElementById('tituloOtro');
-    i.style.display=s.value==='otro'?'block':'none';
-    if(s.value==='otro'){
-        i.required=true;
-        s.name='titulo_temp';
-        i.name='titulo';
-    }else{
-        i.required=false;
-        s.name='titulo';
-        i.name='titulo_temp';
-    }
-}
-
-function editarReunion(id,tit,tema,fecha,hI,hF,asis,enc){
-    document.getElementById('edit_id').value=id;
-    document.getElementById('titulo').value=tit;
-    document.getElementById('tema').value=tema;
-    document.getElementById('fecha').value=fecha;
-    document.getElementById('hora_inicio').value=hI;
-    document.getElementById('hora_fin').value=hF;
-    document.getElementById('asistentes').value=asis;
-    document.getElementById('encargado').value=enc;
-    document.getElementById('formTitulo').textContent='✏️ Editar Reunión';
-    document.getElementById('btnSubmit').textContent='💾 Guardar Cambios';
-    document.getElementById('btnCancelar').classList.remove('d-none');
-    document.querySelector('.card-header').scrollIntoView({behavior:'smooth'});
-}
-
-function cancelarEdicion(){
-    document.getElementById('edit_id').value='';
-    document.getElementById('formReunion').reset();
-    document.getElementById('fecha').value='{{ today }}';
-    document.getElementById('formTitulo').textContent='Nueva Reunión';
-    document.getElementById('btnSubmit').textContent='✅ Programar Reunión';
-    document.getElementById('btnCancelar').classList.add('d-none');
-}
-
-async function eliminarReunion(id){
-    if(!confirm('¿Eliminar?'))return;
-    const r=await fetch('/api/reunion/'+id+'/eliminar',{method:'POST',headers:{'Content-Type':'application/json'}});
-    if((await r.json()).success)document.getElementById('fila-'+id)?.remove();
-}
-
-async function sincronizarReunion(id){
-    if(!confirm('¿Sincronizar esta reunión con Google Calendar?'))return;
-    const r=await fetch('/api/reunion/'+id+'/sincronizar',{method:'POST',headers:{'Content-Type':'application/json'}});
-    const d=await r.json();
-    alert(d.success?'✅ Sincronizada':'❌ '+(d.error||''));
-    location.reload();
-}
-
-async function sincronizarTodasReuniones(){
-    if(!confirm('¿Sincronizar TODAS las reuniones?'))return;
-    const btns=document.querySelectorAll('button[onclick^="sincronizarReunion("]');
-    let ok=0;
-    for(let b of btns){
-        const id=b.getAttribute('onclick').match(/\d+/)[0];
-        try{
-            const r=await fetch('/api/reunion/'+id+'/sincronizar',{method:'POST',headers:{'Content-Type':'application/json'}});
-            if((await r.json()).success)ok++;
-        }catch(e){}
-    }
-    alert('✅ '+ok+' reuniones sincronizadas');
-    location.reload();
-}
-
+async function cargarEncargados(){try{const r=await fetch('/api/encargados');const e=await r.json();document.getElementById('listaEncargados').innerHTML=e.map(n=>`<option value="${n}">`).join('')}catch(e){}}
+function tituloOtro(s){const i=document.getElementById('tituloOtro');i.style.display=s.value==='otro'?'block':'none';if(s.value==='otro'){i.required=true;s.name='titulo_temp';i.name='titulo'}else{i.required=false;s.name='titulo';i.name='titulo_temp'}}
+function editarReunion(id,tit,tema,fecha,hI,hF,asis,enc){document.getElementById('edit_id').value=id;document.getElementById('titulo').value=tit;document.getElementsByName('tema')[0].value=tema;document.getElementsByName('fecha')[0].value=fecha;document.getElementsByName('hora_inicio')[0].value=hI;document.getElementsByName('hora_fin')[0].value=hF;document.getElementsByName('asistentes')[0].value=asis;document.getElementsByName('encargado')[0].value=enc;document.getElementById('formTitulo').textContent='✏️ Editar Reunión';document.getElementById('btnSubmit').textContent='💾 Guardar Cambios';document.getElementById('btnCancelar').classList.remove('d-none')}
+function cancelarEdicion(){document.getElementById('edit_id').value='';document.getElementById('formReunion').reset();document.getElementById('formTitulo').textContent='Nueva Reunión';document.getElementById('btnSubmit').textContent='✅ Programar';document.getElementById('btnCancelar').classList.add('d-none')}
+async function eliminarReunion(id){if(!confirm('¿Eliminar?'))return;await fetch('/api/reunion/'+id+'/eliminar',{method:'POST'});document.getElementById('fila-'+id)?.remove()}
 cargarEncargados();
-cargarSugerencias();
 </script>
 {% endblock %}
