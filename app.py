@@ -1335,7 +1335,22 @@ def gestion_gastos():
     anio = int(request.args.get('anio', date.today().year))
     gastos = supabase.table('gastos').select('*').eq('mes', mes).eq('anio', anio).order('fecha', desc=True).execute()
     total = sum(g.get('monto', 0) or 0 for g in (gastos.data or []))
-    return render_template('gastos.html', gastos=gastos.data or [], total=total, mes=mes, anio=anio, today=date.today())
+        # Calcular total de pagos a docentes del mes para mostrarlo en el formulario
+    sesiones_mes = supabase.table('sesiones').select('*').in_('estado', ['Realizado', 'Cancelado-Pagado']).gte('fecha', f"{anio}-{mes:02d}-01").lte('fecha', f"{anio}-{mes:02d}-31").execute()
+    total_pago_docentes_mes = 0
+    for s in (sesiones_mes.data or []):
+        tipo = s.get('tipo_sesion', 'clase')
+        horas = s.get('horas', 0) or 0
+        valor = s.get('valor_total', 0) or 0
+        estado = s.get('estado', '')
+        if estado == 'Cancelado-Pagado':
+            total_pago_docentes_mes += s.get('valor_pagar_docente', 0) or 0
+        elif tipo in ['clase', 'preuniversitario']:
+            total_pago_docentes_mes += horas * PAGO_DOCENCIA_POR_HORA
+        else:
+            total_pago_docentes_mes += valor * PORCENTAJE_PSICOLOGIA
+    
+    return render_template('gastos.html', gastos=gastos.data or [], total=total, mes=mes, anio=anio, today=date.today(), total_pago_docentes_mes=total_pago_docentes_mes)
 
 @app.route('/api/gasto/<int:id>/eliminar', methods=['POST'])
 @login_required

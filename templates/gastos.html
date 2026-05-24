@@ -27,7 +27,10 @@
                         <label class="form-label">Categoría</label>
                         <select name="categoria" class="form-select">
                             <option value="">Seleccionar...</option>
-                            <option value="Servicios">Servicios (luz, agua, internet)</option>
+                            <option value="Arriendo">Arriendo</option>
+                            <option value="Telefonía móvil">Telefonía móvil</option>
+                            <option value="Servicios básicos">Servicios básicos (luz, agua)</option>
+                            <option value="Internet">Internet</option>
                             <option value="Materiales">Materiales didácticos</option>
                             <option value="Transporte">Transporte</option>
                             <option value="Alimentación">Alimentación</option>
@@ -37,9 +40,7 @@
                     </div>
                     <div class="mb-2">
                         <label class="form-label">Persona que realiza el gasto *</label>
-                        <input type="text" name="persona" class="form-control" required 
-                               list="listaPersonas" autocomplete="off"
-                               placeholder="Nombre de quien pagó">
+                        <input type="text" name="persona" class="form-control" required list="listaPersonas" autocomplete="off" placeholder="Nombre de quien pagó">
                         <datalist id="listaPersonas"></datalist>
                     </div>
                     <div class="mb-2 form-check">
@@ -48,11 +49,35 @@
                     </div>
                     <div class="mb-2" id="divReembolsado" style="display:none;">
                         <label class="form-label">Reembolsar a *</label>
-                        <input type="text" name="reembolsado_a" class="form-control" 
-                               list="listaPersonas" autocomplete="off"
-                               placeholder="Persona a quien se le debe devolver">
+                        <input type="text" name="reembolsado_a" class="form-control" list="listaPersonas" autocomplete="off" placeholder="Persona a quien se le debe devolver">
                     </div>
                     <button type="submit" class="btn btn-danger w-100">✅ Registrar Gasto</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- REGISTRO DE FECHA DE PAGO A DOCENTES (INFORMATIVO) -->
+        <div class="card shadow mt-3">
+            <div class="card-header bg-primary text-white"><strong>📅 Fecha de Pago a Docentes/Psicólogos</strong></div>
+            <div class="card-body">
+                <p class="small text-muted">Registre la fecha en que realizó el pago a docentes y psicólogos desde la cuenta bancaria.</p>
+                <form method="POST" action="{{ url_for('gestion_gastos') }}">
+                    <input type="hidden" name="concepto" value="Pago a docentes/psicólogos">
+                    <input type="hidden" name="categoria" value="Pago docentes">
+                    <div class="mb-2">
+                        <label class="form-label">Fecha de pago *</label>
+                        <input type="date" name="fecha" class="form-control" value="{{ today }}" required>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Monto total pagado *</label>
+                        <input type="number" name="monto" class="form-control" step="0.01" required placeholder="0.00" id="monto_pago_docentes">
+                        <small class="text-muted">Total a pagar este mes según módulo 5: <strong>${{ "%.2f"|format(total_pago_docentes_mes or 0) }}</strong></small>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Persona que realizó el pago *</label>
+                        <input type="text" name="persona" class="form-control" required value="{{ current_user.nombre }}" list="listaPersonas" autocomplete="off">
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">📅 Registrar Fecha de Pago</button>
                 </form>
             </div>
         </div>
@@ -133,9 +158,9 @@
             </div>
         </div>
         
-        <!-- RESUMEN DE REEMBOLSOS PENDIENTES -->
+        <!-- REEMBOLSOS PENDIENTES -->
         <div class="card shadow mt-3">
-            <div class="card-header bg-warning text-dark"><strong>🔄 Reembolsos Pendientes del Mes</strong></div>
+            <div class="card-header bg-warning text-dark"><strong>🔄 Reembolsos Pendientes</strong></div>
             <div class="card-body">
                 {% set reembolsos = gastos|selectattr('reembolso', 'equalto', True)|list %}
                 {% if reembolsos %}
@@ -152,10 +177,7 @@
                         {% endfor %}
                     </tbody>
                     <tfoot>
-                        <tr class="fw-bold">
-                            <td colspan="2">Total reembolsos</td>
-                            <td colspan="2">${{ "%.2f"|format(reembolsos|sum(attribute='monto')) }}</td>
-                        </tr>
+                        <tr class="fw-bold"><td colspan="2">Total</td><td colspan="2">${{ "%.2f"|format(reembolsos|sum(attribute='monto')) }}</td></tr>
                     </tfoot>
                 </table>
                 {% else %}
@@ -168,8 +190,7 @@
 
 <script>
 function toggleReembolso() {
-    document.getElementById('divReembolsado').style.display = 
-        document.getElementById('reembolso').checked ? 'block' : 'none';
+    document.getElementById('divReembolsado').style.display = document.getElementById('reembolso').checked ? 'block' : 'none';
 }
 
 async function eliminarGasto(id) {
@@ -178,12 +199,14 @@ async function eliminarGasto(id) {
     location.reload();
 }
 
-// Cargar sugerencias de personas
 const personas = new Set();
 {% for g in gastos %}
     {% if g.get('persona') %}personas.add('{{ g['persona'] }}');{% endif %}
     {% if g.get('reembolsado_a') %}personas.add('{{ g['reembolsado_a'] }}');{% endif %}
 {% endfor %}
 document.getElementById('listaPersonas').innerHTML = [...personas].map(p => `<option value="${p}">`).join('');
+
+// Auto-completar monto de pago a docentes
+document.getElementById('monto_pago_docentes').value = '{{ "%.2f"|format(total_pago_docentes_mes or 0) }}';
 </script>
 {% endblock %}
