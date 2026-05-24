@@ -46,7 +46,6 @@
     </div>
 </div>
 
-<!-- Resumen de la sesión seleccionada -->
 <div id="resumenSeleccion" style="display:none;">
     <div class="card shadow mb-4">
         <div class="card-header bg-success text-white">
@@ -58,7 +57,6 @@
     </div>
 </div>
 
-<!-- Formulario de edición -->
 <div id="formEdicion" style="display:none;">
     <div class="card shadow mb-4">
         <div class="card-header bg-warning text-dark">
@@ -79,15 +77,20 @@
             
             <div class="mb-2">
                 <label class="form-label">Asignatura/Terapia</label>
-                <input type="text" id="asignatura" class="form-control">
+                <input type="text" id="asignatura" class="form-control" list="listaAsignaturasMasiva" autocomplete="off" placeholder="Escribe o selecciona una asignatura">
+                <datalist id="listaAsignaturasMasiva">
+                    {% for a in asignaturas %}
+                    <option value="{{ a }}">{{ a }}</option>
+                    {% endfor %}
+                </datalist>
             </div>
             
             <div class="mb-2" id="div_atencion_masiva" style="display:none;">
                 <label class="form-label">Atención Psicológica *</label>
-                <select id="atencion_psicologica" class="form-select">
+                <select id="atencion_psicologica" class="form-select" onchange="calcularValorMasivo()">
                     <option value="">Seleccionar tipo de atención...</option>
                     {% for item in atencion_psicologica %}
-                    <option value="{{ item.nombre }}">{{ item.nombre }} (${{ "%.2f"|format(item.precio) }})</option>
+                    <option value="{{ item.nombre }}" data-precio="{{ item.precio }}">{{ item.nombre }} (${{ "%.2f"|format(item.precio) }})</option>
                     {% endfor %}
                 </select>
                 <small class="text-danger" id="error_atencion_masiva" style="display:none;">❌ Debe seleccionar un tipo de atención psicológica (costo)</small>
@@ -95,12 +98,22 @@
             
             <div class="mb-2">
                 <label class="form-label">Profesor/Terapeuta *</label>
-                <input type="text" id="profesor" class="form-control" required>
+                <input type="text" id="profesor" class="form-control" required list="listaProfesoresMasiva" autocomplete="off" placeholder="Escribe o selecciona un profesor">
+                <datalist id="listaProfesoresMasiva">
+                    {% for p in profesores %}
+                    <option value="{{ p }}">{{ p }}</option>
+                    {% endfor %}
+                </datalist>
             </div>
             
             <div class="mb-2">
                 <label class="form-label">Encargado Apertura *</label>
-                <input type="text" id="encargado" class="form-control" required>
+                <input type="text" id="encargado" class="form-control" required list="listaEncargadosMasiva" autocomplete="off" placeholder="Escribe o selecciona un encargado">
+                <datalist id="listaEncargadosMasiva">
+                    {% for e in encargados %}
+                    <option value="{{ e }}">{{ e }}</option>
+                    {% endfor %}
+                </datalist>
             </div>
             
             <div class="row">
@@ -110,23 +123,30 @@
                 </div>
                 <div class="col-md-4 mb-2">
                     <label class="form-label">Hora inicio *</label>
-                    <input type="time" id="hora_inicio" class="form-control" required>
+                    <input type="time" id="hora_inicio" class="form-control" required onchange="calcularValorMasivo()">
                 </div>
                 <div class="col-md-4 mb-2">
                     <label class="form-label">Hora fin *</label>
-                    <input type="time" id="hora_fin" class="form-control" required>
+                    <input type="time" id="hora_fin" class="form-control" required onchange="calcularValorMasivo()">
                 </div>
             </div>
             
             <div class="row">
                 <div class="col-md-6 mb-2" id="div_precio_masivo">
                     <label class="form-label">💵 Precio por hora *</label>
-                    <input type="number" id="precio_hora" class="form-control" step="0.01" min="0.01">
+                    <input type="number" id="precio_hora" class="form-control" step="0.01" min="0.01" list="listaPreciosMasiva" autocomplete="off" placeholder="0.00" onchange="calcularValorMasivo()" oninput="calcularValorMasivo()">
+                    <datalist id="listaPreciosMasiva">
+                        {% for p in precios_clase %}
+                        <option value="{{ p }}">${{ "%.2f"|format(p) }}</option>
+                        {% endfor %}
+                    </datalist>
                     <small class="text-danger" id="error_precio_masivo" style="display:none;">❌ El precio por hora no puede ser 0 o estar vacío</small>
                 </div>
                 <div class="col-md-6 mb-2">
                     <label class="form-label">💰 Valor total *</label>
-                    <input type="number" id="valor_total" class="form-control" step="0.01" required>
+                    <input type="number" id="valor_total" class="form-control" step="0.01" required oninput="verificarValorMasivo()">
+                    <small id="info_valor_masivo" class="text-muted"></small>
+                    <small id="error_valor_masivo" class="text-danger" style="display:none;">⚠️ El valor total no coincide con el cálculo automático. Revíselo.</small>
                 </div>
             </div>
             
@@ -155,8 +175,71 @@
     </div>
 </div>
 
+<style>
+    .input-error { border: 2px solid #dc3545 !important; background-color: #fff5f5 !important; }
+    .input-warning { border: 2px solid #ffc107 !important; background-color: #fffdf5 !important; }
+</style>
+
 <script>
 let sesionOriginal = null;
+let valorCalculadoMasivo = 0;
+
+function calcularHorasMasivo() {
+    const hIni = document.getElementById('hora_inicio').value;
+    const hFin = document.getElementById('hora_fin').value;
+    if (!hIni || !hFin) return 0;
+    const [h1, m1] = hIni.split(':').map(Number);
+    const [h2, m2] = hFin.split(':').map(Number);
+    let horas = (h2 + m2/60) - (h1 + m1/60);
+    if (horas < 0) horas += 24;
+    return Math.round(horas * 100) / 100;
+}
+
+function calcularValorMasivo() {
+    const tipo = document.getElementById('tipoSesion').value;
+    const esTerapia = tipo === 'terapia' || tipo === 'ambos';
+    const horas = calcularHorasMasivo();
+    
+    if (esTerapia) {
+        const select = document.getElementById('atencion_psicologica');
+        const option = select.options[select.selectedIndex];
+        const precio = option ? parseFloat(option.getAttribute('data-precio')) || 0 : 0;
+        valorCalculadoMasivo = precio;
+        document.getElementById('precio_hora').value = precio;
+    } else {
+        const precioHora = parseFloat(document.getElementById('precio_hora').value) || 0;
+        valorCalculadoMasivo = Math.round((horas * precioHora) * 100) / 100;
+    }
+    
+    document.getElementById('valor_total').value = valorCalculadoMasivo;
+    document.getElementById('info_valor_masivo').innerText = horas > 0 ? `(Horas: ${horas} × Precio: $${document.getElementById('precio_hora').value || 0})` : '';
+    
+    verificarValorMasivo();
+}
+
+function verificarValorMasivo() {
+    const valorActual = parseFloat(document.getElementById('valor_total').value) || 0;
+    const errorValor = document.getElementById('error_valor_masivo');
+    const inputValor = document.getElementById('valor_total');
+    const infoValor = document.getElementById('info_valor_masivo');
+    
+    if (valorCalculadoMasivo > 0 && Math.abs(valorActual - valorCalculadoMasivo) > 0.01) {
+        errorValor.style.display = 'block';
+        inputValor.classList.add('input-warning');
+        infoValor.innerText = `⚠️ Valor calculado: $${valorCalculadoMasivo.toFixed(2)} | Valor ingresado: $${valorActual.toFixed(2)}`;
+    } else if (valorActual === 0 && valorCalculadoMasivo > 0) {
+        errorValor.style.display = 'block';
+        inputValor.classList.add('input-error');
+        errorValor.innerText = '❌ El valor total no puede ser 0. Se ha calculado automáticamente.';
+        document.getElementById('valor_total').value = valorCalculadoMasivo;
+    } else {
+        errorValor.style.display = 'none';
+        inputValor.classList.remove('input-warning', 'input-error');
+        if (valorCalculadoMasivo > 0) {
+            infoValor.innerText = `✅ Valor correcto: $${valorCalculadoMasivo.toFixed(2)} (${calcularHorasMasivo()} horas)`;
+        }
+    }
+}
 
 function cambioTipoMasivo() {
     const tipo = document.getElementById('tipoSesion').value;
@@ -165,9 +248,12 @@ function cambioTipoMasivo() {
     
     if (tipo === 'terapia' || tipo === 'ambos') {
         divPsicologia.style.display = 'block';
+        divPrecio.style.display = 'none';
     } else {
         divPsicologia.style.display = 'none';
+        divPrecio.style.display = 'block';
     }
+    calcularValorMasivo();
 }
 
 document.getElementById('selectEstudiante').addEventListener('change', async function() {
@@ -250,20 +336,20 @@ async function seleccionarSesionDeLista(id) {
         document.getElementById('hora_inicio').value = (sesionOriginal.hora_inicio || '').substring(0, 5);
         document.getElementById('hora_fin').value = (sesionOriginal.hora_fin || '').substring(0, 5);
         document.getElementById('precio_hora').value = sesionOriginal.precio_hora || 10;
-        document.getElementById('valor_total').value = sesionOriginal.valor_total || 0;
-        document.getElementById('estado').value = sesionOriginal.estado || 'Planificado';
-        document.getElementById('observaciones').value = sesionOriginal.observaciones || '';
         document.getElementById('atencion_psicologica').value = sesionOriginal.tema_terapia || '';
         
         cambioTipoMasivo();
+        calcularValorMasivo();
+        
+        document.getElementById('valor_total').value = sesionOriginal.valor_total || valorCalculadoMasivo;
+        verificarValorMasivo();
         
         document.getElementById('error_atencion_masiva').style.display = 'none';
         document.getElementById('error_precio_masivo').style.display = 'none';
+        document.getElementById('error_valor_masivo').style.display = 'none';
         
         const selectSesion = document.getElementById('selectSesion');
-        if (selectSesion) {
-            selectSesion.value = id;
-        }
+        if (selectSesion) selectSesion.value = id;
         
         document.getElementById('formEdicion').style.display = 'block';
         document.getElementById('formEdicion').scrollIntoView({behavior: 'smooth'});
@@ -274,37 +360,41 @@ async function seleccionarSesionDeLista(id) {
 
 async function cargarSesion() {
     const sesionId = document.getElementById('selectSesion').value;
-    if (!sesionId) {
-        alert('❌ Selecciona una sesión');
-        return;
-    }
+    if (!sesionId) { alert('❌ Selecciona una sesión'); return; }
     await seleccionarSesionDeLista(parseInt(sesionId));
 }
 
 async function guardarEdicionMasiva() {
-    if (!sesionOriginal) {
-        alert('❌ No hay sesión seleccionada');
-        return;
-    }
+    if (!sesionOriginal) { alert('❌ No hay sesión seleccionada'); return; }
     
     const tipo = document.getElementById('tipoSesion').value;
     const esTerapia = tipo === 'terapia' || tipo === 'ambos';
     
-    // Validar costo obligatorio
     if (esTerapia) {
         const atencion = document.getElementById('atencion_psicologica').value;
         if (!atencion || atencion === '') {
             document.getElementById('error_atencion_masiva').style.display = 'block';
-            alert('❌ Debe seleccionar un tipo de atención psicológica (costo). No puede quedar vacío.');
+            alert('❌ Debe seleccionar un tipo de atención psicológica (costo).');
             return;
         }
     } else {
         const precioHora = parseFloat(document.getElementById('precio_hora').value) || 0;
         if (!precioHora || precioHora <= 0) {
             document.getElementById('error_precio_masivo').style.display = 'block';
-            alert('❌ El precio por hora no puede ser 0 o estar vacío. Debe seleccionar un costo.');
+            alert('❌ El precio por hora no puede ser 0 o estar vacío.');
             return;
         }
+    }
+    
+    const valorTotal = parseFloat(document.getElementById('valor_total').value) || 0;
+    if (valorTotal <= 0) {
+        alert('❌ El valor total no puede ser 0.');
+        document.getElementById('valor_total').value = valorCalculadoMasivo;
+        return;
+    }
+    
+    if (valorCalculadoMasivo > 0 && Math.abs(valorTotal - valorCalculadoMasivo) > 0.01) {
+        if (!confirm('⚠️ El valor total no coincide con el cálculo automático.\n\n¿Desea guardar de todas formas?')) return;
     }
     
     const nuevos = {
@@ -316,7 +406,7 @@ async function guardarEdicionMasiva() {
         profesor: document.getElementById('profesor').value,
         encargado: document.getElementById('encargado').value,
         precio_hora: parseFloat(document.getElementById('precio_hora').value) || 0,
-        valor_total: parseFloat(document.getElementById('valor_total').value) || 0,
+        valor_total: valorTotal,
         estado: document.getElementById('estado').value,
         observaciones: document.getElementById('observaciones').value
     };
@@ -324,57 +414,32 @@ async function guardarEdicionMasiva() {
     const responsable = document.getElementById('responsable').value;
     
     if (!nuevos.fecha || !nuevos.hora_inicio || !nuevos.hora_fin) {
-        alert('❌ Fecha y hora son obligatorios');
-        return;
+        alert('❌ Fecha y hora son obligatorios'); return;
     }
-    
     if (nuevos.hora_fin <= nuevos.hora_inicio) {
-        alert('❌ ERROR: La hora de fin debe ser mayor que la hora de inicio.');
-        return;
+        alert('❌ ERROR: La hora de fin debe ser mayor que la hora de inicio.'); return;
     }
     
-    if (nuevos.valor_total < 0) {
-        alert('❌ ERROR: El valor total no puede ser negativo.');
-        return;
-    }
-    
-    let resumen = '📋 CONFIRMAR CAMBIOS\n\n';
-    resumen += `👤 Responsable: ${responsable}\n`;
-    resumen += `📅 Fecha: ${nuevos.fecha}\n`;
-    resumen += `🕐 Horario: ${nuevos.hora_inicio} - ${nuevos.hora_fin}\n`;
-    resumen += `👨‍🏫 Profesor: ${nuevos.profesor}\n`;
-    resumen += `🔑 Encargado: ${nuevos.encargado}\n`;
-    resumen += `💰 Valor: $${nuevos.valor_total.toFixed(2)}\n`;
-    resumen += `\n⚠️ ¿Estás seguro de aplicar estos cambios?`;
-    
-    if (!confirm(resumen)) return;
+    if (!confirm('⚠️ ¿Estás seguro de aplicar estos cambios?')) return;
     
     const data = {
-        fecha: nuevos.fecha,
-        hora_inicio: nuevos.hora_inicio,
-        hora_fin: nuevos.hora_fin,
-        tipo_sesion: nuevos.tipo_sesion,
-        estudiante_id: sesionOriginal.estudiante_id,
+        fecha: nuevos.fecha, hora_inicio: nuevos.hora_inicio, hora_fin: nuevos.hora_fin,
+        tipo_sesion: nuevos.tipo_sesion, estudiante_id: sesionOriginal.estudiante_id,
         asignatura: nuevos.asignatura,
         tema_terapia: esTerapia ? document.getElementById('atencion_psicologica').value : '',
-        profesor_terapeuta: nuevos.profesor,
-        encargado_apertura: nuevos.encargado,
-        estado: nuevos.estado,
-        observaciones: nuevos.observaciones,
-        valor_total: nuevos.valor_total,
-        precio_hora: nuevos.precio_hora,
+        profesor_terapeuta: nuevos.profesor, encargado_apertura: nuevos.encargado,
+        estado: nuevos.estado, observaciones: nuevos.observaciones,
+        valor_total: nuevos.valor_total, precio_hora: nuevos.precio_hora,
         responsable: responsable
     };
     
     try {
         const response = await fetch('/api/sesion/' + sesionOriginal.id + '/editar', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(data)
+            method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)
         });
         const result = await response.json();
         if (result.success) {
-            alert('✅ Sesión actualizada correctamente!\n👤 Responsable: ' + responsable);
+            alert('✅ Sesión actualizada correctamente!');
             location.reload();
         } else {
             alert('❌ Error: ' + (result.error || 'Desconocido'));
