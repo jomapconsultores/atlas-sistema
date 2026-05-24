@@ -1286,7 +1286,6 @@ def reportes():
     observaciones = supabase.table('sesiones').select('*, estudiantes(apellidos, nombres)').not_.is_('observaciones', 'null').order('fecha', desc=True).limit(30).execute()
     nuevos_usuarios = supabase.table('usuarios').select('*').gte('fecha_registro', f"{anio}-{mes:02d}-01").lte('fecha_registro', f"{anio}-{mes:02d}-31").execute()
 
-    # DATOS PARA REPORTE DE GÉNERO
     estudiantes_hombres = 0
     estudiantes_mujeres = 0
     horas_por_estudiante = {}
@@ -1307,7 +1306,6 @@ def reportes():
         horas_por_estudiante[nombre_est] = horas_est
         cobrar_por_estudiante[nombre_est] = cobrar_est
     
-    # DATOS PARA REPORTE DE ASIGNATURAS CON VALORES
     asignaturas_valores = {}
     asignaturas_estudiantes = {}
     for e in (estudiantes.data or []):
@@ -1357,38 +1355,8 @@ def reportes():
                          correcciones=correcciones.data or [], observaciones=observaciones.data or [],
                          nuevos_usuarios=nuevos_usuarios.data or [], total_planificado=0)
 
-    
-    # ========== TOTALES DE PAGOS DOCENTES PARA PORCENTAJES ==========
-    total_pago_docentes_general = total_docencia + total_psicologia
 
-            return render_template('reportes.html',
-                         datos_estudiantes=datos_estudiantes, total_estudiantes=len(datos_estudiantes),
-                         total_horas_estudiantes=total_horas_estudiantes,
-                         total_cobrar_estudiantes=total_cobrar_estudiantes,
-                         total_pagado_estudiantes=total_pagado_estudiantes,
-                         total_por_pagar_estudiantes=total_cobrar_estudiantes - total_pagado_estudiantes,
-                         total_ingresos=total_ingresos,
-                         total_gastos=total_gastos, balance=balance,
-                         gastos=gastos_mes.data or [], mes=mes, anio=anio,
-                         ingresos_por_tipo=ingresos_por_tipo, gastos_por_categoria=gastos_por_categoria,
-                         horas_por_materia=horas_por_materia, asignaturas_detalle=asignaturas_detalle,
-                         cumplimiento=cumplimiento,
-                         pagos_por_docente=pagos_por_docente, total_pago_docentes=total_pago_docentes,
-                         total_docencia=total_docencia, total_psicologia=total_psicologia,
-                         total_pago_docentes_general=total_pago_docentes_general,
-                         total_atlas=total_atlas,
-                         planificado_clases=planificado_clases,
-                         planificado_psicologia=planificado_psicologia,
-                         ejecutado_clases=total_facturado_clases,
-                         ejecutado_psicologia=total_facturado_psicologia,
-                         estudiantes_hombres=estudiantes_hombres,
-                         estudiantes_mujeres=estudiantes_mujeres,
-                         horas_por_estudiante=horas_por_estudiante,
-                         cobrar_por_estudiante=cobrar_por_estudiante,
-                         asignaturas_valores=asignaturas_valores,
-                         asignaturas_estudiantes=asignaturas_estudiantes,
-                         correcciones=correcciones.data or [], observaciones=observaciones.data or [],
-                         nuevos_usuarios=nuevos_usuarios.data or [], total_planificado=0)
+# ========== GASTOS ==========
 
 
 # ========== GASTOS ==========
