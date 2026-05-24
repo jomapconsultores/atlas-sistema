@@ -7,7 +7,7 @@
 <form class="row g-2 mb-4"><div class="col-auto"><select name="mes" class="form-select" onchange="this.form.submit()">{% for m in range(1,13) %}<option value="{{ m }}" {{ 'selected' if m==mes }}>{{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][m-1] }}</option>{% endfor %}</select></div><div class="col-auto"><select name="anio" class="form-select" onchange="this.form.submit()">{% for a in range(2025,2031) %}<option value="{{ a }}" {{ 'selected' if a==anio }}>{{ a }}</option>{% endfor %}</select></div></form>
 
 <!-- Tarjetas -->
-<div class="row mb-4"><div class="col-md-3"><div class="card bg-primary text-white text-center p-2"><h5>{{ total_estudiantes }}</h5><small>Estudiantes</small></div></div><div class="col-md-3"><div class="card bg-success text-white text-center p-2"><h5>{{ total_horas_estudiantes }}</h5><small>Horas Efectivas</small></div></div><div class="col-md-3"><div class="card bg-info text-white text-center p-2"><h5>${{ "%.0f"|format(total_ingresos) }}</h5><small>Ingresos</small></div></div><div class="col-md-3"><div class="card bg-{{ 'success' if balance>=0 else 'danger' }} text-white text-center p-2"><h5>${{ "%.0f"|format(balance) }}</h5><small>Resultado Neto</small></div></div></div>
+<div class="row mb-4"><div class="col-md-3"><div class="card bg-primary text-white text-center p-2"><h5>{{ total_estudiantes }}</h5><small>Estudiantes</small></div></div><div class="col-md-3"><div class="card bg-success text-white text-center p-2"><h5>{{ total_horas_estudiantes }}</h5><small>Horas Efectivas</small></div></div><div class="col-md-3"><div class="card bg-info text-white text-center p-2"><h5>${{ "%.0f"|format(total_ingresos) }}</h5><small>Ingresos Recaudados</small></div></div><div class="col-md-3"><div class="card bg-{{ 'success' if balance>=0 else 'danger' }} text-white text-center p-2"><h5>${{ "%.0f"|format(balance) }}</h5><small>Resultado Neto</small></div></div></div>
 
 <!-- ========== BALANCE DE RESULTADOS ========== -->
 <div class="card shadow mb-4"><div class="card-header bg-dark text-white"><strong>💰 Balance de Resultados - {{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][mes-1] }} {{ anio }}</strong></div><div class="card-body p-2">
@@ -15,16 +15,21 @@
 <thead><tr class="table-dark"><th>Concepto</th><th class="text-end">Planificado</th><th class="text-end">%</th><th class="text-end">Ejecutado</th><th class="text-end">%</th></tr></thead>
 <tbody>
 
-<!-- INGRESOS -->
+<!-- INGRESOS PLANIFICADOS (sin restar cuentas por cobrar) -->
 <tr class="table-success"><td colspan="5"><strong>➕ INGRESOS TOTALES</strong></td></tr>
-{% set ing_clases = ingresos_por_tipo.get('clase',0)+ingresos_por_tipo.get('preuniversitario',0) %}
-{% set ing_psico = ingresos_por_tipo.get('terapia',0)+ingresos_por_tipo.get('ambos',0) %}
-{% set ing_totales = total_ingresos %}
-<tr><td>📚 Ingresos Clases</td><td class="text-end">${{ "%.2f"|format(total_cobrar_estudiantes) }}</td><td class="text-end">{{ (total_cobrar_estudiantes/total_cobrar_estudiantes*100)|round(1) if total_cobrar_estudiantes>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(ing_clases) }}</td><td class="text-end">{{ (ing_clases/ing_totales*100)|round(1) if ing_totales>0 else 0 }}%</td></tr>
-<tr><td>🧠 Ingresos Psicología</td><td class="text-end">-</td><td class="text-end">-</td><td class="text-end">${{ "%.2f"|format(ing_psico) }}</td><td class="text-end">{{ (ing_psico/ing_totales*100)|round(1) if ing_totales>0 else 0 }}%</td></tr>
-<tr class="table-success"><td><strong>Total Ingresos</strong></td><td class="text-end"><strong>${{ "%.2f"|format(total_cobrar_estudiantes) }}</strong></td><td class="text-end"><strong>100%</strong></td><td class="text-end"><strong>${{ "%.2f"|format(ing_totales) }}</strong></td><td class="text-end"><strong>100%</strong></td></tr>
+{% set ing_clases_plan = total_cobrar_estudiantes %}
+{% set ing_psico_plan = namespace(v=0) %}
+{% for t,v in ingresos_por_tipo.items() %}{% if t in ['terapia','ambos'] %}{% set ing_psico_plan.v = ing_psico_plan.v + v %}{% endif %}{% endfor %}
+{% set ing_clases_ejec = ingresos_por_tipo.get('clase',0)+ingresos_por_tipo.get('preuniversitario',0) %}
+{% set ing_psico_ejec = ingresos_por_tipo.get('terapia',0)+ingresos_por_tipo.get('ambos',0) %}
+{% set ing_totales_plan = total_cobrar_estudiantes %}
+{% set ing_totales_ejec = total_ingresos %}
 
-<!-- GASTOS -->
+<tr><td>📚 Ingresos Clases</td><td class="text-end">${{ "%.2f"|format(ing_clases_plan) }}</td><td class="text-end">{{ (ing_clases_plan/ing_totales_plan*100)|round(1) if ing_totales_plan>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(ing_clases_ejec) }}</td><td class="text-end">{{ (ing_clases_ejec/ing_totales_ejec*100)|round(1) if ing_totales_ejec>0 else 0 }}%</td></tr>
+<tr><td>🧠 Ingresos Psicología</td><td class="text-end">${{ "%.2f"|format(ing_psico_plan.v) }}</td><td class="text-end">{{ (ing_psico_plan.v/ing_totales_plan*100)|round(1) if ing_totales_plan>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(ing_psico_ejec) }}</td><td class="text-end">{{ (ing_psico_ejec/ing_totales_ejec*100)|round(1) if ing_totales_ejec>0 else 0 }}%</td></tr>
+<tr class="table-success"><td><strong>Total Ingresos</strong></td><td class="text-end"><strong>${{ "%.2f"|format(ing_totales_plan) }}</strong></td><td class="text-end"><strong>100%</strong></td><td class="text-end"><strong>${{ "%.2f"|format(ing_totales_ejec) }}</strong></td><td class="text-end"><strong>100%</strong></td></tr>
+
+<!-- GASTOS (totales registrados) -->
 <tr class="table-danger"><td colspan="5"><strong>➖ GASTOS TOTALES</strong></td></tr>
 {% set g_arriendo = namespace(v=0) %}{% set g_telefonia = namespace(v=0) %}{% set g_servicios = namespace(v=0) %}{% set g_internet = namespace(v=0) %}{% set g_otros = namespace(v=0) %}
 {% for g in gastos %}
@@ -35,22 +40,26 @@
 {% elif 'internet' in cat %}{% set g_internet.v = g_internet.v + g.monto %}
 {% else %}{% set g_otros.v = g_otros.v + g.monto %}
 {% endif %}{% endfor %}
-<tr><td>🏠 Arriendo</td><td class="text-end">${{ "%.2f"|format(g_arriendo.v) }}</td><td class="text-end">{{ (g_arriendo.v/ing_totales*100)|round(1) if ing_totales>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(g_arriendo.v) }}</td><td class="text-end">{{ (g_arriendo.v/ing_totales*100)|round(1) if ing_totales>0 else 0 }}%</td></tr>
-<tr><td>📱 Telefonía Móvil</td><td class="text-end">${{ "%.2f"|format(g_telefonia.v) }}</td><td class="text-end">{{ (g_telefonia.v/ing_totales*100)|round(1) if ing_totales>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(g_telefonia.v) }}</td><td class="text-end">{{ (g_telefonia.v/ing_totales*100)|round(1) if ing_totales>0 else 0 }}%</td></tr>
-<tr><td>💡 Servicios Básicos</td><td class="text-end">${{ "%.2f"|format(g_servicios.v) }}</td><td class="text-end">{{ (g_servicios.v/ing_totales*100)|round(1) if ing_totales>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(g_servicios.v) }}</td><td class="text-end">{{ (g_servicios.v/ing_totales*100)|round(1) if ing_totales>0 else 0 }}%</td></tr>
-<tr><td>🌐 Internet</td><td class="text-end">${{ "%.2f"|format(g_internet.v) }}</td><td class="text-end">{{ (g_internet.v/ing_totales*100)|round(1) if ing_totales>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(g_internet.v) }}</td><td class="text-end">{{ (g_internet.v/ing_totales*100)|round(1) if ing_totales>0 else 0 }}%</td></tr>
-<tr><td>📦 Otros Gastos</td><td class="text-end">${{ "%.2f"|format(g_otros.v) }}</td><td class="text-end">{{ (g_otros.v/ing_totales*100)|round(1) if ing_totales>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(g_otros.v) }}</td><td class="text-end">{{ (g_otros.v/ing_totales*100)|round(1) if ing_totales>0 else 0 }}%</td></tr>
-<tr><td>👨‍🏫 Pago a Docentes</td><td class="text-end">${{ "%.2f"|format(total_docencia) }}</td><td class="text-end">{{ (total_docencia/ing_totales*100)|round(1) if ing_totales>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(total_docencia) }}</td><td class="text-end">{{ (total_docencia/ing_totales*100)|round(1) if ing_totales>0 else 0 }}%</td></tr>
-<tr><td>🧠 Pago a Psicólogos</td><td class="text-end">${{ "%.2f"|format(total_psicologia) }}</td><td class="text-end">{{ (total_psicologia/ing_totales*100)|round(1) if ing_totales>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(total_psicologia) }}</td><td class="text-end">{{ (total_psicologia/ing_totales*100)|round(1) if ing_totales>0 else 0 }}%</td></tr>
-{% set gt = g_arriendo.v+g_telefonia.v+g_servicios.v+g_internet.v+g_otros.v+total_docencia+total_psicologia %}
-<tr class="table-danger"><td><strong>Total Gastos</strong></td><td class="text-end"><strong>${{ "%.2f"|format(gt) }}</strong></td><td class="text-end"><strong>{{ (gt/ing_totales*100)|round(1) if ing_totales>0 else 0 }}%</strong></td><td class="text-end"><strong>${{ "%.2f"|format(gt) }}</strong></td><td class="text-end"><strong>{{ (gt/ing_totales*100)|round(1) if ing_totales>0 else 0 }}%</strong></td></tr>
 
-<!-- RESULTADO -->
-<tr class="{{ 'table-success' if ing_totales-gt>=0 else 'table-danger' }}"><td><strong>= RESULTADO NETO</strong></td><td class="text-end"><strong>${{ "%.2f"|format(total_cobrar_estudiantes-gt) }}</strong></td><td class="text-end"></td><td class="text-end"><strong>${{ "%.2f"|format(ing_totales-gt) }}</strong></td><td class="text-end"></td></tr>
+<tr><td>🏠 Arriendo</td><td class="text-end">${{ "%.2f"|format(g_arriendo.v) }}</td><td class="text-end">{{ (g_arriendo.v/ing_totales_plan*100)|round(1) if ing_totales_plan>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(g_arriendo.v) }}</td><td class="text-end">{{ (g_arriendo.v/ing_totales_ejec*100)|round(1) if ing_totales_ejec>0 else 0 }}%</td></tr>
+<tr><td>📱 Telefonía Móvil</td><td class="text-end">${{ "%.2f"|format(g_telefonia.v) }}</td><td class="text-end">{{ (g_telefonia.v/ing_totales_plan*100)|round(1) if ing_totales_plan>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(g_telefonia.v) }}</td><td class="text-end">{{ (g_telefonia.v/ing_totales_ejec*100)|round(1) if ing_totales_ejec>0 else 0 }}%</td></tr>
+<tr><td>💡 Servicios Básicos</td><td class="text-end">${{ "%.2f"|format(g_servicios.v) }}</td><td class="text-end">{{ (g_servicios.v/ing_totales_plan*100)|round(1) if ing_totales_plan>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(g_servicios.v) }}</td><td class="text-end">{{ (g_servicios.v/ing_totales_ejec*100)|round(1) if ing_totales_ejec>0 else 0 }}%</td></tr>
+<tr><td>🌐 Internet</td><td class="text-end">${{ "%.2f"|format(g_internet.v) }}</td><td class="text-end">{{ (g_internet.v/ing_totales_plan*100)|round(1) if ing_totales_plan>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(g_internet.v) }}</td><td class="text-end">{{ (g_internet.v/ing_totales_ejec*100)|round(1) if ing_totales_ejec>0 else 0 }}%</td></tr>
+<tr><td>📦 Otros Gastos</td><td class="text-end">${{ "%.2f"|format(g_otros.v) }}</td><td class="text-end">{{ (g_otros.v/ing_totales_plan*100)|round(1) if ing_totales_plan>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(g_otros.v) }}</td><td class="text-end">{{ (g_otros.v/ing_totales_ejec*100)|round(1) if ing_totales_ejec>0 else 0 }}%</td></tr>
+
+<!-- Pagos a docentes y psicólogos (iguales en ambas columnas) -->
+<tr><td>👨‍🏫 Pago a Docentes</td><td class="text-end">${{ "%.2f"|format(total_docencia) }}</td><td class="text-end">{{ (total_docencia/ing_totales_plan*100)|round(1) if ing_totales_plan>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(total_docencia) }}</td><td class="text-end">{{ (total_docencia/ing_totales_ejec*100)|round(1) if ing_totales_ejec>0 else 0 }}%</td></tr>
+<tr><td>🧠 Pago a Psicólogos</td><td class="text-end">${{ "%.2f"|format(total_psicologia) }}</td><td class="text-end">{{ (total_psicologia/ing_totales_plan*100)|round(1) if ing_totales_plan>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(total_psicologia) }}</td><td class="text-end">{{ (total_psicologia/ing_totales_ejec*100)|round(1) if ing_totales_ejec>0 else 0 }}%</td></tr>
+
+{% set gt = g_arriendo.v+g_telefonia.v+g_servicios.v+g_internet.v+g_otros.v+total_docencia+total_psicologia %}
+<tr class="table-danger"><td><strong>Total Gastos</strong></td><td class="text-end"><strong>${{ "%.2f"|format(gt) }}</strong></td><td class="text-end"><strong>{{ (gt/ing_totales_plan*100)|round(1) if ing_totales_plan>0 else 0 }}%</strong></td><td class="text-end"><strong>${{ "%.2f"|format(gt) }}</strong></td><td class="text-end"><strong>{{ (gt/ing_totales_ejec*100)|round(1) if ing_totales_ejec>0 else 0 }}%</strong></td></tr>
+
+<!-- RESULTADO NETO -->
+<tr class="{{ 'table-success' if ing_totales_ejec-gt>=0 else 'table-danger' }}"><td><strong>= RESULTADO NETO</strong></td><td class="text-end"><strong>${{ "%.2f"|format(ing_totales_plan-gt) }}</strong></td><td class="text-end"></td><td class="text-end"><strong>${{ "%.2f"|format(ing_totales_ejec-gt) }}</strong></td><td class="text-end"></td></tr>
 </tbody></table></div></div></div>
 
 <!-- Pagos a Docentes -->
-<div class="card shadow mb-4"><div class="card-header bg-secondary text-white"><strong>💲 Pagos a Docentes</strong></div><div class="card-body"><div class="table-responsive"><table class="table table-sm"><thead><tr class="table-dark"><th>Profesional</th><th class="text-end">$ Docencia</th><th class="text-end">$ Psicología</th><th class="text-end">$ Total</th></tr></thead><tbody>{% for n,d in pagos_por_docente.items() %}<tr><td><strong>{{ n }}</strong></td><td class="text-end">${{ "%.2f"|format(d.pago_docencia) }}</td><td class="text-end">${{ "%.2f"|format(d.pago_psicologia) }}</td><td class="text-end fw-bold">${{ "%.2f"|format(d.total_pagar) }}</td></tr>{% endfor %}</tbody></table></div></div></div>
+<div class="card shadow mb-4"><div class="card-header bg-secondary text-white"><strong>💲 Pagos a Docentes y Psicólogos</strong></div><div class="card-body"><div class="table-responsive"><table class="table table-sm"><thead><tr class="table-dark"><th>Profesional</th><th class="text-end">$ Docencia</th><th class="text-end">$ Psicología</th><th class="text-end">$ Total</th></tr></thead><tbody>{% for n,d in pagos_por_docente.items() %}<tr><td><strong>{{ n }}</strong></td><td class="text-end">${{ "%.2f"|format(d.pago_docencia) }}</td><td class="text-end">${{ "%.2f"|format(d.pago_psicologia) }}</td><td class="text-end fw-bold">${{ "%.2f"|format(d.total_pagar) }}</td></tr>{% endfor %}</tbody></table></div></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
