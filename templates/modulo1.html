@@ -6,16 +6,15 @@
     .card-premium { border-radius: 20px; border: none; box-shadow: 0 4px 20px rgba(0,0,0,0.06); background: white; margin-bottom: 20px; overflow: hidden; }
     .card-header-grad { padding: 14px 20px; color: white; font-weight: 700; font-size: 15px; }
     .grad-blue { background: linear-gradient(135deg, #1a73e8, #0d47a1); }
-    .grad-dark { background: linear-gradient(135deg, #263238, #111); }
+    .grad-purple { background: linear-gradient(135deg, #7b1fa2, #4a148c); }
     .form-control-premium { border-radius: 10px; border: 2px solid #e0e0e0; padding: 10px 14px; font-size: 13px; transition: all 0.2s; }
     .form-control-premium:focus { border-color: #1a73e8; box-shadow: 0 0 0 3px rgba(26,115,232,0.1); }
     .form-select-premium { border-radius: 10px; border: 2px solid #e0e0e0; padding: 10px 14px; font-size: 13px; }
-    .btn-premium { border-radius: 12px; font-weight: 600; font-size: 13px; padding: 10px 20px; transition: all 0.2s; }
-    .btn-primary-premium { background: linear-gradient(135deg, #1a73e8, #0d47a1); color: white; border: none; }
+    .btn-premium { border-radius: 12px; font-weight: 600; font-size: 13px; padding: 10px 20px; transition: all 0.2s; border: none; }
+    .btn-primary-premium { background: linear-gradient(135deg, #1a73e8, #0d47a1); color: white; }
     .btn-primary-premium:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(26,115,232,0.3); color: white; }
-    .sesion-row { background: #f8f9fa; border-radius: 12px; padding: 15px; margin-bottom: 10px; border: 1px solid #e8e8e8; transition: all 0.2s; }
+    .sesion-row { background: #f8f9fa; border-radius: 14px; padding: 16px; margin-bottom: 10px; border: 1px solid #e8e8e8; transition: all 0.2s; }
     .sesion-row:hover { border-color: #1a73e8; box-shadow: 0 2px 8px rgba(26,115,232,0.08); }
-    .section-title { font-size: 16px; font-weight: 700; color: #1a1a2e; margin-bottom: 15px; }
 </style>
 
 <h3 style="font-weight: 800; color: #1a1a2e;">📋 Módulo 1: Planificación</h3>
@@ -43,30 +42,35 @@
                     <label class="form-label fw-bold" style="font-size: 12px;">NÚMERO DE ESTUDIANTES</label>
                     <input type="number" name="num_estudiantes" class="form-control form-control-premium" value="1" min="1" id="num_estudiantes" onchange="generarSesiones()">
                 </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="card-premium" id="cardPsicologia" style="display:none;">
-        <div class="card-header-grad" style="background: linear-gradient(135deg, #7b1fa2, #4a148c);">🧠 Atención Psicológica</div>
-        <div class="card-body">
-            <div class="row g-3">
                 <div class="col-md-6">
-                    <label class="form-label fw-bold" style="font-size: 12px;">TIPO DE ATENCIÓN *</label>
-                    <select name="atencion_psicologica" class="form-select form-select-premium">
-                        <option value="">Seleccionar...</option>
-                        {% for item in atencion_psicologica %}
-                        <option value="{{ item.nombre }}">{{ item.nombre }} (${{ "%.2f"|format(item.precio) }})</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-6" id="divAsignaturaPsico" style="display:none;">
                     <label class="form-label fw-bold" style="font-size: 12px;">ASIGNATURA</label>
                     <select name="asignatura" class="form-select form-select-premium">
                         <option value="">Seleccionar...</option>
                         {% for a in asignaturas %}<option value="{{ a }}">{{ a }}</option>{% endfor %}
                     </select>
                 </div>
+                <div class="col-md-6" id="divPrecioHora">
+                    <label class="form-label fw-bold" style="font-size: 12px;">PRECIO POR HORA *</label>
+                    <select name="precio_hora" class="form-select form-select-premium">
+                        <option value="">Seleccionar...</option>
+                        {% for p in precios_clase %}<option value="{{ p }}">${{ "%.2f"|format(p) }}</option>{% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card-premium" id="cardPsicologia" style="display:none;">
+        <div class="card-header-grad grad-purple">🧠 Atención Psicológica</div>
+        <div class="card-body">
+            <div class="mb-3">
+                <label class="form-label fw-bold" style="font-size: 12px;">TIPO DE ATENCIÓN *</label>
+                <select name="atencion_psicologica" class="form-select form-select-premium">
+                    <option value="">Seleccionar...</option>
+                    {% for item in atencion_psicologica %}
+                    <option value="{{ item.nombre }}">{{ item.nombre }} (${{ "%.2f"|format(item.precio) }})</option>
+                    {% endfor %}
+                </select>
             </div>
         </div>
     </div>
@@ -80,7 +84,7 @@
 function cambioTipo() {
     const tipo = document.querySelector('[name="tipo_sesion"]').value;
     document.getElementById('cardPsicologia').style.display = (tipo === 'terapia' || tipo === 'ambos') ? 'block' : 'none';
-    document.getElementById('divAsignaturaPsico').style.display = (tipo === 'ambos') ? 'block' : 'none';
+    document.getElementById('divPrecioHora').style.display = (tipo === 'terapia' || tipo === 'ambos') ? 'none' : 'block';
 }
 
 function generarSesiones() {

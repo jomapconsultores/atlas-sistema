@@ -55,8 +55,8 @@
                         <td class="text-end text-success">${{ "%.2f"|format(e.pagado) }}</td>
                         <td class="text-end {% if e.saldo > 0 %}text-danger fw-bold{% else %}text-success{% endif %}">${{ "%.2f"|format(e.saldo) }}</td>
                         <td>
-                            <button class="btn btn-info btn-premium" onclick="toggleDetalle({{ e.id }})">📋</button>
-                            <button class="btn btn-outline-success btn-premium" onclick="pagarEstudiante({{ e.id }},'{{ e.nombre|escape }}',{{ e.saldo }})">💵</button>
+                            <button class="btn btn-info btn-premium" onclick="toggleDetalle({{ e.id }})">📋 Detalle</button>
+                            <button class="btn btn-outline-success btn-premium" onclick="pagarEstudiante({{ e.id }},'{{ e.nombre|escape }}',{{ e.saldo }})">💵 Pagar</button>
                         </td>
                     </tr>{% endfor %}
                 </tbody>
@@ -73,19 +73,21 @@
         <div class="detalle-card" id="detalle-{{ e.id }}" style="display:none;">
             <div class="detalle-header" onclick="toggleBody(this)">👨‍🎓 {{ e.nombre }} <span class="badge bg-primary badge-premium">{{ e.sesiones|length }} sesiones</span></div>
             <div class="detalle-body">
+                <h6 class="text-muted mb-2">📚 Sesiones a Cobrar (Realizadas + Cancelado-Pagado)</h6>
                 <table class="table table-sm table-bordered mb-2"><thead class="table-light"><tr><th>Fecha</th><th>Asignatura</th><th>Tipo</th><th class="text-center">Horas</th><th class="text-end">V.Hora</th><th class="text-end">V.Total</th><th>Estado</th></tr></thead><tbody>
                 {% set th=namespace(v=0) %}{% set tv=namespace(v=0) %}
                 {% for s in e.sesiones %}{% if s.estado in ['Realizado','Cancelado-Pagado'] %}{% set th.v=th.v+(s.horas or 0) %}{% set tv.v=tv.v+(s.valor_total or 0) %}
                 <tr><td>{{ s.fecha }}</td><td>{{ s.asignatura or s.tema_terapia or '-' }}</td><td><span class="badge badge-premium bg-{{ 'primary' if s.tipo_sesion=='clase' else 'success' if s.tipo_sesion=='terapia' else 'warning' }}">{{ s.tipo_sesion }}</span></td><td class="text-center">{{ s.horas }}</td><td class="text-end">${{ "%.2f"|format(s.precio_hora or 0) }}</td><td class="text-end fw-bold">${{ "%.2f"|format(s.valor_total or 0) }}</td><td><span class="badge badge-premium bg-{{ 'success' if s.estado=='Realizado' else 'info' }}">{{ s.estado }}</span></td></tr>
                 {% endif %}{% endfor %}</tbody><tfoot class="table-secondary"><tr><td colspan="3"><strong>TOTAL</strong></td><td class="text-center"><strong>{{ th.v }}</strong></td><td></td><td class="text-end"><strong>${{ "%.2f"|format(tv.v) }}</strong></td><td></td></tr></tfoot></table>
                 
+                <h6 class="text-muted mt-3">💵 Historial de Pagos</h6>
                 <table class="table table-sm table-bordered mb-2"><thead class="table-light"><tr><th>Fecha Pago</th><th>Tipo</th><th>Concepto</th><th class="text-end">Monto</th></tr></thead><tbody>
                 {% set tpa=namespace(v=0) %}{% for p in e.pagos %}{% set tpa.v=tpa.v+(p.monto or 0) %}
                 <tr><td>{{ p.fecha_pago }}</td><td>{{ p.tipo_pago or '-' }}</td><td>{{ p.concepto or '-' }}</td><td class="text-end text-success">${{ "%.2f"|format(p.monto or 0) }}</td></tr>
                 {% endfor %}</tbody><tfoot class="table-secondary"><tr><td colspan="3"><strong>Total Pagado</strong></td><td class="text-end"><strong>${{ "%.2f"|format(tpa.v) }}</strong></td></tr></tfoot></table>
                 
                 <div class="alert alert-{{ 'danger' if e.saldo > 0 else 'success' }} mb-0" style="border-radius: 10px; font-size: 13px;">
-                    <strong>{% if e.saldo > 0 %}💸 SALDO A COBRAR: ${{ "%.2f"|format(e.saldo) }}{% else %}✅ AL DÍA{% endif %}</strong>
+                    <strong>{% if e.saldo > 0 %}💸 SALDO A COBRAR: ${{ "%.2f"|format(e.saldo) }}{% elif e.saldo < 0 %}✅ SALDO A FAVOR: ${{ "%.2f"|format(e.saldo|abs) }}{% else %}✅ CUENTA AL DÍA{% endif %}</strong>
                 </div>
             </div>
         </div>
