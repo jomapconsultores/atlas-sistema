@@ -1155,7 +1155,6 @@ def reportes():
     total_cobrar_estudiantes = 0
     total_pagado_estudiantes = 0
     
-    # Para el balance: planificado por tipo y ejecutado por tipo
     planificado_clases = 0
     planificado_psicologia = 0
     ejecutado_clases = 0
@@ -1174,19 +1173,16 @@ def reportes():
     total_gastos = 0
     
     for e in (estudiantes.data or []):
-        # USAR LA MISMA LÓGICA QUE MODULO 3
         ses = supabase.table('sesiones').select('*').eq('estudiante_id', e['id']).in_('estado', ['Realizado', 'Cancelado-Pagado']).execute()
         pag = supabase.table('pagos').select('*').eq('estudiante_id', e['id']).order('fecha_pago', desc=True).execute()
         
-        # Filtrar por mes
         ses_data = [s for s in (ses.data or []) if s.get('fecha', '') and s['fecha'][:7] == f"{anio}-{mes:02d}"]
         pag_data = [p for p in (pag.data or []) if p.get('fecha_pago', '') and p['fecha_pago'][:7] == f"{anio}-{mes:02d}"]
         
-        # Separar por estado y tipo
         ses_realizadas = [s for s in ses_data if s['estado'] == 'Realizado']
         ses_cancelado_pagado = [s for s in ses_data if s['estado'] == 'Cancelado-Pagado']
         
-        # Total a cobrar = Realizadas + Cancelado-Pagado (igual que modulo3)
+        # Total a cobrar (planificado) = Realizadas + Cancelado-Pagado
         cobrar = sum(s.get('valor_total', 0) or 0 for s in ses_data)
         pagado = sum(p.get('monto', 0) or 0 for p in pag_data)
         
@@ -1196,7 +1192,7 @@ def reportes():
         total_cobrar_estudiantes += cobrar
         total_pagado_estudiantes += pagado
         
-        # Planificado = lo que se debe cobrar (Realizadas + Canc-Pag) por tipo
+        # Planificado por tipo (lo que se debe cobrar)
         for s in ses_data:
             tipo = s.get('tipo_sesion', 'clase')
             valor = s.get('valor_total', 0) or 0
@@ -1205,7 +1201,7 @@ def reportes():
             else:
                 planificado_psicologia += valor
         
-        # Ejecutado = solo lo RECAUDADO (Realizado) por tipo
+        # Ejecutado por tipo (solo lo RECAUDADO = sesiones Realizado)
         for s in ses_realizadas:
             tipo = s.get('tipo_sesion', 'clase')
             valor = s.get('valor_total', 0) or 0
@@ -1215,7 +1211,7 @@ def reportes():
             else:
                 ejecutado_psicologia += valor
         
-        # Cálculo de pagos a docentes
+        # Pagos a docentes
         for s in ses_data:
             if s['estado'] in ['Realizado', 'Cancelado-Pagado']:
                 tipo = s.get('tipo_sesion', 'clase')
@@ -1252,7 +1248,6 @@ def reportes():
                 pagos_por_docente[prof]['pago_psicologia'] += pago_psicologia
                 pagos_por_docente[prof]['total_pagar'] += total_pagar
         
-        # Para cumplimiento y materias
         for s in ses_data:
             asig = s.get('asignatura') or s.get('tema_terapia') or 'Sin registro'
             horas_por_materia[asig] = horas_por_materia.get(asig, 0) + (s.get('horas', 0) or 0)
@@ -1269,7 +1264,9 @@ def reportes():
                 'cobrar': cobrar, 'pagado': pagado, 'saldo': cobrar - pagado
             })
     
-    total_ingresos = total_pagado_estudiantes
+    # IMPORTANTE: total_ingresos debe ser la suma de ejecutado_clases + ejecutado_psicologia
+    # que viene de las sesiones Realizado (lo facturado/recibido)
+    total_ingresos = ejecutado_clases + ejecutado_psicologia
     
     gastos_mes = supabase.table('gastos').select('*').eq('mes', mes).eq('anio', anio).execute()
     total_gastos = sum(g.get('monto', 0) or 0 for g in (gastos_mes.data or []))
@@ -1277,7 +1274,7 @@ def reportes():
         cat = g.get('categoria', 'Sin categoría')
         gastos_por_categoria[cat] = gastos_por_categoria.get(cat, 0) + (g.get('monto', 0) or 0)
     
-    balance = total_pagado_estudiantes - total_gastos - total_pago_docentes
+    balance = total_ingresos - total_gastos - total_pago_docentes
     
     correcciones = supabase.table('correcciones_pagos').select('*').order('fecha_correccion', desc=True).limit(30).execute()
     observaciones = supabase.table('sesiones').select('*, estudiantes(apellidos, nombres)').not_.is_('observaciones', 'null').order('fecha', desc=True).limit(30).execute()
