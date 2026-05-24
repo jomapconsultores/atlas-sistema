@@ -1157,7 +1157,6 @@ def reportes():
     
     planificado_clases = 0
     planificado_psicologia = 0
-    # Para ejecutado: acumulamos el proporcional de lo pagado por tipo
     total_facturado_clases = 0
     total_facturado_psicologia = 0
     total_facturado = 0
@@ -1184,9 +1183,7 @@ def reportes():
         ses_realizadas = [s for s in ses_data if s['estado'] == 'Realizado']
         ses_cancelado_pagado = [s for s in ses_data if s['estado'] == 'Cancelado-Pagado']
         
-        # Total a cobrar (planificado)
         cobrar = sum(s.get('valor_total', 0) or 0 for s in ses_data)
-        # Total pagado por el estudiante (EJECUTADO REAL)
         pagado = sum(p.get('monto', 0) or 0 for p in pag_data)
         
         horas_real = sum(s.get('horas', 0) or 0 for s in ses_realizadas)
@@ -1195,7 +1192,6 @@ def reportes():
         total_cobrar_estudiantes += cobrar
         total_pagado_estudiantes += pagado
         
-        # PLANIFICADO: separar por tipo lo que se debe cobrar
         cobrar_clases_est = 0
         cobrar_psico_est = 0
         for s in ses_data:
@@ -1208,7 +1204,6 @@ def reportes():
                 cobrar_psico_est += valor
                 planificado_psicologia += valor
         
-        # EJECUTADO: distribuir lo PAGADO proporcionalmente al tipo de sesión
         cobrar_total_est = cobrar_clases_est + cobrar_psico_est
         if cobrar_total_est > 0:
             proporcion_clases = cobrar_clases_est / cobrar_total_est
@@ -1223,11 +1218,9 @@ def reportes():
         total_facturado_psicologia += ejecutado_psico_est
         total_facturado += pagado
         
-        # ingresos_por_tipo para gráficos (usamos lo facturado)
         ingresos_por_tipo['clase'] = ingresos_por_tipo.get('clase', 0) + ejecutado_clases_est
         ingresos_por_tipo['terapia'] = ingresos_por_tipo.get('terapia', 0) + ejecutado_psico_est
         
-        # Pagos a docentes
         for s in ses_data:
             tipo = s.get('tipo_sesion', 'clase')
             valor = s.get('valor_total', 0) or 0
@@ -1279,7 +1272,6 @@ def reportes():
                 'cobrar': cobrar, 'pagado': pagado, 'saldo': cobrar - pagado
             })
     
-    # TOTAL INGRESOS = total_facturado (lo que realmente pagaron)
     total_ingresos = total_facturado
     
     gastos_mes = supabase.table('gastos').select('*').eq('mes', mes).eq('anio', anio).execute()
@@ -1294,9 +1286,30 @@ def reportes():
     observaciones = supabase.table('sesiones').select('*, estudiantes(apellidos, nombres)').not_.is_('observaciones', 'null').order('fecha', desc=True).limit(30).execute()
     nuevos_usuarios = supabase.table('usuarios').select('*').gte('fecha_registro', f"{anio}-{mes:02d}-01").lte('fecha_registro', f"{anio}-{mes:02d}-31").execute()
 
-    # ========== DATOS PARA REPORTE DE ASIGNATURAS CON VALORES ==========
+    # DATOS PARA REPORTE DE GÉNERO
+    estudiantes_hombres = 0
+    estudiantes_mujeres = 0
+    horas_por_estudiante = {}
+    cobrar_por_estudiante = {}
+    
+    for e in (estudiantes.data or []):
+        genero = (e.get('genero') or '').lower()
+        if genero in ['m', 'masculino', 'hombre']:
+            estudiantes_hombres += 1
+        elif genero in ['f', 'femenino', 'mujer']:
+            estudiantes_mujeres += 1
+        
+        nombre_est = f"{e['apellidos']} {e['nombres']}"
+        ses_est = supabase.table('sesiones').select('*').eq('estudiante_id', e['id']).in_('estado', ['Realizado', 'Cancelado-Pagado']).execute()
+        ses_est_data = [s for s in (ses_est.data or []) if s.get('fecha', '') and s['fecha'][:7] == f"{anio}-{mes:02d}"]
+        horas_est = sum(s.get('horas', 0) or 0 for s in ses_est_data)
+        cobrar_est = sum(s.get('valor_total', 0) or 0 for s in ses_est_data)
+        horas_por_estudiante[nombre_est] = horas_est
+        cobrar_por_estudiante[nombre_est] = cobrar_est
+    
+    # DATOS PARA REPORTE DE ASIGNATURAS CON VALORES
     asignaturas_valores = {}
-    asignaturas_estudiantes = {}  # Diccionario para guardar estudiantes por asignatura
+    asignaturas_estudiantes = {}
     for e in (estudiantes.data or []):
         nombre_est = f"{e['apellidos']} {e['nombres']}"
         ses_est = supabase.table('sesiones').select('*').eq('estudiante_id', e['id']).in_('estado', ['Realizado', 'Cancelado-Pagado']).execute()
@@ -1310,27 +1323,12 @@ def reportes():
             asignaturas_valores[asig]['valor'] += s.get('valor_total', 0) or 0
             asignaturas_estudiantes[asig].add(nombre_est)
     
-    # Convertir sets a conteo
     for asig in asignaturas_valores:
         asignaturas_valores[asig]['estudiantes'] = len(asignaturas_estudiantes.get(asig, set()))
     
-    # ========== DATOS PARA REPORTE DE ASIGNATURAS CON VALORES ==========
-    asignaturas_valores = {}
-    for e in (estudiantes.data or []):
-        ses_est = supabase.table('sesiones').select('*').eq('estudiante_id', e['id']).in_('estado', ['Realizado', 'Cancelado-Pagado']).execute()
-        ses_est_data = [s for s in (ses_est.data or []) if s.get('fecha', '') and s['fecha'][:7] == f"{anio}-{mes:02d}"]
-        for s in ses_est_data:
-            asig = s.get('asignatura') or s.get('tema_terapia') or 'Sin registro'
-            if asig not in asignaturas_valores:
-                asignaturas_valores[asig] = {'horas': 0, 'valor': 0, 'estudiantes': 0}
-            asignaturas_valores[asig]['horas'] += s.get('horas', 0) or 0
-            asignaturas_valores[asig]['valor'] += s.get('valor_total', 0) or 0
-            asignaturas_valores[asig]['estudiantes'] += 1
-    
-    # ========== TOTALES DE PAGOS DOCENTES PARA PORCENTAJES ==========
     total_pago_docentes_general = total_docencia + total_psicologia
 
-        return render_template('reportes.html',
+    return render_template('reportes.html',
                          datos_estudiantes=datos_estudiantes, total_estudiantes=len(datos_estudiantes),
                          total_horas_estudiantes=total_horas_estudiantes,
                          total_cobrar_estudiantes=total_cobrar_estudiantes,
@@ -1355,9 +1353,43 @@ def reportes():
                          horas_por_estudiante=horas_por_estudiante,
                          cobrar_por_estudiante=cobrar_por_estudiante,
                          asignaturas_valores=asignaturas_valores,
-                         asignaturas_estudiantes=asignaturas_estudiantes,  # <-- ESTA LÍNEA
+                         asignaturas_estudiantes=asignaturas_estudiantes,
                          correcciones=correcciones.data or [], observaciones=observaciones.data or [],
                          nuevos_usuarios=nuevos_usuarios.data or [], total_planificado=0)
+
+    
+    # ========== TOTALES DE PAGOS DOCENTES PARA PORCENTAJES ==========
+    total_pago_docentes_general = total_docencia + total_psicologia
+
+            return render_template('reportes.html',
+                         datos_estudiantes=datos_estudiantes, total_estudiantes=len(datos_estudiantes),
+                         total_horas_estudiantes=total_horas_estudiantes,
+                         total_cobrar_estudiantes=total_cobrar_estudiantes,
+                         total_pagado_estudiantes=total_pagado_estudiantes,
+                         total_por_pagar_estudiantes=total_cobrar_estudiantes - total_pagado_estudiantes,
+                         total_ingresos=total_ingresos,
+                         total_gastos=total_gastos, balance=balance,
+                         gastos=gastos_mes.data or [], mes=mes, anio=anio,
+                         ingresos_por_tipo=ingresos_por_tipo, gastos_por_categoria=gastos_por_categoria,
+                         horas_por_materia=horas_por_materia, asignaturas_detalle=asignaturas_detalle,
+                         cumplimiento=cumplimiento,
+                         pagos_por_docente=pagos_por_docente, total_pago_docentes=total_pago_docentes,
+                         total_docencia=total_docencia, total_psicologia=total_psicologia,
+                         total_pago_docentes_general=total_pago_docentes_general,
+                         total_atlas=total_atlas,
+                         planificado_clases=planificado_clases,
+                         planificado_psicologia=planificado_psicologia,
+                         ejecutado_clases=total_facturado_clases,
+                         ejecutado_psicologia=total_facturado_psicologia,
+                         estudiantes_hombres=estudiantes_hombres,
+                         estudiantes_mujeres=estudiantes_mujeres,
+                         horas_por_estudiante=horas_por_estudiante,
+                         cobrar_por_estudiante=cobrar_por_estudiante,
+                         asignaturas_valores=asignaturas_valores,
+                         asignaturas_estudiantes=asignaturas_estudiantes,
+                         correcciones=correcciones.data or [], observaciones=observaciones.data or [],
+                         nuevos_usuarios=nuevos_usuarios.data or [], total_planificado=0)
+
 
 # ========== GASTOS ==========
 @app.route('/gastos', methods=['GET', 'POST'])
