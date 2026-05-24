@@ -1350,7 +1350,65 @@ def gestion_gastos():
         else:
             total_pago_docentes_mes += valor * PORCENTAJE_PSICOLOGIA
     
-    return render_template('gastos.html', gastos=gastos.data or [], total=total, mes=mes, anio=anio, today=date.today(), total_pago_docentes_mes=total_pago_docentes_mes)
+        # Obtener pagos a docentes del mes
+    sesiones_mes = supabase.table('sesiones').select('*').in_('estado', ['Realizado', 'Cancelado-Pagado']).gte('fecha', f"{anio}-{mes:02d}-01").lte('fecha', f"{anio}-{mes:02d}-31").execute()
+    
+    pagos_docentes_detalle = {}
+    total_sesiones_docentes = 0
+    total_docencia_mes = 0
+    total_psicologia_mes = 0
+    total_pago_docentes_mes = 0
+    
+    for s in (sesiones_mes.data or []):
+        tipo = s.get('tipo_sesion', 'clase')
+        horas = s.get('horas', 0) or 0
+        valor = s.get('valor_total', 0) or 0
+        prof = s.get('profesor_terapeuta', 'Desconocido')
+        estado = s.get('estado', '')
+        
+        if prof not in pagos_docentes_detalle:
+            pagos_docentes_detalle[prof] = {'pago_docencia': 0, 'pago_psicologia': 0, 'total_pagar': 0, 'sesiones': 0, 'fecha_pago': None, 'pagado': False}
+        
+        pagos_docentes_detalle[prof]['sesiones'] += 1
+        total_sesiones_docentes += 1
+        
+        if estado == 'Cancelado-Pagado':
+            pago = s.get('valor_pagar_docente', 0) or 0
+            if tipo in ['clase', 'preuniversitario']:
+                pagos_docentes_detalle[prof]['pago_docencia'] += pago
+                total_docencia_mes += pago
+            else:
+                pagos_docentes_detalle[prof]['pago_psicologia'] += pago
+                total_psicologia_mes += pago
+            pagos_docentes_detalle[prof]['total_pagar'] += pago
+            total_pago_docentes_mes += pago
+        else:
+            if tipo in ['clase', 'preuniversitario']:
+                pago = horas * PAGO_DOCENCIA_POR_HORA
+                pagos_docentes_detalle[prof]['pago_docencia'] += pago
+                total_docencia_mes += pago
+            else:
+                pago = valor * PORCENTAJE_PSICOLOGIA
+                pagos_docentes_detalle[prof]['pago_psicologia'] += pago
+                total_psicologia_mes += pago
+            pagos_docentes_detalle[prof]['total_pagar'] += pago
+            total_pago_docentes_mes += pago
+    
+    # Cargar fechas de pago guardadas
+    fechas = supabase.table('fechas_pago_docentes').select('*').eq('mes', mes).eq('anio', anio).execute()
+    for f in (fechas.data or []):
+        nombre = f.get('docente_nombre')
+        if nombre in pagos_docentes_detalle:
+            pagos_docentes_detalle[nombre]['fecha_pago'] = f.get('fecha_pago')
+            pagos_docentes_detalle[nombre]['pagado'] = f.get('pagado', False)
+    
+    return render_template('gastos.html', 
+                         gastos=gastos.data or [], total=total, mes=mes, anio=anio, today=date.today(),
+                         pagos_docentes_detalle=pagos_docentes_detalle,
+                         total_pago_docentes_mes=total_pago_docentes_mes,
+                         total_docencia_mes=total_docencia_mes,
+                         total_psicologia_mes=total_psicologia_mes,
+                         total_sesiones_docentes=total_sesiones_docentes)
 
 @app.route('/api/gasto/<int:id>/eliminar', methods=['POST'])
 @login_required
@@ -1572,6 +1630,65 @@ def agregar_observacion(id):
     data = request.get_json()
     supabase.table('sesiones').update({'observaciones': data.get('observaciones', '')}).eq('id', id).execute()
     return jsonify({'success': True})
+
+# ========== API EDICIÓN RÁPIDA DE GASTOS ==========
+@app.route('/api/gasto/<int:id>/editar', methods=['POST'])
+@login_required
+def api_editar_gasto(id):
+    data = request.get_json()
+    campo = data.get('campo')
+    valor = data.get('valor')
+    try:
+        if campo == 'monto':
+            valor = float(valor)
+        supabase.table('gastos').update({campo: valor}).eq('id', id).execute()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+# ========== API FECHA PAGO DOCENTES ==========
+@app.route('/api/pago-docente/fecha', methods=['POST'])
+@login_required
+def api_fecha_pago_docente():
+    data = request.get_json()
+    docente = data.get('docente')
+    fecha = data.get('fecha')
+    try:
+        # Guardar en tabla de fechas_pago
+        supabase.table('fechas_pago_docentes').upsert({
+            'docente_nombre': docente,
+            'fecha_pago': fecha,
+            'mes': date.today().month,
+            'anio': date.today().year,
+            'registrado_por': current_user.nombre
+        }).execute()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/pago-docente/toggle', methods=['POST'])
+@login_required
+def api_toggle_pago_docente():
+    data = request.get_json()
+    docente = data.get('docente')
+    try:
+        # Verificar estado actual
+        existente = supabase.table('fechas_pago_docentes').select('*').eq('docente_nombre', docente).eq('mes', date.today().month).eq('anio', date.today().year).execute()
+        if existente.data and existente.data[0].get('pagado'):
+            supabase.table('fechas_pago_docentes').update({'pagado': False}).eq('id', existente.data[0]['id']).execute()
+        elif existente.data:
+            supabase.table('fechas_pago_docentes').update({'pagado': True}).eq('id', existente.data[0]['id']).execute()
+        else:
+            supabase.table('fechas_pago_docentes').insert({
+                'docente_nombre': docente,
+                'pagado': True,
+                'mes': date.today().month,
+                'anio': date.today().year,
+                'registrado_por': current_user.nombre
+            }).execute()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 # ========== INICIALIZACIÓN ==========
 if __name__ == '__main__':
