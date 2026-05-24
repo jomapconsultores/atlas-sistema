@@ -63,7 +63,7 @@
     </div>
 </div>
 
-<!-- Modal para editar sesión (simplificado para evitar errores) -->
+<!-- Modal para editar sesión -->
 <div class="modal fade" id="modalEditarSesion" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -98,7 +98,7 @@
                 </div>
                 <div class="mb-2">
                     <label class="form-label">Tipo</label>
-                    <select id="edit_tipo_sesion" class="form-select">
+                    <select id="edit_tipo_sesion" class="form-select" onchange="cambioTipoSesion()">
                         <option value="clase">📚 Clase</option>
                         <option value="terapia">🧠 Terapia</option>
                         <option value="ambos">📚🧠 Ambos</option>
@@ -109,6 +109,16 @@
                     <label class="form-label">Asignatura/Tema</label>
                     <input type="text" id="edit_asignatura" class="form-control">
                 </div>
+                <div class="mb-2" id="div_atencion_psicologica" style="display:none;">
+                    <label class="form-label">Atención Psicológica *</label>
+                    <select id="edit_atencion_psicologica" class="form-select">
+                        <option value="">Seleccionar tipo de atención...</option>
+                        {% for item in atencion_psicologica %}
+                        <option value="{{ item.nombre }}">{{ item.nombre }} (${{ "%.2f"|format(item.precio) }})</option>
+                        {% endfor %}
+                    </select>
+                    <small class="text-danger" id="error_atencion" style="display:none;">❌ Debe seleccionar un tipo de atención psicológica (costo)</small>
+                </div>
                 <div class="mb-2">
                     <label class="form-label">Profesor</label>
                     <input type="text" id="edit_profesor" class="form-control">
@@ -117,9 +127,10 @@
                     <label class="form-label">Encargado</label>
                     <input type="text" id="edit_encargado" class="form-control">
                 </div>
-                <div class="mb-2">
-                    <label class="form-label">Precio por hora</label>
-                    <input type="number" id="edit_precio_hora" class="form-control" step="0.01">
+                <div class="mb-2" id="div_precio_hora">
+                    <label class="form-label">Precio por hora *</label>
+                    <input type="number" id="edit_precio_hora" class="form-control" step="0.01" min="0.01">
+                    <small class="text-danger" id="error_precio" style="display:none;">❌ El precio por hora no puede ser 0 o estar vacío</small>
                 </div>
                 <div class="mb-2">
                     <label class="form-label">Valor total</label>
@@ -131,6 +142,7 @@
                         <option value="Planificado">Planificado</option>
                         <option value="Realizado">Realizado</option>
                         <option value="Cancelado">Cancelado</option>
+                        <option value="Cancelado-Pagado">Cancelado-Pagado</option>
                     </select>
                 </div>
                 <div class="mb-2">
@@ -276,6 +288,18 @@ function marcarTodasCompletas() {
     }
 }
 
+function cambioTipoSesion() {
+    const tipo = document.getElementById('edit_tipo_sesion').value;
+    const divPsicologia = document.getElementById('div_atencion_psicologica');
+    const divPrecio = document.getElementById('div_precio_hora');
+    
+    if (tipo === 'terapia' || tipo === 'ambos') {
+        divPsicologia.style.display = 'block';
+    } else {
+        divPsicologia.style.display = 'none';
+    }
+}
+
 async function abrirEdicion(id) {
     try {
         const response = await fetch('/api/sesion/' + id);
@@ -295,6 +319,13 @@ async function abrirEdicion(id) {
         document.getElementById('edit_observaciones').value = s.observaciones || '';
         document.getElementById('edit_valor_total').value = s.valor_total || 0;
         document.getElementById('edit_precio_hora').value = s.precio_hora || 10;
+        document.getElementById('edit_atencion_psicologica').value = s.tema_terapia || '';
+        
+        cambioTipoSesion();
+        
+        // Ocultar errores
+        document.getElementById('error_atencion').style.display = 'none';
+        document.getElementById('error_precio').style.display = 'none';
         
         new bootstrap.Modal(document.getElementById('modalEditarSesion')).show();
     } catch (error) {
@@ -304,13 +335,34 @@ async function abrirEdicion(id) {
 
 async function guardarEdicionSesion() {
     const id = document.getElementById('edit_sesion_id').value;
+    const tipo = document.getElementById('edit_tipo_sesion').value;
+    const esTerapia = tipo === 'terapia' || tipo === 'ambos';
+    
+    // Validar costo obligatorio
+    if (esTerapia) {
+        const atencion = document.getElementById('edit_atencion_psicologica').value;
+        if (!atencion || atencion === '') {
+            document.getElementById('error_atencion').style.display = 'block';
+            alert('❌ Debe seleccionar un tipo de atención psicológica (costo). No puede quedar vacío.');
+            return;
+        }
+    } else {
+        const precioHora = parseFloat(document.getElementById('edit_precio_hora').value) || 0;
+        if (!precioHora || precioHora <= 0) {
+            document.getElementById('error_precio').style.display = 'block';
+            alert('❌ El precio por hora no puede ser 0 o estar vacío. Debe seleccionar un costo.');
+            return;
+        }
+    }
+    
     const data = {
         fecha: document.getElementById('edit_fecha').value,
         hora_inicio: document.getElementById('edit_hora_inicio').value,
         hora_fin: document.getElementById('edit_hora_fin').value,
-        tipo_sesion: document.getElementById('edit_tipo_sesion').value,
+        tipo_sesion: tipo,
         estudiante_id: parseInt(document.getElementById('edit_estudiante_id').value),
         asignatura: document.getElementById('edit_asignatura').value,
+        tema_terapia: esTerapia ? document.getElementById('edit_atencion_psicologica').value : '',
         profesor_terapeuta: document.getElementById('edit_profesor').value,
         encargado_apertura: document.getElementById('edit_encargado').value,
         estado: document.getElementById('edit_estado').value,

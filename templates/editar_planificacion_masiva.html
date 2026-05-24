@@ -69,7 +69,7 @@
             
             <div class="mb-2">
                 <label class="form-label">Tipo de Sesión *</label>
-                <select id="tipoSesion" class="form-select" required>
+                <select id="tipoSesion" class="form-select" required onchange="cambioTipoMasivo()">
                     <option value="clase">📚 Clase</option>
                     <option value="terapia">🧠 Terapia</option>
                     <option value="ambos">📚🧠 Ambos</option>
@@ -80,6 +80,17 @@
             <div class="mb-2">
                 <label class="form-label">Asignatura/Terapia</label>
                 <input type="text" id="asignatura" class="form-control">
+            </div>
+            
+            <div class="mb-2" id="div_atencion_masiva" style="display:none;">
+                <label class="form-label">Atención Psicológica *</label>
+                <select id="atencion_psicologica" class="form-select">
+                    <option value="">Seleccionar tipo de atención...</option>
+                    {% for item in atencion_psicologica %}
+                    <option value="{{ item.nombre }}">{{ item.nombre }} (${{ "%.2f"|format(item.precio) }})</option>
+                    {% endfor %}
+                </select>
+                <small class="text-danger" id="error_atencion_masiva" style="display:none;">❌ Debe seleccionar un tipo de atención psicológica (costo)</small>
             </div>
             
             <div class="mb-2">
@@ -108,9 +119,10 @@
             </div>
             
             <div class="row">
-                <div class="col-md-6 mb-2">
+                <div class="col-md-6 mb-2" id="div_precio_masivo">
                     <label class="form-label">💵 Precio por hora *</label>
-                    <input type="number" id="precio_hora" class="form-control" step="0.01" required>
+                    <input type="number" id="precio_hora" class="form-control" step="0.01" min="0.01">
+                    <small class="text-danger" id="error_precio_masivo" style="display:none;">❌ El precio por hora no puede ser 0 o estar vacío</small>
                 </div>
                 <div class="col-md-6 mb-2">
                     <label class="form-label">💰 Valor total *</label>
@@ -124,6 +136,7 @@
                     <option value="Planificado">📅 Planificado</option>
                     <option value="Realizado">✅ Realizado</option>
                     <option value="Cancelado">❌ Cancelado</option>
+                    <option value="Cancelado-Pagado">❌💰 Cancelado-Pagado</option>
                 </select>
             </div>
             
@@ -145,7 +158,18 @@
 <script>
 let sesionOriginal = null;
 
-// Cargar sesiones al seleccionar estudiante
+function cambioTipoMasivo() {
+    const tipo = document.getElementById('tipoSesion').value;
+    const divPsicologia = document.getElementById('div_atencion_masiva');
+    const divPrecio = document.getElementById('div_precio_masivo');
+    
+    if (tipo === 'terapia' || tipo === 'ambos') {
+        divPsicologia.style.display = 'block';
+    } else {
+        divPsicologia.style.display = 'none';
+    }
+}
+
 document.getElementById('selectEstudiante').addEventListener('change', async function() {
     const estudianteId = this.value;
     const selectSesion = document.getElementById('selectSesion');
@@ -229,8 +253,13 @@ async function seleccionarSesionDeLista(id) {
         document.getElementById('valor_total').value = sesionOriginal.valor_total || 0;
         document.getElementById('estado').value = sesionOriginal.estado || 'Planificado';
         document.getElementById('observaciones').value = sesionOriginal.observaciones || '';
+        document.getElementById('atencion_psicologica').value = sesionOriginal.tema_terapia || '';
         
-        // Seleccionar también en el select
+        cambioTipoMasivo();
+        
+        document.getElementById('error_atencion_masiva').style.display = 'none';
+        document.getElementById('error_precio_masivo').style.display = 'none';
+        
         const selectSesion = document.getElementById('selectSesion');
         if (selectSesion) {
             selectSesion.value = id;
@@ -258,11 +287,31 @@ async function guardarEdicionMasiva() {
         return;
     }
     
+    const tipo = document.getElementById('tipoSesion').value;
+    const esTerapia = tipo === 'terapia' || tipo === 'ambos';
+    
+    // Validar costo obligatorio
+    if (esTerapia) {
+        const atencion = document.getElementById('atencion_psicologica').value;
+        if (!atencion || atencion === '') {
+            document.getElementById('error_atencion_masiva').style.display = 'block';
+            alert('❌ Debe seleccionar un tipo de atención psicológica (costo). No puede quedar vacío.');
+            return;
+        }
+    } else {
+        const precioHora = parseFloat(document.getElementById('precio_hora').value) || 0;
+        if (!precioHora || precioHora <= 0) {
+            document.getElementById('error_precio_masivo').style.display = 'block';
+            alert('❌ El precio por hora no puede ser 0 o estar vacío. Debe seleccionar un costo.');
+            return;
+        }
+    }
+    
     const nuevos = {
         fecha: document.getElementById('fecha').value,
         hora_inicio: document.getElementById('hora_inicio').value,
         hora_fin: document.getElementById('hora_fin').value,
-        tipo_sesion: document.getElementById('tipoSesion').value,
+        tipo_sesion: tipo,
         asignatura: document.getElementById('asignatura').value,
         profesor: document.getElementById('profesor').value,
         encargado: document.getElementById('encargado').value,
@@ -289,7 +338,7 @@ async function guardarEdicionMasiva() {
         return;
     }
     
-    let resumen = '📋 COMPARACIÓN DE CAMBIOS\n\n';
+    let resumen = '📋 CONFIRMAR CAMBIOS\n\n';
     resumen += `👤 Responsable: ${responsable}\n`;
     resumen += `📅 Fecha: ${nuevos.fecha}\n`;
     resumen += `🕐 Horario: ${nuevos.hora_inicio} - ${nuevos.hora_fin}\n`;
@@ -307,7 +356,7 @@ async function guardarEdicionMasiva() {
         tipo_sesion: nuevos.tipo_sesion,
         estudiante_id: sesionOriginal.estudiante_id,
         asignatura: nuevos.asignatura,
-        tema_terapia: '',
+        tema_terapia: esTerapia ? document.getElementById('atencion_psicologica').value : '',
         profesor_terapeuta: nuevos.profesor,
         encargado_apertura: nuevos.encargado,
         estado: nuevos.estado,
