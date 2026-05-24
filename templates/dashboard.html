@@ -2,111 +2,407 @@
 {% block title %}Panel - Atlas{% endblock %}
 
 {% block content %}
-<h2 class="mb-4">👋 Bienvenido, {{ current_user.nombre }} <small class="text-muted">({{ current_user.rol }})</small></h2>
-<p class="text-muted small mb-3">Sistema creado por <strong>Marco Antonio Posligua San Martín</strong></p>
+<style>
+    :root {
+        --primary: #1a73e8;
+        --success: #0f9d58;
+        --warning: #f4b400;
+        --danger: #db4437;
+        --dark: #1a1a2e;
+        --light: #f8f9fa;
+    }
+    
+    .welcome-section {
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+        border-radius: 24px;
+        padding: 30px 35px;
+        color: white;
+        margin-bottom: 25px;
+        position: relative;
+        overflow: hidden;
+    }
+    .welcome-section::before {
+        content: '';
+        position: absolute;
+        top: -50px;
+        right: -50px;
+        width: 200px;
+        height: 200px;
+        background: rgba(255,255,255,0.03);
+        border-radius: 50%;
+    }
+    .welcome-section::after {
+        content: '';
+        position: absolute;
+        bottom: -30px;
+        right: 100px;
+        width: 150px;
+        height: 150px;
+        background: rgba(255,255,255,0.02);
+        border-radius: 50%;
+    }
+    .welcome-section h3 {
+        font-weight: 700;
+        font-size: 24px;
+        position: relative;
+        z-index: 1;
+    }
+    .welcome-section .subtitle {
+        font-size: 13px;
+        opacity: 0.7;
+        position: relative;
+        z-index: 1;
+    }
+    .welcome-section .role-badge {
+        display: inline-block;
+        padding: 6px 16px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-top: 10px;
+    }
+    .role-admin { background: rgba(255,255,255,0.15); color: #ffd54f; }
+    .role-socio { background: rgba(255,255,255,0.15); color: #81c784; }
+    .role-profesor { background: rgba(255,255,255,0.15); color: #64b5f6; }
+    .role-psicologo { background: rgba(255,255,255,0.15); color: #ce93d8; }
+    .role-estudiante { background: rgba(255,255,255,0.15); color: #ffab91; }
+    .role-padre { background: rgba(255,255,255,0.15); color: #a5d6a7; }
+    
+    .module-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 16px;
+        margin-bottom: 20px;
+    }
+    .module-card {
+        background: white;
+        border-radius: 18px;
+        padding: 22px 18px;
+        text-decoration: none;
+        color: inherit;
+        transition: all 0.3s ease;
+        border: 1px solid #f0f0f0;
+        position: relative;
+        overflow: hidden;
+        cursor: pointer;
+    }
+    .module-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 30px rgba(0,0,0,0.1);
+        border-color: transparent;
+        text-decoration: none;
+        color: inherit;
+    }
+    .module-card .module-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 22px;
+        margin-bottom: 12px;
+    }
+    .module-card .module-title {
+        font-weight: 700;
+        font-size: 14px;
+        margin-bottom: 4px;
+    }
+    .module-card .module-desc {
+        font-size: 11px;
+        color: #888;
+        line-height: 1.4;
+    }
+    .module-card .module-badge {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+    }
+    
+    .icon-blue { background: #e3f2fd; color: #1a73e8; }
+    .icon-green { background: #e8f5e9; color: #0f9d58; }
+    .icon-orange { background: #fff3e0; color: #f4511e; }
+    .icon-teal { background: #e0f7fa; color: #00acc1; }
+    .icon-purple { background: #f3e5f5; color: #7b1fa2; }
+    .icon-red { background: #ffebee; color: #db4437; }
+    .icon-indigo { background: #e8eaf6; color: #3949ab; }
+    .icon-amber { background: #fff8e1; color: #ff8f00; }
+    .icon-pink { background: #fce4ec; color: #c62828; }
+    .icon-cyan { background: #e0f7fa; color: #00838f; }
+    
+    .badge-dot-blue { background: #1a73e8; }
+    .badge-dot-green { background: #0f9d58; }
+    .badge-dot-orange { background: #f4511e; }
+    .badge-dot-teal { background: #00acc1; }
+    .badge-dot-purple { background: #7b1fa2; }
+    .badge-dot-red { background: #db4437; }
+    
+    .quick-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 20px;
+    }
+    .quick-btn {
+        padding: 10px 18px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+        border: 2px solid #e0e0e0;
+        background: white;
+        transition: all 0.2s;
+        text-decoration: none;
+        color: #333;
+    }
+    .quick-btn:hover {
+        border-color: var(--primary);
+        background: #f8f9ff;
+        text-decoration: none;
+        color: var(--primary);
+    }
+    
+    .profile-card {
+        background: white;
+        border-radius: 18px;
+        padding: 20px;
+        border: 1px solid #f0f0f0;
+        margin-top: 20px;
+    }
+    .profile-card .profile-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 15px;
+    }
+    .profile-card .avatar {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #1a73e8, #0d47a1);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        font-weight: 700;
+    }
+    .profile-card .info-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 6px 0;
+        font-size: 12px;
+        border-bottom: 1px solid #f5f5f5;
+    }
+    .profile-card .info-row:last-child { border: none; }
+</style>
 
-<!-- ========== ADMIN Y SOCIO ========== -->
-{% if current_user.rol in ['admin', 'socio'] %}
-<div class="row">
-    <div class="col-md-4 mb-3"><a href="/modulo1" class="text-decoration-none"><div class="card bg-primary text-white h-100"><div class="card-body text-center"><i class="bi bi-journal-plus" style="font-size: 50px;"></i><h5 class="mt-3">📋 Módulo 1</h5><p>Planificación</p></div></div></a></div>
-    <div class="col-md-4 mb-3"><a href="/modulo2" class="text-decoration-none"><div class="card bg-success text-white h-100"><div class="card-body text-center"><i class="bi bi-calendar-check" style="font-size: 50px;"></i><h5 class="mt-3">📅 Módulo 2</h5><p>Calendario</p></div></div></a></div>
-    <div class="col-md-4 mb-3"><a href="/modulo3" class="text-decoration-none"><div class="card bg-warning text-white h-100"><div class="card-body text-center"><i class="bi bi-cash-coin" style="font-size: 50px;"></i><h5 class="mt-3">💰 Módulo 3</h5><p>Pagos</p></div></div></a></div>
-    <div class="col-md-4 mb-3"><a href="/modulo4" class="text-decoration-none"><div class="card bg-info text-white h-100"><div class="card-body text-center"><i class="bi bi-calendar-week" style="font-size: 50px;"></i><h5 class="mt-3">📅 Módulo 4</h5><p>Calendario Público</p></div></div></a></div>
-    <div class="col-md-4 mb-3"><a href="/modulo5" class="text-decoration-none"><div class="card bg-secondary text-white h-100"><div class="card-body text-center"><i class="bi bi-wallet2" style="font-size: 50px;"></i><h5 class="mt-3">💵 Módulo 5</h5><p>Pagos Docentes</p></div></div></a></div>
-    <div class="col-md-4 mb-3"><a href="/modulo6" class="text-decoration-none"><div class="card bg-dark text-white h-100"><div class="card-body text-center"><i class="bi bi-people-fill" style="font-size: 50px;"></i><h5 class="mt-3">📋 Módulo 6</h5><p>Reuniones</p></div></div></a></div>
-</div>
-<div class="row mt-3">
-    <div class="col-md-3 mb-2"><a href="/estudiantes" class="btn btn-outline-primary w-100">🎓 Estudiantes</a></div>
-    <div class="col-md-3 mb-2"><a href="/padres" class="btn btn-outline-primary w-100">👨‍👩‍👧 Padres</a></div>
-    <div class="col-md-3 mb-2"><a href="/gastos" class="btn btn-outline-danger w-100">📉 Gastos</a></div>
-    <div class="col-md-3 mb-2"><a href="/reportes" class="btn btn-outline-info w-100">📊 Reportes</a></div>
-</div>
-<div class="row mt-2">
-    <div class="col-md-4 mb-2"><a href="/psicologia-especial" class="btn btn-outline-success w-100">🧠 Psicología Especial</a></div>
-    <div class="col-md-4 mb-2"><a href="/gestion-anticipos" class="btn btn-outline-warning w-100">💰 Gestión de Anticipos {% if solicitudes_pendientes > 0 %}<span class="badge bg-danger">{{ solicitudes_pendientes }}</span>{% endif %}</a></div>
-    {% if current_user.rol == 'admin' %}
-    <div class="col-md-4 mb-2"><a href="/usuarios" class="btn btn-outline-danger w-100">👥 Usuarios</a></div>
+<div class="container-fluid px-0">
+    
+    <!-- WELCOME SECTION -->
+    <div class="welcome-section">
+        <h3>👋 ¡Bienvenido, {{ current_user.nombre }}!</h3>
+        <div class="subtitle">Sistema de Gestión Académica Atlas</div>
+        <span class="role-badge 
+            {% if current_user.rol == 'admin' %}role-admin
+            {% elif current_user.rol == 'socio' %}role-socio
+            {% elif current_user.rol == 'profesor' %}role-profesor
+            {% elif current_user.rol == 'psicologo' %}role-psicologo
+            {% elif current_user.rol == 'estudiante' %}role-estudiante
+            {% else %}role-padre{% endif %}">
+            {{ current_user.rol }}
+        </span>
+    </div>
+    
+    <!-- ========== ADMIN Y SOCIO ========== -->
+    {% if current_user.rol in ['admin', 'socio'] %}
+    <div class="module-grid">
+        <a href="/modulo1" class="module-card">
+            <div class="module-badge badge-dot-blue"></div>
+            <div class="module-icon icon-blue">📋</div>
+            <div class="module-title">Módulo 1</div>
+            <div class="module-desc">Planificación de sesiones</div>
+        </a>
+        <a href="/modulo2" class="module-card">
+            <div class="module-badge badge-dot-green"></div>
+            <div class="module-icon icon-green">📅</div>
+            <div class="module-title">Módulo 2</div>
+            <div class="module-desc">Calendario de clases</div>
+        </a>
+        <a href="/modulo3" class="module-card">
+            <div class="module-badge badge-dot-orange"></div>
+            <div class="module-icon icon-orange">💰</div>
+            <div class="module-title">Módulo 3</div>
+            <div class="module-desc">Pagos de estudiantes</div>
+        </a>
+        <a href="/modulo4" class="module-card">
+            <div class="module-badge badge-dot-teal"></div>
+            <div class="module-icon icon-teal">📅</div>
+            <div class="module-title">Módulo 4</div>
+            <div class="module-desc">Calendario público</div>
+        </a>
+        <a href="/modulo5" class="module-card">
+            <div class="module-badge badge-dot-purple"></div>
+            <div class="module-icon icon-purple">💵</div>
+            <div class="module-title">Módulo 5</div>
+            <div class="module-desc">Pagos a docentes</div>
+        </a>
+        <a href="/modulo6" class="module-card">
+            <div class="module-badge badge-dot-red"></div>
+            <div class="module-icon icon-red">👥</div>
+            <div class="module-title">Módulo 6</div>
+            <div class="module-desc">Reuniones</div>
+        </a>
+    </div>
+    
+    <div class="quick-actions">
+        <a href="/estudiantes" class="quick-btn">🎓 Estudiantes</a>
+        <a href="/padres" class="quick-btn">👨‍👩‍👧 Padres</a>
+        <a href="/gastos" class="quick-btn">📉 Gastos</a>
+        <a href="/reportes" class="quick-btn">📊 Reportes</a>
+        <a href="/psicologia-especial" class="quick-btn">🧠 Psicología Especial</a>
+        <a href="/gestion-anticipos" class="quick-btn">
+            💰 Anticipos
+            {% if solicitudes_pendientes > 0 %}
+            <span class="badge bg-danger ms-1">{{ solicitudes_pendientes }}</span>
+            {% endif %}
+        </a>
+        {% if current_user.rol == 'admin' %}
+        <a href="/usuarios" class="quick-btn">👥 Usuarios</a>
+        <a href="/admin/costos" class="quick-btn">⚙️ Costos</a>
+        {% endif %}
+    </div>
+    
+    <!-- ========== PROFESOR ========== -->
+    {% elif current_user.rol == 'profesor' %}
+    <div class="module-grid">
+        <a href="/modulo2" class="module-card">
+            <div class="module-badge badge-dot-green"></div>
+            <div class="module-icon icon-green">📅</div>
+            <div class="module-title">Mis Clases</div>
+            <div class="module-desc">Ver y marcar sesiones</div>
+        </a>
+        <a href="/mi-reporte" class="module-card">
+            <div class="module-badge badge-dot-blue"></div>
+            <div class="module-icon icon-blue">📊</div>
+            <div class="module-title">Mi Reporte</div>
+            <div class="module-desc">Estadísticas y pagos</div>
+        </a>
+        <a href="/mis-anticipos" class="module-card">
+            <div class="module-badge badge-dot-orange"></div>
+            <div class="module-icon icon-amber">🏦</div>
+            <div class="module-title">Mis Anticipos</div>
+            <div class="module-desc">Solicitar anticipos</div>
+        </a>
+        <a href="/editar-perfil" class="module-card">
+            <div class="module-badge badge-dot-teal"></div>
+            <div class="module-icon icon-cyan">⚙️</div>
+            <div class="module-title">Mi Perfil</div>
+            <div class="module-desc">Actualizar datos</div>
+        </a>
+    </div>
+    
+    <!-- ========== PSICÓLOGO ========== -->
+    {% elif current_user.rol == 'psicologo' %}
+    <div class="module-grid">
+        <a href="/modulo2" class="module-card">
+            <div class="module-badge badge-dot-green"></div>
+            <div class="module-icon icon-green">📅</div>
+            <div class="module-title">Mis Sesiones</div>
+            <div class="module-desc">Ver y marcar sesiones</div>
+        </a>
+        <a href="/mi-reporte" class="module-card">
+            <div class="module-badge badge-dot-blue"></div>
+            <div class="module-icon icon-blue">📊</div>
+            <div class="module-title">Mi Reporte</div>
+            <div class="module-desc">Estadísticas y pagos</div>
+        </a>
+        <a href="/mis-anticipos" class="module-card">
+            <div class="module-badge badge-dot-orange"></div>
+            <div class="module-icon icon-amber">🏦</div>
+            <div class="module-title">Mis Anticipos</div>
+            <div class="module-desc">Solicitar anticipos</div>
+        </a>
+        <a href="/mis-clientes" class="module-card">
+            <div class="module-badge badge-dot-purple"></div>
+            <div class="module-icon icon-purple">🧠</div>
+            <div class="module-title">Mis Clientes</div>
+            <div class="module-desc">Gestionar clientes</div>
+        </a>
+        <a href="/editar-perfil" class="module-card">
+            <div class="module-badge badge-dot-teal"></div>
+            <div class="module-icon icon-cyan">⚙️</div>
+            <div class="module-title">Mi Perfil</div>
+            <div class="module-desc">Actualizar datos</div>
+        </a>
+    </div>
+    
+    <!-- ========== ESTUDIANTE ========== -->
+    {% elif current_user.rol == 'estudiante' %}
+    <div class="module-grid">
+        <a href="/modulo2" class="module-card">
+            <div class="module-badge badge-dot-green"></div>
+            <div class="module-icon icon-green">📅</div>
+            <div class="module-title">Mis Clases</div>
+            <div class="module-desc">Ver sesiones programadas</div>
+        </a>
+        <a href="/mi-reporte" class="module-card">
+            <div class="module-badge badge-dot-blue"></div>
+            <div class="module-icon icon-blue">📊</div>
+            <div class="module-title">Mi Reporte</div>
+            <div class="module-desc">Clases, pagos y saldos</div>
+        </a>
+        <a href="/editar-perfil" class="module-card">
+            <div class="module-badge badge-dot-teal"></div>
+            <div class="module-icon icon-cyan">⚙️</div>
+            <div class="module-title">Mi Perfil</div>
+            <div class="module-desc">Actualizar datos</div>
+        </a>
+    </div>
+    
+    <!-- ========== PADRE ========== -->
+    {% elif current_user.rol == 'padre' %}
+    <div class="module-grid">
+        <a href="/modulo2" class="module-card">
+            <div class="module-badge badge-dot-green"></div>
+            <div class="module-icon icon-green">📅</div>
+            <div class="module-title">Clases de mis hijos</div>
+            <div class="module-desc">Ver sesiones programadas</div>
+        </a>
+        <a href="/mi-reporte" class="module-card">
+            <div class="module-badge badge-dot-blue"></div>
+            <div class="module-icon icon-blue">📊</div>
+            <div class="module-title">Reporte de mis hijos</div>
+            <div class="module-desc">Pagos y saldos</div>
+        </a>
+        <a href="/editar-perfil" class="module-card">
+            <div class="module-badge badge-dot-teal"></div>
+            <div class="module-icon icon-cyan">⚙️</div>
+            <div class="module-title">Mi Perfil</div>
+            <div class="module-desc">Actualizar datos</div>
+        </a>
+    </div>
     {% endif %}
-</div>
-<div class="row mt-2">
-    {% if current_user.rol == 'admin' %}
-    <div class="col-md-4 mb-2">
-        <a href="/admin/costos" class="btn btn-outline-dark w-100">⚙️ Administrar Costos</a>
+    
+    <!-- PROFILE CARD -->
+    <div class="profile-card">
+        <div class="profile-header">
+            <div class="avatar">{{ current_user.nombre[0] | upper }}</div>
+            <div>
+                <strong>{{ current_user.nombre }}</strong>
+                <div class="text-muted" style="font-size: 11px;">{{ current_user.email }}</div>
+            </div>
+        </div>
+        <div class="info-row"><span>Rol</span><span class="fw-bold">{{ current_user.rol | upper }}</span></div>
+        <div class="info-row"><span>Email</span><span>{{ current_user.email }}</span></div>
+        <a href="/editar-perfil" class="btn btn-sm w-100 mt-2" style="background: #f0f0f0; border-radius: 10px; font-size: 12px;">
+            ✏️ Actualizar mis datos
+        </a>
     </div>
-    {% endif %}
+    
 </div>
-
-<!-- ========== SOLO PROFESOR ========== -->
-{% elif current_user.rol == 'profesor' %}
-<div class="row">
-    <div class="col-md-4 mb-3"><a href="/modulo2" class="text-decoration-none"><div class="card bg-success text-white h-100"><div class="card-body text-center"><i class="bi bi-calendar-check" style="font-size: 50px;"></i><h5 class="mt-3">📅 Mis Clases</h5><p>Ver y marcar mis sesiones</p></div></div></a></div>
-    <div class="col-md-4 mb-3"><a href="/modulo5" class="text-decoration-none"><div class="card bg-secondary text-white h-100"><div class="card-body text-center"><i class="bi bi-wallet2" style="font-size: 50px;"></i><h5 class="mt-3">💵 Mis Pagos</h5><p>Ver mis pagos como docente</p></div></div></a></div>
-    <div class="col-md-4 mb-3"><a href="/mi-reporte" class="text-decoration-none"><div class="card bg-primary text-white h-100"><div class="card-body text-center"><i class="bi bi-file-earmark-text" style="font-size: 50px;"></i><h5 class="mt-3">📊 Mi Reporte</h5><p>Mis clases y estadísticas</p></div></div></a></div>
-    <div class="col-md-4 mb-3"><a href="/mis-anticipos" class="text-decoration-none"><div class="card bg-info text-white h-100"><div class="card-body text-center"><i class="bi bi-cash-stack" style="font-size: 50px;"></i><h5 class="mt-3">💰 Mis Anticipos</h5><p>Solicitar anticipos</p></div></div></a></div>
-</div>
-<div class="card shadow mt-3">
-    <div class="card-header bg-primary text-white"><strong>✏️ Mis Datos</strong></div>
-    <div class="card-body">
-        <p><strong>Nombre:</strong> {{ current_user.nombre }}</p>
-        <p><strong>Email:</strong> {{ current_user.email }}</p>
-        <p><strong>Rol:</strong> {{ current_user.rol }}</p>
-        <a href="/editar-perfil" class="btn btn-primary btn-sm">✏️ Actualizar mis datos</a>
-    </div>
-</div>
-
-<!-- ========== SOLO PSICÓLOGO ========== -->
-{% elif current_user.rol == 'psicologo' %}
-<div class="row">
-    <div class="col-md-3 mb-3"><a href="/modulo2" class="text-decoration-none"><div class="card bg-success text-white h-100"><div class="card-body text-center"><i class="bi bi-calendar-check" style="font-size: 50px;"></i><h5 class="mt-3">📅 Mis Sesiones</h5><p>Ver y marcar mis sesiones</p></div></div></a></div>
-    <div class="col-md-3 mb-3"><a href="/modulo5" class="text-decoration-none"><div class="card bg-secondary text-white h-100"><div class="card-body text-center"><i class="bi bi-wallet2" style="font-size: 50px;"></i><h5 class="mt-3">💵 Mis Pagos</h5><p>Ver mis pagos como psicólogo</p></div></div></a></div>
-    <div class="col-md-3 mb-3"><a href="/mi-reporte" class="text-decoration-none"><div class="card bg-primary text-white h-100"><div class="card-body text-center"><i class="bi bi-file-earmark-text" style="font-size: 50px;"></i><h5 class="mt-3">📊 Mi Reporte</h5><p>Mis sesiones y estadísticas</p></div></div></a></div>
-    <div class="col-md-3 mb-3"><a href="/mis-anticipos" class="text-decoration-none"><div class="card bg-info text-white h-100"><div class="card-body text-center"><i class="bi bi-cash-stack" style="font-size: 50px;"></i><h5 class="mt-3">💰 Mis Anticipos</h5><p>Solicitar anticipos</p></div></div></a></div>
-</div>
-<div class="row mt-2">
-    <div class="col-md-6 mb-2">
-        <a href="/mis-clientes" class="btn btn-outline-success w-100">🧠 Mis Clientes (Psicología)</a>
-    </div>
-</div>
-<div class="card shadow mt-3">
-    <div class="card-header bg-primary text-white"><strong>✏️ Mis Datos</strong></div>
-    <div class="card-body">
-        <p><strong>Nombre:</strong> {{ current_user.nombre }}</p>
-        <p><strong>Email:</strong> {{ current_user.email }}</p>
-        <p><strong>Rol:</strong> {{ current_user.rol }}</p>
-        <a href="/editar-perfil" class="btn btn-primary btn-sm">✏️ Actualizar mis datos</a>
-    </div>
-</div>
-
-<!-- ========== ESTUDIANTE ========== -->
-{% elif current_user.rol == 'estudiante' %}
-<div class="row">
-    <div class="col-md-6 mb-3"><a href="/modulo2" class="text-decoration-none"><div class="card bg-success text-white h-100"><div class="card-body text-center"><i class="bi bi-calendar-check" style="font-size: 50px;"></i><h5 class="mt-3">📅 Mis Clases</h5><p>Ver mis sesiones programadas</p></div></div></a></div>
-    <div class="col-md-6 mb-3"><a href="/mi-reporte" class="text-decoration-none"><div class="card bg-primary text-white h-100"><div class="card-body text-center"><i class="bi bi-file-earmark-text" style="font-size: 50px;"></i><h5 class="mt-3">📊 Mi Reporte</h5><p>Mis clases, pagos y saldos</p></div></div></a></div>
-</div>
-<div class="card shadow mt-3">
-    <div class="card-header bg-primary text-white"><strong>✏️ Mis Datos</strong></div>
-    <div class="card-body">
-        <p><strong>Nombre:</strong> {{ current_user.nombre }}</p>
-        <p><strong>Email:</strong> {{ current_user.email }}</p>
-        <p><strong>Rol:</strong> {{ current_user.rol }}</p>
-        <a href="/editar-perfil" class="btn btn-primary btn-sm">✏️ Actualizar mis datos</a>
-    </div>
-</div>
-
-<!-- ========== PADRE DE FAMILIA ========== -->
-{% elif current_user.rol == 'padre' %}
-<div class="row">
-    <div class="col-md-6 mb-3"><a href="/modulo2" class="text-decoration-none"><div class="card bg-success text-white h-100"><div class="card-body text-center"><i class="bi bi-calendar-check" style="font-size: 50px;"></i><h5 class="mt-3">📅 Clases de mis hijos</h5><p>Ver sesiones programadas</p></div></div></a></div>
-    <div class="col-md-6 mb-3"><a href="/mi-reporte" class="text-decoration-none"><div class="card bg-primary text-white h-100"><div class="card-body text-center"><i class="bi bi-file-earmark-text" style="font-size: 50px;"></i><h5 class="mt-3">📊 Reporte de mis hijos</h5><p>Pagos y saldos</p></div></div></a></div>
-</div>
-<div class="card shadow mt-3">
-    <div class="card-header bg-primary text-white"><strong>✏️ Mis Datos</strong></div>
-    <div class="card-body">
-        <p><strong>Nombre:</strong> {{ current_user.nombre }}</p>
-        <p><strong>Email:</strong> {{ current_user.email }}</p>
-        <p><strong>Rol:</strong> {{ current_user.rol }}</p>
-        <a href="/editar-perfil" class="btn btn-primary btn-sm">✏️ Actualizar mis datos</a>
-    </div>
-</div>
-{% endif %}
 {% endblock %}
