@@ -67,7 +67,7 @@ ENCARGADOS = ['CARMEN', 'ROSALÍA', 'EDWIN', 'MAP', 'JOHANNA']
 
 # ========== CONSTANTES DE PAGOS ==========
 PAGO_DOCENCIA_POR_HORA = 7
-PORCENTAJE_PSICOLOGIA = 0.4018  # 40.18%
+PORCENTAJE_PSICOLOGIA = 0.4018
 COMISION_CLIENTE_EXTERNO = 0.25
 
 # ========== CARGAR COSTOS DESDE SUPABASE ==========
@@ -656,7 +656,7 @@ def modulo3():
     for e in (estudiantes.data or []):
         ses = supabase.table('sesiones').select('*').eq('estudiante_id', e['id']).in_('estado', ['Realizado', 'Cancelado-Pagado']).execute()
         pag = supabase.table('pagos').select('*').eq('estudiante_id', e['id']).order('fecha_pago', desc=True).execute()
-        cobrar = sum(s.get('valor_total', 0) or 0 for s in (ses.data or []) if s.get('estado') == 'Realizado')
+        cobrar = sum(s.get('valor_total', 0) or 0 for s in (ses.data or []) if s.get('estado') in ['Realizado', 'Cancelado-Pagado'])
         pagado = sum(p.get('monto', 0) or 0 for p in (pag.data or []))
         if cobrar > 0 or pagado > 0:
             datos.append({'id': e['id'], 'nombre': f"{e['apellidos']} {e['nombres']}", 'cobrar': cobrar, 'pagado': pagado, 'saldo': cobrar - pagado, 'pagos': pag.data or [], 'sesiones': ses.data or []})
@@ -1160,7 +1160,7 @@ def reportes():
     for e in (estudiantes.data or []):
         ses = supabase.table('sesiones').select('*').eq('estudiante_id', e['id']).execute()
         ses_todas = [s for s in (ses.data or []) if s.get('fecha', '') and s['fecha'][:7] == f"{anio}-{mes:02d}"]
-        ses_realizadas = [s for s in ses_todas if s['estado'] == 'Realizado']
+        ses_realizadas = [s for s in ses_todas if s['estado'] in ['Realizado', 'Cancelado-Pagado']]
         ses_planificadas = [s for s in ses_todas if s['estado'] == 'Planificado']
         ses_canceladas = [s for s in ses_todas if s['estado'] == 'Cancelado']
         ses_cancelado_pagado = [s for s in ses_todas if s['estado'] == 'Cancelado-Pagado']
@@ -1170,13 +1170,12 @@ def reportes():
         horas_plan = sum(s.get('horas', 0) or 0 for s in ses_todas)
         horas_real = sum(s.get('horas', 0) or 0 for s in ses_realizadas)
         horas_canc = sum(s.get('horas', 0) or 0 for s in ses_canceladas)
-        cobrar = sum(s.get('valor_total', 0) or 0 for s in ses_realizadas if s.get('estado') != 'Cancelado-Pagado')
+        cobrar = sum(s.get('valor_total', 0) or 0 for s in ses_realizadas if s.get('estado') in ['Realizado', 'Cancelado-Pagado'])
         pagado = sum(p.get('monto', 0) or 0 for p in pag_filtrados)
         
         total_horas_estudiantes += horas_real
         total_cobrar_estudiantes += cobrar
         total_pagado_estudiantes += pagado
-        total_ingresos = total_pagado_estudiantes
         
         for s in ses_todas:
             asig = s.get('asignatura') or s.get('tema_terapia') or 'Sin registro'
@@ -1185,13 +1184,13 @@ def reportes():
                 asignaturas_detalle[asig] = {'plan': 0, 'real': 0, 'canc': 0}
             if s['estado'] == 'Planificado':
                 asignaturas_detalle[asig]['plan'] += s.get('horas', 0) or 0
-            elif s['estado'] == 'Realizado':
+            elif s['estado'] in ['Realizado', 'Cancelado-Pagado']:
                 asignaturas_detalle[asig]['real'] += s.get('horas', 0) or 0
             elif s['estado'] == 'Cancelado':
                 asignaturas_detalle[asig]['canc'] += s.get('horas', 0) or 0
             cumplimiento[s.get('estado', 'Planificado').lower()] = cumplimiento.get(s.get('estado', 'Planificado').lower(), 0) + 1
             
-            if s['estado'] == 'Realizado' or s['estado'] == 'Cancelado-Pagado':
+            if s['estado'] in ['Realizado', 'Cancelado-Pagado']:
                 tipo = s.get('tipo_sesion', 'clase')
                 valor = s.get('valor_total', 0) or 0
                 
@@ -1236,6 +1235,8 @@ def reportes():
                 'horas_plan': horas_plan, 'horas_real': horas_real, 'horas_canc': horas_canc,
                 'cobrar': cobrar, 'pagado': pagado, 'saldo': cobrar - pagado
             })
+    
+    total_ingresos = total_pagado_estudiantes
     
     gastos_mes = supabase.table('gastos').select('*').eq('mes', mes).eq('anio', anio).execute()
     total_gastos = sum(g.get('monto', 0) or 0 for g in (gastos_mes.data or []))
