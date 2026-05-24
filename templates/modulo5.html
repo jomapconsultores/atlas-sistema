@@ -79,9 +79,10 @@
                         <th>Tipo</th>
                         <th>Horas</th>
                         <th>Valor Total</th>
-                        <th>Pago Docencia ($7/h)</th>
-                        <th>Pago Psicología (40.18%)</th>
+                        <th>Pago Docencia</th>
+                        <th>Pago Psicología</th>
                         <th>Total a Pagar</th>
+                        <th>Estado</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -106,6 +107,13 @@
                         <td class="text-end text-primary">${{ "%.2f"|format(p.pago_docente) }}</td>
                         <td class="text-end text-success">${{ "%.2f"|format(p.pago_psicologia) }}</td>
                         <td class="text-end fw-bold">${{ "%.2f"|format(p.total_pagar) }}</td>
+                        <td>
+                            {% if p.estado == 'Cancelado-Pagado' %}
+                                <span class="badge bg-info">❌💰 Canc-Pag</span>
+                            {% else %}
+                                <span class="badge bg-success">✅ Realizado</span>
+                            {% endif %}
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -115,6 +123,7 @@
                         <td class="text-end"><strong>${{ "%.2f"|format(total_docencia) }}</strong></td>
                         <td class="text-end"><strong>${{ "%.2f"|format(total_psicologia) }}</strong></td>
                         <td class="text-end"><strong>${{ "%.2f"|format(total_adeudado) }}</strong></td>
+                        <td></td>
                     </tr>
                 </tfoot>
             </table>
@@ -125,7 +134,7 @@
     </div>
 </div>
 
-<!-- ========== REPORTE AGRUPADO POR DOCENTE ========== -->
+<!-- Reporte Agrupado por Docente -->
 <div class="card shadow mb-4">
     <div class="card-header bg-info text-white">
         <strong>📊 Reporte Agrupado por Docente / Psicólogo</strong>
@@ -180,24 +189,14 @@
     <ul class="mb-0">
         <li><strong>Docencia (Clases y Pre Universitario):</strong> $7 por hora</li>
         <li><strong>Psicología (Terapias y Ambos):</strong> 40.18% del valor de la sesión</li>
+        <li><strong>Cancelado-Pagado:</strong> 50% del valor para el docente (máx $7), resto para Atlas</li>
     </ul>
 </div>
 
-<!-- Botones de navegación inferiores -->
-<div class="mt-4">
-    <div class="row g-2">
-        <div class="col-3">
-            <a href="/mi-reporte" class="btn btn-outline-primary btn-sm w-100">📊 Mi Reporte</a>
-        </div>
-        <div class="col-3">
-            <a href="/modulo5" class="btn btn-outline-success btn-sm w-100">💵 Mis Pagos</a>
-        </div>
-        <div class="col-3">
-            <a href="/mis-anticipos" class="btn btn-outline-warning btn-sm w-100">🏦 Mis Anticipos</a>
-        </div>
-        <div class="col-3">
-            <a href="/modulo2" class="btn btn-outline-info btn-sm w-100">📅 Calendario</a>
-        </div>
-    </div>
+<div class="mt-4 d-flex flex-wrap justify-content-between">
+    <a href="/mi-reporte" class="btn btn-outline-primary mb-1">📊 Mi Reporte</a>
+    <a href="/mis-anticipos" class="btn btn-outline-warning mb-1">💵 Mis Anticipos</a>
+    <a href="/modulo2" class="btn btn-outline-success mb-1">📅 Calendario</a>
+    <a href="/editar-perfil" class="btn btn-outline-secondary mb-1">⚙️ Perfil</a>
 </div>
 {% endblock %}

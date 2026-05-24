@@ -162,7 +162,6 @@ def modulo1():
             atencion = request.form.get('atencion_psicologica', '')
             es_paquete = (atencion == 'Paquete 4 terapias')
             
-            # Validar que el costo no esté vacío
             es_terapia = tipo in ['terapia', 'ambos']
             if es_terapia:
                 if not atencion or atencion == '':
@@ -270,12 +269,13 @@ def modulo1():
 @login_required
 @socio_admin_required
 def editar_planificaciones():
-    psicologia, _, _, _ = cargar_costos()
+    psicologia, precios_clase, _, _ = cargar_costos()
     estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
     return render_template('editar_planificaciones.html', 
                          estudiantes=estudiantes.data or [],
                          asignaturas=ASIGNATURAS,
                          atencion_psicologica=psicologia,
+                         precios_clase=precios_clase,
                          profesores=PROFESORES,
                          encargados=ENCARGADOS,
                          today=date.today().isoformat())
@@ -284,12 +284,13 @@ def editar_planificaciones():
 @login_required
 @socio_admin_required
 def editar_planificacion_masiva():
-    psicologia, _, _, _ = cargar_costos()
+    psicologia, precios_clase, _, _ = cargar_costos()
     estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
     return render_template('editar_planificacion_masiva.html',
                          estudiantes=estudiantes.data or [],
                          asignaturas=ASIGNATURAS,
                          atencion_psicologica=psicologia,
+                         precios_clase=precios_clase,
                          profesores=PROFESORES,
                          encargados=ENCARGADOS,
                          today=date.today().isoformat())
@@ -375,7 +376,6 @@ def api_editar_sesion(id):
         precio_hora = data.get('precio_hora', 10)
         es_terapia = data['tipo_sesion'] in ['terapia', 'ambos']
         
-        # Validar que el costo no esté vacío
         if es_terapia:
             if not data.get('tema_terapia') or data.get('tema_terapia', '').strip() == '':
                 return jsonify({'success': False, 'error': 'Debe seleccionar un tipo de atención psicológica (costo)'})
@@ -440,20 +440,31 @@ def toggle_sesion(id):
             else:
                 updates['valor_total'] = round((sd.get('horas', 1) or 1) * (sd.get('precio_hora', 10) or 10), 2)
             updates['valor_pagar_docente'] = updates['valor_total']
+            updates['valor_atlas'] = 0
     elif estado == 'Cancelado':
         updates['valor_total'] = 0
         updates['valor_pagar_docente'] = 0
+        updates['valor_atlas'] = 0
     elif estado == 'Cancelado-Pagado':
         s = supabase.table('sesiones').select('*').eq('id', id).execute()
         if s.data:
             sd = s.data[0]
             if sd.get('cobro_por_sesion') or sd.get('tipo_sesion') in ['terapia', 'ambos']:
-                valor_total = sd.get('precio_hora', 40) or 40
+                valor_total_sesion = sd.get('precio_hora', 40) or 40
             else:
-                valor_total = round((sd.get('horas', 1) or 1) * (sd.get('precio_hora', 10) or 10), 2)
-            updates['valor_total'] = 0
-            updates['valor_pagar_docente'] = valor_total * 0.5
-            updates['valor_atlas'] = valor_total * 0.5
+                valor_total_sesion = round((sd.get('horas', 1) or 1) * (sd.get('precio_hora', 10) or 10), 2)
+            
+            pago_docente = round(valor_total_sesion * 0.5, 2)
+            if sd.get('tipo_sesion') in ['clase', 'preuniversitario']:
+                pago_docente = min(pago_docente, 7.00)
+            else:
+                pago_docente = round(valor_total_sesion * PORCENTAJE_PSICOLOGIA, 2)
+            
+            valor_atlas = round(valor_total_sesion - pago_docente, 2)
+            
+            updates['valor_total'] = valor_total_sesion
+            updates['valor_pagar_docente'] = pago_docente
+            updates['valor_atlas'] = valor_atlas
     
     supabase.table('sesiones').update(updates).eq('id', id).execute()
     return jsonify({'success': True})
@@ -643,9 +654,9 @@ def modulo3():
     estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
     datos = []
     for e in (estudiantes.data or []):
-        ses = supabase.table('sesiones').select('*').eq('estudiante_id', e['id']).eq('estado', 'Realizado').execute()
+        ses = supabase.table('sesiones').select('*').eq('estudiante_id', e['id']).in_('estado', ['Realizado', 'Cancelado-Pagado']).execute()
         pag = supabase.table('pagos').select('*').eq('estudiante_id', e['id']).order('fecha_pago', desc=True).execute()
-        cobrar = sum(s.get('valor_total', 0) or 0 for s in (ses.data or []))
+        cobrar = sum(s.get('valor_total', 0) or 0 for s in (ses.data or []) if s.get('estado') == 'Realizado')
         pagado = sum(p.get('monto', 0) or 0 for p in (pag.data or []))
         if cobrar > 0 or pagado > 0:
             datos.append({'id': e['id'], 'nombre': f"{e['apellidos']} {e['nombres']}", 'cobrar': cobrar, 'pagado': pagado, 'saldo': cobrar - pagado, 'pagos': pag.data or [], 'sesiones': ses.data or []})
@@ -677,7 +688,7 @@ def modulo5():
     filtro_profesor = request.args.get('filtro_profesor', '')
     filtro_estudiante = request.args.get('filtro_estudiante', '')
     
-    query = supabase.table('sesiones').select('*, estudiantes(*)').eq('estado', 'Realizado')
+    query = supabase.table('sesiones').select('*, estudiantes(*)').in_('estado', ['Realizado', 'Cancelado-Pagado'])
     
     if mes and mes != '':
         mes_int = int(mes)
@@ -730,27 +741,32 @@ def modulo5():
         tipo = s.get('tipo_sesion', 'clase')
         profesor = s.get('profesor_terapeuta', 'Desconocido')
         profesores_lista.add(profesor)
-        
-        if tipo in ['clase', 'preuniversitario']:
-            pago_docente = horas * PAGO_DOCENCIA_POR_HORA
-            pago_psicologia = 0
-            total_docencia += pago_docente
-        else:
-            pago_docente = 0
-            pago_psicologia = valor * PORCENTAJE_PSICOLOGIA
-            total_psicologia += pago_psicologia
-        
-        total_pagar = pago_docente + pago_psicologia
-        
-        # Si es Cancelado-Pagado, usar valor_pagar_docente
         estado = s.get('estado', '')
+        
         if estado == 'Cancelado-Pagado':
             valor_pagar_docente = s.get('valor_pagar_docente', 0) or 0
             valor_atlas = s.get('valor_atlas', 0) or 0
+            
             if tipo in ['clase', 'preuniversitario']:
                 pago_docente = valor_pagar_docente
+                pago_psicologia = 0
+                total_docencia += pago_docente
             else:
+                pago_docente = 0
                 pago_psicologia = valor_pagar_docente
+                total_psicologia += pago_psicologia
+            
+            total_pagar = pago_docente + pago_psicologia
+        else:
+            if tipo in ['clase', 'preuniversitario']:
+                pago_docente = horas * PAGO_DOCENCIA_POR_HORA
+                pago_psicologia = 0
+                total_docencia += pago_docente
+            else:
+                pago_docente = 0
+                pago_psicologia = valor * PORCENTAJE_PSICOLOGIA
+                total_psicologia += pago_psicologia
+            
             total_pagar = pago_docente + pago_psicologia
         
         total_adeudado += total_pagar
@@ -765,7 +781,8 @@ def modulo5():
             'valor_total': valor,
             'pago_docente': pago_docente,
             'pago_psicologia': pago_psicologia,
-            'total_pagar': total_pagar
+            'total_pagar': total_pagar,
+            'estado': estado
         })
         
         if profesor not in consolidado:
@@ -950,12 +967,14 @@ def mis_anticipos():
     anticipos = supabase.table('anticipos_solicitudes').select('*').eq('usuario_id', current_user.id).order('fecha_solicitud', desc=True).execute()
     mes_actual = date.today().month
     anio_actual = date.today().year
-    sesiones = supabase.table('sesiones').select('*').eq('estado', 'Realizado').eq('profesor_terapeuta', current_user.nombre).execute()
+    sesiones = supabase.table('sesiones').select('*').in_('estado', ['Realizado', 'Cancelado-Pagado']).eq('profesor_terapeuta', current_user.nombre).execute()
     total_pagar_mes = 0
     for s in (sesiones.data or []):
         if s.get('fecha', '')[:7] == f"{anio_actual}-{mes_actual:02d}":
             tipo = s.get('tipo_sesion', 'clase')
-            if tipo in ['clase', 'preuniversitario']:
+            if s.get('estado') == 'Cancelado-Pagado':
+                total_pagar_mes += s.get('valor_pagar_docente', 0) or 0
+            elif tipo in ['clase', 'preuniversitario']:
                 total_pagar_mes += (s.get('horas', 0) or 0) * 7
             else:
                 total_pagar_mes += (s.get('valor_total', 0) or 0) * 0.4018
@@ -1128,12 +1147,13 @@ def reportes():
     total_pagado_estudiantes = 0
     asignaturas_detalle = {}
     horas_por_materia = {}
-    cumplimiento = {'planificado': 0, 'realizado': 0, 'cancelado': 0}
+    cumplimiento = {'planificado': 0, 'realizado': 0, 'cancelado': 0, 'cancelado-pagado': 0}
     ingresos_por_tipo = {}
     pagos_por_docente = {}
     total_docencia = 0
     total_psicologia = 0
     total_pago_docentes = 0
+    total_atlas = 0
     gastos_por_categoria = {}
     total_gastos = 0
     
@@ -1143,13 +1163,14 @@ def reportes():
         ses_realizadas = [s for s in ses_todas if s['estado'] == 'Realizado']
         ses_planificadas = [s for s in ses_todas if s['estado'] == 'Planificado']
         ses_canceladas = [s for s in ses_todas if s['estado'] == 'Cancelado']
+        ses_cancelado_pagado = [s for s in ses_todas if s['estado'] == 'Cancelado-Pagado']
         pag = supabase.table('pagos').select('*').eq('estudiante_id', e['id']).execute()
         pag_filtrados = [p for p in (pag.data or []) if p['fecha_pago'][:7] == f"{anio}-{mes:02d}"]
         
         horas_plan = sum(s.get('horas', 0) or 0 for s in ses_todas)
         horas_real = sum(s.get('horas', 0) or 0 for s in ses_realizadas)
         horas_canc = sum(s.get('horas', 0) or 0 for s in ses_canceladas)
-        cobrar = sum(s.get('valor_total', 0) or 0 for s in ses_realizadas)
+        cobrar = sum(s.get('valor_total', 0) or 0 for s in ses_realizadas if s.get('estado') != 'Cancelado-Pagado')
         pagado = sum(p.get('monto', 0) or 0 for p in pag_filtrados)
         
         total_horas_estudiantes += horas_real
@@ -1170,21 +1191,37 @@ def reportes():
                 asignaturas_detalle[asig]['canc'] += s.get('horas', 0) or 0
             cumplimiento[s.get('estado', 'Planificado').lower()] = cumplimiento.get(s.get('estado', 'Planificado').lower(), 0) + 1
             
-            if s['estado'] == 'Realizado':
+            if s['estado'] == 'Realizado' or s['estado'] == 'Cancelado-Pagado':
                 tipo = s.get('tipo_sesion', 'clase')
                 valor = s.get('valor_total', 0) or 0
-                ingresos_por_tipo[tipo] = ingresos_por_tipo.get(tipo, 0) + valor
+                
+                if s['estado'] == 'Realizado':
+                    ingresos_por_tipo[tipo] = ingresos_por_tipo.get(tipo, 0) + valor
                 
                 prof = s.get('profesor_terapeuta', 'Desconocido')
                 horas = s.get('horas', 0) or 0
-                if tipo in ['clase', 'preuniversitario']:
-                    pago_docente = horas * 7
-                    pago_psicologia = 0
-                    total_docencia += pago_docente
+                
+                if s['estado'] == 'Cancelado-Pagado':
+                    pago_docente = s.get('valor_pagar_docente', 0) or 0
+                    valor_atlas = s.get('valor_atlas', 0) or 0
+                    total_atlas += valor_atlas
+                    if tipo in ['terapia', 'ambos']:
+                        pago_psicologia = pago_docente
+                        pago_docente = 0
+                        total_psicologia += pago_psicologia
+                    else:
+                        pago_psicologia = 0
+                        total_docencia += pago_docente
                 else:
-                    pago_docente = 0
-                    pago_psicologia = valor * 0.4018
-                    total_psicologia += pago_psicologia
+                    if tipo in ['clase', 'preuniversitario']:
+                        pago_docente = horas * 7
+                        pago_psicologia = 0
+                        total_docencia += pago_docente
+                    else:
+                        pago_docente = 0
+                        pago_psicologia = valor * 0.4018
+                        total_psicologia += pago_psicologia
+                
                 total_pagar = pago_docente + pago_psicologia
                 total_pago_docentes += total_pagar
                 if prof not in pagos_por_docente:
@@ -1229,6 +1266,7 @@ def reportes():
                          cumplimiento=cumplimiento, porcentaje_cumplimiento=porcentaje_cumplimiento,
                          pagos_por_docente=pagos_por_docente, total_pago_docentes=total_pago_docentes,
                          total_docencia=total_docencia, total_psicologia=total_psicologia,
+                         total_atlas=total_atlas,
                          correcciones=correcciones.data or [], observaciones=observaciones.data or [],
                          nuevos_usuarios=nuevos_usuarios.data or [], total_planificado=0)
 
@@ -1365,7 +1403,7 @@ def mi_reporte():
     anticipos_aprobados = 0
     nombre_usuario = current_user.nombre.strip().lower()
     palabras_usuario = nombre_usuario.split()
-    sesiones = supabase.table('sesiones').select('*, estudiantes(*)').eq('estado', 'Realizado').order('fecha', desc=True).execute()
+    sesiones = supabase.table('sesiones').select('*, estudiantes(*)').in_('estado', ['Realizado', 'Cancelado-Pagado']).order('fecha', desc=True).execute()
     
     anticipos = supabase.table('anticipos_solicitudes').select('*').eq('usuario_id', current_user.id).eq('estado', 'aprobado').execute()
     for a in (anticipos.data or []):
@@ -1402,10 +1440,14 @@ def mi_reporte():
             horas = s.get('horas', 0) or 0
             valor = s.get('valor_total', 0) or 0
             tipo = s.get('tipo_sesion', 'clase')
-            if tipo in ['clase', 'preuniversitario']:
+            
+            if s.get('estado') == 'Cancelado-Pagado':
+                mi_pago = s.get('valor_pagar_docente', 0) or 0
+            elif tipo in ['clase', 'preuniversitario']:
                 mi_pago = horas * 7
             else:
                 mi_pago = valor * 0.4018
+                
             total_a_pagar += mi_pago
             total_horas += horas
             datos.append({
