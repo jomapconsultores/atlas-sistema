@@ -2,72 +2,369 @@
 {% block title %}Reportes - Atlas{% endblock %}
 
 {% block content %}
-<h3>📊 Dashboard de Reportes</h3>
+<style>
+    :root {
+        --primary: #1a73e8;
+        --success: #0f9d58;
+        --warning: #f4b400;
+        --danger: #db4437;
+        --dark: #1a1a2e;
+        --light: #f8f9fa;
+    }
+    .report-card {
+        border-radius: 20px;
+        border: none;
+        overflow: hidden;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    }
+    .report-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+    }
+    .stat-card {
+        border-radius: 16px;
+        border: none;
+        padding: 20px 15px;
+        color: white;
+        position: relative;
+        overflow: hidden;
+    }
+    .stat-card .icon-bg {
+        position: absolute;
+        right: -15px;
+        bottom: -15px;
+        font-size: 70px;
+        opacity: 0.2;
+    }
+    .stat-card h3 {
+        font-size: 28px;
+        font-weight: 700;
+        margin: 0;
+        position: relative;
+        z-index: 1;
+    }
+    .stat-card small {
+        font-size: 12px;
+        opacity: 0.9;
+        position: relative;
+        z-index: 1;
+    }
+    .gradient-blue { background: linear-gradient(135deg, #1a73e8, #0d47a1); }
+    .gradient-green { background: linear-gradient(135deg, #0f9d58, #00695c); }
+    .gradient-teal { background: linear-gradient(135deg, #00acc1, #006064); }
+    .gradient-red { background: linear-gradient(135deg, #db4437, #b71c1c); }
+    .gradient-purple { background: linear-gradient(135deg, #7b1fa2, #4a148c); }
+    .gradient-orange { background: linear-gradient(135deg, #f4511e, #bf360c); }
+    .gradient-dark { background: linear-gradient(135deg, #263238, #111); }
+    
+    .table-premium {
+        border-radius: 12px;
+        overflow: hidden;
+        border: none;
+    }
+    .table-premium thead th {
+        background: var(--dark);
+        color: white;
+        font-weight: 600;
+        font-size: 13px;
+        letter-spacing: 0.5px;
+        border: none;
+        padding: 12px 15px;
+    }
+    .table-premium tbody td {
+        padding: 10px 15px;
+        vertical-align: middle;
+        font-size: 13px;
+        border-bottom: 1px solid #f0f0f0;
+    }
+    .table-premium tbody tr:hover {
+        background: #f8f9ff;
+    }
+    .table-premium tfoot td {
+        font-weight: 700;
+        font-size: 14px;
+        border-top: 2px solid var(--dark);
+        background: #f8f9fa;
+    }
+    
+    .badge-premium {
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-weight: 500;
+        font-size: 11px;
+        letter-spacing: 0.3px;
+    }
+    
+    .section-title {
+        font-size: 16px;
+        font-weight: 700;
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+        border-bottom: 3px solid var(--primary);
+        display: inline-block;
+    }
+    
+    .accordion-premium .card {
+        border-radius: 12px;
+        border: 1px solid #e0e0e0;
+        margin-bottom: 8px;
+    }
+    .accordion-premium .card-header {
+        background: white;
+        cursor: pointer;
+        padding: 12px 20px;
+        font-weight: 600;
+        border-radius: 12px !important;
+    }
+    .accordion-premium .card-header:hover {
+        background: #f8f9ff;
+    }
+</style>
 
-<form class="row g-2 mb-4"><div class="col-auto"><select name="mes" class="form-select" onchange="this.form.submit()">{% for m in range(1,13) %}<option value="{{ m }}" {{ 'selected' if m==mes }}>{{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][m-1] }}</option>{% endfor %}</select></div><div class="col-auto"><select name="anio" class="form-select" onchange="this.form.submit()">{% for a in range(2025,2031) %}<option value="{{ a }}" {{ 'selected' if a==anio }}>{{ a }}</option>{% endfor %}</select></div></form>
+<h3 class="mb-4" style="font-weight: 700; color: var(--dark);">
+    <i class="bi bi-graph-up"></i> Dashboard de Reportes
+</h3>
 
-<!-- Tarjetas -->
-<div class="row mb-4">
-    <div class="col-md-3"><div class="card bg-primary text-white text-center p-2"><h5>{{ total_estudiantes }}</h5><small>Estudiantes (👨 {{ estudiantes_hombres }} | 👩 {{ estudiantes_mujeres }})</small></div></div>
-    <div class="col-md-3"><div class="card bg-success text-white text-center p-2"><h5>{{ total_horas_estudiantes }}</h5><small>Horas Efectivas</small></div></div>
-    <div class="col-md-3"><div class="card bg-info text-white text-center p-2"><h5>${{ "%.0f"|format(total_ingresos) }}</h5><small>Ingresos Recaudados</small></div></div>
-    <div class="col-md-3"><div class="card bg-{{ 'success' if balance>=0 else 'danger' }} text-white text-center p-2"><h5>${{ "%.0f"|format(balance) }}</h5><small>Resultado Neto</small></div></div>
+<!-- Filtros -->
+<div class="card report-card mb-4">
+    <div class="card-body">
+        <form class="row g-3 align-items-end">
+            <div class="col-auto">
+                <label class="form-label fw-bold text-muted small">MES</label>
+                <select name="mes" class="form-select" onchange="this.form.submit()" style="border-radius: 10px; border: 2px solid #e0e0e0;">
+                    {% for m in range(1,13) %}
+                    <option value="{{ m }}" {{ 'selected' if m==mes }}>{{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][m-1] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <label class="form-label fw-bold text-muted small">AÑO</label>
+                <select name="anio" class="form-select" onchange="this.form.submit()" style="border-radius: 10px; border: 2px solid #e0e0e0;">
+                    {% for a in range(2025,2031) %}
+                    <option value="{{ a }}" {{ 'selected' if a==anio }}>{{ a }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </form>
+    </div>
 </div>
 
-<!-- BALANCE DE RESULTADOS -->
-<div class="card shadow mb-4"><div class="card-header bg-dark text-white"><strong>💰 Balance de Resultados - {{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][mes-1] }} {{ anio }}</strong></div><div class="card-body p-2"><div class="table-responsive"><table class="table table-sm table-bordered"><thead><tr class="table-dark"><th>Concepto</th><th class="text-end">Planificado</th><th class="text-end">%</th><th class="text-end">Ejecutado</th><th class="text-end">%</th></tr></thead><tbody>
+<!-- Tarjetas de estadísticas -->
+<div class="row mb-4 g-3">
+    <div class="col-md-3">
+        <div class="stat-card gradient-blue">
+            <div class="icon-bg">👥</div>
+            <h3>{{ total_estudiantes }}</h3>
+            <small>Estudiantes Activos</small>
+            <div class="mt-2 small">👨 {{ estudiantes_hombres }} | 👩 {{ estudiantes_mujeres }}</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card gradient-green">
+            <div class="icon-bg">⏱️</div>
+            <h3>{{ total_horas_estudiantes }}</h3>
+            <small>Horas Efectivas</small>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card gradient-teal">
+            <div class="icon-bg">💰</div>
+            <h3>${{ "%.0f"|format(total_ingresos) }}</h3>
+            <small>Ingresos Recaudados</small>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card {{ 'gradient-green' if balance>=0 else 'gradient-red' }}">
+            <div class="icon-bg">📊</div>
+            <h3>${{ "%.0f"|format(balance) }}</h3>
+            <small>Resultado Neto</small>
+        </div>
+    </div>
+</div>
 
-<tr class="table-success"><td colspan="5"><strong>➕ INGRESOS TOTALES</strong></td></tr>
-{% set plan_total = planificado_clases + planificado_psicologia %}
-{% set ejec_total = total_ingresos %}
-<tr><td>📚 Ingresos Clases</td><td class="text-end">${{ "%.2f"|format(planificado_clases) }}</td><td class="text-end">{{ (planificado_clases/plan_total*100)|round(1) if plan_total>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(ejecutado_clases) }}</td><td class="text-end">{{ (ejecutado_clases/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</td></tr>
-<tr><td>🧠 Ingresos Psicología</td><td class="text-end">${{ "%.2f"|format(planificado_psicologia) }}</td><td class="text-end">{{ (planificado_psicologia/plan_total*100)|round(1) if plan_total>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(ejecutado_psicologia) }}</td><td class="text-end">{{ (ejecutado_psicologia/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</td></tr>
-<tr class="table-success"><td><strong>Total Ingresos</strong></td><td class="text-end"><strong>${{ "%.2f"|format(plan_total) }}</strong></td><td class="text-end"><strong>100%</strong></td><td class="text-end"><strong>${{ "%.2f"|format(ejec_total) }}</strong></td><td class="text-end"><strong>100%</strong></td></tr>
+<!-- ========== BALANCE DE RESULTADOS ========== -->
+<div class="card report-card mb-4">
+    <div class="card-header gradient-dark text-white d-flex justify-content-between align-items-center" style="border-radius: 20px 20px 0 0; padding: 15px 20px;">
+        <strong style="font-size: 16px;">💰 Balance de Resultados - {{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][mes-1] }} {{ anio }}</strong>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-premium mb-0">
+                <thead>
+                    <tr>
+                        <th>Concepto</th>
+                        <th class="text-end" width="15%">Planificado</th>
+                        <th class="text-end" width="10%">%</th>
+                        <th class="text-end" width="15%">Ejecutado</th>
+                        <th class="text-end" width="10%">%</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% set plan_total = planificado_clases + planificado_psicologia %}
+                    {% set ejec_total = total_ingresos %}
+                    
+                    <tr style="background: #e8f5e9;">
+                        <td colspan="5"><strong>➕ INGRESOS TOTALES</strong></td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge bg-primary badge-premium">📚 Clases</span></td>
+                        <td class="text-end">${{ "%.2f"|format(planificado_clases) }}</td>
+                        <td class="text-end">{{ (planificado_clases/plan_total*100)|round(1) if plan_total>0 else 0 }}%</td>
+                        <td class="text-end">${{ "%.2f"|format(ejecutado_clases) }}</td>
+                        <td class="text-end">{{ (ejecutado_clases/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge bg-success badge-premium">🧠 Psicología</span></td>
+                        <td class="text-end">${{ "%.2f"|format(planificado_psicologia) }}</td>
+                        <td class="text-end">{{ (planificado_psicologia/plan_total*100)|round(1) if plan_total>0 else 0 }}%</td>
+                        <td class="text-end">${{ "%.2f"|format(ejecutado_psicologia) }}</td>
+                        <td class="text-end">{{ (ejecutado_psicologia/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</td>
+                    </tr>
+                    <tr style="background: #c8e6c9; font-weight: 700;">
+                        <td><strong>Total Ingresos</strong></td>
+                        <td class="text-end"><strong>${{ "%.2f"|format(plan_total) }}</strong></td>
+                        <td class="text-end"><strong>100%</strong></td>
+                        <td class="text-end"><strong>${{ "%.2f"|format(ejec_total) }}</strong></td>
+                        <td class="text-end"><strong>100%</strong></td>
+                    </tr>
+                    
+                    <tr style="background: #ffebee;">
+                        <td colspan="5"><strong>➖ GASTOS TOTALES</strong></td>
+                    </tr>
+                    
+                    {% set g_arriendo = namespace(v=0) %}{% set g_telefonia = namespace(v=0) %}{% set g_servicios = namespace(v=0) %}{% set g_internet = namespace(v=0) %}{% set g_otros = namespace(v=0) %}
+                    {% for g in gastos %}
+                    {% set cat = g.get('categoria','').lower() %}
+                    {% if 'arri' in cat %}{% set g_arriendo.v = g_arriendo.v + g.monto %}
+                    {% elif 'telef' in cat or 'movil' in cat %}{% set g_telefonia.v = g_telefonia.v + g.monto %}
+                    {% elif 'internet' in cat %}{% set g_internet.v = g_internet.v + g.monto %}
+                    {% elif 'servicio' in cat or 'basico' in cat or 'luz' in cat or 'agua' in cat %}{% set g_servicios.v = g_servicios.v + g.monto %}
+                    {% else %}{% set g_otros.v = g_otros.v + g.monto %}{% endif %}{% endfor %}
+                    
+                    <tr><td>🏠 Arriendo</td><td class="text-end">${{ "%.2f"|format(g_arriendo.v) }}</td><td class="text-end">{{ (g_arriendo.v/plan_total*100)|round(1) if plan_total>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(g_arriendo.v) }}</td><td class="text-end">{{ (g_arriendo.v/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</td></tr>
+                    <tr><td>📱 Telefonía Móvil</td><td class="text-end">${{ "%.2f"|format(g_telefonia.v) }}</td><td class="text-end">{{ (g_telefonia.v/plan_total*100)|round(1) if plan_total>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(g_telefonia.v) }}</td><td class="text-end">{{ (g_telefonia.v/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</td></tr>
+                    <tr><td>💡 Servicios Básicos (luz, agua)</td><td class="text-end">${{ "%.2f"|format(g_servicios.v) }}</td><td class="text-end">{{ (g_servicios.v/plan_total*100)|round(1) if plan_total>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(g_servicios.v) }}</td><td class="text-end">{{ (g_servicios.v/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</td></tr>
+                    <tr><td>🌐 Internet</td><td class="text-end">${{ "%.2f"|format(g_internet.v) }}</td><td class="text-end">{{ (g_internet.v/plan_total*100)|round(1) if plan_total>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(g_internet.v) }}</td><td class="text-end">{{ (g_internet.v/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</td></tr>
+                    <tr><td>📦 Otros Gastos</td><td class="text-end">${{ "%.2f"|format(g_otros.v) }}</td><td class="text-end">{{ (g_otros.v/plan_total*100)|round(1) if plan_total>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(g_otros.v) }}</td><td class="text-end">{{ (g_otros.v/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</td></tr>
+                    <tr><td>👨‍🏫 Pago a Docentes</td><td class="text-end">${{ "%.2f"|format(total_docencia) }}</td><td class="text-end">{{ (total_docencia/plan_total*100)|round(1) if plan_total>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(total_docencia) }}</td><td class="text-end">{{ (total_docencia/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</td></tr>
+                    <tr><td>🧠 Pago a Psicólogos</td><td class="text-end">${{ "%.2f"|format(total_psicologia) }}</td><td class="text-end">{{ (total_psicologia/plan_total*100)|round(1) if plan_total>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(total_psicologia) }}</td><td class="text-end">{{ (total_psicologia/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</td></tr>
+                    
+                    {% set gt = g_arriendo.v+g_telefonia.v+g_servicios.v+g_internet.v+g_otros.v+total_docencia+total_psicologia %}
+                    <tr style="background: #ffcdd2; font-weight: 700;">
+                        <td><strong>Total Gastos</strong></td>
+                        <td class="text-end"><strong>${{ "%.2f"|format(gt) }}</strong></td>
+                        <td class="text-end"><strong>{{ (gt/plan_total*100)|round(1) if plan_total>0 else 0 }}%</strong></td>
+                        <td class="text-end"><strong>${{ "%.2f"|format(gt) }}</strong></td>
+                        <td class="text-end"><strong>{{ (gt/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</strong></td>
+                    </tr>
+                    
+                    <tr style="background: {{ '#c8e6c9' if ejec_total-gt>=0 else '#ffcdd2' }}; font-weight: 700; font-size: 16px;">
+                        <td><strong>= RESULTADO NETO</strong></td>
+                        <td class="text-end"><strong>${{ "%.2f"|format(plan_total-gt) }}</strong></td>
+                        <td></td>
+                        <td class="text-end"><strong>${{ "%.2f"|format(ejec_total-gt) }}</strong></td>
+                        <td></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 
-<tr class="table-danger"><td colspan="5"><strong>➖ GASTOS TOTALES</strong></td></tr>
-{% set g_arriendo = namespace(v=0) %}{% set g_telefonia = namespace(v=0) %}{% set g_servicios = namespace(v=0) %}{% set g_internet = namespace(v=0) %}{% set g_otros = namespace(v=0) %}
-{% for g in gastos %}
-{% set cat = g.get('categoria','').lower() %}
-{% if 'arri' in cat %}{% set g_arriendo.v = g_arriendo.v + g.monto %}
-{% elif 'telef' in cat or 'movil' in cat %}{% set g_telefonia.v = g_telefonia.v + g.monto %}
-{% elif 'internet' in cat %}{% set g_internet.v = g_internet.v + g.monto %}
-{% elif 'servicio' in cat or 'basico' in cat or 'luz' in cat or 'agua' in cat %}{% set g_servicios.v = g_servicios.v + g.monto %}
-{% else %}{% set g_otros.v = g_otros.v + g.monto %}{% endif %}{% endfor %}
+<!-- ========== REPORTE POR ASIGNATURA DETALLADO ========== -->
+<div class="card report-card mb-4">
+    <div class="card-header gradient-purple text-white" style="border-radius: 20px 20px 0 0; padding: 15px 20px;">
+        <strong style="font-size: 16px;">📚 Reporte Detallado por Asignatura / Terapia</strong>
+    </div>
+    <div class="card-body p-3">
+        <div class="accordion-premium" id="accordionAsignaturas">
+            {% for asig, datos in asignaturas_valores.items() %}
+            <div class="card">
+                <div class="card-header" data-bs-toggle="collapse" data-bs-target="#asig{{ loop.index }}" style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>{{ asig }}</span>
+                    <div>
+                        <span class="badge bg-primary badge-premium me-2">{{ datos.estudiantes }} est.</span>
+                        <span class="badge bg-success badge-premium me-2">{{ datos.horas }} hrs</span>
+                        <span class="badge bg-dark badge-premium">${{ "%.2f"|format(datos.valor) }}</span>
+                    </div>
+                </div>
+                <div id="asig{{ loop.index }}" class="collapse" data-bs-parent="#accordionAsignaturas">
+                    <div class="card-body bg-light">
+                        <table class="table table-sm table-borderless mb-0">
+                            <tr><td width="150"><strong>📚 Asignatura:</strong></td><td>{{ asig }}</td></tr>
+                            <tr><td><strong>👥 Estudiantes:</strong></td><td>{{ datos.estudiantes }}</td></tr>
+                            <tr><td><strong>⏱️ Horas Totales:</strong></td><td>{{ datos.horas }}</td></tr>
+                            <tr><td><strong>💰 Valor Cobrado:</strong></td><td class="fw-bold">${{ "%.2f"|format(datos.valor) }}</td></tr>
+                            <tr><td><strong>📊 % del Total:</strong></td><td>
+                                <div class="progress" style="height: 20px; border-radius: 10px;">
+                                    <div class="progress-bar bg-success" style="width: {{ (datos.valor/plan_total*100)|round(1) if plan_total>0 else 0 }}%">
+                                        {{ (datos.valor/plan_total*100)|round(1) if plan_total>0 else 0 }}%
+                                    </div>
+                                </div>
+                            </td></tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="mt-3 p-3" style="background: var(--dark); color: white; border-radius: 10px;">
+            <div class="row">
+                <div class="col-4 text-center"><strong>{{ asignaturas_valores|length }}</strong><br><small>Asignaturas</small></div>
+                <div class="col-4 text-center"><strong>{{ total_horas_estudiantes }}</strong><br><small>Horas Totales</small></div>
+                <div class="col-4 text-center"><strong>${{ "%.2f"|format(plan_total) }}</strong><br><small>Valor Total</small></div>
+            </div>
+        </div>
+    </div>
+</div>
 
-<tr><td>🏠 Arriendo</td><td class="text-end">${{ "%.2f"|format(g_arriendo.v) }}</td><td class="text-end">{{ (g_arriendo.v/plan_total*100)|round(1) if plan_total>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(g_arriendo.v) }}</td><td class="text-end">{{ (g_arriendo.v/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</td></tr>
-<tr><td>📱 Telefonía Móvil</td><td class="text-end">${{ "%.2f"|format(g_telefonia.v) }}</td><td class="text-end">{{ (g_telefonia.v/plan_total*100)|round(1) if plan_total>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(g_telefonia.v) }}</td><td class="text-end">{{ (g_telefonia.v/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</td></tr>
-<tr><td>💡 Servicios Básicos (luz, agua)</td><td class="text-end">${{ "%.2f"|format(g_servicios.v) }}</td><td class="text-end">{{ (g_servicios.v/plan_total*100)|round(1) if plan_total>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(g_servicios.v) }}</td><td class="text-end">{{ (g_servicios.v/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</td></tr>
-<tr><td>🌐 Internet</td><td class="text-end">${{ "%.2f"|format(g_internet.v) }}</td><td class="text-end">{{ (g_internet.v/plan_total*100)|round(1) if plan_total>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(g_internet.v) }}</td><td class="text-end">{{ (g_internet.v/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</td></tr>
-<tr><td>📦 Otros Gastos</td><td class="text-end">${{ "%.2f"|format(g_otros.v) }}</td><td class="text-end">{{ (g_otros.v/plan_total*100)|round(1) if plan_total>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(g_otros.v) }}</td><td class="text-end">{{ (g_otros.v/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</td></tr>
-<tr><td>👨‍🏫 Pago a Docentes</td><td class="text-end">${{ "%.2f"|format(total_docencia) }}</td><td class="text-end">{{ (total_docencia/plan_total*100)|round(1) if plan_total>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(total_docencia) }}</td><td class="text-end">{{ (total_docencia/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</td></tr>
-<tr><td>🧠 Pago a Psicólogos</td><td class="text-end">${{ "%.2f"|format(total_psicologia) }}</td><td class="text-end">{{ (total_psicologia/plan_total*100)|round(1) if plan_total>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(total_psicologia) }}</td><td class="text-end">{{ (total_psicologia/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</td></tr>
-
-{% set gt = g_arriendo.v+g_telefonia.v+g_servicios.v+g_internet.v+g_otros.v+total_docencia+total_psicologia %}
-<tr class="table-danger"><td><strong>Total Gastos</strong></td><td class="text-end"><strong>${{ "%.2f"|format(gt) }}</strong></td><td class="text-end"><strong>{{ (gt/plan_total*100)|round(1) if plan_total>0 else 0 }}%</strong></td><td class="text-end"><strong>${{ "%.2f"|format(gt) }}</strong></td><td class="text-end"><strong>{{ (gt/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</strong></td></tr>
-
-<tr class="{{ 'table-success' if ejec_total-gt>=0 else 'table-danger' }}"><td><strong>= RESULTADO NETO</strong></td><td class="text-end"><strong>${{ "%.2f"|format(plan_total-gt) }}</strong></td><td class="text-end"></td><td class="text-end"><strong>${{ "%.2f"|format(ejec_total-gt) }}</strong></td><td class="text-end"></td></tr>
-</tbody></table></div></div></div>
-
-<!-- ========== REPORTE POR ASIGNATURA CON VALORES ========== -->
-<div class="card shadow mb-4"><div class="card-header bg-info text-white"><strong>📚 Reporte por Asignatura - Horas y Valores</strong></div><div class="card-body p-2"><div class="table-responsive"><table class="table table-sm table-bordered"><thead><tr class="table-dark"><th>Asignatura / Terapia</th><th class="text-center">Estudiantes</th><th class="text-center">Horas Totales</th><th class="text-end">Valor Cobrado</th><th class="text-end">% del Total</th></tr></thead><tbody>
-{% for asig, datos in asignaturas_valores.items() %}
-<tr><td>{{ asig }}</td><td class="text-center">{{ datos.estudiantes }}</td><td class="text-center">{{ datos.horas }}</td><td class="text-end">${{ "%.2f"|format(datos.valor) }}</td><td class="text-end">{{ (datos.valor/plan_total*100)|round(1) if plan_total>0 else 0 }}%</td></tr>
-{% endfor %}
-</tbody><tfoot class="table-secondary"><tr><td><strong>TOTAL</strong></td><td class="text-center"><strong>{{ total_estudiantes }}</strong></td><td class="text-center"><strong>{{ total_horas_estudiantes }}</strong></td><td class="text-end"><strong>${{ "%.2f"|format(plan_total) }}</strong></td><td class="text-end"><strong>100%</strong></td></tr></tfoot></table></div></div></div>
-
-<!-- ========== PAGOS A DOCENTES CON PORCENTAJES ========== -->
-<div class="card shadow mb-4"><div class="card-header bg-secondary text-white"><strong>💲 Pagos a Docentes y Psicólogos</strong></div><div class="card-body p-2"><div class="table-responsive"><table class="table table-sm table-bordered"><thead><tr class="table-dark"><th>Profesional</th><th class="text-end">$ Docencia</th><th class="text-end">$ Psicología</th><th class="text-end">$ Total</th><th class="text-end">% del Total Pagos</th></tr></thead><tbody>
-{% for n,d in pagos_por_docente.items() %}
-<tr><td><strong>{{ n }}</strong></td><td class="text-end">${{ "%.2f"|format(d.pago_docencia) }}</td><td class="text-end">${{ "%.2f"|format(d.pago_psicologia) }}</td><td class="text-end fw-bold">${{ "%.2f"|format(d.total_pagar) }}</td><td class="text-end">{{ (d.total_pagar/total_pago_docentes*100)|round(1) if total_pago_docentes>0 else 0 }}%</td></tr>
-{% endfor %}
-</tbody><tfoot class="table-secondary"><tr><td><strong>TOTAL</strong></td><td class="text-end"><strong>${{ "%.2f"|format(total_docencia) }}</strong></td><td class="text-end"><strong>${{ "%.2f"|format(total_psicologia) }}</strong></td><td class="text-end"><strong>${{ "%.2f"|format(total_pago_docentes) }}</strong></td><td class="text-end"><strong>100%</strong></td></tr></tfoot></table></div></div></div>
+<!-- ========== PAGOS A DOCENTES ========== -->
+<div class="card report-card mb-4">
+    <div class="card-header gradient-orange text-white" style="border-radius: 20px 20px 0 0; padding: 15px 20px;">
+        <strong style="font-size: 16px;">💲 Pagos a Docentes y Psicólogos</strong>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-premium mb-0">
+                <thead>
+                    <tr>
+                        <th>Profesional</th>
+                        <th class="text-end">$ Docencia</th>
+                        <th class="text-end">$ Psicología</th>
+                        <th class="text-end">$ Total</th>
+                        <th class="text-end">% del Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for n,d in pagos_por_docente.items() %}
+                    <tr>
+                        <td><strong>{{ n }}</strong></td>
+                        <td class="text-end text-primary">${{ "%.2f"|format(d.pago_docencia) }}</td>
+                        <td class="text-end text-success">${{ "%.2f"|format(d.pago_psicologia) }}</td>
+                        <td class="text-end fw-bold">${{ "%.2f"|format(d.total_pagar) }}</td>
+                        <td class="text-end">
+                            <div class="progress" style="height: 6px; border-radius: 3px;">
+                                <div class="progress-bar bg-warning" style="width: {{ (d.total_pagar/total_pago_docentes*100)|round(1) if total_pago_docentes>0 else 0 }}%"></div>
+                            </div>
+                            <small>{{ (d.total_pagar/total_pago_docentes*100)|round(1) if total_pago_docentes>0 else 0 }}%</small>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td><strong>TOTAL</strong></td>
+                        <td class="text-end"><strong>${{ "%.2f"|format(total_docencia) }}</strong></td>
+                        <td class="text-end"><strong>${{ "%.2f"|format(total_psicologia) }}</strong></td>
+                        <td class="text-end"><strong>${{ "%.2f"|format(total_pago_docentes) }}</strong></td>
+                        <td class="text-end"><strong>100%</strong></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script>
-const colors=['#1a73e8','#0f9d58','#f4b400','#db4437','#ab47bc','#00acc1','#ff7043','#9ccc65'];
-new Chart(document.getElementById('chartIngresos'),{type:'pie',data:{labels:[{% for t,v in ingresos_por_tipo.items() %}'{{ t }}',{% endfor %}],datasets:[{data:[{% for t,v in ingresos_por_tipo.items() %}{{ v }},{% endfor %}],backgroundColor:colors}]},options:{responsive:true,plugins:{legend:{position:'bottom'}}}});
-new Chart(document.getElementById('chartCumplimiento'),{type:'doughnut',data:{labels:['Realizado','Planificado','Cancelado'],datasets:[{data:[{{ cumplimiento.get('realizado',0) }},{{ cumplimiento.get('planificado',0) }},{{ cumplimiento.get('cancelado',0) }}],backgroundColor:['#0f9d58','#f4b400','#db4437']}]},options:{responsive:true,plugins:{legend:{position:'bottom'}}}});
-new Chart(document.getElementById('chartGastos'),{type:'pie',data:{labels:[{% for c,v in gastos_por_categoria.items() %}'{{ c }}',{% endfor %}],datasets:[{data:[{% for c,v in gastos_por_categoria.items() %}{{ v }},{% endfor %}],backgroundColor:colors}]},options:{responsive:true,plugins:{legend:{position:'bottom'}}}});
-new Chart(document.getElementById('chartMaterias'),{type:'bar',data:{labels:[{% for m,h in horas_por_materia.items() %}'{{ m[:20] }}',{% endfor %}],datasets:[{label:'Horas',data:[{% for m,h in horas_por_materia.items() %}{{ h }},{% endfor %}],backgroundColor:'#1a73e8'}]},options:{responsive:true,plugins:{legend:{position:'top'}}}});
-</script>
 {% endblock %}
