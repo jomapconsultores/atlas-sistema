@@ -1155,11 +1155,9 @@ def reportes():
     total_cobrar_estudiantes = 0
     total_pagado_estudiantes = 0
     
-    # Para planificado: separar por tipo
+    # Para el balance: planificado por tipo y ejecutado por tipo
     planificado_clases = 0
     planificado_psicologia = 0
-    
-    # Para ejecutado: lo realmente cobrado
     ejecutado_clases = 0
     ejecutado_psicologia = 0
     
@@ -1176,29 +1174,30 @@ def reportes():
     total_gastos = 0
     
     for e in (estudiantes.data or []):
-        ses = supabase.table('sesiones').select('*').eq('estudiante_id', e['id']).execute()
-        ses_todas = [s for s in (ses.data or []) if s.get('fecha', '') and s['fecha'][:7] == f"{anio}-{mes:02d}"]
-        ses_realizadas = [s for s in ses_todas if s['estado'] == 'Realizado']
-        ses_planificadas = [s for s in ses_todas if s['estado'] == 'Planificado']
-        ses_canceladas = [s for s in ses_todas if s['estado'] == 'Cancelado']
-        ses_cancelado_pagado = [s for s in ses_todas if s['estado'] == 'Cancelado-Pagado']
-        pag = supabase.table('pagos').select('*').eq('estudiante_id', e['id']).execute()
-        pag_filtrados = [p for p in (pag.data or []) if p['fecha_pago'][:7] == f"{anio}-{mes:02d}"]
+        # USAR LA MISMA LÓGICA QUE MODULO 3
+        ses = supabase.table('sesiones').select('*').eq('estudiante_id', e['id']).in_('estado', ['Realizado', 'Cancelado-Pagado']).execute()
+        pag = supabase.table('pagos').select('*').eq('estudiante_id', e['id']).order('fecha_pago', desc=True).execute()
         
-        horas_plan = sum(s.get('horas', 0) or 0 for s in ses_todas)
+        # Filtrar por mes
+        ses_data = [s for s in (ses.data or []) if s.get('fecha', '') and s['fecha'][:7] == f"{anio}-{mes:02d}"]
+        pag_data = [p for p in (pag.data or []) if p.get('fecha_pago', '') and p['fecha_pago'][:7] == f"{anio}-{mes:02d}"]
+        
+        # Separar por estado y tipo
+        ses_realizadas = [s for s in ses_data if s['estado'] == 'Realizado']
+        ses_cancelado_pagado = [s for s in ses_data if s['estado'] == 'Cancelado-Pagado']
+        
+        # Total a cobrar = Realizadas + Cancelado-Pagado (igual que modulo3)
+        cobrar = sum(s.get('valor_total', 0) or 0 for s in ses_data)
+        pagado = sum(p.get('monto', 0) or 0 for p in pag_data)
+        
         horas_real = sum(s.get('horas', 0) or 0 for s in ses_realizadas)
-        horas_canc = sum(s.get('horas', 0) or 0 for s in ses_canceladas)
-        
-        # Cobrar incluye Realizadas + Cancelado-Pagado
-        cobrar = sum(s.get('valor_total', 0) or 0 for s in (ses_realizadas + ses_cancelado_pagado))
-        pagado = sum(p.get('monto', 0) or 0 for p in pag_filtrados)
         
         total_horas_estudiantes += horas_real
         total_cobrar_estudiantes += cobrar
         total_pagado_estudiantes += pagado
         
-        # Calcular planificado por tipo
-        for s in ses_planificadas:
+        # Planificado = lo que se debe cobrar (Realizadas + Canc-Pag) por tipo
+        for s in ses_data:
             tipo = s.get('tipo_sesion', 'clase')
             valor = s.get('valor_total', 0) or 0
             if tipo in ['clase', 'preuniversitario']:
@@ -1206,41 +1205,21 @@ def reportes():
             else:
                 planificado_psicologia += valor
         
-        # Calcular planificado por tipo DESDE REALIZADAS Y CANCELADO-PAGADO
-        # (porque son las que se van a cobrar)
-        for s in (ses_realizadas + ses_cancelado_pagado):
+        # Ejecutado = solo lo RECAUDADO (Realizado) por tipo
+        for s in ses_realizadas:
             tipo = s.get('tipo_sesion', 'clase')
             valor = s.get('valor_total', 0) or 0
+            ingresos_por_tipo[tipo] = ingresos_por_tipo.get(tipo, 0) + valor
             if tipo in ['clase', 'preuniversitario']:
-                planificado_clases += valor
+                ejecutado_clases += valor
             else:
-                planificado_psicologia += valor
+                ejecutado_psicologia += valor
         
-        for s in ses_todas:
-            asig = s.get('asignatura') or s.get('tema_terapia') or 'Sin registro'
-            horas_por_materia[asig] = horas_por_materia.get(asig, 0) + (s.get('horas', 0) or 0)
-            if asig not in asignaturas_detalle:
-                asignaturas_detalle[asig] = {'plan': 0, 'real': 0, 'canc': 0}
-            if s['estado'] == 'Planificado':
-                asignaturas_detalle[asig]['plan'] += s.get('horas', 0) or 0
-            elif s['estado'] in ['Realizado', 'Cancelado-Pagado']:
-                asignaturas_detalle[asig]['real'] += s.get('horas', 0) or 0
-            elif s['estado'] == 'Cancelado':
-                asignaturas_detalle[asig]['canc'] += s.get('horas', 0) or 0
-            cumplimiento[s.get('estado', 'Planificado').lower()] = cumplimiento.get(s.get('estado', 'Planificado').lower(), 0) + 1
-            
+        # Cálculo de pagos a docentes
+        for s in ses_data:
             if s['estado'] in ['Realizado', 'Cancelado-Pagado']:
                 tipo = s.get('tipo_sesion', 'clase')
                 valor = s.get('valor_total', 0) or 0
-                
-                # Solo sumar a ingresos_por_tipo (ejecutado) lo que está como Realizado (pagado)
-                if s['estado'] == 'Realizado':
-                    ingresos_por_tipo[tipo] = ingresos_por_tipo.get(tipo, 0) + valor
-                    if tipo in ['clase', 'preuniversitario']:
-                        ejecutado_clases += valor
-                    else:
-                        ejecutado_psicologia += valor
-                
                 prof = s.get('profesor_terapeuta', 'Desconocido')
                 horas = s.get('horas', 0) or 0
                 
@@ -1273,10 +1252,20 @@ def reportes():
                 pagos_por_docente[prof]['pago_psicologia'] += pago_psicologia
                 pagos_por_docente[prof]['total_pagar'] += total_pagar
         
+        # Para cumplimiento y materias
+        for s in ses_data:
+            asig = s.get('asignatura') or s.get('tema_terapia') or 'Sin registro'
+            horas_por_materia[asig] = horas_por_materia.get(asig, 0) + (s.get('horas', 0) or 0)
+            if asig not in asignaturas_detalle:
+                asignaturas_detalle[asig] = {'plan': 0, 'real': 0, 'canc': 0}
+            if s['estado'] in ['Realizado', 'Cancelado-Pagado']:
+                asignaturas_detalle[asig]['real'] += s.get('horas', 0) or 0
+            cumplimiento[s.get('estado', 'Planificado').lower()] = cumplimiento.get(s.get('estado', 'Planificado').lower(), 0) + 1
+        
         if cobrar > 0 or pagado > 0 or horas_real > 0:
             datos_estudiantes.append({
                 'id': e['id'], 'estudiante': f"{e['apellidos']} {e['nombres']}",
-                'horas_plan': horas_plan, 'horas_real': horas_real, 'horas_canc': horas_canc,
+                'horas_plan': 0, 'horas_real': horas_real, 'horas_canc': 0,
                 'cobrar': cobrar, 'pagado': pagado, 'saldo': cobrar - pagado
             })
     
@@ -1288,7 +1277,6 @@ def reportes():
         cat = g.get('categoria', 'Sin categoría')
         gastos_por_categoria[cat] = gastos_por_categoria.get(cat, 0) + (g.get('monto', 0) or 0)
     
-    total_por_pagar_estudiantes = total_cobrar_estudiantes - total_pagado_estudiantes
     balance = total_pagado_estudiantes - total_gastos - total_pago_docentes
     
     correcciones = supabase.table('correcciones_pagos').select('*').order('fecha_correccion', desc=True).limit(30).execute()
@@ -1300,7 +1288,7 @@ def reportes():
                          total_horas_estudiantes=total_horas_estudiantes,
                          total_cobrar_estudiantes=total_cobrar_estudiantes,
                          total_pagado_estudiantes=total_pagado_estudiantes,
-                         total_por_pagar_estudiantes=total_por_pagar_estudiantes,
+                         total_por_pagar_estudiantes=total_cobrar_estudiantes - total_pagado_estudiantes,
                          total_ingresos=total_ingresos,
                          total_gastos=total_gastos, balance=balance,
                          gastos=gastos_mes.data or [], mes=mes, anio=anio,
