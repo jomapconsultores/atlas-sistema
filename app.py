@@ -1294,7 +1294,7 @@ def reportes():
     observaciones = supabase.table('sesiones').select('*, estudiantes(apellidos, nombres)').not_.is_('observaciones', 'null').order('fecha', desc=True).limit(30).execute()
     nuevos_usuarios = supabase.table('usuarios').select('*').gte('fecha_registro', f"{anio}-{mes:02d}-01").lte('fecha_registro', f"{anio}-{mes:02d}-31").execute()
 
-        # ========== DATOS PARA REPORTE DE GÉNERO ==========
+    # ========== DATOS PARA REPORTE DE GÉNERO ==========
     estudiantes_hombres = 0
     estudiantes_mujeres = 0
     horas_por_estudiante = {}
@@ -1331,7 +1331,7 @@ def reportes():
     # ========== TOTALES DE PAGOS DOCENTES PARA PORCENTAJES ==========
     total_pago_docentes_general = total_docencia + total_psicologia
 
-        return render_template('reportes.html',
+    return render_template('reportes.html',
                          datos_estudiantes=datos_estudiantes, total_estudiantes=len(datos_estudiantes),
                          total_horas_estudiantes=total_horas_estudiantes,
                          total_cobrar_estudiantes=total_cobrar_estudiantes,
@@ -1349,8 +1349,8 @@ def reportes():
                          total_atlas=total_atlas,
                          planificado_clases=planificado_clases,
                          planificado_psicologia=planificado_psicologia,
-                         ejecutado_clases=ejecutado_clases,
-                         ejecutado_psicologia=ejecutado_psicologia,
+                         ejecutado_clases=total_facturado_clases,
+                         ejecutado_psicologia=total_facturado_psicologia,
                          estudiantes_hombres=estudiantes_hombres,
                          estudiantes_mujeres=estudiantes_mujeres,
                          horas_por_estudiante=horas_por_estudiante,
@@ -1374,26 +1374,13 @@ def gestion_gastos():
         }).execute()
         flash('✅ Gasto registrado', 'success')
         return redirect(url_for('gestion_gastos'))
+    
     mes = int(request.args.get('mes', date.today().month))
     anio = int(request.args.get('anio', date.today().year))
     gastos = supabase.table('gastos').select('*').eq('mes', mes).eq('anio', anio).order('fecha', desc=True).execute()
     total = sum(g.get('monto', 0) or 0 for g in (gastos.data or []))
-        # Calcular total de pagos a docentes del mes para mostrarlo en el formulario
-    sesiones_mes = supabase.table('sesiones').select('*').in_('estado', ['Realizado', 'Cancelado-Pagado']).gte('fecha', f"{anio}-{mes:02d}-01").lte('fecha', f"{anio}-{mes:02d}-31").execute()
-    total_pago_docentes_mes = 0
-    for s in (sesiones_mes.data or []):
-        tipo = s.get('tipo_sesion', 'clase')
-        horas = s.get('horas', 0) or 0
-        valor = s.get('valor_total', 0) or 0
-        estado = s.get('estado', '')
-        if estado == 'Cancelado-Pagado':
-            total_pago_docentes_mes += s.get('valor_pagar_docente', 0) or 0
-        elif tipo in ['clase', 'preuniversitario']:
-            total_pago_docentes_mes += horas * PAGO_DOCENCIA_POR_HORA
-        else:
-            total_pago_docentes_mes += valor * PORCENTAJE_PSICOLOGIA
     
-        # Obtener pagos a docentes del mes
+    # Obtener pagos a docentes del mes
     sesiones_mes = supabase.table('sesiones').select('*').in_('estado', ['Realizado', 'Cancelado-Pagado']).gte('fecha', f"{anio}-{mes:02d}-01").lte('fecha', f"{anio}-{mes:02d}-31").execute()
     
     pagos_docentes_detalle = {}
