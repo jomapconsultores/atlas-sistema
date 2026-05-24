@@ -1,179 +1,39 @@
 {% extends "base.html" %}
 {% block title %}Administrar Costos - Atlas{% endblock %}
-
 {% block content %}
-<h3>⚙️ Administración de Costos</h3>
-<p class="text-muted">Administradores y socios pueden modificar los costos del sistema</p>
+<style>
+    .card-premium { border-radius: 20px; border: none; box-shadow: 0 4px 20px rgba(0,0,0,0.06); background: white; margin-bottom: 20px; overflow: hidden; }
+    .card-header-grad { padding: 14px 20px; color: white; font-weight: 700; font-size: 15px; }
+    .grad-dark { background: linear-gradient(135deg, #263238, #111); }
+    .table-premium { border-radius: 12px; overflow: hidden; border: none; margin: 0; }
+    .table-premium thead th { background: #1a1a2e; color: white; font-weight: 600; font-size: 11px; letter-spacing: 0.5px; border: none; padding: 10px 12px; text-transform: uppercase; }
+    .table-premium tbody td { padding: 8px 12px; font-size: 13px; border-bottom: 1px solid #f0f0f0; }
+    .btn-premium { border-radius: 10px; font-weight: 600; font-size: 11px; padding: 6px 12px; }
+    .form-control-premium { border-radius: 10px; border: 2px solid #e0e0e0; padding: 8px 12px; font-size: 12px; }
+    .form-select-premium { border-radius: 10px; border: 2px solid #e0e0e0; padding: 8px 12px; font-size: 12px; }
+    .badge-premium { padding: 5px 10px; border-radius: 10px; font-size: 10px; font-weight: 600; }
+</style>
+<h3 style="font-weight:800;color:#1a1a2e;">⚙️ Administración de Costos</h3>
+<div class="mb-3"><button class="btn btn-success btn-premium" data-bs-toggle="modal" data-bs-target="#modalCosto" onclick="limpiarModal()">➕ Nuevo Costo</button></div>
 
-<div class="mb-3">
-    <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalCosto" onclick="limpiarModal()">➕ Nuevo Costo</button>
-</div>
+<div class="card-premium"><div class="card-header-grad grad-dark">📋 Costos <span class="badge bg-light text-dark ms-2">{{ costos|length }}</span></div><div class="card-body p-0">
+<div class="table-responsive"><table class="table table-premium mb-0"><thead><tr><th>Concepto</th><th>Tipo</th><th>Precio</th><th>Modificado</th><th>Estado</th><th>Acción</th></tr></thead><tbody>
+{% for c in costos %}<tr><td>{{ c.concepto }}</td><td><span class="badge-premium bg-{{ 'success' if c.tipo=='psicologia' else 'primary' if c.tipo=='clase' else 'warning' }}">{{ c.tipo }}</span></td><td class="text-end fw-bold">${{ "%.2f"|format(c.precio) }}</td><td><small>{{ c.get('nombre_modificador','Sistema') }}</small></td><td><span class="badge-premium bg-{{ 'success' if c.activo else 'danger' }}">{{ 'Activo' if c.activo else 'Inactivo' }}</span></td><td>
+<button class="btn btn-warning btn-premium" onclick="editarCosto({{ c.id }},'{{ c.concepto|escape }}','{{ c.tipo }}',{{ c.precio }})">✏️</button>
+<button class="btn btn-sm btn-{{ 'secondary' if c.activo else 'success' }} btn-premium" onclick="toggleCosto({{ c.id }})">{{ '🔒' if c.activo else '🔓' }}</button>
+</td></tr>{% endfor %}
+</tbody></table></div></div></div>
 
-<div class="card shadow">
-    <div class="card-header bg-dark text-white">
-        <strong>📋 Costos Configurados</strong>
-        <span class="badge bg-light text-dark ms-2">{{ costos|length }} registros</span>
-    </div>
-    <div class="card-body">
-        <div class="table-responsive">
-            <table class="table table-sm table-striped">
-                <thead>
-                    <tr class="table-dark">
-                        <th>ID</th>
-                        <th>Concepto</th>
-                        <th>Tipo</th>
-                        <th>Precio</th>
-                        <th>Modificado por</th>
-                        <th>Estado</th>
-                        <th>Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for c in costos %}
-                    <tr>
-                        <td>{{ c.id }}</td>
-                        <td>{{ c.concepto }}</td>
-                        <td>
-                            {% if c.tipo == 'psicologia' %}
-                                <span class="badge bg-success">🧠 Psicología</span>
-                            {% elif c.tipo == 'clase' %}
-                                <span class="badge bg-primary">📚 Clase</span>
-                            {% elif c.tipo == 'matricula' %}
-                                <span class="badge bg-warning">📝 Matrícula</span>
-                            {% elif c.tipo == 'pension' %}
-                                <span class="badge bg-info">💵 Pensión</span>
-                            {% else %}
-                                <span class="badge bg-secondary">{{ c.tipo }}</span>
-                            {% endif %}
-                        </td>
-                        <td class="text-end fw-bold">${{ "%.2f"|format(c.precio) }}</td>
-                        <td><small>{{ c.get('nombre_modificador', 'Sistema') }}</small></td>
-                        <td>
-                            {% if c.activo %}
-                                <span class="badge bg-success">✅ Activo</span>
-                            {% else %}
-                                <span class="badge bg-danger">❌ Inactivo</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <button class="btn btn-warning btn-sm" onclick="editarCosto({{ c.id }}, '{{ c.concepto|escape }}', '{{ c.tipo }}', {{ c.precio }})">✏️</button>
-                            <button class="btn btn-{{ 'secondary' if c.activo else 'success' }} btn-sm" onclick="toggleCosto({{ c.id }})">{{ '🔒' if c.activo else '🔓' }}</button>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
-
-<div class="modal fade" id="modalCosto" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header bg-dark text-white">
-                <h5 class="modal-title" id="modalTitulo">➕ Nuevo Costo</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <input type="hidden" id="costo_id" value="">
-                <div class="mb-3">
-                    <label class="form-label">Concepto *</label>
-                    <input type="text" id="concepto" class="form-control" required placeholder="Nombre del concepto (ej: Clase normal)">
-                    <small class="text-muted">Se guardará con la primera letra en mayúscula automáticamente</small>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Tipo *</label>
-                    <select id="tipo" class="form-select" required>
-                        <option value="psicologia">🧠 Psicología</option>
-                        <option value="clase">📚 Clase</option>
-                        <option value="matricula">📝 Matrícula</option>
-                        <option value="pension">💵 Pensión</option>
-                        <option value="servicio">🔧 Servicio</option>
-                    </select>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Precio ($) *</label>
-                    <input type="number" id="precio" class="form-control" step="0.01" required placeholder="0.00">
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-dark" onclick="guardarCosto()">💾 Guardar</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<a href="/dashboard" class="btn btn-outline-secondary mt-3">← Dashboard</a>
+<div class="modal fade" id="modalCosto"><div class="modal-dialog"><div class="modal-content" style="border-radius:16px;"><div class="modal-header bg-dark text-white" style="border-radius:16px 16px 0 0;"><h5 class="modal-title" id="modalTitulo">➕ Nuevo Costo</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body">
+<input type="hidden" id="costo_id"><div class="mb-3"><label class="form-label fw-bold">Concepto</label><input type="text" id="concepto" class="form-control form-control-premium" required></div>
+<div class="mb-3"><label class="form-label fw-bold">Tipo</label><select id="tipo" class="form-select form-select-premium"><option value="psicologia">🧠 Psicología</option><option value="clase">📚 Clase</option><option value="matricula">📝 Matrícula</option><option value="pension">💵 Pensión</option><option value="servicio">🔧 Servicio</option></select></div>
+<div class="mb-3"><label class="form-label fw-bold">Precio ($)</label><input type="number" id="precio" class="form-control form-control-premium" step="0.01" required></div>
+</div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-dark" onclick="guardarCosto()">💾 Guardar</button></div></div></div></div>
 
 <script>
-function limpiarModal() {
-    document.getElementById('costo_id').value = '';
-    document.getElementById('concepto').value = '';
-    document.getElementById('tipo').value = 'psicologia';
-    document.getElementById('precio').value = '';
-    document.getElementById('modalTitulo').textContent = '➕ Nuevo Costo';
-}
-
-function editarCosto(id, concepto, tipo, precio) {
-    document.getElementById('costo_id').value = id;
-    document.getElementById('concepto').value = concepto;
-    document.getElementById('tipo').value = tipo;
-    document.getElementById('precio').value = precio;
-    document.getElementById('modalTitulo').textContent = '✏️ Editar Costo';
-    new bootstrap.Modal(document.getElementById('modalCosto')).show();
-}
-
-async function guardarCosto() {
-    const id = document.getElementById('costo_id').value;
-    const concepto = document.getElementById('concepto').value.trim();
-    const tipo = document.getElementById('tipo').value;
-    const precio = document.getElementById('precio').value;
-    
-    if (!concepto || !precio) {
-        alert('Complete todos los campos');
-        return;
-    }
-    
-    const url = id ? '/api/costos/' + id + '/editar' : '/api/costos/crear';
-    
-    try {
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({concepto: concepto, tipo: tipo, precio: parseFloat(precio)})
-        });
-        const result = await response.json();
-        
-        if (result.success) {
-            alert('✅ Costo guardado correctamente');
-            location.reload();
-        } else {
-            alert('❌ Error: ' + (result.error || 'No se pudo guardar'));
-        }
-    } catch (e) {
-        alert('❌ Error de conexión');
-    }
-}
-
-async function toggleCosto(id) {
-    if (!confirm('¿Cambiar estado de este costo?')) return;
-    
-    try {
-        const response = await fetch('/api/costos/' + id + '/toggle', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'}
-        });
-        const result = await response.json();
-        
-        if (result.success) {
-            location.reload();
-        } else {
-            alert('❌ Error: ' + (result.error || 'No se pudo cambiar'));
-        }
-    } catch (e) {
-        alert('❌ Error de conexión');
-    }
-}
+function limpiarModal(){document.getElementById('costo_id').value='';document.getElementById('concepto').value='';document.getElementById('tipo').value='psicologia';document.getElementById('precio').value='';document.getElementById('modalTitulo').textContent='➕ Nuevo Costo';}
+function editarCosto(id,c,t,p){document.getElementById('costo_id').value=id;document.getElementById('concepto').value=c;document.getElementById('tipo').value=t;document.getElementById('precio').value=p;document.getElementById('modalTitulo').textContent='✏️ Editar';new bootstrap.Modal(document.getElementById('modalCosto')).show();}
+async function guardarCosto(){const id=document.getElementById('costo_id').value;const c=document.getElementById('concepto').value.trim();const t=document.getElementById('tipo').value;const p=document.getElementById('precio').value;if(!c||!p){alert('Complete todos los campos');return;}const url=id?'/api/costos/'+id+'/editar':'/api/costos/crear';try{const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({concepto:c,tipo:t,precio:parseFloat(p)})});const j=await r.json();if(j.success){location.reload();}else{alert('❌ '+j.error);}}catch(e){alert('❌ Error');}}
+async function toggleCosto(id){if(!confirm('¿Cambiar estado?'))return;try{const r=await fetch('/api/costos/'+id+'/toggle',{method:'POST',headers:{'Content-Type':'application/json'}});const j=await r.json();if(j.success)location.reload();}catch(e){alert('❌ Error');}}
 </script>
 {% endblock %}

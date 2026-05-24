@@ -1,145 +1,38 @@
 {% extends "base.html" %}
 {% block title %}Estudiantes - Atlas{% endblock %}
-
 {% block content %}
-<h3>🎓 Estudiantes</h3>
+<style>
+    .card-premium { border-radius: 20px; border: none; box-shadow: 0 4px 20px rgba(0,0,0,0.06); background: white; margin-bottom: 20px; overflow: hidden; }
+    .card-header-grad { padding: 14px 20px; color: white; font-weight: 700; font-size: 15px; }
+    .grad-blue { background: linear-gradient(135deg, #1a73e8, #0d47a1); }
+    .table-premium { border-radius: 12px; overflow: hidden; border: none; margin: 0; }
+    .table-premium thead th { background: #1a1a2e; color: white; font-weight: 600; font-size: 11px; letter-spacing: 0.5px; border: none; padding: 10px 12px; text-transform: uppercase; }
+    .table-premium tbody td { padding: 8px 12px; font-size: 13px; border-bottom: 1px solid #f0f0f0; }
+    .table-premium tbody tr:hover { background: #f8f9ff; }
+    .btn-premium { border-radius: 10px; font-weight: 600; font-size: 11px; padding: 8px 14px; }
+    .form-control-premium { border-radius: 10px; border: 2px solid #e0e0e0; padding: 10px 14px; font-size: 13px; }
+</style>
+<h3 style="font-weight:800;color:#1a1a2e;">🎓 Estudiantes</h3>
+<p class="text-muted" style="font-size:13px;margin-bottom:20px;">Gestión de estudiantes activos</p>
 
-{% if rol in ['admin', 'socio'] %}
-<div class="row">
-    <!-- CREAR NUEVO ESTUDIANTE -->
-    <div class="col-md-6 mb-4">
-        <div class="card shadow h-100">
-            <div class="card-header bg-success text-white"><strong>➕ Nuevo Estudiante</strong></div>
-            <div class="card-body">
-                <form method="POST" action="/api/crear_estudiante_form">
-                    <div class="mb-2">
-                        <label class="form-label">Nombres *</label>
-                        <input type="text" name="nombres" class="form-control" required>
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label">Apellidos *</label>
-                        <input type="text" name="apellidos" class="form-control" required>
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label">Nivel/Curso</label>
-                        <input type="text" name="nivel_curso" class="form-control" placeholder="Ej: 3ro Bachillerato">
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label">Institución/Procedencia</label>
-                        <input type="text" name="procedencia" class="form-control" placeholder="Ej: Colegio Nacional" list="listaCentros" autocomplete="off">
-                        <datalist id="listaCentros">
-                            {% for e in estudiantes %}{% if e.get('procedencia') %}<option value="{{ e['procedencia'] }}">{% endif %}{% endfor %}
-                        </datalist>
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label">Padre de Familia (opcional)</label>
-                        <input type="text" name="padre_nombre" class="form-control" placeholder="Nombre del padre">
-                    </div>
-                    <button type="submit" class="btn btn-success w-100 mt-2">✅ Crear Estudiante</button>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <!-- EDITAR / ELIMINAR ESTUDIANTE -->
-    <div class="col-md-6 mb-4">
-        <div class="card shadow h-100">
-            <div class="card-header bg-primary text-white"><strong>✏️ Editar / Eliminar Estudiante</strong></div>
-            <div class="card-body">
-                <form method="POST">
-                    <div class="mb-2">
-                        <label class="form-label">Seleccionar estudiante *</label>
-                        <select name="estudiante_id" id="selectEstudiante" class="form-select" required onchange="cargarDatos(this)">
-                            <option value="">Seleccionar...</option>
-                            {% for e in estudiantes %}
-                            <option value="{{ e['id'] }}" 
-                                    data-nombres="{{ e['nombres'] }}"
-                                    data-apellidos="{{ e['apellidos'] }}"
-                                    data-nivel="{{ e.get('nivel_curso', '') }}"
-                                    data-procedencia="{{ e.get('procedencia', '') }}"
-                                    data-padre="{{ e.get('padre_nombre', '') }}">
-                                {{ e['apellidos'] }} {{ e['nombres'] }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="mb-2"><label class="form-label">Nombres *</label><input type="text" name="nombres" id="editNombres" class="form-control" required></div>
-                    <div class="mb-2"><label class="form-label">Apellidos *</label><input type="text" name="apellidos" id="editApellidos" class="form-control" required></div>
-                    <div class="mb-2"><label class="form-label">Nivel/Curso</label><input type="text" name="nivel_curso" id="editNivel" class="form-control"></div>
-                    <div class="mb-2"><label class="form-label">Institución/Procedencia</label><input type="text" name="procedencia" id="editProcedencia" class="form-control"></div>
-                    <div class="mb-2"><label class="form-label">Padre de Familia (opcional)</label><input type="text" name="padre_nombre" id="editPadre" class="form-control"></div>
-                    <div class="d-flex gap-2 mt-2">
-                        <button type="submit" class="btn btn-primary flex-fill">💾 Actualizar</button>
-                        <button type="button" class="btn btn-danger flex-fill" onclick="eliminarEstudiante()">🗑️ Eliminar</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
+{% if rol in ['admin','socio'] %}
+<div class="card-premium"><div class="card-header-grad grad-blue">➕ Nuevo Estudiante</div><div class="card-body">
+<form method="POST" action="/api/crear_estudiante_form" class="row g-2">
+    <div class="col-md-4"><input type="text" name="nombres" class="form-control form-control-premium" placeholder="Nombres" required></div>
+    <div class="col-md-4"><input type="text" name="apellidos" class="form-control form-control-premium" placeholder="Apellidos" required></div>
+    <div class="col-md-4"><input type="text" name="nivel_curso" class="form-control form-control-premium" placeholder="Nivel/Curso"></div>
+    <div class="col-md-4"><input type="text" name="procedencia" class="form-control form-control-premium" placeholder="Procedencia"></div>
+    <div class="col-md-4"><input type="text" name="padre_nombre" class="form-control form-control-premium" placeholder="Nombre del padre"></div>
+    <div class="col-md-4"><button type="submit" class="btn btn-primary btn-premium w-100">✅ Registrar</button></div>
+</form></div></div>
 {% endif %}
 
-<!-- LISTA DE ESTUDIANTES -->
-<div class="card shadow">
-    <div class="card-header bg-info text-white"><strong>📋 Lista de Estudiantes ({{ estudiantes|length }})</strong></div>
-    <div class="card-body">
-        {% if estudiantes %}
-        <div class="table-responsive">
-            <table class="table table-striped table-sm">
-                <thead>
-                    <tr><th>Apellidos</th><th>Nombres</th><th>Nivel/Curso</th><th>Institución</th><th>Padre</th></tr>
-                </thead>
-                <tbody>
-                    {% for e in estudiantes %}
-                    <tr>
-                        <td>{{ e['apellidos'] }}</td>
-                        <td>{{ e['nombres'] }}</td>
-                        <td>{{ e.get('nivel_curso', '') }}</td>
-                        <td>{{ e.get('procedencia', '') }}</td>
-                        <td>{{ e.get('padre_nombre', '') }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% else %}
-        <p class="text-muted">No hay estudiantes registrados.</p>
-        {% endif %}
-    </div>
-</div>
+<div class="card-premium"><div class="card-header-grad" style="background:linear-gradient(135deg,#263238,#111);">📋 Lista de Estudiantes</div><div class="card-body p-0">
+<div class="table-responsive"><table class="table table-premium mb-0"><thead><tr><th>Apellidos</th><th>Nombres</th><th>Nivel/Curso</th><th>Procedencia</th><th>Padre</th>{% if rol in ['admin','socio'] %}<th>Acción</th>{% endif %}</tr></thead><tbody>
+{% for e in estudiantes %}<tr><td>{{ e.apellidos }}</td><td>{{ e.nombres }}</td><td>{{ e.get('nivel_curso','') }}</td><td>{{ e.get('procedencia','') }}</td><td>{{ e.get('padre_nombre','') }}</td>{% if rol in ['admin','socio'] %}<td><button class="btn btn-outline-danger btn-sm btn-premium" onclick="eliminarEstudiante({{ e.id }})">🗑️</button></td>{% endif %}</tr>{% endfor %}
+</tbody></table></div></div></div>
 
 <script>
-function cargarDatos(select) {
-    const option = select.selectedOptions[0];
-    if (!option || !option.value) return;
-    document.getElementById('editNombres').value = option.dataset.nombres || '';
-    document.getElementById('editApellidos').value = option.dataset.apellidos || '';
-    document.getElementById('editNivel').value = option.dataset.nivel || '';
-    document.getElementById('editProcedencia').value = option.dataset.procedencia || '';
-    document.getElementById('editPadre').value = option.dataset.padre || '';
-}
-
-function eliminarEstudiante() {
-    const select = document.getElementById('selectEstudiante');
-    const id = select.value;
-    const nombre = select.selectedOptions[0]?.text || '';
-    
-    if (!id) { alert('Selecciona un estudiante primero'); return; }
-    if (!confirm('🗑️ ¿Eliminar a ' + nombre + ' definitivamente?\n\n⚠️ Si tiene sesiones o pagos, no se podrá eliminar.')) return;
-    
-    fetch('/api/estudiante/' + id + '/eliminar', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'}
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) {
-            alert('✅ Estudiante eliminado');
-            location.reload();
-        } else {
-            alert('❌ ' + (data.error || 'Error al eliminar'));
-        }
-    });
-}
+async function eliminarEstudiante(id){if(!confirm('¿Desactivar estudiante?'))return;await fetch('/api/estudiante/'+id+'/eliminar',{method:'POST'});location.reload();}
 </script>
 {% endblock %}
