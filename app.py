@@ -1155,10 +1155,12 @@ def reportes():
     total_cobrar_estudiantes = 0
     total_pagado_estudiantes = 0
     
+    # Estos son los valores para el balance
     planificado_clases = 0
     planificado_psicologia = 0
     ejecutado_clases = 0
     ejecutado_psicologia = 0
+    total_cobrado = 0  # Lo que realmente pagaron los estudiantes
     
     asignaturas_detalle = {}
     horas_por_materia = {}
@@ -1173,17 +1175,21 @@ def reportes():
     total_gastos = 0
     
     for e in (estudiantes.data or []):
+        # Obtener sesiones Realizadas y Cancelado-Pagado (igual que modulo3)
         ses = supabase.table('sesiones').select('*').eq('estudiante_id', e['id']).in_('estado', ['Realizado', 'Cancelado-Pagado']).execute()
+        # Obtener pagos del estudiante
         pag = supabase.table('pagos').select('*').eq('estudiante_id', e['id']).order('fecha_pago', desc=True).execute()
         
+        # Filtrar por mes
         ses_data = [s for s in (ses.data or []) if s.get('fecha', '') and s['fecha'][:7] == f"{anio}-{mes:02d}"]
         pag_data = [p for p in (pag.data or []) if p.get('fecha_pago', '') and p['fecha_pago'][:7] == f"{anio}-{mes:02d}"]
         
         ses_realizadas = [s for s in ses_data if s['estado'] == 'Realizado']
         ses_cancelado_pagado = [s for s in ses_data if s['estado'] == 'Cancelado-Pagado']
         
-        # Total a cobrar (planificado) = Realizadas + Cancelado-Pagado
+        # Total a cobrar = Realizadas + Cancelado-Pagado (MISMA LÓGICA QUE MODULO3)
         cobrar = sum(s.get('valor_total', 0) or 0 for s in ses_data)
+        # Total pagado por el estudiante
         pagado = sum(p.get('monto', 0) or 0 for p in pag_data)
         
         horas_real = sum(s.get('horas', 0) or 0 for s in ses_realizadas)
@@ -1192,7 +1198,8 @@ def reportes():
         total_cobrar_estudiantes += cobrar
         total_pagado_estudiantes += pagado
         
-        # Planificado por tipo (lo que se debe cobrar)
+        # CLASIFICAR POR TIPO para el balance
+        # PLANIFICADO = lo que se debe cobrar (Realizadas + Canc-Pag)
         for s in ses_data:
             tipo = s.get('tipo_sesion', 'clase')
             valor = s.get('valor_total', 0) or 0
@@ -1201,7 +1208,7 @@ def reportes():
             else:
                 planificado_psicologia += valor
         
-        # Ejecutado por tipo (solo lo RECAUDADO = sesiones Realizado)
+        # EJECUTADO = lo RECAUDADO (sesiones Realizado) = ingreso real
         for s in ses_realizadas:
             tipo = s.get('tipo_sesion', 'clase')
             valor = s.get('valor_total', 0) or 0
@@ -1211,42 +1218,44 @@ def reportes():
             else:
                 ejecutado_psicologia += valor
         
-        # Pagos a docentes
+        # Total cobrado = suma de ejecutado
+        total_cobrado += pagado
+        
+        # Pagos a docentes (solo para la tabla de pagos)
         for s in ses_data:
-            if s['estado'] in ['Realizado', 'Cancelado-Pagado']:
-                tipo = s.get('tipo_sesion', 'clase')
-                valor = s.get('valor_total', 0) or 0
-                prof = s.get('profesor_terapeuta', 'Desconocido')
-                horas = s.get('horas', 0) or 0
-                
-                if s['estado'] == 'Cancelado-Pagado':
-                    pago_docente = s.get('valor_pagar_docente', 0) or 0
-                    valor_atlas = s.get('valor_atlas', 0) or 0
-                    total_atlas += valor_atlas
-                    if tipo in ['terapia', 'ambos']:
-                        pago_psicologia = pago_docente
-                        pago_docente = 0
-                        total_psicologia += pago_psicologia
-                    else:
-                        pago_psicologia = 0
-                        total_docencia += pago_docente
+            tipo = s.get('tipo_sesion', 'clase')
+            valor = s.get('valor_total', 0) or 0
+            prof = s.get('profesor_terapeuta', 'Desconocido')
+            horas = s.get('horas', 0) or 0
+            
+            if s['estado'] == 'Cancelado-Pagado':
+                pago_docente = s.get('valor_pagar_docente', 0) or 0
+                valor_atlas = s.get('valor_atlas', 0) or 0
+                total_atlas += valor_atlas
+                if tipo in ['terapia', 'ambos']:
+                    pago_psicologia = pago_docente
+                    pago_docente = 0
+                    total_psicologia += pago_psicologia
                 else:
-                    if tipo in ['clase', 'preuniversitario']:
-                        pago_docente = horas * 7
-                        pago_psicologia = 0
-                        total_docencia += pago_docente
-                    else:
-                        pago_docente = 0
-                        pago_psicologia = valor * 0.4018
-                        total_psicologia += pago_psicologia
-                
-                total_pagar = pago_docente + pago_psicologia
-                total_pago_docentes += total_pagar
-                if prof not in pagos_por_docente:
-                    pagos_por_docente[prof] = {'pago_docencia': 0, 'pago_psicologia': 0, 'total_pagar': 0}
-                pagos_por_docente[prof]['pago_docencia'] += pago_docente
-                pagos_por_docente[prof]['pago_psicologia'] += pago_psicologia
-                pagos_por_docente[prof]['total_pagar'] += total_pagar
+                    pago_psicologia = 0
+                    total_docencia += pago_docente
+            else:
+                if tipo in ['clase', 'preuniversitario']:
+                    pago_docente = horas * 7
+                    pago_psicologia = 0
+                    total_docencia += pago_docente
+                else:
+                    pago_docente = 0
+                    pago_psicologia = valor * 0.4018
+                    total_psicologia += pago_psicologia
+            
+            total_pagar = pago_docente + pago_psicologia
+            total_pago_docentes += total_pagar
+            if prof not in pagos_por_docente:
+                pagos_por_docente[prof] = {'pago_docencia': 0, 'pago_psicologia': 0, 'total_pagar': 0}
+            pagos_por_docente[prof]['pago_docencia'] += pago_docente
+            pagos_por_docente[prof]['pago_psicologia'] += pago_psicologia
+            pagos_por_docente[prof]['total_pagar'] += total_pagar
         
         for s in ses_data:
             asig = s.get('asignatura') or s.get('tema_terapia') or 'Sin registro'
@@ -1264,8 +1273,7 @@ def reportes():
                 'cobrar': cobrar, 'pagado': pagado, 'saldo': cobrar - pagado
             })
     
-    # IMPORTANTE: total_ingresos debe ser la suma de ejecutado_clases + ejecutado_psicologia
-    # que viene de las sesiones Realizado (lo facturado/recibido)
+    # TOTAL INGRESOS = suma de ejecutado_clases + ejecutado_psicologia (lo facturado)
     total_ingresos = ejecutado_clases + ejecutado_psicologia
     
     gastos_mes = supabase.table('gastos').select('*').eq('mes', mes).eq('anio', anio).execute()
