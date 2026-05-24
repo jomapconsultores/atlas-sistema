@@ -2,114 +2,454 @@
 {% block title %}Planificación - Atlas{% endblock %}
 
 {% block content %}
-<style>
-    .card-premium { border-radius: 20px; border: none; box-shadow: 0 4px 20px rgba(0,0,0,0.06); background: white; margin-bottom: 20px; overflow: hidden; }
-    .card-header-grad { padding: 14px 20px; color: white; font-weight: 700; font-size: 15px; }
-    .grad-blue { background: linear-gradient(135deg, #1a73e8, #0d47a1); }
-    .grad-purple { background: linear-gradient(135deg, #7b1fa2, #4a148c); }
-    .form-control-premium { border-radius: 10px; border: 2px solid #e0e0e0; padding: 10px 14px; font-size: 13px; transition: all 0.2s; }
-    .form-control-premium:focus { border-color: #1a73e8; box-shadow: 0 0 0 3px rgba(26,115,232,0.1); }
-    .form-select-premium { border-radius: 10px; border: 2px solid #e0e0e0; padding: 10px 14px; font-size: 13px; }
-    .btn-premium { border-radius: 12px; font-weight: 600; font-size: 13px; padding: 10px 20px; transition: all 0.2s; border: none; }
-    .btn-primary-premium { background: linear-gradient(135deg, #1a73e8, #0d47a1); color: white; }
-    .btn-primary-premium:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(26,115,232,0.3); color: white; }
-    .sesion-row { background: #f8f9fa; border-radius: 14px; padding: 16px; margin-bottom: 10px; border: 1px solid #e8e8e8; transition: all 0.2s; }
-    .sesion-row:hover { border-color: #1a73e8; box-shadow: 0 2px 8px rgba(26,115,232,0.08); }
-</style>
-
-<h3 style="font-weight: 800; color: #1a1a2e;">📋 Módulo 1: Planificación</h3>
-<p class="text-muted" style="font-size: 13px; margin-bottom: 20px;">Planifica nuevas sesiones de clase o terapia</p>
-
-<form method="POST" id="formPlanificacion">
-    <div class="card-premium">
-        <div class="card-header-grad grad-blue">⚙️ Configuración General</div>
-        <div class="card-body">
-            <div class="row g-3">
-                <div class="col-md-4">
-                    <label class="form-label fw-bold" style="font-size: 12px;">TIPO DE SESIÓN</label>
-                    <select name="tipo_sesion" class="form-select form-select-premium" onchange="cambioTipo()">
-                        <option value="clase">📚 Clase</option>
-                        <option value="terapia">🧠 Terapia</option>
-                        <option value="ambos">📚🧠 Ambos</option>
-                        <option value="preuniversitario">🎓 Pre Universitario</option>
-                    </select>
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label fw-bold" style="font-size: 12px;">NÚMERO DE SESIONES</label>
-                    <input type="number" name="num_sesiones" class="form-control form-control-premium" value="1" min="1" id="num_sesiones" onchange="generarSesiones()">
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label fw-bold" style="font-size: 12px;">NÚMERO DE ESTUDIANTES</label>
-                    <input type="number" name="num_estudiantes" class="form-control form-control-premium" value="1" min="1" id="num_estudiantes" onchange="generarSesiones()">
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-bold" style="font-size: 12px;">ASIGNATURA</label>
-                    <select name="asignatura" class="form-select form-select-premium">
-                        <option value="">Seleccionar...</option>
-                        {% for a in asignaturas %}<option value="{{ a }}">{{ a }}</option>{% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-6" id="divPrecioHora">
-                    <label class="form-label fw-bold" style="font-size: 12px;">PRECIO POR HORA *</label>
-                    <select name="precio_hora" class="form-select form-select-premium">
-                        <option value="">Seleccionar...</option>
-                        {% for p in precios_clase %}<option value="{{ p }}">${{ "%.2f"|format(p) }}</option>{% endfor %}
-                    </select>
-                </div>
-            </div>
-        </div>
+<!-- Botones de sincronización y edición -->
+<div class="d-flex justify-content-between mb-3 flex-wrap gap-2">
+    <div>
+        <a href="/editar-planificaciones" class="btn btn-warning">
+            ✏️ Editar Planificaciones Existentes
+        </a>
+        <a href="/editar-planificacion-masiva" class="btn btn-secondary ms-2">
+            🔄 Edición Masiva
+        </a>
     </div>
+    <div class="btn-group" role="group">
+        <button type="button" class="btn btn-danger" onclick="sincronizarTodoCalendario()" style="background-color: #dc3545; border-color: #dc3545;">
+            🔄 Sincronizar TODO con Google Calendar
+        </button>
+        <button type="button" class="btn btn-outline-danger" onclick="sincronizarMesActual()">
+            📅 Solo este mes
+        </button>
+    </div>
+</div>
 
-    <div class="card-premium" id="cardPsicologia" style="display:none;">
-        <div class="card-header-grad grad-purple">🧠 Atención Psicológica</div>
-        <div class="card-body">
-            <div class="mb-3">
-                <label class="form-label fw-bold" style="font-size: 12px;">TIPO DE ATENCIÓN *</label>
-                <select name="atencion_psicologica" class="form-select form-select-premium">
-                    <option value="">Seleccionar...</option>
-                    {% for item in atencion_psicologica %}
-                    <option value="{{ item.nombre }}">{{ item.nombre }} (${{ "%.2f"|format(item.precio) }})</option>
+<div class="card shadow mb-4">
+    <div class="card-header bg-primary text-white"><strong>➕ Nueva Planificación</strong></div>
+    <div class="card-body">
+        <form method="POST" id="formPlanificar">
+            
+            <div class="mb-2">
+                <label class="form-label">Número de Estudiantes *</label>
+                <select name="num_estudiantes" id="numEstudiantes" class="form-select" onchange="mostrarEstudiantes()">
+                    {% for i in range(1, 11) %}
+                    <option value="{{ i }}">{{ i }} estudiante(s)</option>
                     {% endfor %}
                 </select>
             </div>
-        </div>
+            
+            <div id="contenedorEstudiantes"></div>
+            
+            <div class="mb-2">
+                <label class="form-label">Tipo de Sesión *</label>
+                <select name="tipo_sesion" id="tipoSesion" class="form-select" required onchange="mostrarCampos()">
+                    <option value="">Seleccionar...</option>
+                    <option value="clase">📚 Clase</option>
+                    <option value="terapia">🧠 Atención Psicológica</option>
+                    <option value="ambos">📚🧠 Ambos</option>
+                    <option value="preuniversitario">🎓 Pre Universitario</option>
+                </select>
+            </div>
+            
+            <div id="camposClase" style="display:none;">
+                <div class="mb-2">
+                    <label class="form-label">Asignatura *</label>
+                    <select name="asignatura" class="form-select">
+                        <option value="">Seleccionar...</option>
+                        {% for a in asignaturas %}
+                        <option value="{{ a }}">{{ a }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            
+            <div id="camposTerapia" style="display:none;">
+                <div class="mb-2">
+                    <label class="form-label">Tipo de Atención *</label>
+                    <select name="atencion_psicologica" id="atencionPsicologica" class="form-select" onchange="verificarPaquete()">
+                        <option value="">Seleccionar...</option>
+                        {% for item in atencion_psicologica %}
+                        <option value="{{ item['nombre'] }}" data-precio="{{ item['precio'] }}" data-sesiones="{{ item.get('sesiones', 1) }}">
+                            {{ item['nombre'] }} - ${{ item['precio'] }}
+                            {% if item.get('sesiones', 1) > 1 %}
+                                ({{ item['sesiones'] }} sesiones)
+                            {% endif %}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            
+            <div id="camposPrecio" class="mb-2">
+                <label class="form-label">Precio por Hora *</label>
+                <select name="precio_hora" class="form-select">
+                    <optgroup label="Clases">
+                        {% for pr in precios_clase %}<option value="{{ pr }}">${{ pr }}</option>{% endfor %}
+                    </optgroup>
+                    <optgroup label="Matrícula Pre">
+                        {% for pr in precios_matricula %}<option value="{{ pr }}">${{ pr }}</option>{% endfor %}
+                    </optgroup>
+                    <optgroup label="Pensión Pre">
+                        {% for pr in precios_pension %}<option value="{{ pr }}">${{ pr }}</option>{% endfor %}
+                    </optgroup>
+                </select>
+            </div>
+            
+            <div class="mb-2">
+                <label class="form-label">Número de Sesiones *</label>
+                <select name="num_sesiones" id="numSesiones" class="form-select" onchange="mostrarFechas()">
+                    {% for i in range(1, 11) %}
+                    <option value="{{ i }}">{{ i }} sesión(es)</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div id="contenedorFechas"></div>
+            
+            <button type="submit" class="btn btn-primary btn-lg w-100 mt-3" id="btnPlanificar">✅ Planificar</button>
+        </form>
     </div>
+</div>
 
-    <div id="sesionesContainer"></div>
-
-    <button type="submit" class="btn btn-primary-premium btn-lg w-100 mt-3">✅ Planificar Sesiones</button>
-</form>
+<style>
+    .hora-invalida {
+        border: 2px solid #dc3545 !important;
+        background-color: #ffe6e6 !important;
+    }
+    .mensaje-error {
+        color: #dc3545;
+        font-size: 12px;
+        margin-top: 5px;
+        display: none;
+    }
+</style>
 
 <script>
-function cambioTipo() {
-    const tipo = document.querySelector('[name="tipo_sesion"]').value;
-    document.getElementById('cardPsicologia').style.display = (tipo === 'terapia' || tipo === 'ambos') ? 'block' : 'none';
-    document.getElementById('divPrecioHora').style.display = (tipo === 'terapia' || tipo === 'ambos') ? 'none' : 'block';
+// Función para verificar si es paquete de terapias
+function verificarPaquete() {
+    const select = document.getElementById('atencionPsicologica');
+    const selectedOption = select.options[select.selectedIndex];
+    const sesiones = selectedOption ? parseInt(selectedOption.dataset.sesiones) : 1;
+    
+    if (sesiones > 1) {
+        const numSesionesSelect = document.getElementById('numSesiones');
+        numSesionesSelect.value = sesiones;
+        numSesionesSelect.disabled = true;
+        mostrarFechas();
+    } else {
+        document.getElementById('numSesiones').disabled = false;
+    }
 }
 
-function generarSesiones() {
-    const num = parseInt(document.getElementById('num_sesiones').value) || 1;
-    const numEst = parseInt(document.getElementById('num_estudiantes').value) || 1;
+// ========== VARIABLES GLOBALES ==========
+let fechasValidas = {};
+
+// CONFIRMACIÓN AL PLANIFICAR CON VALIDACIONES
+document.getElementById('formPlanificar').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    let todasValidas = true;
+    let errores = [];
+    const numSesiones = document.getElementById('numSesiones').value;
+    
+    for (let i = 1; i <= numSesiones; i++) {
+        if (!fechasValidas[i]) {
+            todasValidas = false;
+            errores.push(`Sesión ${i}`);
+        }
+    }
+    
+    if (!todasValidas) {
+        alert(`❌ No se puede planificar.\n\nLas siguientes sesiones tienen errores:\n${errores.join('\n')}\n\nCorrige las horas antes de continuar.`);
+        return;
+    }
+    
+    const numEstudiantes = document.getElementById('numEstudiantes').value;
+    const tipo = document.getElementById('tipoSesion').value;
+    
+    let fechas = [];
+    for (let i = 1; i <= numSesiones; i++) {
+        const fecha = document.querySelector(`[name="fecha_${i}"]`)?.value;
+        const hIni = document.querySelector(`[name="hora_inicio_${i}"]`)?.value;
+        const hFin = document.querySelector(`[name="hora_fin_${i}"]`)?.value;
+        if (fecha && hIni && hFin) {
+            const inicio = new Date(`${fecha}T${hIni}:00`);
+            const fin = new Date(`${fecha}T${hFin}:00`);
+            const horas = (fin - inicio) / 3600000;
+            fechas.push(`📅 Sesión ${i}: ${fecha} de ${hIni} a ${hFin} (${horas.toFixed(2)} horas)`);
+        }
+    }
+    
+    let mensaje = `✅ ¿Confirmas la planificación?\n\n`;
+    mensaje += `📋 Tipo: ${tipo}\n`;
+    mensaje += `👨‍🎓 Estudiantes: ${numEstudiantes}\n`;
+    mensaje += `📅 Sesiones: ${numSesiones}\n\n`;
+    mensaje += `Detalle:\n${fechas.join('\n')}`;
+    
+    if (confirm(mensaje)) {
+        this.submit();
+    }
+});
+
+function validarHoras(sesionNum) {
+    const fecha = document.querySelector(`[name="fecha_${sesionNum}"]`)?.value;
+    const hIni = document.querySelector(`[name="hora_inicio_${sesionNum}"]`)?.value;
+    const hFin = document.querySelector(`[name="hora_fin_${sesionNum}"]`)?.value;
+    
+    const inputIni = document.querySelector(`[name="hora_inicio_${sesionNum}"]`);
+    const inputFin = document.querySelector(`[name="hora_fin_${sesionNum}"]`);
+    const mensajeError = document.getElementById(`error_${sesionNum}`);
+    
+    if (!hIni || !hFin) {
+        if (mensajeError) mensajeError.style.display = 'none';
+        fechasValidas[sesionNum] = false;
+        return;
+    }
+    
+    if (hFin <= hIni) {
+        inputIni.classList.add('hora-invalida');
+        inputFin.classList.add('hora-invalida');
+        if (mensajeError) {
+            mensajeError.style.display = 'block';
+            mensajeError.innerHTML = '❌ La hora de fin debe ser mayor que la hora de inicio';
+        }
+        fechasValidas[sesionNum] = false;
+        return;
+    }
+    
+    if (fecha && hIni && hFin) {
+        const inicio = new Date(`${fecha}T${hIni}:00`);
+        const fin = new Date(`${fecha}T${hFin}:00`);
+        const horas = (fin - inicio) / 3600000;
+        
+        if (horas <= 0) {
+            inputIni.classList.add('hora-invalida');
+            inputFin.classList.add('hora-invalida');
+            if (mensajeError) {
+                mensajeError.style.display = 'block';
+                mensajeError.innerHTML = '❌ La duración debe ser mayor a 0 horas';
+            }
+            fechasValidas[sesionNum] = false;
+            return;
+        }
+        
+        if (horas < 0.5) {
+            inputIni.classList.add('hora-invalida');
+            inputFin.classList.add('hora-invalida');
+            if (mensajeError) {
+                mensajeError.style.display = 'block';
+                mensajeError.innerHTML = '⚠️ Duración muy corta (mínimo 30 minutos)';
+            }
+            fechasValidas[sesionNum] = false;
+            return;
+        }
+    }
+    
+    inputIni.classList.remove('hora-invalida');
+    inputFin.classList.remove('hora-invalida');
+    if (mensajeError) mensajeError.style.display = 'none';
+    fechasValidas[sesionNum] = true;
+}
+
+const ESTUDIANTES = [{% for e in estudiantes %}{id:{{ e['id'] }}, nombre:"{{ e['apellidos'] }} {{ e['nombres'] }}"},{% endfor %}];
+const PROFESORES = [{% for p in profesores %}"{{ p }}",{% endfor %}];
+const ENCARGADOS = [{% for e in encargados %}"{{ e }}",{% endfor %}];
+
+function mostrarEstudiantes() {
+    const num = parseInt(document.getElementById('numEstudiantes').value);
     let html = '';
     for (let i = 1; i <= num; i++) {
-        html += `<div class="sesion-row">
-            <strong class="text-primary">📅 Sesión ${i}</strong>
-            <div class="row g-2 mt-2">
-                <div class="col-md-3"><label class="form-label" style="font-size:11px;">Fecha</label><input type="date" name="fecha_${i}" class="form-control form-control-premium" value="{{ today }}"></div>
-                <div class="col-md-2"><label class="form-label" style="font-size:11px;">Inicio</label><input type="time" name="hora_inicio_${i}" class="form-control form-control-premium"></div>
-                <div class="col-md-2"><label class="form-label" style="font-size:11px;">Fin</label><input type="time" name="hora_fin_${i}" class="form-control form-control-premium"></div>
-                <div class="col-md-2"><label class="form-label" style="font-size:11px;">Profesor</label><select name="profesor_${i}" class="form-select form-select-premium"><option value="">Seleccionar...</option>{% for p in profesores %}<option value="{{ p }}">{{ p }}</option>{% endfor %}<option value="nuevo">➕ Nuevo</option></select></div>
-                <div class="col-md-3"><label class="form-label" style="font-size:11px;">Encargado</label><select name="encargado_${i}" class="form-select form-select-premium"><option value="">Seleccionar...</option>{% for e in encargados %}<option value="{{ e }}">{{ e }}</option>{% endfor %}</select></div>
-            </div>`;
-        for (let j = 1; j <= numEst; j++) {
-            html += `<div class="row g-2 mt-1"><div class="col-md-6"><label class="form-label" style="font-size:10px;">Estudiante ${j}</label><select name="estudiante_id_${j}" class="form-select form-select-premium"><option value="">Seleccionar...</option>{% for e in estudiantes %}<option value="{{ e.id }}">{{ e.apellidos }} {{ e.nombres }}</option>{% endfor %}<option value="nuevo">➕ Nuevo</option></select></div></div>`;
-        }
-        html += `</div>`;
+        html += `
+        <div class="border rounded p-2 mb-2">
+            <strong>Estudiante ${i}</strong>
+            <select name="estudiante_id_${i}" id="estSelect_${i}" class="form-select mb-1" onchange="toggleNuevo(${i}, this.value)">
+                <option value="">Seleccionar existente o crear nuevo...</option>
+                ${ESTUDIANTES.map(e => `<option value="${e.id}">${e.nombre}</option>`).join('')}
+                <option value="nuevo">➕ Crear nuevo estudiante</option>
+            </select>
+            <div id="nuevoEstudiante_${i}" style="display:none;">
+                <div class="row">
+                    <div class="col-md-6"><input type="text" id="nuevo_nombre_${i}" class="form-control mb-1" placeholder="Nombres *"></div>
+                    <div class="col-md-6"><input type="text" id="nuevo_apellido_${i}" class="form-control mb-1" placeholder="Apellidos *"></div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6"><input type="text" id="nuevo_nivel_${i}" class="form-control mb-1" placeholder="Nivel/Curso"></div>
+                    <div class="col-md-6"><input type="text" id="nuevo_procedencia_${i}" class="form-control mb-1" placeholder="Institución"></div>
+                </div>
+                <input type="text" id="nuevo_padre_${i}" class="form-control mb-2" placeholder="Padre (opcional)">
+                <button type="button" class="btn btn-success btn-sm" onclick="crearEstudianteAPI(${i})">✅ Crear Estudiante</button>
+            </div>
+        </div>`;
     }
-    document.getElementById('sesionesContainer').innerHTML = html;
+    document.getElementById('contenedorEstudiantes').innerHTML = html;
 }
 
-cambioTipo();
-generarSesiones();
+function toggleNuevo(num, val) {
+    document.getElementById('nuevoEstudiante_' + num).style.display = (val === 'nuevo') ? 'block' : 'none';
+}
+
+async function crearEstudianteAPI(num) {
+    const nombre = document.getElementById('nuevo_nombre_' + num).value.trim();
+    const apellido = document.getElementById('nuevo_apellido_' + num).value.trim();
+    if (!nombre || !apellido) { alert('❌ Nombres y apellidos obligatorios'); return; }
+    
+    try {
+        const resp = await fetch('/api/crear_estudiante', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                nombres: nombre, apellidos: apellido,
+                nivel_curso: document.getElementById('nuevo_nivel_' + num).value.trim(),
+                procedencia: document.getElementById('nuevo_procedencia_' + num).value.trim(),
+                padre_nombre: document.getElementById('nuevo_padre_' + num).value.trim()
+            })
+        });
+        const result = await resp.json();
+        if (result.success) {
+            const select = document.getElementById('estSelect_' + num);
+            const option = document.createElement('option');
+            option.value = result.id; option.textContent = result.nombre; option.selected = true;
+            select.insertBefore(option, select.lastChild);
+            document.getElementById('nuevoEstudiante_' + num).style.display = 'none';
+            alert('✅ Estudiante creado: ' + result.nombre);
+        }
+    } catch (e) { alert('❌ Error de conexión'); }
+}
+
+function mostrarCampos() {
+    const tipo = document.getElementById('tipoSesion').value;
+    document.getElementById('camposClase').style.display = (tipo === 'clase' || tipo === 'ambos' || tipo === 'preuniversitario') ? 'block' : 'none';
+    document.getElementById('camposTerapia').style.display = (tipo === 'terapia' || tipo === 'ambos') ? 'block' : 'none';
+    document.getElementById('camposPrecio').style.display = (tipo === 'terapia') ? 'none' : 'block';
+}
+
+function mostrarFechas() {
+    const num = parseInt(document.getElementById('numSesiones').value);
+    let html = '';
+    for (let i = 1; i <= num; i++) {
+        html += `
+        <div class="border rounded p-2 mb-2" id="sesion_${i}">
+            <strong>Sesión ${i}</strong>
+            <div class="row">
+                <div class="col-md-3"><label class="small">Fecha</label><input type="date" name="fecha_${i}" class="form-control" value="{{ today }}" required></div>
+                <div class="col-md-3"><label class="small">Inicio</label><input type="time" name="hora_inicio_${i}" class="form-control" required onchange="validarHoras(${i})" oninput="validarHoras(${i})"></div>
+                <div class="col-md-3"><label class="small">Fin</label><input type="time" name="hora_fin_${i}" class="form-control" required onchange="validarHoras(${i})" oninput="validarHoras(${i})"></div>
+                <div class="col-md-3">
+                    <label class="small">Profesor</label>
+                    <select name="profesor_${i}" class="form-select" onchange="toggleNuevoProf(${i}, this.value)">
+                        ${PROFESORES.map(p => `<option value="${p}">${p}</option>`).join('')}
+                        <option value="nuevo">➕ Nuevo</option>
+                    </select>
+                    <input type="text" name="nuevo_profesor_${i}" class="form-control mt-1" placeholder="Nombre" style="display:none;" id="nuevoProfInput_${i}">
+                </div>
+            </div>
+            <div class="row mt-1">
+                <div class="col-md-6">
+                    <label class="small">Encargado Apertura</label>
+                    <select name="encargado_${i}" class="form-select">
+                        <option value="">Seleccionar...</option>
+                        ${ENCARGADOS.map(e => `<option value="${e}">${e}</option>`).join('')}
+                    </select>
+                </div>
+            </div>
+            <div id="error_${i}" class="mensaje-error"></div>
+        </div>`;
+    }
+    document.getElementById('contenedorFechas').innerHTML = html;
+    fechasValidas = {};
+    for (let i = 1; i <= num; i++) {
+        fechasValidas[i] = false;
+    }
+}
+
+function toggleNuevoProf(num, val) {
+    document.getElementById('nuevoProfInput_' + num).style.display = (val === 'nuevo') ? 'block' : 'none';
+}
+
+mostrarEstudiantes();
+mostrarFechas();
+
+// ========== FUNCIONES DE SINCRONIZACIÓN MASIVA ==========
+async function sincronizarTodoCalendario() {
+    if (!confirm('⚠️ ¿Estás seguro de sincronizar TODAS las sesiones con Google Calendar?\n\nEsto actualizará o creará eventos para todas las sesiones en estado "Realizado".\nPuede tomar varios segundos...')) return;
+    
+    const btn = event.target;
+    const textoOriginal = btn.innerText;
+    btn.disabled = true;
+    btn.innerText = '⏳ Sincronizando...';
+    
+    try {
+        const response = await fetch('/api/sesiones/para-sincronizar');
+        const sesiones = await response.json();
+        
+        if (sesiones.length === 0) {
+            alert('No hay sesiones realizadas para sincronizar');
+            btn.disabled = false;
+            btn.innerText = textoOriginal;
+            return;
+        }
+        
+        let procesadas = 0, exitosas = 0, errores = 0;
+        const progressDiv = document.createElement('div');
+        progressDiv.className = 'alert alert-info mt-3';
+        progressDiv.innerHTML = '<strong>🔄 Sincronizando...</strong><br><div class="progress"><div id="syncProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%">0%</div></div><p id="syncStatus" class="mt-2">Procesando 0 de ' + sesiones.length + ' sesiones...</p>';
+        const formCard = document.querySelector('.card.shadow.mb-4');
+        if (formCard) formCard.parentNode.insertBefore(progressDiv, formCard.nextSibling);
+        
+        for (let i = 0; i < sesiones.length; i++) {
+            const s = sesiones[i];
+            try {
+                const syncResponse = await fetch('/api/sesion/' + s.id + '/sincronizar', {method: 'POST', headers: {'Content-Type': 'application/json'}});
+                const result = await syncResponse.json();
+                if (result.success) exitosas++;
+                else errores++;
+            } catch (err) { errores++; }
+            procesadas++;
+            const porcentaje = Math.round((procesadas / sesiones.length) * 100);
+            const progressBar = document.getElementById('syncProgressBar');
+            if (progressBar) { progressBar.style.width = porcentaje + '%'; progressBar.innerText = porcentaje + '%'; }
+            const statusElem = document.getElementById('syncStatus');
+            if (statusElem) statusElem.innerText = `Procesando ${procesadas} de ${sesiones.length}... ✅ ${exitosas} | ❌ ${errores}`;
+        }
+        
+        const resultDiv = document.createElement('div');
+        resultDiv.className = `alert ${errores === 0 ? 'alert-success' : 'alert-warning'} mt-3`;
+        resultDiv.innerHTML = `<strong>📊 Sincronización completada</strong><br>✅ Exitosas: ${exitosas}<br>❌ Errores: ${errores}<br>📅 Total: ${procesadas}`;
+        const existingDiv = document.querySelector('.alert-info');
+        if (existingDiv) existingDiv.replaceWith(resultDiv);
+        setTimeout(() => resultDiv.remove(), 5000);
+        alert(`✅ Sincronización completada\n\n✅ Exitosas: ${exitosas}\n❌ Errores: ${errores}`);
+    } catch (error) { alert('❌ Error: ' + error.message); }
+    finally { btn.disabled = false; btn.innerText = textoOriginal; }
+}
+
+async function sincronizarMesActual() {
+    const hoy = new Date();
+    const anio = hoy.getFullYear();
+    const mes = hoy.getMonth() + 1;
+    const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    const nombreMes = meses[mes - 1];
+    
+    if (!confirm(`⚠️ ¿Sincronizar solo las sesiones de ${nombreMes} ${anio}?`)) return;
+    const btn = event.target;
+    const textoOriginal = btn.innerText;
+    btn.disabled = true;
+    btn.innerText = '⏳...';
+    
+    try {
+        const response = await fetch(`/api/sesiones/para-sincronizar?mes=${mes}&anio=${anio}`);
+        const sesiones = await response.json();
+        if (sesiones.length === 0) { alert(`No hay sesiones en ${nombreMes} ${anio}`); btn.disabled = false; btn.innerText = textoOriginal; return; }
+        let exitosas = 0, errores = 0;
+        for (const s of sesiones) {
+            try {
+                const syncResponse = await fetch('/api/sesion/' + s.id + '/sincronizar', {method: 'POST', headers: {'Content-Type': 'application/json'}});
+                const result = await syncResponse.json();
+                if (result.success) exitosas++;
+                else errores++;
+            } catch (err) { errores++; }
+        }
+        alert(`📅 ${nombreMes} ${anio}\n✅ Exitosas: ${exitosas}\n❌ Errores: ${errores}`);
+    } catch (error) { alert('❌ Error: ' + error.message); }
+    finally { btn.disabled = false; btn.innerText = textoOriginal; }
+}
 </script>
 {% endblock %}

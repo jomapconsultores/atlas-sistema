@@ -2,73 +2,42 @@
 {% block title %}Calendario - Atlas{% endblock %}
 
 {% block content %}
-<style>
-    .card-premium {
-        border-radius: 20px; border: none; box-shadow: 0 4px 20px rgba(0,0,0,0.06);
-        background: white; margin-bottom: 20px; overflow: hidden;
-    }
-    .card-header-grad {
-        padding: 14px 20px; color: white; font-weight: 700; font-size: 15px;
-    }
-    .grad-green { background: linear-gradient(135deg, #0f9d58, #00695c); }
-    .grad-warning { background: linear-gradient(135deg, #f4b400, #e65100); }
-    
-    .table-premium {
-        border-radius: 12px; overflow: hidden; border: none; margin: 0;
-    }
-    .table-premium thead th {
-        background: #1a1a2e; color: white; font-weight: 600; font-size: 11px;
-        letter-spacing: 0.5px; border: none; padding: 10px 12px; text-transform: uppercase;
-    }
-    .table-premium tbody td {
-        padding: 8px 12px; vertical-align: middle; font-size: 13px;
-        border-bottom: 1px solid #f0f0f0;
-    }
-    .table-premium tbody tr:hover { background: #f8f9ff; }
-    
-    .badge-status {
-        padding: 5px 10px; border-radius: 12px; font-size: 10px; font-weight: 600;
-    }
-    
-    .pendiente-card {
-        background: #fffdf5; border: 1px solid #ffe082; border-radius: 14px;
-        padding: 12px 16px; margin-bottom: 8px; transition: all 0.2s;
-    }
-    .pendiente-card:hover { box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
-    
-    .btn-premium {
-        border-radius: 10px; font-size: 11px; font-weight: 600; padding: 6px 14px;
-        transition: all 0.2s; border: none;
-    }
-    .btn-marcar { background: #e8f5e9; color: #2e7d32; }
-    .btn-marcar:hover { background: #c8e6c9; }
-    .btn-cancelar { background: #fff3e0; color: #e65100; }
-    .btn-cancelar:hover { background: #ffe0b2; }
-    .btn-cancpag { background: #e0f7fa; color: #006064; }
-    .btn-cancpag:hover { background: #b2ebf2; }
-    
-    input[type="radio"] { accent-color: #1a73e8; transform: scale(1.2); cursor: pointer; }
-</style>
+<h3>📅 {% if current_user.rol in ['admin', 'socio'] %}Calendario de Clases{% else %}Mis Clases{% endif %}</h3>
 
-<h3 style="font-weight: 800; color: #1a1a2e; margin-bottom: 5px;">
-    📅 {% if current_user.rol in ['admin', 'socio'] %}Calendario de Clases{% else %}Mis Clases{% endif %}
-</h3>
-<p class="text-muted" style="font-size: 13px; margin-bottom: 20px;">{{ fecha }}</p>
-
-<form class="d-flex gap-2 mb-4">
-    <input type="date" name="fecha" value="{{ fecha }}" class="form-control" style="border-radius: 10px; max-width: 200px; border: 2px solid #e0e0e0;" onchange="this.form.submit()">
-    <a href="/modulo2" class="btn btn-outline-secondary" style="border-radius: 10px; font-size: 12px;">Todas</a>
+<form class="mb-3 d-flex gap-2">
+    <input type="date" name="fecha" value="{{ fecha }}" class="form-control d-inline w-auto" onchange="this.form.submit()">
+    <a href="/modulo2" class="btn btn-outline-secondary btn-sm">Todas las fechas</a>
     {% if current_user.rol in ['admin','socio'] %}
-    <button type="button" class="btn btn-outline-primary" style="border-radius: 10px; font-size: 12px;" onclick="sincronizarTodos()">🔄 Sincronizar</button>
+    <button type="button" class="btn btn-outline-primary btn-sm" onclick="sincronizarTodos()">🔄 Sincronizar Fecha</button>
     {% endif %}
 </form>
 
-<div class="card-premium">
-    <div class="card-header-grad grad-green">Sesiones del {{ fecha }}</div>
-    <div class="card-body p-0">
+<style>
+    .hora-invalida {
+        border: 2px solid #dc3545 !important;
+        background-color: #ffe6e6 !important;
+    }
+    .error-msg {
+        color: #dc3545;
+        font-size: 12px;
+        margin-top: 5px;
+        display: none;
+    }
+    .pendiente-card {
+        background-color: #fff3cd;
+        border-left: 5px solid #ffc107;
+        margin-bottom: 10px;
+        padding: 10px;
+        border-radius: 5px;
+    }
+</style>
+
+<div class="card shadow mb-4">
+    <div class="card-header bg-success text-white"><strong>Sesiones del {{ fecha }}</strong></div>
+    <div class="card-body">
         {% if sesiones %}
         <div class="table-responsive">
-            <table class="table table-premium mb-0">
+            <table class="table table-striped">
                 <thead>
                     <tr>
                         <th>Fecha</th><th>Hora</th><th>Estudiante</th><th>Tipo</th><th>Asig/Tema</th><th>Prof</th>
@@ -85,118 +54,177 @@
                         <td>{{ s.tipo_sesion }}</td>
                         <td>{{ s.get('asignatura') or s.get('tema_terapia') or '-' }}</td>
                         <td>{{ s.profesor_terapeuta }}</td>
-                        <td><span class="badge-status" style="background: {{ '#c8e6c9' if s.estado=='Realizado' else '#ffcdd2' if s.estado=='Cancelado' else '#b2ebf2' if s.estado=='Cancelado-Pagado' else '#fff9c4' }}; color: {{ '#2e7d32' if s.estado=='Realizado' else '#b71c1c' if s.estado=='Cancelado' else '#006064' if s.estado=='Cancelado-Pagado' else '#f57f17' }};">{{ s.estado }}</span></td>
-                        <td><input type="radio" name="est_{{ s.id }}" data-id="{{ s.id }}" data-estado="Realizado" {{ 'checked' if s.estado=='Realizado' }}></td>
-                        <td><input type="radio" name="est_{{ s.id }}" data-id="{{ s.id }}" data-estado="Cancelado" {{ 'checked' if s.estado=='Cancelado' }}></td>
-                        <td><input type="radio" name="est_{{ s.id }}" data-id="{{ s.id }}" data-estado="Cancelado-Pagado" {{ 'checked' if s.estado=='Cancelado-Pagado' }}></td>
+                        <td>
+                            <span class="badge bg-{{ 'success' if s.estado=='Realizado' else 'danger' if s.estado=='Cancelado' else 'warning' if s.estado=='Planificado' else 'info' }}">{{ s.estado }}</span>
+                        </td>
+                        <td><input type="radio" name="est_{{ s.id }}" class="radio-sesion" data-id="{{ s.id }}" data-estado="Realizado" {{ 'checked' if s.estado=='Realizado' }}></td>
+                        <td><input type="radio" name="est_{{ s.id }}" class="radio-sesion" data-id="{{ s.id }}" data-estado="Cancelado" {{ 'checked' if s.estado=='Cancelado' }}></td>
+                        <td><input type="radio" name="est_{{ s.id }}" class="radio-sesion" data-id="{{ s.id }}" data-estado="Cancelado-Pagado" {{ 'checked' if s.estado=='Cancelado-Pagado' }}></td>
                         {% if current_user.rol in ['admin','socio'] %}
-                        <td><button class="btn btn-sm btn-outline-danger" style="border-radius: 8px;" onclick="eliminarSesion({{ s.id }})">🗑️</button></td>
+                        <td><button class="btn btn-danger btn-sm" onclick="eliminarSesion({{ s.id }})">🗑️</button></td>
                         {% endif %}
-                    </tr>
+                     </tr>
                     {% endfor %}
                 </tbody>
-            </table>
+             </table>
         </div>
-        {% else %}<div class="text-center py-4 text-muted">No hay sesiones. <a href="/modulo1">¿Planificar?</a></div>{% endif %}
+        {% else %}<p class="text-muted">No hay sesiones. {% if current_user.rol in ['admin','socio'] %}<a href="/modulo1">¿Planificar?</a>{% endif %}</p>
+        {% endif %}
     </div>
 </div>
 
-<div class="card-premium">
-    <div class="card-header-grad grad-warning">
-        ⏳ Sesiones Pendientes <span class="badge bg-dark ms-2" id="pendientesCount">0</span>
+<!-- Pendientes - CORREGIDO -->
+<div class="card shadow mb-4">
+    <div class="card-header bg-warning text-dark">
+        <strong>⏳ Sesiones Pendientes por Marcar</strong>
+        <span class="badge bg-dark ms-2" id="pendientesCount">0</span>
     </div>
-    <div class="card-body" id="pendientesContainer">
-        <div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div> Cargando...</div>
+    <div class="card-body">
+        <div id="pendientesContainer">
+            <div class="text-center py-3">
+                <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                    <span class="ms-2">Cargando pendientes...</span>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
 <script>
-document.querySelectorAll('input[type="radio"]').forEach(r => {
+// Función para cambiar estado de sesión
+document.querySelectorAll('.radio-sesion').forEach(r => {
     r.addEventListener('change', function() {
         if (!this.checked) return;
         const id = this.dataset.id, e = this.dataset.estado;
-        let msg = '¿Marcar como ' + e + '?';
-        if (e === 'Cancelado-Pagado') msg = '⚠️ Cancelado-Pagado\n50% docente | 50% Atlas';
-        if (!confirm(msg)) { location.reload(); return; }
+        let mensaje = '¿Confirmas marcar como ' + e + '?';
+        if (e === 'Cancelado-Pagado') {
+            mensaje = '⚠️ ¿Marcar como Cancelado-Pagado?\n\n50% para el docente\n50% para Atlas';
+        }
+        if (!confirm(mensaje)) {
+            location.reload();
+            return;
+        }
         fetch('/api/sesion/' + id + '/toggle', {
-            method: 'POST', headers: {'Content-Type': 'application/json'},
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({estado: e})
         }).then(() => location.reload());
     });
 });
 
+// Cargar pendientes
 async function cargarPendientes() {
     try {
-        const r = await fetch('/api/sesiones/pendientes');
-        const pendientes = await r.json();
-        const c = document.getElementById('pendientesContainer');
-        const cs = document.getElementById('pendientesCount');
-        if (!pendientes.length) {
-            c.innerHTML = '<div class="alert alert-success mb-0" style="border-radius: 12px;">✅ Sin pendientes</div>';
-            if (cs) cs.innerText = '0';
+        const response = await fetch('/api/sesiones/pendientes');
+        const pendientes = await response.json();
+        
+        const container = document.getElementById('pendientesContainer');
+        const countSpan = document.getElementById('pendientesCount');
+        
+        if (!container) return;
+        
+        if (pendientes.length === 0) {
+            container.innerHTML = '<div class="alert alert-success mb-0">✅ No hay sesiones pendientes. Todas están marcadas.</div>';
+            if (countSpan) countSpan.innerText = '0';
             return;
         }
-        if (cs) cs.innerText = pendientes.length;
-        let h = '';
+        
+        if (countSpan) countSpan.innerText = pendientes.length;
+        
+        let html = '<div class="list-group">';
         for (const s of pendientes) {
-            h += `<div class="pendiente-card" id="pend-${s.id}">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <strong>📅 ${s.fecha}</strong> ${s.hora_inicio}-${s.hora_fin}<br>
-                        <small>👨‍🎓 ${s.estudiante} | 📚 ${s.asignatura||'Sin asignatura'} | 👨‍🏫 ${s.profesor_terapeuta}</small>
-                    </div>
-                    <div class="d-flex gap-1">
-                        <button class="btn-premium btn-marcar" onclick="marcarPendiente(${s.id},'Realizado')">✅</button>
-                        <button class="btn-premium btn-cancelar" onclick="marcarPendiente(${s.id},'Cancelado')">❌</button>
-                        <button class="btn-premium btn-cancpag" onclick="marcarPendiente(${s.id},'Cancelado-Pagado')">❌💰</button>
+            html += `
+                <div class="list-group-item pendiente-card" id="pend-${s.id}">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>📅 ${s.fecha}</strong> - ${s.hora_inicio} a ${s.hora_fin}<br>
+                            <small>👨‍🎓 ${s.estudiante}</small><br>
+                            <small>📚 ${s.asignatura || s.tema_terapia || 'Sin asignatura'}</small><br>
+                            <small>👨‍🏫 ${s.profesor_terapeuta}</small>
+                        </div>
+                        <div>
+                            <button class="btn btn-success btn-sm me-1" onclick="marcarPendiente(${s.id}, 'Realizado')">✅ Realizado</button>
+                            <button class="btn btn-warning btn-sm me-1" onclick="marcarPendiente(${s.id}, 'Cancelado')">❌ Cancelado</button>
+                            <button class="btn btn-info btn-sm" onclick="marcarPendiente(${s.id}, 'Cancelado-Pagado')">❌💰 Canc-Pag</button>
+                        </div>
                     </div>
                 </div>
-            </div>`;
+            `;
         }
-        c.innerHTML = h;
-    } catch(e) { document.getElementById('pendientesContainer').innerHTML = '<div class="alert alert-danger">Error</div>'; }
+        html += '</div>';
+        container.innerHTML = html;
+    } catch (error) {
+        console.error('Error cargando pendientes:', error);
+        document.getElementById('pendientesContainer').innerHTML = '<div class="alert alert-danger">Error al cargar pendientes</div>';
+    }
 }
 
 async function marcarPendiente(id, estado) {
-    let msg = '¿Marcar como ' + estado + '?';
-    if (estado === 'Cancelado-Pagado') msg = '⚠️ Cancelado-Pagado\n50% docente | 50% Atlas';
-    if (!confirm(msg)) return;
+    let mensaje = `¿Marcar esta sesión como ${estado}?`;
+    if (estado === 'Cancelado-Pagado') {
+        mensaje = '⚠️ ¿Marcar como Cancelado-Pagado?\n\n50% para el docente\n50% para Atlas';
+    }
+    if (!confirm(mensaje)) return;
     try {
-        const r = await fetch('/api/sesion/' + id + '/toggle', {
-            method: 'POST', headers: {'Content-Type': 'application/json'},
+        const response = await fetch('/api/sesion/' + id + '/toggle', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({estado: estado})
         });
-        if ((await r.json()).success) {
-            document.getElementById('pend-'+id)?.remove();
-            const rem = document.querySelectorAll('.pendiente-card').length;
-            document.getElementById('pendientesCount').innerText = rem;
-            if (!rem) document.getElementById('pendientesContainer').innerHTML = '<div class="alert alert-success mb-0">✅ Sin pendientes</div>';
+        const result = await response.json();
+        if (result.success) {
+            document.getElementById(`pend-${id}`)?.remove();
+            const remaining = document.querySelectorAll('.pendiente-card').length;
+            document.getElementById('pendientesCount').innerText = remaining;
+            if (remaining === 0) {
+                document.getElementById('pendientesContainer').innerHTML = '<div class="alert alert-success mb-0">✅ No hay sesiones pendientes. Todas están marcadas.</div>';
+            }
             location.reload();
+        } else {
+            alert('Error: ' + (result.error || 'Desconocido'));
         }
-    } catch(e) { alert('Error'); }
+    } catch (error) {
+        alert('Error al marcar: ' + error);
+    }
 }
 
 {% if current_user.rol in ['admin','socio'] %}
 async function eliminarSesion(id) {
-    if (!confirm('¿Eliminar?')) return;
-    await fetch('/api/sesion/'+id+'/eliminar', {method:'POST'});
-    location.reload();
-}
-async function sincronizarTodos() {
-    if (!confirm('¿Sincronizar todas?')) return;
-    const btns = document.querySelectorAll('input[type="radio"]');
-    let ok = 0;
-    for (let b of btns) {
-        try {
-            const r = await fetch('/api/sesion/'+b.dataset.id+'/sincronizar', {method:'POST', headers:{'Content-Type':'application/json'}});
-            if ((await r.json()).success) ok++;
-        } catch(e) {}
+    if (!confirm('🗑️ ¿Eliminar esta sesión permanentemente?')) return;
+    try {
+        await fetch('/api/sesion/' + id + '/eliminar', {method: 'POST'});
+        location.reload();
+    } catch (error) {
+        alert('Error al eliminar');
     }
-    alert('✅ '+ok+' sincronizadas');
+}
+
+async function sincronizarTodos() {
+    if (!confirm('¿Sincronizar TODAS las sesiones de esta fecha con Google Calendar?')) return;
+    const btns = document.querySelectorAll('.radio-sesion');
+    let ok = 0;
+    for (let btn of btns) {
+        const id = btn.dataset.id;
+        if (id) {
+            try {
+                const r = await fetch('/api/sesion/' + id + '/sincronizar', {method: 'POST', headers: {'Content-Type': 'application/json'}});
+                if ((await r.json()).success) ok++;
+            } catch(e) {}
+        }
+    }
+    alert('✅ ' + ok + ' sesiones sincronizadas');
     location.reload();
 }
 {% endif %}
 
+// Inicializar
 cargarPendientes();
 </script>
+
+<div class="mt-4 d-flex flex-wrap justify-content-between">
+    <a href="/modulo1" class="btn btn-outline-primary mb-1">← M1</a>
+    <a href="/modulo3" class="btn btn-outline-success mb-1">M3 →</a>
+    <a href="/modulo4" class="btn btn-outline-info mb-1">M4</a>
+    <a href="/modulo5" class="btn btn-outline-warning mb-1">M5</a>
+</div>
 {% endblock %}

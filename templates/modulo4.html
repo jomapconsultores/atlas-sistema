@@ -2,40 +2,267 @@
 {% block title %}Calendario Público - Atlas{% endblock %}
 
 {% block content %}
-<style>
-    .card-premium { border-radius: 20px; border: none; box-shadow: 0 4px 20px rgba(0,0,0,0.06); background: white; margin-bottom: 20px; overflow: hidden; }
-    .card-header-grad { padding: 14px 20px; color: white; font-weight: 700; font-size: 15px; }
-    .grad-teal { background: linear-gradient(135deg, #00acc1, #006064); }
-    .grad-purple { background: linear-gradient(135deg, #7b1fa2, #4a148c); }
-    .table-premium { border-radius: 12px; overflow: hidden; border: none; margin: 0; }
-    .table-premium thead th { background: #1a1a2e; color: white; font-weight: 600; font-size: 11px; letter-spacing: 0.5px; border: none; padding: 10px 12px; text-transform: uppercase; }
-    .table-premium tbody td { padding: 8px 12px; font-size: 13px; border-bottom: 1px solid #f0f0f0; }
-    .table-premium tbody tr:hover { background: #f8f9ff; }
-    .badge-premium { padding: 5px 10px; border-radius: 10px; font-size: 10px; font-weight: 600; }
-</style>
+<h3>📅 Calendario Público</h3>
 
-<h3 style="font-weight:800;color:#1a1a2e;">📅 Módulo 4: Calendario Público</h3>
-<p class="text-muted" style="font-size:13px;margin-bottom:20px;">Vista general de todas las sesiones y reuniones</p>
-
-<div class="card-premium">
-    <div class="card-header-grad grad-teal">📚 Sesiones Programadas</div>
-    <div class="card-body p-0">
-        {% if sesiones %}
-        <div class="table-responsive"><table class="table table-premium mb-0"><thead><tr><th>Fecha</th><th>Hora</th><th>Estudiante</th><th>Tipo</th><th>Asignatura</th><th>Profesor</th><th>Estado</th></tr></thead><tbody>
-        {% for s in sesiones %}<tr><td>{{ s.fecha }}</td><td>{{ s.hora_inicio }} - {{ s.hora_fin }}</td><td>{% if s.estudiantes %}{{ s.estudiantes.apellidos }} {{ s.estudiantes.nombres }}{% else %}ID: {{ s.estudiante_id }}{% endif %}</td><td><span class="badge-premium bg-primary">{{ s.tipo_sesion }}</span></td><td>{{ s.get('asignatura') or s.get('tema_terapia') or '-' }}</td><td>{{ s.profesor_terapeuta }}</td><td><span class="badge-premium bg-{{ 'success' if s.estado=='Realizado' else 'warning' if s.estado=='Planificado' else 'danger' if s.estado=='Cancelado' else 'info' }}">{{ s.estado }}</span></td></tr>{% endfor %}
-        </tbody></table></div>
-        {% else %}<div class="text-center py-4 text-muted">No hay sesiones programadas</div>{% endif %}
-    </div>
-</div>
-
-{% if reuniones %}
-<div class="card-premium">
-    <div class="card-header-grad grad-purple">👥 Reuniones</div>
-    <div class="card-body p-0">
-        <div class="table-responsive"><table class="table table-premium mb-0"><thead><tr><th>Fecha</th><th>Hora</th><th>Título</th><th>Tema</th><th>Asistentes</th><th>Encargado</th></tr></thead><tbody>
-        {% for r in reuniones %}<tr><td>{{ r.fecha }}</td><td>{{ r.hora_inicio }} - {{ r.hora_fin }}</td><td>{{ r.titulo }}</td><td>{{ r.get('tema','') }}</td><td>{{ r.get('asistentes','') }}</td><td>{{ r.encargado }}</td></tr>{% endfor %}
-        </tbody></table></div>
-    </div>
+{% if current_user.rol in ['admin','socio'] %}
+<div class="mb-3">
+    <button type="button" class="btn btn-outline-primary btn-sm" onclick="sincronizarTodos()">🔄 Sincronizar Todas las Sesiones</button>
 </div>
 {% endif %}
+
+<style>
+    .hora-invalida {
+        border: 2px solid #dc3545 !important;
+        background-color: #ffe6e6 !important;
+    }
+    .error-msg {
+        color: #dc3545;
+        font-size: 12px;
+        margin-top: 5px;
+        display: none;
+    }
+</style>
+
+<div class="row">
+    <div class="col-md-9">
+        <div class="card shadow mb-4">
+            <div class="card-header bg-info text-white"><strong>📚 Sesiones</strong></div>
+            <div class="card-body">
+                {% if sesiones %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th><th>Hora</th><th>Est</th><th>Tipo</th><th>Asig/Tema</th><th>Prof</th><th>Estado</th>
+                                {% if current_user.rol in ['admin','socio'] %}<th>✏️</th><th>🔄 Est.</th><th>👨‍🏫 Prof.</th><th>🗑️</th>{% endif %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for s in sesiones %}
+                            <tr id="fila-{{ s['id'] }}">
+                                <td>
+                                    <span class="fecha-texto-{{ s['id'] }}">{{ s['fecha'] }}</span>
+                                    {% if current_user.rol in ['admin','socio'] %}
+                                    <input type="date" class="form-control form-control-sm fecha-input-{{ s['id'] }}" value="{{ s['fecha'] }}" style="display:none;width:130px;">
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="hora-texto-{{ s['id'] }}">{{ s['hora_inicio'] }} - {{ s['hora_fin'] }}</span>
+                                    {% if current_user.rol in ['admin','socio'] %}
+                                    <div class="hora-input-{{ s['id'] }}" style="display:none;">
+                                        <input type="time" class="form-control form-control-sm hora-inicio-input-{{ s['id'] }}" value="{{ s['hora_inicio'] }}" style="width:100px;">
+                                        <input type="time" class="form-control form-control-sm hora-fin-input-{{ s['id'] }}" value="{{ s['hora_fin'] }}" style="width:100px;">
+                                        <div id="error-{{ s['id'] }}" class="error-msg"></div>
+                                    </div>
+                                    {% endif %}
+                                </td>
+                                <td>{{ s['estudiantes']['apellidos'] }} {{ s['estudiantes']['nombres'] }}</td>
+                                <td>{{ s['tipo_sesion'] }}</td>
+                                <td>{{ s.get('asignatura') or s.get('tema_terapia') or '-' }}</td>
+                                <td>{{ s['profesor_terapeuta'] }}</td>
+                                <td>
+                                    <span class="badge bg-{{ 'success' if s['estado']=='Realizado' else 'danger' if s['estado']=='Cancelado' else 'warning' }}">{{ s['estado'] }}</span>
+                                    {% if current_user.rol in ['admin','socio'] %}
+                                        {% if s.get('evento_calendario_id') %}
+                                        <span class="badge bg-success" title="Sincronizado">📅</span>
+                                        {% else %}
+                                        <button class="btn btn-outline-success btn-sm" onclick="sincronizarEvento({{ s['id'] }})">🔄</button>
+                                        {% endif %}
+                                    {% endif %}
+                                </td>
+                                {% if current_user.rol in ['admin','socio'] %}
+                                <td>
+                                    <button class="btn btn-warning btn-sm editar-btn-{{ s['id'] }}" onclick="editarSesion({{ s['id'] }})">✏️</button>
+                                    <button class="btn btn-success btn-sm guardar-btn-{{ s['id'] }}" style="display:none;" onclick="guardarCambios({{ s['id'] }})">✅</button>
+                                    <button class="btn btn-secondary btn-sm cancelar-btn-{{ s['id'] }}" style="display:none;" onclick="cancelarEdicion({{ s['id'] }})">❌</button>
+                                </td>
+                                <td><button class="btn btn-outline-primary btn-sm" onclick="abrirModalEstudiante({{ s['id'] }})">🔄</button></td>
+                                <td><button class="btn btn-outline-warning btn-sm" onclick="abrirModalProfesor({{ s['id'] }}, '{{ s['profesor_terapeuta'] }}')">👨‍🏫</button></td>
+                                <td><button class="btn btn-danger btn-sm" onclick="eliminarSesion({{ s['id'] }})">🗑️</button></td>
+                                {% endif %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}<p class="text-muted">No hay sesiones.</p>{% endif %}
+            </div>
+        </div>
+        
+        {% if current_user.rol in ['admin','socio'] and reuniones %}
+        <div class="card shadow mb-4">
+            <div class="card-header bg-dark text-white"><strong>📋 Reuniones</strong></div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <thead>
+                        <tr><th>Fecha</th><th>Hora</th><th>Título</th><th>Asistentes</th><th>Tema</th><th>Enc</th><th>📅</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for r in reuniones %}
+                        <tr>
+                            <td>{{ r['fecha'] }}</td>
+                            <td>{{ r['hora_inicio'] }} - {{ r['hora_fin'] }}</td>
+                            <td>{{ r['titulo'] }}</td>
+                            <td>{{ r.get('asistentes','')[:30] }}</td>
+                            <td>{{ r.get('tema','') }}</td>
+                            <td>{{ r['encargado'] }}</td>
+                            <td>{% if r.get('evento_calendario_id') %}<span class="badge bg-success">📅</span>{% else %}<button class="btn btn-outline-success btn-sm" onclick="sincronizarReunion({{ r['id'] }})">🔄</button>{% endif %}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card shadow">
+            <div class="card-header bg-dark text-white"><strong>⚡ Acciones</strong></div>
+            <div class="card-body">
+                {% if current_user.rol in ['admin','socio'] %}
+                <a href="/modulo1" class="btn btn-primary w-100 mb-2">➕ Planificar</a>
+                {% endif %}
+                <a href="/modulo2" class="btn btn-success w-100">📅 Calendario</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Función para validar horas
+function validarHorasEdicion(id) {
+    const hIni = document.querySelector(`.hora-inicio-input-${id}`).value;
+    const hFin = document.querySelector(`.hora-fin-input-${id}`).value;
+    const errorDiv = document.getElementById(`error-${id}`);
+    
+    if (hIni && hFin) {
+        if (hFin <= hIni) {
+            errorDiv.style.display = 'block';
+            errorDiv.innerHTML = '❌ La hora de fin debe ser mayor a la hora de inicio';
+            document.querySelector(`.hora-inicio-input-${id}`).classList.add('hora-invalida');
+            document.querySelector(`.hora-fin-input-${id}`).classList.add('hora-invalida');
+            return false;
+        } else {
+            errorDiv.style.display = 'none';
+            document.querySelector(`.hora-inicio-input-${id}`).classList.remove('hora-invalida');
+            document.querySelector(`.hora-fin-input-${id}`).classList.remove('hora-invalida');
+            return true;
+        }
+    }
+    return true;
+}
+
+{% if current_user.rol in ['admin','socio'] %}
+function editarSesion(id) {
+    document.querySelector(`.fecha-texto-${id}`).style.display = 'none';
+    document.querySelector(`.fecha-input-${id}`).style.display = 'block';
+    document.querySelector(`.hora-texto-${id}`).style.display = 'none';
+    document.querySelector(`.hora-input-${id}`).style.display = 'block';
+    document.querySelector(`.editar-btn-${id}`).style.display = 'none';
+    document.querySelector(`.guardar-btn-${id}`).style.display = 'inline-block';
+    document.querySelector(`.cancelar-btn-${id}`).style.display = 'inline-block';
+    
+    // Agregar event listeners para validación
+    document.querySelector(`.hora-inicio-input-${id}`).addEventListener('change', function() {
+        validarHorasEdicion(id);
+    });
+    document.querySelector(`.hora-fin-input-${id}`).addEventListener('change', function() {
+        validarHorasEdicion(id);
+    });
+}
+
+function cancelarEdicion(id) {
+    location.reload();
+}
+
+async function guardarCambios(id) {
+    if (!validarHorasEdicion(id)) {
+        alert('❌ Corrige las horas antes de guardar. La hora de fin debe ser mayor a la hora de inicio.');
+        return;
+    }
+    
+    const fecha = document.querySelector(`.fecha-input-${id}`).value;
+    const hIni = document.querySelector(`.hora-inicio-input-${id}`).value;
+    const hFin = document.querySelector(`.hora-fin-input-${id}`).value;
+    
+    if (!fecha || !hIni || !hFin) {
+        alert('❌ Complete todos los campos');
+        return;
+    }
+    
+    if (!confirm('¿Confirmas los cambios?')) return;
+    
+    try {
+        const response = await fetch('/api/sesion/' + id + '/modificar', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({fecha: fecha, hora_inicio: hIni, hora_fin: hFin})
+        });
+        const result = await response.json();
+        if (result.success) {
+            alert('✅ Sesión actualizada');
+            location.reload();
+        } else {
+            alert('❌ Error: ' + (result.error || 'Desconocido'));
+        }
+    } catch (error) {
+        alert('❌ Error al guardar');
+    }
+}
+
+function abrirModalEstudiante(id) {
+    // Implementar según necesidad
+    alert('Funcionalidad en desarrollo');
+}
+
+function abrirModalProfesor(id, actual) {
+    // Implementar según necesidad
+    alert('Funcionalidad en desarrollo');
+}
+
+async function eliminarSesion(id) {
+    if (!confirm('🗑️ ¿Eliminar esta sesión?')) return;
+    await fetch('/api/sesion/' + id + '/eliminar', {method: 'POST'});
+    location.reload();
+}
+
+async function sincronizarEvento(id) {
+    if (!confirm('¿Sincronizar esta sesión con Google Calendar?')) return;
+    const btn = event.target;
+    btn.disabled = true;
+    btn.textContent = '⏳';
+    try {
+        const r = await fetch('/api/sesion/' + id + '/sincronizar', {method: 'POST', headers: {'Content-Type': 'application/json'}});
+        const d = await r.json();
+        if (d.success) alert('✅ Sincronizado');
+        else alert('❌ ' + (d.error || 'Error'));
+        location.reload();
+    } catch(e) { alert('❌ Error'); }
+}
+
+async function sincronizarTodos() {
+    if (!confirm('¿Sincronizar TODAS las sesiones?')) return;
+    let ok = 0;
+    const btns = document.querySelectorAll('button[onclick^="sincronizarEvento"]');
+    for (let b of btns) {
+        const id = b.getAttribute('onclick').match(/\d+/)[0];
+        try {
+            const r = await fetch('/api/sesion/' + id + '/sincronizar', {method: 'POST', headers: {'Content-Type': 'application/json'}});
+            if ((await r.json()).success) ok++;
+        } catch(e) {}
+    }
+    alert('✅ ' + ok + ' sincronizadas');
+    location.reload();
+}
+
+async function sincronizarReunion(id) {
+    if (!confirm('¿Sincronizar esta reunión?')) return;
+    const r = await fetch('/api/reunion/' + id + '/sincronizar', {method: 'POST', headers: {'Content-Type': 'application/json'}});
+    const d = await r.json();
+    alert(d.success ? '✅ Sincronizada' : '❌ ' + (d.error || 'Error'));
+    location.reload();
+}
+{% endif %}
+</script>
 {% endblock %}
