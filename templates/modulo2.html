@@ -41,8 +41,8 @@
                 <thead>
                     <tr>
                         <th>Fecha</th><th>Hora</th><th>Estudiante</th><th>Tipo</th><th>Asig/Tema</th><th>Prof</th>
-                        <th>Estado</th><th>✅</th><th>❌</th>
-                        {% if current_user.rol in ['admin','socio'] %}<th>✏️</th><th>🗑️</th>{% endif %}
+                        <th>Estado</th><th>✅</th><th>❌</th><th>❌💰</th>
+                        {% if current_user.rol in ['admin','socio'] %}<th>🗑️</th>{% endif %}
                     </tr>
                 </thead>
                 <tbody>
@@ -55,10 +55,11 @@
                         <td>{{ s.get('asignatura') or s.get('tema_terapia') or '-' }}</td>
                         <td>{{ s.profesor_terapeuta }}</td>
                         <td>
-                            <span class="badge bg-{{ 'success' if s.estado=='Realizado' else 'danger' if s.estado=='Cancelado' else 'warning' }}">{{ s.estado }}</span>
+                            <span class="badge bg-{{ 'success' if s.estado=='Realizado' else 'danger' if s.estado=='Cancelado' else 'warning' if s.estado=='Planificado' else 'info' }}">{{ s.estado }}</span>
                         </td>
                         <td><input type="radio" name="est_{{ s.id }}" class="radio-sesion" data-id="{{ s.id }}" data-estado="Realizado" {{ 'checked' if s.estado=='Realizado' }}></td>
                         <td><input type="radio" name="est_{{ s.id }}" class="radio-sesion" data-id="{{ s.id }}" data-estado="Cancelado" {{ 'checked' if s.estado=='Cancelado' }}></td>
+                        <td><input type="radio" name="est_{{ s.id }}" class="radio-sesion" data-id="{{ s.id }}" data-estado="Cancelado-Pagado" {{ 'checked' if s.estado=='Cancelado-Pagado' }}></td>
                         {% if current_user.rol in ['admin','socio'] %}
                         <td><button class="btn btn-danger btn-sm" onclick="eliminarSesion({{ s.id }})">🗑️</button></td>
                         {% endif %}
@@ -95,7 +96,11 @@ document.querySelectorAll('.radio-sesion').forEach(r => {
     r.addEventListener('change', function() {
         if (!this.checked) return;
         const id = this.dataset.id, e = this.dataset.estado;
-        if (!confirm('¿Confirmas marcar como ' + e + '?')) {
+        let mensaje = '¿Confirmas marcar como ' + e + '?';
+        if (e === 'Cancelado-Pagado') {
+            mensaje = '⚠️ ¿Marcar como Cancelado-Pagado?\n\n50% para el docente\n50% para Atlas';
+        }
+        if (!confirm(mensaje)) {
             location.reload();
             return;
         }
@@ -138,8 +143,9 @@ async function cargarPendientes() {
                             <small>👨‍🏫 ${s.profesor_terapeuta}</small>
                         </div>
                         <div>
-                            <button class="btn btn-success btn-sm me-1" onclick="marcarPendiente(${s.id}, 'Realizado')">✅ Marcar Realizado</button>
-                            <button class="btn btn-warning btn-sm" onclick="marcarPendiente(${s.id}, 'Cancelado')">❌ Marcar Cancelado</button>
+                            <button class="btn btn-success btn-sm me-1" onclick="marcarPendiente(${s.id}, 'Realizado')">✅ Realizado</button>
+                            <button class="btn btn-warning btn-sm me-1" onclick="marcarPendiente(${s.id}, 'Cancelado')">❌ Cancelado</button>
+                            <button class="btn btn-info btn-sm" onclick="marcarPendiente(${s.id}, 'Cancelado-Pagado')">❌💰 Canc-Pag</button>
                         </div>
                     </div>
                 </div>
@@ -154,7 +160,11 @@ async function cargarPendientes() {
 }
 
 async function marcarPendiente(id, estado) {
-    if (!confirm(`¿Marcar esta sesión como ${estado}?`)) return;
+    let mensaje = `¿Marcar esta sesión como ${estado}?`;
+    if (estado === 'Cancelado-Pagado') {
+        mensaje = '⚠️ ¿Marcar como Cancelado-Pagado?\n\n50% para el docente\n50% para Atlas';
+    }
+    if (!confirm(mensaje)) return;
     try {
         const response = await fetch('/api/sesion/' + id + '/toggle', {
             method: 'POST',
@@ -169,7 +179,6 @@ async function marcarPendiente(id, estado) {
             if (remaining === 0) {
                 document.getElementById('pendientesContainer').innerHTML = '<div class="alert alert-success mb-0">✅ No hay sesiones pendientes. Todas están marcadas.</div>';
             }
-            // Recargar la tabla principal
             location.reload();
         } else {
             alert('Error: ' + (result.error || 'Desconocido'));
