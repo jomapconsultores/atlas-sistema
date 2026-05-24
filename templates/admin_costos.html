@@ -3,7 +3,7 @@
 
 {% block content %}
 <h3>⚙️ Administración de Costos</h3>
-<p class="text-muted">Solo administradores pueden modificar los costos del sistema</p>
+<p class="text-muted">Administradores y socios pueden modificar los costos del sistema</p>
 
 <div class="mb-3">
     <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalCosto" onclick="limpiarModal()">➕ Nuevo Costo</button>
@@ -23,6 +23,7 @@
                         <th>Concepto</th>
                         <th>Tipo</th>
                         <th>Precio</th>
+                        <th>Modificado por</th>
                         <th>Estado</th>
                         <th>Acciones</th>
                     </tr>
@@ -46,6 +47,7 @@
                             {% endif %}
                         </td>
                         <td class="text-end fw-bold">${{ "%.2f"|format(c.precio) }}</td>
+                        <td><small>{{ c.get('nombre_modificador', 'Sistema') }}</small></td>
                         <td>
                             {% if c.activo %}
                                 <span class="badge bg-success">✅ Activo</span>
@@ -76,7 +78,8 @@
                 <input type="hidden" id="costo_id" value="">
                 <div class="mb-3">
                     <label class="form-label">Concepto *</label>
-                    <input type="text" id="concepto" class="form-control" required placeholder="Nombre del concepto">
+                    <input type="text" id="concepto" class="form-control" required placeholder="Nombre del concepto (ej: Clase normal)">
+                    <small class="text-muted">Se guardará con la primera letra en mayúscula automáticamente</small>
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Tipo *</label>

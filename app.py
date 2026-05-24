@@ -161,6 +161,19 @@ def modulo1():
             primera_fecha = None
             atencion = request.form.get('atencion_psicologica', '')
             es_paquete = (atencion == 'Paquete 4 terapias')
+            
+            # Validar que el costo no esté vacío
+            es_terapia = tipo in ['terapia', 'ambos']
+            if es_terapia:
+                if not atencion or atencion == '':
+                    flash('❌ Debe seleccionar un tipo de atención psicológica (costo)', 'error')
+                    return redirect(url_for('modulo1'))
+            else:
+                precio_hora = request.form.get('precio_hora', '')
+                if not precio_hora or precio_hora == '':
+                    flash('❌ Debe seleccionar un precio por hora (costo)', 'error')
+                    return redirect(url_for('modulo1'))
+            
             if es_paquete:
                 num_sesiones = 4
             
@@ -188,10 +201,9 @@ def modulo1():
                 inicio = datetime.strptime(f"{fecha} {h_ini}", '%Y-%m-%d %H:%M')
                 fin = datetime.strptime(f"{fecha} {h_fin}", '%Y-%m-%d %H:%M')
                 horas = round((fin - inicio).total_seconds() / 3600, 2)
-                es_terapia = tipo in ['terapia', 'ambos']
                 
                 if es_terapia:
-                    tema = request.form.get('atencion_psicologica', '')
+                    tema = atencion
                     asignatura = request.form.get('asignatura', '') if tipo == 'ambos' else ''
                     if tema == 'Paquete 4 terapias':
                         precio = 160 / 4
@@ -201,7 +213,7 @@ def modulo1():
                 else:
                     asignatura = request.form.get('asignatura', '')
                     tema = ''
-                    precio = float(request.form.get('precio_hora', 10))
+                    precio = float(precio_hora)
                     valor_inicial = 0
                 
                 estudiantes_nombres = []
@@ -363,6 +375,14 @@ def api_editar_sesion(id):
         precio_hora = data.get('precio_hora', 10)
         es_terapia = data['tipo_sesion'] in ['terapia', 'ambos']
         
+        # Validar que el costo no esté vacío
+        if es_terapia:
+            if not data.get('tema_terapia') or data.get('tema_terapia', '').strip() == '':
+                return jsonify({'success': False, 'error': 'Debe seleccionar un tipo de atención psicológica (costo)'})
+        else:
+            if not precio_hora or precio_hora == 0:
+                return jsonify({'success': False, 'error': 'Debe seleccionar un precio por hora (costo)'})
+        
         updates = {
             'fecha': data['fecha'],
             'hora_inicio': hora_inicio_str,
@@ -419,8 +439,21 @@ def toggle_sesion(id):
                 updates['valor_total'] = sd.get('precio_hora', 40) or 40
             else:
                 updates['valor_total'] = round((sd.get('horas', 1) or 1) * (sd.get('precio_hora', 10) or 10), 2)
+            updates['valor_pagar_docente'] = updates['valor_total']
     elif estado == 'Cancelado':
         updates['valor_total'] = 0
+        updates['valor_pagar_docente'] = 0
+    elif estado == 'Cancelado-Pagado':
+        s = supabase.table('sesiones').select('*').eq('id', id).execute()
+        if s.data:
+            sd = s.data[0]
+            if sd.get('cobro_por_sesion') or sd.get('tipo_sesion') in ['terapia', 'ambos']:
+                valor_total = sd.get('precio_hora', 40) or 40
+            else:
+                valor_total = round((sd.get('horas', 1) or 1) * (sd.get('precio_hora', 10) or 10), 2)
+            updates['valor_total'] = 0
+            updates['valor_pagar_docente'] = valor_total * 0.5
+            updates['valor_atlas'] = valor_total * 0.5
     
     supabase.table('sesiones').update(updates).eq('id', id).execute()
     return jsonify({'success': True})
@@ -708,6 +741,18 @@ def modulo5():
             total_psicologia += pago_psicologia
         
         total_pagar = pago_docente + pago_psicologia
+        
+        # Si es Cancelado-Pagado, usar valor_pagar_docente
+        estado = s.get('estado', '')
+        if estado == 'Cancelado-Pagado':
+            valor_pagar_docente = s.get('valor_pagar_docente', 0) or 0
+            valor_atlas = s.get('valor_atlas', 0) or 0
+            if tipo in ['clase', 'preuniversitario']:
+                pago_docente = valor_pagar_docente
+            else:
+                pago_psicologia = valor_pagar_docente
+            total_pagar = pago_docente + pago_psicologia
+        
         total_adeudado += total_pagar
         
         est = s.get('estudiantes', {})
@@ -832,22 +877,27 @@ def api_crear_encargado():
 # ========== ADMINISTRACIÓN DE COSTOS ==========
 @app.route('/admin/costos')
 @login_required
-@admin_required
+@socio_admin_required
 def admin_costos():
     costos = supabase.table('costos_config').select('*').order('tipo').order('concepto').execute()
     return render_template('admin_costos.html', costos=costos.data or [])
 
 @app.route('/api/costos/crear', methods=['POST'])
 @login_required
-@admin_required
+@socio_admin_required
 def api_crear_costo():
     data = request.get_json()
     try:
+        concepto = data['concepto'].strip()
+        concepto = concepto[0].upper() + concepto[1:].lower() if len(concepto) > 0 else concepto
+        
         supabase.table('costos_config').insert({
-            'concepto': data['concepto'],
+            'concepto': concepto,
             'tipo': data.get('tipo', 'servicio'),
             'precio': float(data['precio']),
-            'creado_por': current_user.id
+            'creado_por': current_user.id,
+            'nombre_modificador': current_user.nombre,
+            'fecha_actualizacion': date.today().isoformat()
         }).execute()
         return jsonify({'success': True})
     except Exception as e:
@@ -855,14 +905,19 @@ def api_crear_costo():
 
 @app.route('/api/costos/<int:id>/editar', methods=['POST'])
 @login_required
-@admin_required
+@socio_admin_required
 def api_editar_costo(id):
     data = request.get_json()
     try:
+        concepto = data['concepto'].strip()
+        concepto = concepto[0].upper() + concepto[1:].lower() if len(concepto) > 0 else concepto
+        
         supabase.table('costos_config').update({
-            'concepto': data['concepto'],
+            'concepto': concepto,
             'tipo': data.get('tipo', 'servicio'),
             'precio': float(data['precio']),
+            'modificado_por': current_user.id,
+            'nombre_modificador': current_user.nombre,
             'fecha_actualizacion': date.today().isoformat()
         }).eq('id', id).execute()
         return jsonify({'success': True})
@@ -871,12 +926,17 @@ def api_editar_costo(id):
 
 @app.route('/api/costos/<int:id>/toggle', methods=['POST'])
 @login_required
-@admin_required
+@socio_admin_required
 def api_toggle_costo(id):
     costo = supabase.table('costos_config').select('activo').eq('id', id).execute()
     if costo.data:
         nuevo_estado = not costo.data[0].get('activo', True)
-        supabase.table('costos_config').update({'activo': nuevo_estado}).eq('id', id).execute()
+        supabase.table('costos_config').update({
+            'activo': nuevo_estado,
+            'modificado_por': current_user.id,
+            'nombre_modificador': current_user.nombre,
+            'fecha_actualizacion': date.today().isoformat()
+        }).eq('id', id).execute()
         return jsonify({'success': True, 'activo': nuevo_estado})
     return jsonify({'success': False, 'error': 'No encontrado'})
 
