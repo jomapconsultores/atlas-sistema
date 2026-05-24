@@ -1293,8 +1293,45 @@ def reportes():
     correcciones = supabase.table('correcciones_pagos').select('*').order('fecha_correccion', desc=True).limit(30).execute()
     observaciones = supabase.table('sesiones').select('*, estudiantes(apellidos, nombres)').not_.is_('observaciones', 'null').order('fecha', desc=True).limit(30).execute()
     nuevos_usuarios = supabase.table('usuarios').select('*').gte('fecha_registro', f"{anio}-{mes:02d}-01").lte('fecha_registro', f"{anio}-{mes:02d}-31").execute()
+
+        # ========== DATOS PARA REPORTE DE GÉNERO ==========
+    estudiantes_hombres = 0
+    estudiantes_mujeres = 0
+    horas_por_estudiante = {}
+    cobrar_por_estudiante = {}
     
-    return render_template('reportes.html',
+    for e in (estudiantes.data or []):
+        genero = (e.get('genero') or '').lower()
+        if genero in ['m', 'masculino', 'hombre']:
+            estudiantes_hombres += 1
+        elif genero in ['f', 'femenino', 'mujer']:
+            estudiantes_mujeres += 1
+        
+        nombre_est = f"{e['apellidos']} {e['nombres']}"
+        ses_est = supabase.table('sesiones').select('*').eq('estudiante_id', e['id']).in_('estado', ['Realizado', 'Cancelado-Pagado']).execute()
+        ses_est_data = [s for s in (ses_est.data or []) if s.get('fecha', '') and s['fecha'][:7] == f"{anio}-{mes:02d}"]
+        horas_est = sum(s.get('horas', 0) or 0 for s in ses_est_data)
+        cobrar_est = sum(s.get('valor_total', 0) or 0 for s in ses_est_data)
+        horas_por_estudiante[nombre_est] = horas_est
+        cobrar_por_estudiante[nombre_est] = cobrar_est
+    
+    # ========== DATOS PARA REPORTE DE ASIGNATURAS CON VALORES ==========
+    asignaturas_valores = {}
+    for e in (estudiantes.data or []):
+        ses_est = supabase.table('sesiones').select('*').eq('estudiante_id', e['id']).in_('estado', ['Realizado', 'Cancelado-Pagado']).execute()
+        ses_est_data = [s for s in (ses_est.data or []) if s.get('fecha', '') and s['fecha'][:7] == f"{anio}-{mes:02d}"]
+        for s in ses_est_data:
+            asig = s.get('asignatura') or s.get('tema_terapia') or 'Sin registro'
+            if asig not in asignaturas_valores:
+                asignaturas_valores[asig] = {'horas': 0, 'valor': 0, 'estudiantes': 0}
+            asignaturas_valores[asig]['horas'] += s.get('horas', 0) or 0
+            asignaturas_valores[asig]['valor'] += s.get('valor_total', 0) or 0
+            asignaturas_valores[asig]['estudiantes'] += 1
+    
+    # ========== TOTALES DE PAGOS DOCENTES PARA PORCENTAJES ==========
+    total_pago_docentes_general = total_docencia + total_psicologia
+
+        return render_template('reportes.html',
                          datos_estudiantes=datos_estudiantes, total_estudiantes=len(datos_estudiantes),
                          total_horas_estudiantes=total_horas_estudiantes,
                          total_cobrar_estudiantes=total_cobrar_estudiantes,
@@ -1308,11 +1345,17 @@ def reportes():
                          cumplimiento=cumplimiento,
                          pagos_por_docente=pagos_por_docente, total_pago_docentes=total_pago_docentes,
                          total_docencia=total_docencia, total_psicologia=total_psicologia,
+                         total_pago_docentes_general=total_pago_docentes_general,
                          total_atlas=total_atlas,
                          planificado_clases=planificado_clases,
                          planificado_psicologia=planificado_psicologia,
-                         ejecutado_clases=total_facturado_clases,
-                         ejecutado_psicologia=total_facturado_psicologia,
+                         ejecutado_clases=ejecutado_clases,
+                         ejecutado_psicologia=ejecutado_psicologia,
+                         estudiantes_hombres=estudiantes_hombres,
+                         estudiantes_mujeres=estudiantes_mujeres,
+                         horas_por_estudiante=horas_por_estudiante,
+                         cobrar_por_estudiante=cobrar_por_estudiante,
+                         asignaturas_valores=asignaturas_valores,
                          correcciones=correcciones.data or [], observaciones=observaciones.data or [],
                          nuevos_usuarios=nuevos_usuarios.data or [], total_planificado=0)
 
