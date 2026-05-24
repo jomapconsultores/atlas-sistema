@@ -13,22 +13,21 @@
         border-radius: 20px; border: none; overflow: hidden;
         transition: all 0.3s ease; box-shadow: 0 4px 20px rgba(0,0,0,0.06); background: white;
     }
-    .report-card:hover { box-shadow: 0 8px 30px rgba(0,0,0,0.12); }
     
     .stat-card {
-        border-radius: 20px; border: none; padding: 25px 20px; color: white;
-        position: relative; overflow: hidden; cursor: default;
+        border-radius: 20px; border: none; padding: 28px 22px; color: white;
+        position: relative; overflow: hidden; cursor: default; transition: all 0.3s;
     }
-    .stat-card .icon-bg { position: absolute; right: -10px; top: -10px; font-size: 80px; opacity: 0.15; }
-    .stat-card h2 { font-size: 32px; font-weight: 800; margin: 0; position: relative; z-index: 1; }
-    .stat-card .label { font-size: 13px; opacity: 0.9; position: relative; z-index: 1; font-weight: 500; }
-    .stat-card .sub { font-size: 11px; opacity: 0.7; margin-top: 5px; position: relative; z-index: 1; }
+    .stat-card:hover { transform: translateY(-3px); box-shadow: 0 8px 25px rgba(0,0,0,0.2); }
+    .stat-card .icon-bg { position: absolute; right: -15px; top: -15px; font-size: 90px; opacity: 0.12; }
+    .stat-card h2 { font-size: 34px; font-weight: 800; margin: 0; position: relative; z-index: 1; letter-spacing: -1px; }
+    .stat-card .label { font-size: 14px; opacity: 0.95; position: relative; z-index: 1; font-weight: 500; }
+    .stat-card .sub { font-size: 12px; opacity: 0.75; margin-top: 6px; position: relative; z-index: 1; }
     
     .gradient-blue { background: linear-gradient(135deg, #1a73e8, #0d47a1); }
     .gradient-green { background: linear-gradient(135deg, #0f9d58, #00695c); }
     .gradient-teal { background: linear-gradient(135deg, #00acc1, #006064); }
     .gradient-red { background: linear-gradient(135deg, #db4437, #b71c1c); }
-    .gradient-purple { background: linear-gradient(135deg, #7b1fa2, #4a148c); }
     .gradient-orange { background: linear-gradient(135deg, #f4511e, #bf360c); }
     .gradient-dark { background: linear-gradient(135deg, #263238, #111); }
     .gradient-indigo { background: linear-gradient(135deg, #3949ab, #1a237e); }
@@ -36,13 +35,13 @@
     .table-premium { border-radius: 12px; overflow: hidden; border: none; }
     .table-premium thead th {
         background: var(--dark); color: white; font-weight: 600; font-size: 11px;
-        letter-spacing: 0.5px; border: none; padding: 10px 12px; text-transform: uppercase;
+        letter-spacing: 0.8px; border: none; padding: 12px 14px; text-transform: uppercase;
     }
-    .table-premium tbody td { padding: 8px 12px; vertical-align: middle; font-size: 13px; border-bottom: 1px solid #f0f0f0; }
+    .table-premium tbody td { padding: 10px 14px; vertical-align: middle; font-size: 13px; border-bottom: 1px solid #f0f0f0; }
     .table-premium tbody tr:hover { background: #f8f9ff; }
-    .table-premium tfoot td { font-weight: 700; font-size: 13px; border-top: 2px solid var(--dark); background: #f8f9fa; }
+    .table-premium tfoot td { font-weight: 700; font-size: 14px; border-top: 2px solid var(--dark); background: #f8f9fa; }
     
-    .badge-premium { padding: 5px 10px; border-radius: 15px; font-weight: 500; font-size: 10px; }
+    .badge-premium { padding: 6px 12px; border-radius: 15px; font-weight: 600; font-size: 10px; letter-spacing: 0.3px; }
     
     .asig-item {
         border-radius: 14px; border: 1px solid #e8e8e8; margin-bottom: 8px;
@@ -59,37 +58,41 @@
     }
     .asig-item .asig-body.show { display: block; }
     .asig-item .mini-badge {
-        display: inline-block; padding: 3px 9px; border-radius: 10px;
-        font-size: 10px; font-weight: 500; margin-right: 4px;
+        display: inline-block; padding: 4px 10px; border-radius: 10px;
+        font-size: 10px; font-weight: 600; margin-right: 5px;
     }
     .mini-blue { background: #e3f2fd; color: #1565c0; }
     .mini-green { background: #e8f5e9; color: #2e7d32; }
     .mini-orange { background: #fff3e0; color: #e65100; }
     
     .student-tag {
-        display: inline-block; background: #f0f0f0; padding: 3px 10px;
-        border-radius: 12px; font-size: 11px; margin: 2px 4px 2px 0;
+        display: inline-block; background: #f5f5f5; padding: 4px 12px;
+        border-radius: 15px; font-size: 11px; margin: 2px 5px 3px 0; border: 1px solid #e8e8e8;
     }
     
-    .progress-mini { height: 6px; border-radius: 3px; background: #e0e0e0; margin-top: 3px; }
+    .progress-mini { height: 6px; border-radius: 3px; background: #e0e0e0; margin-top: 4px; }
     .progress-mini .progress-bar { border-radius: 3px; }
+    
+    .form-select-sm { border-radius: 10px; border: 2px solid #e0e0e0; font-weight: 500; font-size: 12px; padding: 8px 12px; }
+    .form-select-sm:focus { border-color: #1a73e8; box-shadow: 0 0 0 3px rgba(26,115,232,0.1); }
+    
+    .card-header { padding: 14px 20px; font-weight: 700; font-size: 15px; }
 </style>
 
 <div class="container-fluid px-0">
     
-    <!-- HEADER -->
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h4 style="font-weight: 800; color: var(--dark); margin: 0;">📊 Dashboard de Reportes</h4>
             <small class="text-muted">{{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][mes-1] }} {{ anio }}</small>
         </div>
         <form class="d-flex gap-2">
-            <select name="mes" class="form-select form-select-sm" onchange="this.form.submit()" style="border-radius: 10px; width: 130px;">
+            <select name="mes" class="form-select form-select-sm" onchange="this.form.submit()" style="width: 130px;">
                 {% for m in range(1,13) %}
                 <option value="{{ m }}" {{ 'selected' if m==mes }}>{{ ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][m-1] }}</option>
                 {% endfor %}
             </select>
-            <select name="anio" class="form-select form-select-sm" onchange="this.form.submit()" style="border-radius: 10px; width: 100px;">
+            <select name="anio" class="form-select form-select-sm" onchange="this.form.submit()" style="width: 100px;">
                 {% for a in range(2025,2031) %}
                 <option value="{{ a }}" {{ 'selected' if a==anio }}>{{ a }}</option>
                 {% endfor %}
@@ -97,14 +100,13 @@
         </form>
     </div>
     
-    <!-- STATS -->
     <div class="row g-3 mb-4">
         <div class="col-md-3">
             <div class="stat-card gradient-blue">
                 <div class="icon-bg">👥</div>
                 <h2>{{ total_estudiantes }}</h2>
-                <div class="label">Estudiantes</div>
-                <div class="sub">👨 {{ estudiantes_hombres }} | 👩 {{ estudiantes_mujeres }}</div>
+                <div class="label">Estudiantes Activos</div>
+                <div class="sub">👨 {{ estudiantes_hombres }} Hombres | 👩 {{ estudiantes_mujeres }} Mujeres</div>
             </div>
         </div>
         <div class="col-md-3">
@@ -112,15 +114,15 @@
                 <div class="icon-bg">⏱️</div>
                 <h2>{{ total_horas_estudiantes }}</h2>
                 <div class="label">Horas Efectivas</div>
-                <div class="sub">{{ "%.1f"|format(total_horas_estudiantes/total_estudiantes) if total_estudiantes>0 else 0 }} hrs/est.</div>
+                <div class="sub">{{ "%.1f"|format(total_horas_estudiantes/total_estudiantes) if total_estudiantes>0 else 0 }} hrs/estudiante</div>
             </div>
         </div>
         <div class="col-md-3">
             <div class="stat-card gradient-teal">
                 <div class="icon-bg">💰</div>
                 <h2>${{ "%.0f"|format(total_ingresos) }}</h2>
-                <div class="label">Ingresos</div>
-                <div class="sub">${{ "%.0f"|format(total_ingresos/total_estudiantes) if total_estudiantes>0 else 0 }}/est.</div>
+                <div class="label">Ingresos Recaudados</div>
+                <div class="sub">${{ "%.0f"|format(total_ingresos/total_estudiantes) if total_estudiantes>0 else 0 }}/estudiante</div>
             </div>
         </div>
         <div class="col-md-3">
@@ -133,10 +135,9 @@
         </div>
     </div>
     
-    <!-- BALANCE -->
     <div class="card report-card mb-4">
-        <div class="card-header gradient-dark text-white d-flex justify-content-between align-items-center" style="border-radius: 20px 20px 0 0; padding: 12px 20px;">
-            <strong style="font-size: 15px;">💰 Balance de Resultados</strong>
+        <div class="card-header gradient-dark text-white d-flex justify-content-between align-items-center" style="border-radius: 20px 20px 0 0;">
+            <strong>💰 Balance de Resultados</strong>
             <span class="badge bg-light text-dark">Planificado vs Ejecutado</span>
         </div>
         <div class="card-body p-0">
@@ -163,12 +164,12 @@
                         {% else %}{% set g_otros.v = g_otros.v + g.monto %}{% endif %}{% endfor %}
                         
                         <tr><td>🏠 Arriendo</td><td class="text-end">${{ "%.2f"|format(g_arriendo.v) }}</td><td class="text-end">{{ (g_arriendo.v/plan_total*100)|round(1) if plan_total>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(g_arriendo.v) }}</td><td class="text-end">{{ (g_arriendo.v/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</td></tr>
-                        <tr><td>📱 Telefonía</td><td class="text-end">${{ "%.2f"|format(g_telefonia.v) }}</td><td class="text-end">{{ (g_telefonia.v/plan_total*100)|round(1) if plan_total>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(g_telefonia.v) }}</td><td class="text-end">{{ (g_telefonia.v/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</td></tr>
-                        <tr><td>💡 Serv. Básicos</td><td class="text-end">${{ "%.2f"|format(g_servicios.v) }}</td><td class="text-end">{{ (g_servicios.v/plan_total*100)|round(1) if plan_total>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(g_servicios.v) }}</td><td class="text-end">{{ (g_servicios.v/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</td></tr>
+                        <tr><td>📱 Telefonía Móvil</td><td class="text-end">${{ "%.2f"|format(g_telefonia.v) }}</td><td class="text-end">{{ (g_telefonia.v/plan_total*100)|round(1) if plan_total>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(g_telefonia.v) }}</td><td class="text-end">{{ (g_telefonia.v/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</td></tr>
+                        <tr><td>💡 Servicios Básicos</td><td class="text-end">${{ "%.2f"|format(g_servicios.v) }}</td><td class="text-end">{{ (g_servicios.v/plan_total*100)|round(1) if plan_total>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(g_servicios.v) }}</td><td class="text-end">{{ (g_servicios.v/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</td></tr>
                         <tr><td>🌐 Internet</td><td class="text-end">${{ "%.2f"|format(g_internet.v) }}</td><td class="text-end">{{ (g_internet.v/plan_total*100)|round(1) if plan_total>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(g_internet.v) }}</td><td class="text-end">{{ (g_internet.v/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</td></tr>
-                        <tr><td>📦 Otros</td><td class="text-end">${{ "%.2f"|format(g_otros.v) }}</td><td class="text-end">{{ (g_otros.v/plan_total*100)|round(1) if plan_total>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(g_otros.v) }}</td><td class="text-end">{{ (g_otros.v/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</td></tr>
-                        <tr><td>👨‍🏫 Docentes</td><td class="text-end">${{ "%.2f"|format(total_docencia) }}</td><td class="text-end">{{ (total_docencia/plan_total*100)|round(1) if plan_total>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(total_docencia) }}</td><td class="text-end">{{ (total_docencia/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</td></tr>
-                        <tr><td>🧠 Psicólogos</td><td class="text-end">${{ "%.2f"|format(total_psicologia) }}</td><td class="text-end">{{ (total_psicologia/plan_total*100)|round(1) if plan_total>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(total_psicologia) }}</td><td class="text-end">{{ (total_psicologia/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</td></tr>
+                        <tr><td>📦 Otros Gastos</td><td class="text-end">${{ "%.2f"|format(g_otros.v) }}</td><td class="text-end">{{ (g_otros.v/plan_total*100)|round(1) if plan_total>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(g_otros.v) }}</td><td class="text-end">{{ (g_otros.v/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</td></tr>
+                        <tr><td>👨‍🏫 Pago Docentes</td><td class="text-end">${{ "%.2f"|format(total_docencia) }}</td><td class="text-end">{{ (total_docencia/plan_total*100)|round(1) if plan_total>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(total_docencia) }}</td><td class="text-end">{{ (total_docencia/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</td></tr>
+                        <tr><td>🧠 Pago Psicólogos</td><td class="text-end">${{ "%.2f"|format(total_psicologia) }}</td><td class="text-end">{{ (total_psicologia/plan_total*100)|round(1) if plan_total>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(total_psicologia) }}</td><td class="text-end">{{ (total_psicologia/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</td></tr>
                         
                         {% set gt = g_arriendo.v+g_telefonia.v+g_servicios.v+g_internet.v+g_otros.v+total_docencia+total_psicologia %}
                         <tr style="background: #ffcdd2; font-weight: 700;"><td><strong>Total Gastos</strong></td><td class="text-end"><strong>${{ "%.2f"|format(gt) }}</strong></td><td class="text-end"><strong>{{ (gt/plan_total*100)|round(1) if plan_total>0 else 0 }}%</strong></td><td class="text-end"><strong>${{ "%.2f"|format(gt) }}</strong></td><td class="text-end"><strong>{{ (gt/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</strong></td></tr>
@@ -182,10 +183,9 @@
         </div>
     </div>
     
-    <!-- DETALLE POR ASIGNATURA -->
     <div class="card report-card mb-4">
-        <div class="card-header gradient-indigo text-white" style="border-radius: 20px 20px 0 0; padding: 12px 20px;">
-            <strong style="font-size: 15px;">📚 Detalle por Asignatura / Terapia</strong>
+        <div class="card-header gradient-indigo text-white" style="border-radius: 20px 20px 0 0;">
+            <strong>📚 Detalle por Asignatura / Terapia</strong>
         </div>
         <div class="card-body p-3">
             {% for asig, datos in asignaturas_valores.items() %}
@@ -221,18 +221,17 @@
                 </div>
             </div>
             {% endfor %}
-            <div class="mt-2 p-2 text-center" style="background: #f8f9fa; border-radius: 10px; font-size: 12px;">
+            <div class="mt-3 p-2 text-center" style="background: #f8f9fa; border-radius: 12px; font-size: 12px; font-weight: 600;">
                 <strong>{{ asignaturas_valores|length }}</strong> asignaturas | 
-                <strong>{{ total_horas_estudiantes }}</strong> horas | 
-                <strong>${{ "%.2f"|format(plan_total) }}</strong> total
+                <strong>{{ total_horas_estudiantes }}</strong> horas totales | 
+                <strong>${{ "%.2f"|format(plan_total) }}</strong> valor total
             </div>
         </div>
     </div>
     
-    <!-- PAGOS A DOCENTES -->
     <div class="card report-card mb-4">
-        <div class="card-header gradient-orange text-white" style="border-radius: 20px 20px 0 0; padding: 12px 20px;">
-            <strong style="font-size: 15px;">💲 Pagos a Docentes y Psicólogos</strong>
+        <div class="card-header gradient-orange text-white" style="border-radius: 20px 20px 0 0;">
+            <strong>💲 Pagos a Docentes y Psicólogos</strong>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
