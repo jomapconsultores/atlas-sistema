@@ -2,6 +2,37 @@
 {% block title %}Editar Planificaciones - Atlas{% endblock %}
 
 {% block content %}
+<style>
+    .card { border-radius: 16px; border: none; box-shadow: 0 3px 15px rgba(0,0,0,0.06); }
+    .card-header { padding: 14px 20px; font-weight: 700; font-size: 15px; border-radius: 16px 16px 0 0 !important; }
+    .bg-primary { background: linear-gradient(135deg, #1a73e8, #0d47a1) !important; }
+    .bg-info { background: linear-gradient(135deg, #00acc1, #006064) !important; }
+    .bg-warning { background: linear-gradient(135deg, #f4b400, #e65100) !important; }
+    .form-control, .form-select { border-radius: 10px; border: 2px solid #e0e0e0; padding: 10px 14px; font-size: 13px; transition: all 0.2s; }
+    .form-control:focus, .form-select:focus { border-color: #1a73e8; box-shadow: 0 0 0 3px rgba(26,115,232,0.1); }
+    .btn { border-radius: 10px; font-weight: 600; font-size: 13px; }
+    .btn-primary { background: linear-gradient(135deg, #1a73e8, #0d47a1); border: none; }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(26,115,232,0.3); }
+    .btn-outline-secondary { border-radius: 10px; }
+    .btn-danger { border-radius: 10px; }
+    .btn-secondary { border-radius: 10px; }
+    label { font-weight: 600; font-size: 12px; color: #555; }
+    .modal-content { border-radius: 16px; border: none; overflow: hidden; }
+    .modal-header { border-radius: 16px 16px 0 0; }
+    .sesion-card{border:1px solid #e8e8e8;border-radius:14px;padding:14px;margin-bottom:10px;transition:all .2s;cursor:pointer;background:white}
+    .sesion-card:hover{transform:translateY(-3px);box-shadow:0 8px 25px rgba(0,0,0,.1);border-color:#1a73e8}
+    .sesion-card.faltan-datos{background-color:#fff5f5;border-left:4px solid #dc3545}
+    .sesion-card.realizado{background-color:#f0faf0;border-left:4px solid #28a745}
+    .sesion-card.cancelado{background-color:#fff5f5;border-left:4px solid #dc3545}
+    .sesion-card.planificado{background-color:#fffdf5;border-left:4px solid #ffc107}
+    .badge-falta{background-color:#dc3545;color:#fff;font-size:10px;padding:3px 8px;border-radius:12px;margin-left:5px}
+    .badge { padding: 5px 10px; border-radius: 12px; font-size: 10px; font-weight: 600; }
+    .input-error{border:2px solid #dc3545!important;background:#fff5f5!important}
+    .input-warning{border:2px solid #ffc107!important;background:#fffdf5!important}
+    .input-group .form-select { border-radius: 10px 0 0 10px; }
+    .input-group .form-control { border-radius: 0 10px 10px 0; }
+</style>
+
 <h3>✏️ Editor de Planificaciones</h3>
 <p class="text-muted">Aquí puedes modificar todas las sesiones planificadas.</p>
 
@@ -14,15 +45,12 @@
 <div class="mb-2"><label class="form-label">Estudiante</label><select id="edit_estudiante_id" class="form-select"><option value="">Seleccionar...</option>{% for e in estudiantes %}<option value="{{ e.id }}">{{ e.apellidos }} {{ e.nombres }}</option>{% endfor %}</select></div>
 <div class="mb-2"><label class="form-label">Tipo</label><select id="edit_tipo_sesion" class="form-select" onchange="cambioTipoSesion()"><option value="clase">📚 Clase</option><option value="terapia">🧠 Terapia</option><option value="ambos">📚🧠 Ambos</option><option value="preuniversitario">🎓 Pre Uni</option></select></div>
 
-<!-- ASIGNATURA DESPLEGABLE + NUEVO -->
 <div class="mb-2"><label class="form-label">Asignatura/Tema</label><div class="input-group"><select id="edit_asignatura_select" class="form-select" onchange="asignaturaCambio()"><option value="">Seleccionar o crear...</option><option value="NUEVO">➕ Crear nueva...</option>{% for a in asignaturas %}<option value="{{ a }}">{{ a }}</option>{% endfor %}</select><input type="text" id="edit_asignatura_nuevo" class="form-control" style="display:none;" placeholder="Nueva asignatura"></div></div>
 
 <div class="mb-2" id="div_atencion_psicologica" style="display:none;"><label class="form-label">Atención Psicológica *</label><select id="edit_atencion_psicologica" class="form-select" onchange="calcularValorTotal()"><option value="">Seleccionar...</option>{% for item in atencion_psicologica %}<option value="{{ item.nombre }}" data-precio="{{ item.precio }}">{{ item.nombre }} (${{ "%.2f"|format(item.precio) }})</option>{% endfor %}</select><small class="text-danger" id="error_atencion" style="display:none;">❌ Debe seleccionar</small></div>
 
-<!-- PROFESOR DESPLEGABLE + NUEVO -->
 <div class="mb-2"><label class="form-label">Profesor</label><div class="input-group"><select id="edit_profesor_select" class="form-select" onchange="profesorCambio()"><option value="">Seleccionar o crear...</option><option value="NUEVO">➕ Crear nuevo...</option>{% for p in profesores %}<option value="{{ p }}">{{ p }}</option>{% endfor %}</select><input type="text" id="edit_profesor_nuevo" class="form-control" style="display:none;" placeholder="Nuevo profesor"></div></div>
 
-<!-- ENCARGADO DESPLEGABLE + NUEVO -->
 <div class="mb-2"><label class="form-label">Encargado</label><div class="input-group"><select id="edit_encargado_select" class="form-select" onchange="encargadoCambio()"><option value="">Seleccionar o crear...</option><option value="NUEVO">➕ Crear nuevo...</option>{% for e in encargados %}<option value="{{ e }}">{{ e }}</option>{% endfor %}</select><input type="text" id="edit_encargado_nuevo" class="form-control" style="display:none;" placeholder="Nuevo encargado"></div></div>
 
 <div class="mb-2" id="div_precio_hora"><label class="form-label">Precio por hora *</label><select id="edit_precio_hora" class="form-select" onchange="calcularValorTotal()"><option value="">Seleccionar...</option>{% for p in precios_clase %}<option value="{{ p }}">${{ "%.2f"|format(p) }}</option>{% endfor %}</select><small class="text-danger" id="error_precio" style="display:none;">❌ Debe seleccionar</small></div>
@@ -32,8 +60,6 @@
 <div class="mb-2"><label class="form-label">Observaciones</label><textarea id="edit_observaciones" class="form-control" rows="2"></textarea></div>
 <div class="mb-2"><label class="form-label">Responsable</label><input type="text" id="edit_responsable" class="form-control" value="{{ current_user.nombre }}" readonly></div>
 </div><div class="modal-footer"><button type="button" class="btn btn-danger" onclick="eliminarSesionModal()">🗑️</button><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-primary" onclick="guardarEdicionSesion()">💾 Guardar</button></div></div></div></div>
-
-<style>.sesion-card{border:1px solid #ddd;border-radius:10px;padding:12px;margin-bottom:12px;transition:all .2s;cursor:pointer}.sesion-card:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,.1)}.sesion-card.faltan-datos{background-color:#fcc;border-left:5px solid #dc3545}.sesion-card.realizado{background-color:#d4edda;border-left:5px solid #28a745}.sesion-card.cancelado{background-color:#f8d7da;border-left:5px solid #dc3545}.sesion-card.planificado{background-color:#fff3cd;border-left:5px solid #ffc107}.badge-falta{background-color:#dc3545;color:#fff;font-size:10px;padding:2px 6px;border-radius:10px;margin-left:5px}.input-error{border:2px solid #dc3545!important}.input-warning{border:2px solid #ffc107!important}</style>
 
 <script>
 let todasSesiones=[],valorCalculado=0;

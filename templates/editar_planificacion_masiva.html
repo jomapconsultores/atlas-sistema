@@ -2,6 +2,28 @@
 {% block title %}Edición Masiva - Atlas{% endblock %}
 
 {% block content %}
+<style>
+    .card { border-radius: 16px; border: none; box-shadow: 0 3px 15px rgba(0,0,0,0.06); }
+    .card-header { padding: 14px 20px; font-weight: 700; font-size: 15px; border-radius: 16px 16px 0 0 !important; }
+    .bg-primary { background: linear-gradient(135deg, #1a73e8, #0d47a1) !important; }
+    .bg-info { background: linear-gradient(135deg, #00acc1, #006064) !important; }
+    .bg-success { background: linear-gradient(135deg, #0f9d58, #00695c) !important; }
+    .bg-warning { background: linear-gradient(135deg, #f4b400, #e65100) !important; }
+    .form-control, .form-select { border-radius: 10px; border: 2px solid #e0e0e0; padding: 10px 14px; font-size: 13px; transition: all 0.2s; }
+    .form-control:focus, .form-select:focus { border-color: #1a73e8; box-shadow: 0 0 0 3px rgba(26,115,232,0.1); }
+    .btn { border-radius: 10px; font-weight: 600; font-size: 13px; }
+    .btn-primary { background: linear-gradient(135deg, #1a73e8, #0d47a1); border: none; }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(26,115,232,0.3); }
+    label { font-weight: 600; font-size: 12px; color: #555; }
+    .alert { border-radius: 12px; font-size: 13px; }
+    .list-group-item { border-radius: 10px; margin-bottom: 4px; border: 1px solid #e8e8e8; cursor: pointer; transition: all 0.2s; }
+    .list-group-item:hover { background: #f8f9ff; border-color: #1a73e8; }
+    .input-group .form-select { border-radius: 10px 0 0 10px; }
+    .input-group .form-control { border-radius: 0 10px 10px 0; }
+    .input-error{border:2px solid #dc3545!important;background:#fff5f5!important}
+    .input-warning{border:2px solid #ffc107!important;background:#fffdf5!important}
+</style>
+
 <h3>✏️ Edición Masiva de Planificación</h3>
 <p class="text-muted">Selecciona una planificación existente para modificarla.</p>
 
@@ -15,15 +37,12 @@
 <div id="formEdicion" style="display:none"><div class="card shadow mb-4"><div class="card-header bg-warning text-dark"><strong>✏️ Editar</strong></div><div class="card-body"><input type="hidden" id="sesion_id">
 <div class="mb-2"><label class="form-label">Tipo *</label><select id="tipoSesion" class="form-select" onchange="cambioTipoMasivo()"><option value="clase">📚 Clase</option><option value="terapia">🧠 Terapia</option><option value="ambos">📚🧠 Ambos</option><option value="preuniversitario">🎓 Pre Uni</option></select></div>
 
-<!-- ASIGNATURA DESPLEGABLE -->
 <div class="mb-2"><label class="form-label">Asignatura</label><div class="input-group"><select id="asignatura_select" class="form-select" onchange="asigCambio()"><option value="">Seleccionar o crear...</option><option value="NUEVO">➕ Nueva...</option>{% for a in asignaturas %}<option value="{{ a }}">{{ a }}</option>{% endfor %}</select><input type="text" id="asignatura_nuevo" class="form-control" style="display:none" placeholder="Nueva asignatura"></div></div>
 
 <div class="mb-2" id="div_atencion_masiva" style="display:none"><label class="form-label">Atención Psicológica *</label><select id="atencion_psicologica" class="form-select" onchange="calcularValorMasivo()"><option value="">Seleccionar...</option>{% for item in atencion_psicologica %}<option value="{{ item.nombre }}" data-precio="{{ item.precio }}">{{ item.nombre }} (${{ "%.2f"|format(item.precio) }})</option>{% endfor %}</select><small class="text-danger" id="error_atencion_masiva" style="display:none">❌ Seleccione</small></div>
 
-<!-- PROFESOR DESPLEGABLE -->
 <div class="mb-2"><label class="form-label">Profesor *</label><div class="input-group"><select id="profesor_select" class="form-select" onchange="profCambio()"><option value="">Seleccionar o crear...</option><option value="NUEVO">➕ Nuevo...</option>{% for p in profesores %}<option value="{{ p }}">{{ p }}</option>{% endfor %}</select><input type="text" id="profesor_nuevo" class="form-control" style="display:none" placeholder="Nuevo profesor"></div></div>
 
-<!-- ENCARGADO DESPLEGABLE -->
 <div class="mb-2"><label class="form-label">Encargado *</label><div class="input-group"><select id="encargado_select" class="form-select" onchange="encCambio()"><option value="">Seleccionar o crear...</option><option value="NUEVO">➕ Nuevo...</option>{% for e in encargados %}<option value="{{ e }}">{{ e }}</option>{% endfor %}</select><input type="text" id="encargado_nuevo" class="form-control" style="display:none" placeholder="Nuevo encargado"></div></div>
 
 <div class="row"><div class="col-md-4 mb-2"><label class="form-label">Fecha *</label><input type="date" id="fecha" class="form-control"></div><div class="col-md-4 mb-2"><label class="form-label">Inicio *</label><input type="time" id="hora_inicio" class="form-control" onchange="calcularValorMasivo()"></div><div class="col-md-4 mb-2"><label class="form-label">Fin *</label><input type="time" id="hora_fin" class="form-control" onchange="calcularValorMasivo()"></div></div>
@@ -35,8 +54,6 @@
 <div class="mb-2"><label class="form-label">Responsable</label><input type="text" id="responsable" class="form-control" value="{{ current_user.nombre }}" readonly></div>
 <button class="btn btn-primary btn-lg w-100 mt-3" onclick="guardarEdicionMasiva()">✅ Guardar</button>
 </div></div></div>
-
-<style>.input-error{border:2px solid #dc3545!important}.input-warning{border:2px solid #ffc107!important}</style>
 
 <script>
 let sesionOriginal=null,valorCalculadoMasivo=0;
