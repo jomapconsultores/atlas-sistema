@@ -12,7 +12,7 @@
 {% for e in estudiantes %}
 <div class="card mb-3 border-primary" id="detalle-{{ e.id }}" style="display:none;"><div class="card-header bg-primary text-white d-flex justify-content-between"><strong>👨‍🎓 {{ e.nombre }}</strong></div><div class="card-body p-2">
 
-<h6>📚 Sesiones a Cobrar (Realizadas + Cancelado-Pagado)</h6>
+<h6>📚 Todas las Sesiones a Cobrar</h6>
 <div class="table-responsive"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>Fecha</th><th>Asignatura/Terapia</th><th>Tipo</th><th class="text-center">Horas</th><th class="text-end">Valor Hora</th><th class="text-end">Valor Total</th><th>Estado</th></tr></thead><tbody>
 {% set th=namespace(v=0) %}{% set tv=namespace(v=0) %}
 {% for s in e.sesiones %}
@@ -38,7 +38,7 @@
 {% endfor %}{% if tpa.v==0 %}<tr><td colspan="4" class="text-muted text-center">Sin pagos</td></tr>{% endif %}
 </tbody>{% if tpa.v>0 %}<tfoot class="table-secondary"><tr><td colspan="3"><strong>Total Pagado</strong></td><td class="text-end"><strong>${{ "%.2f"|format(tpa.v) }}</strong></td></tr></tfoot>{% endif %}</table></div>
 
-<div class="alert alert-{{ 'danger' if e.saldo > 0 else 'success' }} mt-3"><h6><strong>💰 RESUMEN</strong></h6><table class="table table-sm table-borderless mb-0"><tr><td><strong>Total a Cobrar:</strong></td><td class="text-end"><strong>${{ "%.2f"|format(e.cobrar) }}</strong></td></tr><tr><td><strong>Total Pagado:</strong></td><td class="text-end text-success"><strong>-${{ "%.2f"|format(e.pagado) }}</strong></td></tr><tr><td colspan="2"><hr></td></tr><tr><td><strong>{% if e.saldo > 0 %}💸 SALDO A COBRAR{% elif e.saldo < 0 %}✅ SALDO A FAVOR{% else %}✅ AL DÍA{% endif %}:</strong></td><td class="text-end fw-bold fs-5 {{ 'text-danger' if e.saldo > 0 else 'text-success' }}">${{ "%.2f"|format(e.saldo|abs) }}</td></tr></table></div>
+<div class="alert alert-{{ 'danger' if e.saldo > 0 else 'success' }} mt-3"><h6><strong>💰 RESUMEN</strong></h6><table class="table table-sm table-borderless mb-0"><tr><td><strong>Total a Cobrar (Realizadas + Canc-Pag):</strong></td><td class="text-end"><strong>${{ "%.2f"|format(e.cobrar) }}</strong></td></tr><tr><td><strong>Total Pagado:</strong></td><td class="text-end text-success"><strong>-${{ "%.2f"|format(e.pagado) }}</strong></td></tr><tr><td colspan="2"><hr></td></tr><tr><td><strong>{% if e.saldo > 0 %}💸 SALDO A COBRAR{% elif e.saldo < 0 %}✅ SALDO A FAVOR{% else %}✅ AL DÍA{% endif %}:</strong></td><td class="text-end fw-bold fs-5 {{ 'text-danger' if e.saldo > 0 else 'text-success' }}">${{ "%.2f"|format(e.saldo|abs) }}</td></tr></table></div>
 
 </div></div>
 {% endfor %}

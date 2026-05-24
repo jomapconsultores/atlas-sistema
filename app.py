@@ -436,10 +436,13 @@ def toggle_sesion(id):
         if s.data:
             sd = s.data[0]
             if sd.get('cobro_por_sesion') or sd.get('tipo_sesion') in ['terapia', 'ambos']:
-                updates['valor_total'] = sd.get('precio_hora', 40) or 40
+                valor_total_sesion = sd.get('precio_hora', 40) or 40
             else:
-                updates['valor_total'] = round((sd.get('horas', 1) or 1) * (sd.get('precio_hora', 10) or 10), 2)
-            updates['valor_pagar_docente'] = updates['valor_total']
+                horas = sd.get('horas', 1) or 1
+                precio_hora = sd.get('precio_hora', 10) or 10
+                valor_total_sesion = round(horas * precio_hora, 2)
+            updates['valor_total'] = valor_total_sesion
+            updates['valor_pagar_docente'] = valor_total_sesion
             updates['valor_atlas'] = 0
     elif estado == 'Cancelado':
         updates['valor_total'] = 0
@@ -449,19 +452,25 @@ def toggle_sesion(id):
         s = supabase.table('sesiones').select('*').eq('id', id).execute()
         if s.data:
             sd = s.data[0]
+            # Calcular el valor total de la sesión (lo que debe pagar el estudiante)
             if sd.get('cobro_por_sesion') or sd.get('tipo_sesion') in ['terapia', 'ambos']:
                 valor_total_sesion = sd.get('precio_hora', 40) or 40
             else:
-                valor_total_sesion = round((sd.get('horas', 1) or 1) * (sd.get('precio_hora', 10) or 10), 2)
+                horas = sd.get('horas', 1) or 1
+                precio_hora = sd.get('precio_hora', 10) or 10
+                valor_total_sesion = round(horas * precio_hora, 2)
             
-            pago_docente = round(valor_total_sesion * 0.5, 2)
+            # Calcular pago al docente: 50% del valor, máximo $7 para clases
             if sd.get('tipo_sesion') in ['clase', 'preuniversitario']:
+                pago_docente = round(valor_total_sesion * 0.5, 2)
                 pago_docente = min(pago_docente, 7.00)
             else:
+                # Psicología: 40.18% del valor
                 pago_docente = round(valor_total_sesion * PORCENTAJE_PSICOLOGIA, 2)
             
             valor_atlas = round(valor_total_sesion - pago_docente, 2)
             
+            # IMPORTANTE: valor_total mantiene el valor que debe pagar el estudiante
             updates['valor_total'] = valor_total_sesion
             updates['valor_pagar_docente'] = pago_docente
             updates['valor_atlas'] = valor_atlas
