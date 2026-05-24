@@ -13,13 +13,11 @@
 
 <tr class="table-success"><td colspan="5"><strong>➕ INGRESOS TOTALES</strong></td></tr>
 
-{% set plan_total = total_cobrar_estudiantes %}
-{% set ejec_clases = ingresos_por_tipo.get('clase',0) + ingresos_por_tipo.get('preuniversitario',0) %}
-{% set ejec_psico = ingresos_por_tipo.get('terapia',0) + ingresos_por_tipo.get('ambos',0) %}
+{% set plan_total = planificado_clases + planificado_psicologia %}
 {% set ejec_total = total_ingresos %}
 
-<tr><td>📚 Ingresos Clases</td><td class="text-end">${{ "%.2f"|format(plan_total) }}</td><td class="text-end">100%</td><td class="text-end">${{ "%.2f"|format(ejec_clases) }}</td><td class="text-end">{{ (ejec_clases/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</td></tr>
-<tr><td>🧠 Ingresos Psicología</td><td class="text-end">-</td><td class="text-end">-</td><td class="text-end">${{ "%.2f"|format(ejec_psico) }}</td><td class="text-end">{{ (ejec_psico/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</td></tr>
+<tr><td>📚 Ingresos Clases</td><td class="text-end">${{ "%.2f"|format(planificado_clases) }}</td><td class="text-end">{{ (planificado_clases/plan_total*100)|round(1) if plan_total>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(ejecutado_clases) }}</td><td class="text-end">{{ (ejecutado_clases/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</td></tr>
+<tr><td>🧠 Ingresos Psicología</td><td class="text-end">${{ "%.2f"|format(planificado_psicologia) }}</td><td class="text-end">{{ (planificado_psicologia/plan_total*100)|round(1) if plan_total>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(ejecutado_psicologia) }}</td><td class="text-end">{{ (ejecutado_psicologia/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</td></tr>
 <tr class="table-success"><td><strong>Total Ingresos</strong></td><td class="text-end"><strong>${{ "%.2f"|format(plan_total) }}</strong></td><td class="text-end"><strong>100%</strong></td><td class="text-end"><strong>${{ "%.2f"|format(ejec_total) }}</strong></td><td class="text-end"><strong>100%</strong></td></tr>
 
 <tr class="table-danger"><td colspan="5"><strong>➖ GASTOS TOTALES</strong></td></tr>

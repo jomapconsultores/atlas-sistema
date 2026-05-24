@@ -1154,6 +1154,15 @@ def reportes():
     total_horas_estudiantes = 0
     total_cobrar_estudiantes = 0
     total_pagado_estudiantes = 0
+    
+    # Para planificado: separar por tipo
+    planificado_clases = 0
+    planificado_psicologia = 0
+    
+    # Para ejecutado: lo realmente cobrado
+    ejecutado_clases = 0
+    ejecutado_psicologia = 0
+    
     asignaturas_detalle = {}
     horas_por_materia = {}
     cumplimiento = {'planificado': 0, 'realizado': 0, 'cancelado': 0, 'cancelado-pagado': 0}
@@ -1169,7 +1178,7 @@ def reportes():
     for e in (estudiantes.data or []):
         ses = supabase.table('sesiones').select('*').eq('estudiante_id', e['id']).execute()
         ses_todas = [s for s in (ses.data or []) if s.get('fecha', '') and s['fecha'][:7] == f"{anio}-{mes:02d}"]
-        ses_realizadas = [s for s in ses_todas if s['estado'] in ['Realizado', 'Cancelado-Pagado']]
+        ses_realizadas = [s for s in ses_todas if s['estado'] == 'Realizado']
         ses_planificadas = [s for s in ses_todas if s['estado'] == 'Planificado']
         ses_canceladas = [s for s in ses_todas if s['estado'] == 'Cancelado']
         ses_cancelado_pagado = [s for s in ses_todas if s['estado'] == 'Cancelado-Pagado']
@@ -1179,12 +1188,33 @@ def reportes():
         horas_plan = sum(s.get('horas', 0) or 0 for s in ses_todas)
         horas_real = sum(s.get('horas', 0) or 0 for s in ses_realizadas)
         horas_canc = sum(s.get('horas', 0) or 0 for s in ses_canceladas)
-        cobrar = sum(s.get('valor_total', 0) or 0 for s in ses_realizadas if s.get('estado') in ['Realizado', 'Cancelado-Pagado'])
+        
+        # Cobrar incluye Realizadas + Cancelado-Pagado
+        cobrar = sum(s.get('valor_total', 0) or 0 for s in (ses_realizadas + ses_cancelado_pagado))
         pagado = sum(p.get('monto', 0) or 0 for p in pag_filtrados)
         
         total_horas_estudiantes += horas_real
         total_cobrar_estudiantes += cobrar
         total_pagado_estudiantes += pagado
+        
+        # Calcular planificado por tipo
+        for s in ses_planificadas:
+            tipo = s.get('tipo_sesion', 'clase')
+            valor = s.get('valor_total', 0) or 0
+            if tipo in ['clase', 'preuniversitario']:
+                planificado_clases += valor
+            else:
+                planificado_psicologia += valor
+        
+        # Calcular planificado por tipo DESDE REALIZADAS Y CANCELADO-PAGADO
+        # (porque son las que se van a cobrar)
+        for s in (ses_realizadas + ses_cancelado_pagado):
+            tipo = s.get('tipo_sesion', 'clase')
+            valor = s.get('valor_total', 0) or 0
+            if tipo in ['clase', 'preuniversitario']:
+                planificado_clases += valor
+            else:
+                planificado_psicologia += valor
         
         for s in ses_todas:
             asig = s.get('asignatura') or s.get('tema_terapia') or 'Sin registro'
@@ -1203,8 +1233,13 @@ def reportes():
                 tipo = s.get('tipo_sesion', 'clase')
                 valor = s.get('valor_total', 0) or 0
                 
+                # Solo sumar a ingresos_por_tipo (ejecutado) lo que está como Realizado (pagado)
                 if s['estado'] == 'Realizado':
                     ingresos_por_tipo[tipo] = ingresos_por_tipo.get(tipo, 0) + valor
+                    if tipo in ['clase', 'preuniversitario']:
+                        ejecutado_clases += valor
+                    else:
+                        ejecutado_psicologia += valor
                 
                 prof = s.get('profesor_terapeuta', 'Desconocido')
                 horas = s.get('horas', 0) or 0
@@ -1255,8 +1290,6 @@ def reportes():
     
     total_por_pagar_estudiantes = total_cobrar_estudiantes - total_pagado_estudiantes
     balance = total_pagado_estudiantes - total_gastos - total_pago_docentes
-    porcentaje_cobrado = round((total_pagado_estudiantes / max(total_cobrar_estudiantes, 1)) * 100, 2)
-    porcentaje_cumplimiento = round((cumplimiento.get('realizado', 0) / max(cumplimiento.get('planificado', 1), 1)) * 100, 2)
     
     correcciones = supabase.table('correcciones_pagos').select('*').order('fecha_correccion', desc=True).limit(30).execute()
     observaciones = supabase.table('sesiones').select('*, estudiantes(apellidos, nombres)').not_.is_('observaciones', 'null').order('fecha', desc=True).limit(30).execute()
@@ -1268,15 +1301,19 @@ def reportes():
                          total_cobrar_estudiantes=total_cobrar_estudiantes,
                          total_pagado_estudiantes=total_pagado_estudiantes,
                          total_por_pagar_estudiantes=total_por_pagar_estudiantes,
-                         porcentaje_cobrado=porcentaje_cobrado, total_ingresos=total_ingresos,
+                         total_ingresos=total_ingresos,
                          total_gastos=total_gastos, balance=balance,
                          gastos=gastos_mes.data or [], mes=mes, anio=anio,
                          ingresos_por_tipo=ingresos_por_tipo, gastos_por_categoria=gastos_por_categoria,
                          horas_por_materia=horas_por_materia, asignaturas_detalle=asignaturas_detalle,
-                         cumplimiento=cumplimiento, porcentaje_cumplimiento=porcentaje_cumplimiento,
+                         cumplimiento=cumplimiento,
                          pagos_por_docente=pagos_por_docente, total_pago_docentes=total_pago_docentes,
                          total_docencia=total_docencia, total_psicologia=total_psicologia,
                          total_atlas=total_atlas,
+                         planificado_clases=planificado_clases,
+                         planificado_psicologia=planificado_psicologia,
+                         ejecutado_clases=ejecutado_clases,
+                         ejecutado_psicologia=ejecutado_psicologia,
                          correcciones=correcciones.data or [], observaciones=observaciones.data or [],
                          nuevos_usuarios=nuevos_usuarios.data or [], total_planificado=0)
 
