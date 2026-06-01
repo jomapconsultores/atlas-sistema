@@ -139,7 +139,7 @@
         <a href="/padres" class="quick-btn">👨‍👩‍👧 Padres</a>
         <a href="/gastos" class="quick-btn">📉 Gastos</a>
         <a href="/reportes" class="quick-btn">📊 Reportes</a>
-        <a href="/liquidacion" class="quick-btn">⚖️ Liquidación</a>
+        {% if current_user.rol in ['admin', 'socio'] %}<a href="/liquidacion" class="quick-btn">⚖️ Liquidación</a>{% endif %}
         <a href="/psicologia-especial" class="quick-btn">🧠 Psicología Especial</a>
         <a href="/gestion-anticipos" class="quick-btn">💰 Anticipos {% if solicitudes_pendientes>0 %}<span class="badge bg-danger ms-1">{{ solicitudes_pendientes }}</span>{% endif %}</a>
         {% if current_user.rol=='admin' %}<a href="/usuarios" class="quick-btn">👥 Usuarios</a>{% endif %}

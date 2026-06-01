@@ -1369,13 +1369,19 @@ def gestion_gastos():
         fecha_obj = datetime.strptime(fecha, '%Y-%m-%d')
         mes_periodo = int(request.form.get('mes_periodo', fecha_obj.month))
         anio_periodo = int(request.form.get('anio_periodo', fecha_obj.year))
-        supabase.table('gastos').insert({
+        gasto_data = {
             'concepto': request.form['concepto'], 'monto': float(request.form['monto']),
             'fecha': fecha, 'categoria': request.form.get('categoria', ''),
             'persona': request.form.get('persona', ''), 'reembolso': request.form.get('reembolso') == 'true',
             'registrado_por': current_user.nombre, 'mes': fecha_obj.month, 'anio': fecha_obj.year,
             'mes_periodo': mes_periodo, 'anio_periodo': anio_periodo
-        }).execute()
+        }
+        try:
+            supabase.table('gastos').insert(gasto_data).execute()
+        except Exception:
+            gasto_data.pop('mes_periodo', None)
+            gasto_data.pop('anio_periodo', None)
+            supabase.table('gastos').insert(gasto_data).execute()
         flash('✅ Gasto registrado', 'success')
         return redirect(url_for('gestion_gastos'))
     
@@ -1462,8 +1468,11 @@ def liquidacion():
 
     _, ultimo_dia = monthrange(anio, mes)
 
-    # Gastos del período (filtrados por mes_periodo/anio_periodo)
-    gastos_periodo = supabase.table('gastos').select('*').eq('mes_periodo', mes).eq('anio_periodo', anio).order('fecha', desc=True).execute()
+    # Gastos del período (filtrados por mes_periodo/anio_periodo si existe, si no por mes/anio)
+    try:
+        gastos_periodo = supabase.table('gastos').select('*').eq('mes_periodo', mes).eq('anio_periodo', anio).order('fecha', desc=True).execute()
+    except Exception:
+        gastos_periodo = supabase.table('gastos').select('*').eq('mes', mes).eq('anio', anio).order('fecha', desc=True).execute()
     total_gastos = sum(g.get('monto', 0) or 0 for g in (gastos_periodo.data or []))
     gastos_por_cat = {}
     for g in (gastos_periodo.data or []):
