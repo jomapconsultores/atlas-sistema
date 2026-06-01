@@ -1651,6 +1651,7 @@ def api_crear_estudiante():
         'nivel_curso': a_oracion(data.get('nivel_curso', '')),
         'procedencia': data.get('procedencia', ''),
         'padre_nombre': data.get('padre_nombre', ''),
+        'madre_nombre': data.get('madre_nombre', ''),
         'tipo_institucion': data.get('tipo_institucion', ''),
         'nivel_educativo': a_oracion(data.get('nivel_educativo', '')),
         'activo': True, 'usuario_id': current_user.id
@@ -1668,6 +1669,7 @@ def crear_estudiante_form():
         'nivel_curso': a_oracion(request.form.get('nivel_curso', '')),
         'procedencia': request.form.get('procedencia', ''),
         'padre_nombre': request.form.get('padre_nombre', ''),
+        'madre_nombre': request.form.get('madre_nombre', ''),
         'tipo_institucion': request.form.get('tipo_institucion', ''),
         'nivel_educativo': a_oracion(request.form.get('nivel_educativo', '')),
         'activo': True, 'usuario_id': current_user.id
@@ -1684,7 +1686,7 @@ def api_editar_estudiante(id):
     campo = data.get('campo')
     valor = data.get('valor', '') or ''
     campos_permitidos = ['nombres', 'apellidos', 'nivel_curso', 'procedencia',
-                         'padre_nombre', 'tipo_institucion', 'nivel_educativo', 'genero']
+                         'padre_nombre', 'madre_nombre', 'tipo_institucion', 'nivel_educativo', 'genero']
     if campo not in campos_permitidos:
         return jsonify({'success': False, 'error': 'Campo no permitido'})
     if campo in ['nivel_curso', 'nivel_educativo']:

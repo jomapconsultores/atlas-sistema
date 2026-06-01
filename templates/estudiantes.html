@@ -22,42 +22,67 @@
 <div class="card-premium">
     <div class="card-header-grad grad-blue">➕ Nuevo Estudiante</div>
     <div class="card-body">
-        <form method="POST" action="/api/crear_estudiante_form" class="row g-2" id="formNuevoEst">
+        <form method="POST" action="/api/crear_estudiante_form" class="row g-3" id="formNuevoEst">
+
+            <!-- Fila 1: Datos personales -->
             <div class="col-md-3">
-                <input type="text" name="apellidos" class="form-control form-control-sm" placeholder="Apellidos *" required>
+                <label class="form-label fw-semibold small mb-1">Apellidos *</label>
+                <input type="text" name="apellidos" class="form-control form-control-sm" placeholder="Ej: García López" required>
             </div>
             <div class="col-md-3">
-                <input type="text" name="nombres" class="form-control form-control-sm" placeholder="Nombres *" required>
+                <label class="form-label fw-semibold small mb-1">Nombres *</label>
+                <input type="text" name="nombres" class="form-control form-control-sm" placeholder="Ej: María José" required>
             </div>
             <div class="col-md-3">
-                <input type="text" name="padre_nombre" class="form-control form-control-sm" placeholder="Nombre del padre/madre">
+                <label class="form-label fw-semibold small mb-1">Nombre del padre</label>
+                <input type="text" name="padre_nombre" class="form-control form-control-sm" placeholder="Nombre completo del padre">
             </div>
             <div class="col-md-3">
-                <input list="lista-instituciones" name="procedencia" class="form-control form-control-sm" placeholder="Institución de procedencia" autocomplete="off">
-                <datalist id="lista-instituciones">
-                    {% for inst in instituciones %}<option value="{{ inst }}">{% endfor %}
-                </datalist>
+                <label class="form-label fw-semibold small mb-1">Nombre de la madre</label>
+                <input type="text" name="madre_nombre" class="form-control form-control-sm" placeholder="Nombre completo de la madre">
             </div>
+
+            <!-- Fila 2: Tipo y nivel -->
             <div class="col-md-3">
+                <label class="form-label fw-semibold small mb-1">Tipo de institución</label>
                 <select name="tipo_institucion" class="form-select form-select-sm" id="tipoInstNuevo" onchange="actualizarNivelesNuevo()">
-                    <option value="">Tipo institución...</option>
-                    <option value="Universidad">Universidad</option>
-                    <option value="Bachillerato">Bachillerato</option>
-                    <option value="Escuela">Escuela</option>
-                    <option value="Otro">Otro</option>
+                    <option value="">Seleccionar tipo...</option>
+                    <option value="Universidad">🎓 Universidad</option>
+                    <option value="Bachillerato">📗 Bachillerato</option>
+                    <option value="Escuela">📘 Escuela / Básica</option>
+                    <option value="Otro">📋 Otro</option>
                 </select>
             </div>
             <div class="col-md-3">
-                <select name="nivel_educativo" class="form-select form-select-sm" id="nivelEdNuevo">
-                    <option value="">Nivel educativo...</option>
-                </select>
+                <label class="form-label fw-semibold small mb-1">Nivel educativo</label>
+                <div id="wrapperNivelNuevo">
+                    <select name="nivel_educativo" class="form-select form-select-sm" id="nivelEdNuevo">
+                        <option value="">— selecciona tipo primero —</option>
+                    </select>
+                </div>
             </div>
             <div class="col-md-3">
-                <input type="text" name="nivel_curso" class="form-control form-control-sm" placeholder="Nivel/Curso (ej: 3ro A)">
+                <label class="form-label fw-semibold small mb-1">Paralelo / Sección</label>
+                <input type="text" name="nivel_curso" class="form-control form-control-sm" placeholder="Ej: 3ro A, Grupo B">
             </div>
-            <div class="col-md-3">
-                <button type="submit" class="btn btn-primary btn-sm w-100">✅ Registrar Estudiante</button>
+
+            <!-- Fila 3: Institución con buscador -->
+            <div class="col-md-9">
+                <label class="form-label fw-semibold small mb-1">Institución de procedencia</label>
+                <div class="position-relative" id="wrapperInstNuevo">
+                    <input type="text" id="inputInstNuevo" name="procedencia"
+                        class="form-control form-control-sm" placeholder="Escribe el nombre para buscar o crear..."
+                        autocomplete="off" onkeyup="filtrarInstituciones(this.value)"
+                        onfocus="mostrarDropdown()" onblur="ocultarDropdown()">
+                    <div id="dropdownInst" class="dropdown-inst" style="display:none; position:absolute; top:100%; left:0; right:0; background:white; border:1px solid #dee2e6; border-radius:0 0 8px 8px; max-height:200px; overflow-y:auto; z-index:1000; box-shadow:0 4px 12px rgba(0,0,0,0.1);">
+                    </div>
+                </div>
+                <small class="text-muted">Si no aparece la institución, escríbela y se registrará automáticamente.</small>
             </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary btn-sm w-100" style="height:31px;">✅ Registrar Estudiante</button>
+            </div>
+
         </form>
     </div>
 </div>
@@ -78,11 +103,12 @@
                         <th>#</th>
                         <th>Apellidos</th>
                         <th>Nombres</th>
-                        <th>Padre/Madre</th>
-                        <th>Institución procedencia</th>
+                        <th>Padre</th>
+                        <th>Madre</th>
                         <th>Tipo</th>
                         <th>Nivel educativo</th>
-                        <th>Nivel/Curso</th>
+                        <th>Paralelo</th>
+                        <th>Institución</th>
                         {% if rol in ['admin','socio'] %}<th class="text-center">Acc.</th>{% endif %}
                     </tr>
                 </thead>
@@ -103,8 +129,8 @@
                             {% else %}{{ e.get('padre_nombre','') or '—' }}{% endif %}
                         </td>
                         <td>{% if rol in ['admin','socio'] %}
-                            <span class="celda-edit" onclick="editarCeldaDatalist(this, {{ e.id }}, 'procedencia')">{{ e.get('procedencia','') or '—' }}</span>
-                            {% else %}{{ e.get('procedencia','') or '—' }}{% endif %}
+                            <span class="celda-edit" onclick="editarCelda(this, {{ e.id }}, 'madre_nombre', 'text')">{{ e.get('madre_nombre','') or '—' }}</span>
+                            {% else %}{{ e.get('madre_nombre','') or '—' }}{% endif %}
                         </td>
                         <td>{% if rol in ['admin','socio'] %}
                             <span class="celda-edit" onclick="editarCeldaTipo(this, {{ e.id }}, '{{ e.get('tipo_institucion','') }}')">
@@ -119,6 +145,10 @@
                         <td>{% if rol in ['admin','socio'] %}
                             <span class="celda-edit" onclick="editarCelda(this, {{ e.id }}, 'nivel_curso', 'text')">{{ e.get('nivel_curso','') or '—' }}</span>
                             {% else %}{{ e.get('nivel_curso','') or '—' }}{% endif %}
+                        </td>
+                        <td>{% if rol in ['admin','socio'] %}
+                            <span class="celda-edit" onclick="editarCeldaDatalist(this, {{ e.id }}, 'procedencia')">{{ e.get('procedencia','') or '—' }}</span>
+                            {% else %}{{ e.get('procedencia','') or '—' }}{% endif %}
                         </td>
                         {% if rol in ['admin','socio'] %}
                         <td class="text-center">
@@ -264,7 +294,7 @@ async function guardarCampo(id, campo, valor) {
 function actualizarNivelesNuevo() {
     const tipo = document.getElementById('tipoInstNuevo').value;
     const sel = document.getElementById('nivelEdNuevo');
-    sel.innerHTML = '<option value="">Nivel educativo...</option>';
+    sel.innerHTML = '<option value="">— selecciona nivel —</option>';
     (NIVELES[tipo] || []).forEach(n => { const o = document.createElement('option'); o.value = n; o.text = n; sel.appendChild(o); });
     if ((NIVELES[tipo] || []).length > 0) {
         const oOtro = document.createElement('option'); oOtro.value = '__otro__'; oOtro.text = '+ Otro...'; sel.appendChild(oOtro);
@@ -272,10 +302,44 @@ function actualizarNivelesNuevo() {
 }
 document.getElementById('nivelEdNuevo').addEventListener('change', function() {
     if (this.value === '__otro__') {
-        const custom = prompt('Ingresa el nivel personalizado:') || '';
-        const o = document.createElement('option'); o.value = custom; o.text = custom; o.selected = true; this.appendChild(o);
+        const custom = prompt('Escribe el nivel personalizado:') || '';
+        if (custom) { const o = document.createElement('option'); o.value = custom; o.text = custom; o.selected = true; this.appendChild(o); }
+        else this.value = '';
     }
 });
+
+// ===== BUSCADOR DE INSTITUCIÓN CON DROPDOWN =====
+let _instTimer = null;
+function filtrarInstituciones(q) {
+    clearTimeout(_instTimer);
+    _instTimer = setTimeout(() => _mostrarOpciones(q), 150);
+}
+function _mostrarOpciones(q) {
+    const dd = document.getElementById('dropdownInst');
+    const lower = q.toLowerCase().trim();
+    const matches = lower ? INSTITUCIONES.filter(i => i.toLowerCase().includes(lower)) : INSTITUCIONES;
+    let html = matches.map(i => `<div class="inst-option" onmousedown="seleccionarInst('${i.replace(/'/g, "\\'")}')"
+        style="padding:7px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid #f5f5f5;"
+        onmouseover="this.style.background='#e8f0fe'" onmouseout="this.style.background=''">${i}</div>`).join('');
+    if (q.trim() && !INSTITUCIONES.some(i => i.toLowerCase() === lower)) {
+        html += `<div class="inst-option" onmousedown="crearInst('${q.replace(/'/g, "\\'")}')"
+            style="padding:7px 12px;cursor:pointer;font-size:13px;color:#1a73e8;font-weight:600;background:#f8f9ff;"
+            onmouseover="this.style.background='#e3f2fd'" onmouseout="this.style.background='#f8f9ff'">
+            ➕ Crear: "${q}"</div>`;
+    }
+    dd.innerHTML = html || '<div style="padding:8px 12px;color:#999;font-size:12px;">Sin coincidencias</div>';
+    dd.style.display = 'block';
+}
+function seleccionarInst(valor) {
+    document.getElementById('inputInstNuevo').value = valor;
+    document.getElementById('dropdownInst').style.display = 'none';
+}
+function crearInst(valor) {
+    if (!INSTITUCIONES.includes(valor)) INSTITUCIONES.push(valor);
+    seleccionarInst(valor);
+}
+function mostrarDropdown() { _mostrarOpciones(document.getElementById('inputInstNuevo').value); }
+function ocultarDropdown() { setTimeout(() => { document.getElementById('dropdownInst').style.display = 'none'; }, 200); }
 
 async function eliminarEstudiante(id) {
     if (!confirm('¿Desactivar este estudiante?')) return;
