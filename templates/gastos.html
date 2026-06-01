@@ -2,80 +2,165 @@
 {% block title %}Gastos - Atlas{% endblock %}
 
 {% block content %}
-<h3>📉 Registro de Gastos y Reembolsos</h3>
+<h3>📉 Gestión de Gastos y Pagos</h3>
+
+<!-- ========== PAGOS A DOCENTES Y PSICÓLOGOS ========== -->
+<div class="card shadow mb-4 border-0" style="border-radius: 15px; overflow: hidden;">
+    <div class="card-header bg-gradient text-white" style="background: linear-gradient(135deg, #1a73e8, #0d47a1);">
+        <div class="d-flex justify-content-between align-items-center">
+            <strong>💵 Pagos a Docentes y Psicólogos - {{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][mes-1] }} {{ anio }}</strong>
+            <span class="badge bg-light text-dark fs-6">Total: ${{ "%.2f"|format(total_pago_docentes_mes or 0) }}</span>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0" style="font-size: 14px;">
+                <thead style="background: #f8f9fa;">
+                    <tr>
+                        <th class="ps-3">👨‍🏫 Docente / Psicólogo</th>
+                        <th class="text-center">Tipo</th>
+                        <th class="text-center">Sesiones</th>
+                        <th class="text-end">$ Docencia</th>
+                        <th class="text-end">$ Psicología</th>
+                        <th class="text-end">$ Total a Pagar</th>
+                        <th class="text-center">📅 Fecha Pago</th>
+                        <th class="text-center">✅ Pagado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for nombre, datos in pagos_docentes_detalle.items() %}
+                    <tr id="fila-docente-{{ loop.index }}" style="transition: all 0.2s;">
+                        <td class="ps-3 fw-bold">{{ nombre }}</td>
+                        <td class="text-center">
+                            {% if datos.pago_psicologia > 0 and datos.pago_docencia > 0 %}
+                                <span class="badge bg-warning text-dark">Ambos</span>
+                            {% elif datos.pago_psicologia > 0 %}
+                                <span class="badge bg-success">🧠 Psicólogo</span>
+                            {% else %}
+                                <span class="badge bg-primary">📚 Docente</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">{{ datos.sesiones }}</td>
+                        <td class="text-end text-primary">${{ "%.2f"|format(datos.pago_docencia) }}</td>
+                        <td class="text-end text-success">${{ "%.2f"|format(datos.pago_psicologia) }}</td>
+                        <td class="text-end fw-bold fs-6">${{ "%.2f"|format(datos.total_pagar) }}</td>
+                        <td class="text-center">
+                            <span class="editable-fecha" onclick="editarCelda(this, 'fecha_pago_docente', '{{ nombre }}')" style="cursor: pointer; min-width: 100px; display: inline-block;">
+                                {{ datos.fecha_pago or '—' }}
+                            </span>
+                        </td>
+                        <td class="text-center">
+                            {% if datos.pagado %}
+                                <span class="badge bg-success fs-6" style="cursor: pointer;" onclick="togglePagado('{{ nombre }}')">✅</span>
+                            {% else %}
+                                <span class="badge bg-secondary fs-6" style="cursor: pointer;" onclick="togglePagado('{{ nombre }}')">⏳</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% if not pagos_docentes_detalle %}
+                    <tr><td colspan="8" class="text-center text-muted py-4">No hay pagos registrados para este mes</td></tr>
+                    {% endif %}
+                </tbody>
+                <tfoot style="background: #f8f9fa; font-weight: bold;">
+                    <tr>
+                        <td class="ps-3">TOTALES</td>
+                        <td></td>
+                        <td class="text-center">{{ total_sesiones_docentes or 0 }}</td>
+                        <td class="text-end text-primary">${{ "%.2f"|format(total_docencia_mes or 0) }}</td>
+                        <td class="text-end text-success">${{ "%.2f"|format(total_psicologia_mes or 0) }}</td>
+                        <td class="text-end fs-6">${{ "%.2f"|format(total_pago_docentes_mes or 0) }}</td>
+                        <td></td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+    <div class="card-footer bg-light">
+        <small class="text-muted">💡 Haga clic en la fecha o en el estado de pago para modificar. Los valores se calculan automáticamente del módulo 5.</small>
+    </div>
+</div>
 
 <div class="row">
     <!-- FORMULARIO DE GASTO -->
-    <div class="col-md-5 mb-4">
-        <div class="card shadow">
-            <div class="card-header bg-danger text-white"><strong>Nuevo Gasto / Reembolso</strong></div>
-            <div class="card-body">
+    <div class="col-lg-5 mb-4">
+        <div class="card shadow border-0" style="border-radius: 15px; overflow: hidden;">
+            <div class="card-header bg-gradient text-white" style="background: linear-gradient(135deg, #dc3545, #b71c1c);">
+                <strong>➕ Nuevo Gasto / Reembolso</strong>
+            </div>
+            <div class="card-body bg-light">
                 <form method="POST">
-                    <div class="mb-2">
-                        <label class="form-label">Concepto *</label>
-                        <input type="text" name="concepto" class="form-control" required placeholder="Ej: Material didáctico, transporte...">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Concepto *</label>
+                        <input type="text" name="concepto" class="form-control border-0 shadow-sm" required placeholder="Ej: Material didáctico, transporte...">
                     </div>
-                    <div class="mb-2">
-                        <label class="form-label">Monto *</label>
-                        <input type="number" name="monto" class="form-control" step="0.01" required>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Monto *</label>
+                        <div class="input-group">
+                            <span class="input-group-text border-0 bg-white">$</span>
+                            <input type="number" name="monto" class="form-control border-0 shadow-sm" step="0.01" required>
+                        </div>
                     </div>
-                    <div class="mb-2">
-                        <label class="form-label">Fecha *</label>
-                        <input type="date" name="fecha" class="form-control" value="{{ today }}" required>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Fecha *</label>
+                        <input type="date" name="fecha" class="form-control border-0 shadow-sm" value="{{ today }}" required>
                     </div>
-                    <div class="mb-2">
-                        <label class="form-label">Categoría</label>
-                        <select name="categoria" class="form-select">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Categoría</label>
+                        <select name="categoria" class="form-select border-0 shadow-sm">
                             <option value="">Seleccionar...</option>
-                            <option value="Servicios">Servicios (luz, agua, internet)</option>
-                            <option value="Materiales">Materiales didácticos</option>
-                            <option value="Transporte">Transporte</option>
-                            <option value="Alimentación">Alimentación</option>
-                            <option value="Mantenimiento">Mantenimiento</option>
-                            <option value="Otros">Otros</option>
+                            <option value="Arriendo">🏠 Arriendo</option>
+                            <option value="Telefonía móvil">📱 Telefonía móvil</option>
+                            <option value="Servicios básicos">💡 Servicios básicos (luz, agua)</option>
+                            <option value="Internet">🌐 Internet</option>
+                            <option value="Materiales">📦 Materiales didácticos</option>
+                            <option value="Transporte">🚗 Transporte</option>
+                            <option value="Alimentación">🍽️ Alimentación</option>
+                            <option value="Mantenimiento">🔧 Mantenimiento</option>
+                            <option value="Pago docentes">👨‍🏫 Pago a docentes</option>
+                            <option value="Otros">📋 Otros</option>
                         </select>
                     </div>
-                    <div class="mb-2">
-                        <label class="form-label">Persona que realiza el gasto *</label>
-                        <input type="text" name="persona" class="form-control" required 
-                               list="listaPersonas" autocomplete="off"
-                               placeholder="Nombre de quien pagó">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Persona que realiza el gasto *</label>
+                        <input type="text" name="persona" class="form-control border-0 shadow-sm" required list="listaPersonas" autocomplete="off" placeholder="Nombre de quien pagó">
                         <datalist id="listaPersonas"></datalist>
                     </div>
-                    <div class="mb-2 form-check">
+                    <div class="mb-3 form-check form-switch">
                         <input type="checkbox" name="reembolso" id="reembolso" class="form-check-input" value="true" onchange="toggleReembolso()">
                         <label class="form-check-label" for="reembolso">¿Requiere reembolso?</label>
                     </div>
-                    <div class="mb-2" id="divReembolsado" style="display:none;">
-                        <label class="form-label">Reembolsar a *</label>
-                        <input type="text" name="reembolsado_a" class="form-control" 
-                               list="listaPersonas" autocomplete="off"
-                               placeholder="Persona a quien se le debe devolver">
+                    <div class="mb-3" id="divReembolsado" style="display:none;">
+                        <label class="form-label fw-bold">Reembolsar a *</label>
+                        <input type="text" name="reembolsado_a" class="form-control border-0 shadow-sm" list="listaPersonas" autocomplete="off" placeholder="Persona a quien se le debe devolver">
                     </div>
-                    <button type="submit" class="btn btn-danger w-100">✅ Registrar Gasto</button>
+                    <button type="submit" class="btn btn-danger w-100 shadow-sm" style="border-radius: 10px;">
+                        <i class="bi bi-plus-circle"></i> Registrar Gasto
+                    </button>
                 </form>
             </div>
         </div>
     </div>
 
     <!-- LISTA DE GASTOS -->
-    <div class="col-md-7">
-        <div class="card shadow">
-            <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
-                <strong>Gastos de {{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][mes-1] }} {{ anio }}</strong>
-                <span class="badge bg-light text-dark">Total: ${{ "%.2f"|format(total) }}</span>
+    <div class="col-lg-7">
+        <div class="card shadow border-0" style="border-radius: 15px; overflow: hidden;">
+            <div class="card-header bg-gradient text-white d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #17a2b8, #00695c);">
+                <strong>📋 Gastos de {{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][mes-1] }} {{ anio }}</strong>
+                <span class="badge bg-light text-dark fs-6">Total: ${{ "%.2f"|format(total) }}</span>
             </div>
-            <div class="card-body">
+            <div class="card-body p-2">
                 <form class="mb-2 row g-2">
                     <div class="col-auto">
-                        <select name="mes" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <select name="mes" class="form-select form-select-sm border-0 shadow-sm" onchange="this.form.submit()">
                             {% for m in range(1, 13) %}
                             <option value="{{ m }}" {{ 'selected' if m == mes }}>{{ ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][m-1] }}</option>
                             {% endfor %}
                         </select>
                     </div>
                     <div class="col-auto">
-                        <select name="anio" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <select name="anio" class="form-select form-select-sm border-0 shadow-sm" onchange="this.form.submit()">
                             {% for a in range(2025, 2031) %}
                             <option value="{{ a }}" {{ 'selected' if a == anio }}>{{ a }}</option>
                             {% endfor %}
@@ -84,92 +169,151 @@
                 </form>
                 
                 {% if gastos %}
-                <div class="table-responsive">
-                    <table class="table table-sm table-striped">
-                        <thead>
+                <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                    <table class="table table-hover table-sm mb-0">
+                        <thead class="sticky-top" style="background: #f8f9fa; top: 0; z-index: 10;">
                             <tr>
-                                <th>Fecha</th>
+                                <th>📅 Fecha</th>
                                 <th>Concepto</th>
                                 <th>Categoría</th>
-                                <th>Persona</th>
-                                <th>Monto</th>
-                                <th>Reemb.</th>
-                                <th>🗑️</th>
+                                <th>👤 Persona</th>
+                                <th class="text-end">Monto</th>
+                                <th class="text-center">🔄</th>
+                                <th class="text-center">🗑️</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for g in gastos %}
-                            <tr>
-                                <td>{{ g['fecha'] }}</td>
-                                <td>{{ g['concepto'] }}</td>
-                                <td><span class="badge bg-secondary">{{ g.get('categoria', '') }}</span></td>
-                                <td>{{ g.get('persona', '') }}</td>
-                                <td>${{ "%.2f"|format(g['monto']) }}</td>
+                            <tr id="fila-gasto-{{ g['id'] }}" style="transition: all 0.2s;">
                                 <td>
-                                    {% if g.get('reembolso') %}
-                                    <span class="badge bg-warning text-dark" title="Reembolsar a: {{ g.get('reembolsado_a', '') }}">🔄 Sí</span>
-                                    {% else %}
-                                    <span class="text-muted">-</span>
-                                    {% endif %}
+                                    <span class="editable-celda" onclick="editarGastoInline({{ g['id'] }}, 'fecha', '{{ g['fecha'] }}')" style="cursor: pointer;">{{ g['fecha'] }}</span>
                                 </td>
                                 <td>
-                                    <button class="btn btn-danger btn-sm" onclick="eliminarGasto({{ g['id'] }})">🗑️</button>
+                                    <span class="editable-celda" onclick="editarGastoInline({{ g['id'] }}, 'concepto', '{{ g['concepto']|escape }}')" style="cursor: pointer;">{{ g['concepto'][:30] }}{% if g['concepto']|length > 30 %}...{% endif %}</span>
+                                </td>
+                                <td>
+                                    <span class="badge bg-{{ 'primary' if 'arri' in g.get('categoria','').lower() else 'info' if 'telef' in g.get('categoria','').lower() else 'warning' if 'servicio' in g.get('categoria','').lower() else 'success' if 'internet' in g.get('categoria','').lower() else 'dark' if 'pago' in g.get('categoria','').lower() else 'secondary' }}" style="cursor: pointer;" onclick="editarGastoInline({{ g['id'] }}, 'categoria', '{{ g.get('categoria','')|escape }}')">
+                                        {{ g.get('categoria', 'Sin categoría') }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="editable-celda" onclick="editarGastoInline({{ g['id'] }}, 'persona', '{{ g.get('persona','')|escape }}')" style="cursor: pointer;">{{ g.get('persona', '—') }}</span>
+                                </td>
+                                <td class="text-end fw-bold">
+                                    <span class="editable-celda" onclick="editarGastoInline({{ g['id'] }}, 'monto', '{{ g['monto'] }}')" style="cursor: pointer;">${{ "%.2f"|format(g['monto']) }}</span>
+                                </td>
+                                <td class="text-center">
+                                    {% if g.get('reembolso') %}
+                                    <span class="badge bg-warning text-dark" title="Reembolsar a: {{ g.get('reembolsado_a', '') }}">Sí</span>
+                                    {% else %}
+                                    <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    <button class="btn btn-outline-danger btn-sm border-0" onclick="eliminarGasto({{ g['id'] }})" title="Eliminar">🗑️</button>
                                 </td>
                             </tr>
                             {% endfor %}
                         </tbody>
-                        <tfoot>
-                            <tr class="fw-bold">
+                        <tfoot style="background: #f8f9fa; font-weight: bold;">
+                            <tr>
                                 <td colspan="4">Total</td>
-                                <td>${{ "%.2f"|format(total) }}</td>
+                                <td class="text-end">${{ "%.2f"|format(total) }}</td>
                                 <td colspan="2"></td>
                             </tr>
                         </tfoot>
                     </table>
                 </div>
                 {% else %}
-                <p class="text-muted">No hay gastos registrados este mes.</p>
+                <div class="text-center py-5 text-muted">
+                    <i class="bi bi-inbox" style="font-size: 40px;"></i>
+                    <p class="mt-2">No hay gastos registrados este mes</p>
+                </div>
                 {% endif %}
             </div>
         </div>
         
-        <!-- RESUMEN DE REEMBOLSOS PENDIENTES -->
-        <div class="card shadow mt-3">
-            <div class="card-header bg-warning text-dark"><strong>🔄 Reembolsos Pendientes del Mes</strong></div>
-            <div class="card-body">
+        <!-- REEMBOLSOS PENDIENTES -->
+        <div class="card shadow border-0 mt-3" style="border-radius: 15px; overflow: hidden;">
+            <div class="card-header bg-gradient text-white" style="background: linear-gradient(135deg, #ffc107, #f57f17);">
+                <strong>🔄 Reembolsos Pendientes</strong>
+            </div>
+            <div class="card-body p-2">
                 {% set reembolsos = gastos|selectattr('reembolso', 'equalto', True)|list %}
                 {% if reembolsos %}
-                <table class="table table-sm">
-                    <thead><tr><th>Persona</th><th>Concepto</th><th>Monto</th><th>Reembolsar a</th></tr></thead>
+                <table class="table table-sm table-borderless mb-0">
+                    <thead><tr><th>Persona</th><th>Concepto</th><th class="text-end">Monto</th><th>Reembolsar a</th></tr></thead>
                     <tbody>
                         {% for r in reembolsos %}
                         <tr>
                             <td>{{ r.get('persona', '') }}</td>
-                            <td>{{ r['concepto'] }}</td>
-                            <td>${{ "%.2f"|format(r['monto']) }}</td>
+                            <td>{{ r['concepto'][:25] }}</td>
+                            <td class="text-end">${{ "%.2f"|format(r['monto']) }}</td>
                             <td><strong>{{ r.get('reembolsado_a', r.get('persona', '')) }}</strong></td>
                         </tr>
                         {% endfor %}
                     </tbody>
                     <tfoot>
-                        <tr class="fw-bold">
-                            <td colspan="2">Total reembolsos</td>
-                            <td colspan="2">${{ "%.2f"|format(reembolsos|sum(attribute='monto')) }}</td>
-                        </tr>
+                        <tr class="fw-bold"><td colspan="2">Total</td><td class="text-end" colspan="2">${{ "%.2f"|format(reembolsos|sum(attribute='monto')) }}</td></tr>
                     </tfoot>
                 </table>
                 {% else %}
-                <p class="text-muted">No hay reembolsos pendientes.</p>
+                <p class="text-muted text-center mb-0">No hay reembolsos pendientes</p>
                 {% endif %}
             </div>
         </div>
     </div>
 </div>
 
+<!-- MODAL DE EDICIÓN RÁPIDA -->
+<div class="modal fade" id="modalEdicionRapida" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 15px;">
+            <div class="modal-header bg-dark text-white" style="border-radius: 15px 15px 0 0;">
+                <h6 class="modal-title">✏️ Editar</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="edit_gasto_id">
+                <input type="hidden" id="edit_gasto_campo">
+                <div class="mb-3">
+                    <label class="form-label fw-bold" id="edit_label">Valor</label>
+                    <input type="text" id="edit_valor" class="form-control border-0 shadow-sm">
+                </div>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-dark btn-sm" onclick="guardarEdicionRapida()">💾 Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.editable-celda:hover {
+    background: #e8f0fe;
+    border-radius: 5px;
+    padding: 2px 8px;
+    transition: all 0.2s;
+}
+.editable-fecha:hover {
+    background: #fff3cd;
+    border-radius: 5px;
+    padding: 4px 8px;
+    transition: all 0.2s;
+}
+.table-hover tbody tr:hover {
+    background: #f0f7ff !important;
+    transform: scale(1.005);
+}
+.bg-gradient {
+    background-size: 200% 200%;
+}
+</style>
+
 <script>
 function toggleReembolso() {
-    document.getElementById('divReembolsado').style.display = 
-        document.getElementById('reembolso').checked ? 'block' : 'none';
+    document.getElementById('divReembolsado').style.display = document.getElementById('reembolso').checked ? 'block' : 'none';
 }
 
 async function eliminarGasto(id) {
@@ -178,7 +322,85 @@ async function eliminarGasto(id) {
     location.reload();
 }
 
-// Cargar sugerencias de personas
+function editarGastoInline(id, campo, valor) {
+    document.getElementById('edit_gasto_id').value = id;
+    document.getElementById('edit_gasto_campo').value = campo;
+    document.getElementById('edit_valor').value = valor;
+    document.getElementById('edit_label').innerText = 'Editar ' + campo.charAt(0).toUpperCase() + campo.slice(1);
+    new bootstrap.Modal(document.getElementById('modalEdicionRapida')).show();
+}
+
+async function guardarEdicionRapida() {
+    const id = document.getElementById('edit_gasto_id').value;
+    const campo = document.getElementById('edit_gasto_campo').value;
+    const valor = document.getElementById('edit_valor').value;
+    
+    try {
+        const response = await fetch('/api/gasto/' + id + '/editar', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({campo: campo, valor: valor})
+        });
+        const result = await response.json();
+        if (result.success) {
+            location.reload();
+        } else {
+            alert('❌ Error: ' + (result.error || 'No se pudo guardar'));
+        }
+    } catch (e) {
+        alert('❌ Error de conexión');
+    }
+}
+
+function editarCelda(elemento, campo, nombre) {
+    const valorActual = elemento.innerText.trim();
+    const nuevoValor = prompt('Ingrese la fecha de pago (YYYY-MM-DD) para ' + nombre + ':', valorActual === '—' ? '{{ today }}' : valorActual);
+    if (nuevoValor !== null && nuevoValor !== valorActual) {
+        guardarFechaPagoDocente(nombre, nuevoValor);
+    }
+}
+
+async function guardarFechaPagoDocente(nombre, fecha) {
+    try {
+        const response = await fetch('/api/pago-docente/fecha', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({docente: nombre, fecha: fecha})
+        });
+        const result = await response.json();
+        if (result.success) {
+            location.reload();
+        } else {
+            alert('❌ Error al guardar');
+        }
+    } catch (e) {
+        alert('❌ Error de conexión');
+    }
+}
+
+function togglePagado(nombre) {
+    if (confirm('¿Cambiar estado de pago para ' + nombre + '?')) {
+        guardarTogglePagado(nombre);
+    }
+}
+
+async function guardarTogglePagado(nombre) {
+    try {
+        const response = await fetch('/api/pago-docente/toggle', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({docente: nombre})
+        });
+        const result = await response.json();
+        if (result.success) {
+            location.reload();
+        }
+    } catch (e) {
+        alert('❌ Error');
+    }
+}
+
+// Cargar sugerencias
 const personas = new Set();
 {% for g in gastos %}
     {% if g.get('persona') %}personas.add('{{ g['persona'] }}');{% endif %}

@@ -2,15 +2,50 @@
 {% block title %}Iniciar Sesión - Atlas{% endblock %}
 
 {% block content %}
+<style>
+    .login-card {
+        border-radius: 24px; border: none; box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        background: white; overflow: hidden;
+    }
+    .login-header {
+        background: linear-gradient(135deg, #1a73e8, #0d47a1);
+        padding: 30px 20px; text-align: center; color: white;
+    }
+    .login-header .logo-icon {
+        width: 60px; height: 60px; border-radius: 16px;
+        background: rgba(255,255,255,0.2); display: flex; align-items: center;
+        justify-content: center; font-size: 28px; margin: 0 auto 12px;
+    }
+    .login-header h3 { font-weight: 700; font-size: 20px; margin: 0; }
+    .login-header p { font-size: 12px; opacity: 0.8; margin: 5px 0 0; }
+    .form-control-lg {
+        border-radius: 12px; border: 2px solid #e0e0e0; padding: 14px 16px;
+        font-size: 15px; transition: all 0.2s;
+    }
+    .form-control-lg:focus { border-color: #1a73e8; box-shadow: 0 0 0 4px rgba(26,115,232,0.1); }
+    .btn-login {
+        background: linear-gradient(135deg, #1a73e8, #0d47a1); border: none;
+        border-radius: 14px; padding: 14px; font-size: 16px; font-weight: 600;
+        transition: all 0.3s;
+    }
+    .btn-login:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(26,115,232,0.3); }
+    .btn-registro {
+        border-radius: 12px; padding: 10px 20px; font-weight: 500; font-size: 13px;
+        border: 2px solid #1a73e8; color: #1a73e8; transition: all 0.2s;
+    }
+    .btn-registro:hover { background: #e3f2fd; transform: translateY(-1px); }
+    label { font-weight: 600; font-size: 13px; color: #444; margin-bottom: 6px; }
+</style>
+
 <div class="row justify-content-center mt-5">
     <div class="col-md-4 col-sm-8">
-        <div class="card shadow">
+        <div class="login-card">
+            <div class="login-header">
+                <div class="logo-icon">📚</div>
+                <h3>Atlas</h3>
+                <p>Sistema de Gestión Académica</p>
+            </div>
             <div class="card-body p-4">
-                <div class="text-center mb-4">
-                    <h2>📚 Atlas</h2>
-                    <p class="text-muted">Sistema de Gestión Académica</p>
-                </div>
-                
                 <form method="POST">
                     <div class="mb-3">
                         <label class="form-label">Email</label>
@@ -18,24 +53,23 @@
                                placeholder="admin@atlas.com" required>
                     </div>
                     
-                    <div class="mb-3">
+                    <div class="mb-4">
                         <label class="form-label">Contraseña</label>
                         <input type="password" name="password" class="form-control form-control-lg" 
-                               placeholder="Contraseña" required>
+                               placeholder="••••••••" required>
                     </div>
                     
-                    <button type="submit" class="btn btn-primary btn-lg w-100">
-                        <i class="bi bi-box-arrow-in-right"></i> Ingresar
+                    <button type="submit" class="btn btn-login btn-lg w-100 text-white">
+                        <i class="bi bi-box-arrow-in-right me-2"></i> Ingresar
                     </button>
-                </form>         
-    </div>
+                </form>
             </div>
         </div>
+        <div class="text-center mt-3">
+            <a href="/registro" class="btn btn-registro">
+                📝 ¿No tienes cuenta? Regístrate
+            </a>
+        </div>
     </div>
-<div class="text-center mt-3">
-    <a href="/registro" class="btn btn-outline-primary btn-sm">
-        📝 ¿No tienes cuenta? Regístrate
-    </a>
-</div>
 </div>
 {% endblock %}

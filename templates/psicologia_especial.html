@@ -1,278 +1,31 @@
 {% extends "base.html" %}
 {% block title %}Psicología Especial - Atlas{% endblock %}
-
 {% block content %}
-<h3>🧠 Módulo de Psicología Especial</h3>
-<p class="text-muted">Gestión de clientes externos y citas psicológicas (Comisión centro: 25%)</p>
+<style>
+    .card-premium { border-radius: 20px; border: none; box-shadow: 0 4px 20px rgba(0,0,0,0.06); background: white; margin-bottom: 20px; overflow: hidden; }
+    .card-header-grad { padding: 14px 20px; color: white; font-weight: 700; font-size: 15px; }
+    .grad-purple { background: linear-gradient(135deg, #7b1fa2, #4a148c); }
+    .grad-dark { background: linear-gradient(135deg, #263238, #111); }
+    .table-premium { border-radius: 12px; overflow: hidden; border: none; margin: 0; }
+    .table-premium thead th { background: #1a1a2e; color: white; font-weight: 600; font-size: 11px; letter-spacing: 0.5px; border: none; padding: 10px 12px; text-transform: uppercase; }
+    .table-premium tbody td { padding: 8px 12px; font-size: 13px; border-bottom: 1px solid #f0f0f0; }
+    .stat-card { background: white; border-radius: 16px; padding: 20px; text-align: center; border: 1px solid #e8e8e8; }
+    .stat-card h3 { font-weight: 800; color: #1a1a2e; }
+    .btn-premium { border-radius: 10px; font-weight: 600; font-size: 11px; padding: 8px 14px; }
+    .form-control-premium { border-radius: 10px; border: 2px solid #e0e0e0; padding: 10px 14px; font-size: 13px; }
+    .form-select-premium { border-radius: 10px; border: 2px solid #e0e0e0; padding: 10px 14px; font-size: 13px; }
+</style>
+<h3 style="font-weight:800;color:#1a1a2e;">🧠 Psicología Especial</h3>
+<p class="text-muted" style="font-size:13px;">Comisión: {{ comision_porcentaje }}%</p>
 
-<!-- Tarjetas de resumen -->
-<div class="row mb-4">
-    <div class="col-md-3">
-        <div class="card bg-primary text-white text-center p-2">
-            <h5>{{ total_citas }}</h5>
-            <small>Total Citas</small>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card bg-success text-white text-center p-2">
-            <h5>${{ "%.2f"|format(total_pagado) }}</h5>
-            <small>Total Pagado</small>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card bg-warning text-dark text-center p-2">
-            <h5>${{ "%.2f"|format(total_comision_centro) }}</h5>
-            <small>Comisión Centro (25%)</small>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card bg-info text-white text-center p-2">
-            <h5>{{ psicologos|length }}</h5>
-            <small>Psicólogos</small>
-        </div>
-    </div>
+<div class="row g-3 mb-4">
+    <div class="col-md-4"><div class="stat-card"><h3>{{ total_citas }}</h3><small class="text-muted">Citas</small></div></div>
+    <div class="col-md-4"><div class="stat-card"><h3>${{ "%.0f"|format(total_pagado) }}</h3><small class="text-muted">Pagado</small></div></div>
+    <div class="col-md-4"><div class="stat-card"><h3>${{ "%.0f"|format(total_comision_centro) }}</h3><small class="text-muted">Comisión Centro</small></div></div>
 </div>
 
-<div class="row">
-    <!-- Clientes Externos -->
-    <div class="col-md-4 mb-4">
-        <div class="card shadow">
-            <div class="card-header bg-primary text-white">
-                <strong>👥 Clientes Externos</strong>
-            </div>
-            <div class="card-body" style="max-height: 350px; overflow-y: auto;">
-                <button type="button" class="btn btn-success btn-sm w-100 mb-2" data-bs-toggle="modal" data-bs-target="#modalCliente">
-                    ➕ Nuevo Cliente
-                </button>
-                {% if clientes %}
-                <div class="list-group">
-                    {% for c in clientes %}
-                    <div class="list-group-item">
-                        <strong>{{ c.nombre }}</strong><br>
-                        <small>📞 {{ c.telefono or 'Sin teléfono' }} | ✉️ {{ c.email or 'Sin email' }}</small>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% else %}
-                <p class="text-muted">No hay clientes registrados</p>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-    
-    <!-- Agendar Cita -->
-    <div class="col-md-4 mb-4">
-        <div class="card shadow">
-            <div class="card-header bg-success text-white">
-                <strong>📅 Agendar Cita</strong>
-            </div>
-            <div class="card-body">
-                <div class="mb-2">
-                    <label class="form-label">Cliente *</label>
-                    <select id="cliente_id" class="form-select" required>
-                        <option value="">Seleccionar...</option>
-                        {% for c in clientes %}
-                        <option value="{{ c.id }}">{{ c.nombre }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="mb-2">
-                    <label class="form-label">Psicólogo *</label>
-                    <select id="psicologo_id" class="form-select" required>
-                        <option value="">Seleccionar...</option>
-                        {% for p in psicologos %}
-                        <option value="{{ p.id }}">{{ p.nombre }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="mb-2">
-                    <label class="form-label">Fecha *</label>
-                    <input type="date" id="fecha_cita" class="form-control" value="{{ today }}" required>
-                </div>
-                <div class="row">
-                    <div class="col-6">
-                        <label class="form-label">Hora inicio *</label>
-                        <input type="time" id="hora_inicio" class="form-control" required>
-                    </div>
-                    <div class="col-6">
-                        <label class="form-label">Hora fin *</label>
-                        <input type="time" id="hora_fin" class="form-control" required>
-                    </div>
-                </div>
-                <div class="mb-2">
-                    <label class="form-label">Valor de la cita *</label>
-                    <input type="number" id="valor_cita" class="form-control" step="0.01" required placeholder="0.00">
-                    <small class="text-muted">Comisión del centro: 25% | Pago al psicólogo: 75%</small>
-                </div>
-                <button type="button" class="btn btn-success w-100 mt-2" onclick="agendarCita()">📅 Agendar Cita</button>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Citas Programadas -->
-    <div class="col-md-4 mb-4">
-        <div class="card shadow">
-            <div class="card-header bg-info text-white">
-                <strong>📋 Citas Programadas</strong>
-            </div>
-            <div class="card-body" style="max-height: 400px; overflow-y: auto;">
-                {% if citas %}
-                <div class="list-group">
-                    {% for c in citas %}
-                    <div class="list-group-item">
-                        <div class="d-flex justify-content-between">
-                            <strong>{{ c.clientes_externos.nombre }}</strong>
-                            <span class="badge bg-{{ 'success' if c.estado == 'pagada' else 'warning' if c.estado == 'agendada' else 'secondary' }}">
-                                {{ c.estado }}
-                            </span>
-                        </div>
-                        <div>📅 {{ c.fecha }} | {{ c.hora_inicio }} - {{ c.hora_fin }}</div>
-                        <div>🧠 {{ c.psicologo_nombre }}</div>
-                        <div>💰 Valor: ${{ "%.2f"|format(c.valor) }} | Pagado: ${{ "%.2f"|format(c.monto_pagado) }}</div>
-                        <div>🏢 Comisión centro (25%): ${{ "%.2f"|format(c.comision_centro) }}</div>
-                        <div>💵 Pago al psicólogo (75%): ${{ "%.2f"|format(c.pago_psicologo) }}</div>
-                        <div class="mt-2">
-                            {% if c.estado != 'pagada' and c.monto_pagado < c.valor %}
-                            <button class="btn btn-primary btn-sm" onclick="registrarPago({{ c.id }}, {{ c.valor - c.monto_pagado }})">💰 Pago</button>
-                            {% endif %}
-                            {% if c.estado == 'agendada' %}
-                            <button class="btn btn-success btn-sm" onclick="completarCita({{ c.id }})">✅ Realizada</button>
-                            {% endif %}
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% else %}
-                <p class="text-muted">No hay citas programadas</p>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal Nuevo Cliente -->
-<div class="modal fade" id="modalCliente" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title">➕ Nuevo Cliente Externo</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="mb-2">
-                    <label class="form-label">Nombre *</label>
-                    <input type="text" id="cliente_nombre" class="form-control" required>
-                </div>
-                <div class="mb-2">
-                    <label class="form-label">Teléfono</label>
-                    <input type="text" id="cliente_telefono" class="form-control">
-                </div>
-                <div class="mb-2">
-                    <label class="form-label">Email</label>
-                    <input type="email" id="cliente_email" class="form-control">
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary" onclick="crearCliente()">Guardar</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<script>
-async function crearCliente() {
-    const nombre = document.getElementById('cliente_nombre').value;
-    if (!nombre) { alert('Ingrese el nombre del cliente'); return; }
-    
-    const response = await fetch('/api/cliente-externo', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            nombre: nombre,
-            telefono: document.getElementById('cliente_telefono').value,
-            email: document.getElementById('cliente_email').value
-        })
-    });
-    const result = await response.json();
-    if (result.success) {
-        alert('✅ Cliente creado exitosamente');
-        location.reload();
-    } else {
-        alert('❌ Error: ' + result.error);
-    }
-}
-
-async function agendarCita() {
-    const cliente_id = document.getElementById('cliente_id').value;
-    const psicologo_id = document.getElementById('psicologo_id').value;
-    const psicologo_nombre = document.getElementById('psicologo_id').options[document.getElementById('psicologo_id').selectedIndex]?.text;
-    const fecha = document.getElementById('fecha_cita').value;
-    const hora_inicio = document.getElementById('hora_inicio').value;
-    const hora_fin = document.getElementById('hora_fin').value;
-    const valor = parseFloat(document.getElementById('valor_cita').value);
-    
-    if (!cliente_id || !psicologo_id || !fecha || !hora_inicio || !hora_fin || !valor) {
-        alert('Complete todos los campos');
-        return;
-    }
-    
-    const response = await fetch('/api/cita-psicologia', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            cliente_id: parseInt(cliente_id),
-            psicologo_id: parseInt(psicologo_id),
-            psicologo_nombre: psicologo_nombre,
-            fecha: fecha,
-            hora_inicio: hora_inicio,
-            hora_fin: hora_fin,
-            valor: valor
-        })
-    });
-    const result = await response.json();
-    if (result.success) {
-        alert('✅ Cita agendada correctamente');
-        location.reload();
-    } else {
-        alert('❌ Error: ' + result.error);
-    }
-}
-
-async function registrarPago(id, montoRestante) {
-    let monto = prompt('Ingrese el monto a pagar:', montoRestante);
-    if (!monto) return;
-    monto = parseFloat(monto);
-    if (isNaN(monto) || monto <= 0) { alert('Monto inválido'); return; }
-    
-    const response = await fetch(`/api/cita/${id}/pagar`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({monto: monto})
-    });
-    const result = await response.json();
-    if (result.success) {
-        alert(`✅ Pago registrado. Estado: ${result.nuevo_estado}`);
-        location.reload();
-    } else {
-        alert('❌ Error: ' + result.error);
-    }
-}
-
-async function completarCita(id) {
-    if (!confirm('¿Marcar esta cita como realizada?')) return;
-    const response = await fetch(`/api/cita/${id}/completar`, {method: 'POST'});
-    const result = await response.json();
-    if (result.success) {
-        alert('✅ Cita completada');
-        location.reload();
-    } else {
-        alert('❌ Error: ' + result.error);
-    }
-}
-</script>
-
-<div class="mt-3">
-    <a href="/dashboard" class="btn btn-outline-secondary">← Volver al Dashboard</a>
-</div>
+<div class="card-premium"><div class="card-header-grad grad-purple">📋 Citas</div><div class="card-body p-0">
+<div class="table-responsive"><table class="table table-premium mb-0"><thead><tr><th>Fecha</th><th>Hora</th><th>Cliente</th><th>Psicólogo</th><th>Valor</th><th>Comisión</th><th>Estado</th></tr></thead><tbody>
+{% for c in citas %}<tr><td>{{ c.fecha }}</td><td>{{ c.hora_inicio }} - {{ c.hora_fin }}</td><td>{{ c.clientes_externos.nombre }}</td><td>{{ c.psicologo_nombre }}</td><td>${{ "%.2f"|format(c.valor) }}</td><td>${{ "%.2f"|format(c.comision_centro) }}</td><td><span class="badge bg-{{ 'success' if c.estado=='pagada' else 'warning' }}">{{ c.estado }}</span></td></tr>{% endfor %}
+</tbody></table></div></div></div>
 {% endblock %}

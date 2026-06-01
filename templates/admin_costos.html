@@ -2,60 +2,70 @@
 {% block title %}Administrar Costos - Atlas{% endblock %}
 
 {% block content %}
-<h3>⚙️ Administración de Costos</h3>
-<p class="text-muted">Solo administradores pueden modificar los costos del sistema</p>
+<style>
+    .card-premium { border-radius: 20px; border: none; box-shadow: 0 4px 20px rgba(0,0,0,0.06); background: white; margin-bottom: 20px; overflow: hidden; }
+    .card-header-grad { padding: 14px 20px; color: white; font-weight: 700; font-size: 15px; }
+    .grad-dark { background: linear-gradient(135deg, #263238, #111); }
+    .table-premium { border-radius: 12px; overflow: hidden; border: none; margin: 0; }
+    .table-premium thead th { background: #1a1a2e; color: white; font-weight: 600; font-size: 11px; letter-spacing: 0.5px; border: none; padding: 10px 12px; text-transform: uppercase; }
+    .table-premium tbody td { padding: 8px 12px; font-size: 13px; border-bottom: 1px solid #f0f0f0; }
+    .table-premium tbody tr:hover { background: #f8f9ff; }
+    .btn-premium { border-radius: 10px; font-weight: 600; font-size: 11px; padding: 8px 14px; transition: all 0.2s; }
+    .form-control-premium { border-radius: 10px; border: 2px solid #e0e0e0; padding: 10px 14px; font-size: 13px; transition: all 0.2s; }
+    .form-control-premium:focus { border-color: #1a73e8; box-shadow: 0 0 0 3px rgba(26,115,232,0.1); }
+    .form-select-premium { border-radius: 10px; border: 2px solid #e0e0e0; padding: 10px 14px; font-size: 13px; }
+    .badge-premium { padding: 5px 10px; border-radius: 10px; font-size: 10px; font-weight: 600; }
+    .modal-content { border-radius: 16px; border: none; overflow: hidden; }
+    .modal-header { border-radius: 16px 16px 0 0; }
+    label { font-weight: 600; font-size: 12px; color: #555; }
+    .btn-success { border-radius: 12px; font-weight: 600; }
+</style>
+
+<h3 style="font-weight: 800; color: #1a1a2e;">⚙️ Administración de Costos</h3>
+<p class="text-muted" style="font-size: 13px; margin-bottom: 20px;">Administradores y socios pueden modificar los costos del sistema. El texto se guarda automáticamente en formato oración.</p>
 
 <div class="mb-3">
-    <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalCosto" onclick="limpiarModal()">➕ Nuevo Costo</button>
+    <button class="btn btn-success btn-premium" data-bs-toggle="modal" data-bs-target="#modalCosto" onclick="limpiarModal()">
+        ➕ Nuevo Costo
+    </button>
 </div>
 
-<div class="card shadow">
-    <div class="card-header bg-dark text-white">
-        <strong>📋 Costos Configurados</strong>
-        <span class="badge bg-light text-dark ms-2">{{ costos|length }} registros</span>
+<div class="card-premium">
+    <div class="card-header-grad grad-dark">
+        📋 Costos Configurados <span class="badge bg-light text-dark ms-2">{{ costos|length }} registros</span>
     </div>
-    <div class="card-body">
+    <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-sm table-striped">
+            <table class="table table-premium mb-0">
                 <thead>
-                    <tr class="table-dark">
-                        <th>ID</th>
+                    <tr>
                         <th>Concepto</th>
                         <th>Tipo</th>
-                        <th>Precio</th>
+                        <th class="text-end">Precio</th>
+                        <th>Modificado por</th>
                         <th>Estado</th>
-                        <th>Acciones</th>
+                        <th>Acción</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for c in costos %}
                     <tr>
-                        <td>{{ c.id }}</td>
                         <td>{{ c.concepto }}</td>
                         <td>
-                            {% if c.tipo == 'psicologia' %}
-                                <span class="badge bg-success">🧠 Psicología</span>
-                            {% elif c.tipo == 'clase' %}
-                                <span class="badge bg-primary">📚 Clase</span>
-                            {% elif c.tipo == 'matricula' %}
-                                <span class="badge bg-warning">📝 Matrícula</span>
-                            {% elif c.tipo == 'pension' %}
-                                <span class="badge bg-info">💵 Pensión</span>
-                            {% else %}
-                                <span class="badge bg-secondary">{{ c.tipo }}</span>
-                            {% endif %}
+                            <span class="badge-premium bg-{{ 'success' if c.tipo=='psicologia' else 'primary' if c.tipo=='clase' else 'warning' if c.tipo=='matricula' else 'info' }}">
+                                {{ c.tipo }}
+                            </span>
                         </td>
                         <td class="text-end fw-bold">${{ "%.2f"|format(c.precio) }}</td>
+                        <td><small>{{ c.get('nombre_modificador', 'Sistema') }}</small></td>
                         <td>
-                            {% if c.activo %}
-                                <span class="badge bg-success">✅ Activo</span>
-                            {% else %}
-                                <span class="badge bg-danger">❌ Inactivo</span>
-                            {% endif %}
+                            <span class="badge-premium bg-{{ 'success' if c.activo else 'danger' }}">
+                                {{ 'Activo' if c.activo else 'Inactivo' }}
+                            </span>
                         </td>
                         <td>
-                            <button class="btn btn-warning btn-sm" onclick="editarCosto({{ c.id }}, '{{ c.concepto|escape }}', '{{ c.tipo }}', {{ c.precio }})">✏️</button>
-                            <button class="btn btn-{{ 'secondary' if c.activo else 'success' }} btn-sm" onclick="toggleCosto({{ c.id }})">{{ '🔒' if c.activo else '🔓' }}</button>
+                            <button class="btn btn-warning btn-premium" onclick="editarCosto({{ c.id }}, '{{ c.concepto|escape }}', '{{ c.tipo }}', {{ c.precio }})">✏️</button>
+                            <button class="btn btn-sm btn-{{ 'secondary' if c.activo else 'success' }} btn-premium" onclick="toggleCosto({{ c.id }})">{{ '🔒' if c.activo else '🔓' }}</button>
                         </td>
                     </tr>
                     {% endfor %}
@@ -65,6 +75,7 @@
     </div>
 </div>
 
+<!-- Modal -->
 <div class="modal fade" id="modalCosto" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -76,11 +87,12 @@
                 <input type="hidden" id="costo_id" value="">
                 <div class="mb-3">
                     <label class="form-label">Concepto *</label>
-                    <input type="text" id="concepto" class="form-control" required placeholder="Nombre del concepto">
+                    <input type="text" id="concepto" class="form-control form-control-premium" required placeholder="Ej: Clase normal">
+                    <small class="text-muted">Se guardará con la primera letra de cada palabra en mayúscula automáticamente.</small>
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Tipo *</label>
-                    <select id="tipo" class="form-select" required>
+                    <select id="tipo" class="form-select form-select-premium" required>
                         <option value="psicologia">🧠 Psicología</option>
                         <option value="clase">📚 Clase</option>
                         <option value="matricula">📝 Matrícula</option>
@@ -90,7 +102,7 @@
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Precio ($) *</label>
-                    <input type="number" id="precio" class="form-control" step="0.01" required placeholder="0.00">
+                    <input type="number" id="precio" class="form-control form-control-premium" step="0.01" required placeholder="0.00">
                 </div>
             </div>
             <div class="modal-footer">
@@ -101,7 +113,7 @@
     </div>
 </div>
 
-<a href="/dashboard" class="btn btn-outline-secondary mt-3">← Dashboard</a>
+<a href="/dashboard" class="btn btn-outline-secondary mt-3" style="border-radius: 10px;">← Dashboard</a>
 
 <script>
 function limpiarModal() {

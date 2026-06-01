@@ -1,73 +1,27 @@
 {% extends "base.html" %}
-{% block title %}Padres de Familia - Atlas{% endblock %}
-
+{% block title %}Padres - Atlas{% endblock %}
 {% block content %}
-<h3>👨‍👩‍👧 Padres de Familia</h3>
+<style>
+    .card-premium { border-radius: 20px; border: none; box-shadow: 0 4px 20px rgba(0,0,0,0.06); background: white; margin-bottom: 20px; overflow: hidden; }
+    .card-header-grad { padding: 14px 20px; color: white; font-weight: 700; font-size: 15px; }
+    .grad-green { background: linear-gradient(135deg, #0f9d58, #00695c); }
+    .table-premium { border-radius: 12px; overflow: hidden; border: none; margin: 0; }
+    .table-premium thead th { background: #1a1a2e; color: white; font-weight: 600; font-size: 11px; letter-spacing: 0.5px; border: none; padding: 10px 12px; text-transform: uppercase; }
+    .table-premium tbody td { padding: 8px 12px; font-size: 13px; border-bottom: 1px solid #f0f0f0; }
+    .form-control-premium { border-radius: 10px; border: 2px solid #e0e0e0; padding: 10px 14px; font-size: 13px; }
+    .btn-premium { border-radius: 10px; font-weight: 600; font-size: 11px; padding: 8px 14px; }
+</style>
+<h3 style="font-weight:800;color:#1a1a2e;">👨‍👩‍👧 Padres de Familia</h3>
 
-<div class="row">
-    <div class="col-md-4 mb-4">
-        <div class="card shadow">
-            <div class="card-header bg-primary text-white">
-                <strong>Nuevo Padre</strong>
-            </div>
-            <div class="card-body">
-                <form method="POST">
-                    <div class="mb-2">
-                        <label class="form-label">Nombres *</label>
-                        <input type="text" name="nombres" class="form-control" required>
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label">Apellidos *</label>
-                        <input type="text" name="apellidos" class="form-control" required>
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label">Cédula</label>
-                        <input type="text" name="cedula" class="form-control">
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label">Email</label>
-                        <input type="email" name="email" class="form-control">
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label">Teléfono</label>
-                        <input type="text" name="telefono" class="form-control">
-                    </div>
-                    <button type="submit" class="btn btn-primary w-100 mt-2">
-                        Guardar
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-8">
-        <div class="card shadow">
-            <div class="card-header bg-success text-white">
-                <strong>Lista de Padres</strong>
-            </div>
-            <div class="card-body">
-                <table class="table table-striped">
-                    <thead>
-                        <tr>
-                            <th>Apellidos</th>
-                            <th>Nombres</th>
-                            <th>Teléfono</th>
-                            <th>Email</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for p in padres %}
-                        <tr>
-                            <td>{{ p.apellidos }}</td>
-                            <td>{{ p.nombres }}</td>
-                            <td>{{ p.telefono }}</td>
-                            <td>{{ p.email }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-</div>
+<div class="card-premium"><div class="card-header-grad grad-green">➕ Nuevo Padre</div><div class="card-body">
+<form method="POST" class="row g-2">
+    <div class="col-md-5"><input type="text" name="nombres" class="form-control form-control-premium" placeholder="Nombres" required></div>
+    <div class="col-md-5"><input type="text" name="apellidos" class="form-control form-control-premium" placeholder="Apellidos" required></div>
+    <div class="col-md-2"><button type="submit" class="btn btn-success btn-premium w-100">✅ Registrar</button></div>
+</form></div></div>
+
+<div class="card-premium"><div class="card-header-grad" style="background:linear-gradient(135deg,#263238,#111);">📋 Lista de Padres</div><div class="card-body p-0">
+<div class="table-responsive"><table class="table table-premium mb-0"><thead><tr><th>Apellidos</th><th>Nombres</th><th>Teléfono</th></tr></thead><tbody>
+{% for p in padres %}<tr><td>{{ p.apellidos }}</td><td>{{ p.nombres }}</td><td>{{ p.get('telefono','') }}</td></tr>{% endfor %}
+</tbody></table></div></div></div>
 {% endblock %}

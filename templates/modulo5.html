@@ -2,202 +2,71 @@
 {% block title %}Pagos Docentes - Atlas{% endblock %}
 
 {% block content %}
-<h3>💵 Pagos a Docentes y Psicólogos</h3>
+<style>
+    .card { border-radius: 16px; border: none; box-shadow: 0 3px 15px rgba(0,0,0,0.06); }
+    .card-header { padding: 14px 20px; font-weight: 700; font-size: 15px; border-radius: 16px 16px 0 0 !important; }
+    .bg-primary { background: linear-gradient(135deg, #1a73e8, #0d47a1) !important; }
+    .bg-secondary { background: linear-gradient(135deg, #455a64, #263238) !important; }
+    .bg-info { background: linear-gradient(135deg, #00acc1, #006064) !important; }
+    .form-control, .form-select { border-radius: 10px; border: 2px solid #e0e0e0; padding: 8px 12px; font-size: 12px; }
+    .form-control:focus, .form-select:focus { border-color: #1a73e8; box-shadow: 0 0 0 3px rgba(26,115,232,0.1); }
+    .btn-sm { border-radius: 8px; font-weight: 600; font-size: 11px; }
+    .btn-primary { border-radius: 8px; font-weight: 600; }
+    .btn-outline-secondary { border-radius: 8px; }
+    .btn-outline-primary { border-radius: 8px; }
+    .btn-outline-warning { border-radius: 8px; }
+    .btn-outline-success { border-radius: 8px; }
+    .table { font-size: 12px; }
+    .table thead th { background: #1a1a2e; color: white; font-weight: 600; font-size: 10px; border: none; padding: 8px 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .table tbody td { padding: 7px 10px; vertical-align: middle; border-bottom: 1px solid #f0f0f0; }
+    .table tbody tr:hover { background: #f8f9ff; }
+    .table tfoot td { font-weight: 700; background: #f8f9fa; border-top: 2px solid #1a1a2e; font-size: 12px; }
+    .badge { padding: 4px 8px; border-radius: 10px; font-size: 9px; font-weight: 600; }
+    .alert { border-radius: 12px; font-size: 12px; }
+    .d-flex.gap-2 a { border-radius: 8px; font-weight: 600; font-size: 11px; }
+    label { font-weight: 600; font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: 0.5px; }
+</style>
 
-<!-- Filtros -->
+<h3 style="font-weight: 800; color: #1a1a2e;">💵 Pagos a Docentes y Psicólogos</h3>
+
 <div class="card shadow mb-4">
-    <div class="card-header bg-primary text-white">
-        <strong>🔍 Filtros de búsqueda</strong>
-    </div>
+    <div class="card-header bg-primary text-white"><strong>🔍 Filtros</strong></div>
     <div class="card-body">
-        <form method="GET" action="{{ url_for('modulo5') }}" class="row g-3">
-            <div class="col-md-3">
-                <label class="form-label">Mes</label>
-                <select name="mes" class="form-select">
-                    <option value="">Todos</option>
-                    {% for m in range(1,13) %}
-                    <option value="{{ m }}" {{ 'selected' if mes|string == m|string }}>{{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][m-1] }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Año</label>
-                <select name="anio" class="form-select">
-                    <option value="">Todos</option>
-                    {% for a in range(2025,2031) %}
-                    <option value="{{ a }}" {{ 'selected' if anio|string == a|string }}>{{ a }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">👨‍🎓 Estudiante</label>
-                <input type="text" name="filtro_estudiante" class="form-control" placeholder="Nombre del estudiante" value="{{ filtro_estudiante }}">
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">👨‍🏫 Docente/Psicólogo</label>
-                <select name="filtro_profesor" class="form-select">
-                    <option value="">Todos los profesionales</option>
-                    {% for p in profesores_lista %}
-                    <option value="{{ p }}" {{ 'selected' if filtro_profesor == p }}>{{ p }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-12 text-end">
-                <button type="submit" class="btn btn-primary">🔍 Filtrar</button>
-                <a href="{{ url_for('modulo5') }}" class="btn btn-outline-secondary">🗑️ Limpiar</a>
-            </div>
+        <form method="GET" action="{{ url_for('modulo5') }}" class="row g-2">
+            <div class="col-md-3"><label class="form-label">MES</label><select name="mes" class="form-select"><option value="">Todos</option>{% for m in range(1,13) %}<option value="{{ m }}" {{ 'selected' if mes|string==m|string }}>{{ ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][m-1] }}</option>{% endfor %}</select></div>
+            <div class="col-md-3"><label class="form-label">AÑO</label><select name="anio" class="form-select"><option value="">Todos</option>{% for a in range(2025,2031) %}<option value="{{ a }}" {{ 'selected' if anio|string==a|string }}>{{ a }}</option>{% endfor %}</select></div>
+            <div class="col-md-3"><label class="form-label">ESTUDIANTE</label><input type="text" name="filtro_estudiante" class="form-control" placeholder="Nombre" value="{{ filtro_estudiante }}"></div>
+            <div class="col-md-3"><label class="form-label">DOCENTE</label><select name="filtro_profesor" class="form-select"><option value="">Todos</option>{% for p in profesores_lista %}<option value="{{ p }}" {{ 'selected' if filtro_profesor==p }}>{{ p }}</option>{% endfor %}</select></div>
+            <div class="col-12 text-end"><button type="submit" class="btn btn-primary btn-sm">🔍 Filtrar</button><a href="{{ url_for('modulo5') }}" class="btn btn-outline-secondary btn-sm ms-1">🗑️</a></div>
         </form>
     </div>
 </div>
 
-<!-- Resumen de filtros -->
-{% if mes or anio or filtro_estudiante or filtro_profesor %}
-<div class="alert alert-info small">
-    <strong>📌 Filtros aplicados:</strong>
-    {% if mes %} Mes: {{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][mes|int - 1] }}{% endif %}
-    {% if anio %} Año: {{ anio }}{% endif %}
-    {% if filtro_estudiante %} Estudiante: {{ filtro_estudiante }}{% endif %}
-    {% if filtro_profesor %} Docente: {{ filtro_profesor }}{% endif %}
-</div>
-{% endif %}
-
-<!-- Tabla de pagos detallada -->
 <div class="card shadow mb-4">
-    <div class="card-header bg-secondary text-white">
-        <strong>📋 Detalle de Pagos</strong>
-        <span class="badge bg-light text-dark ms-2">{{ pagos|length }} registros</span>
-    </div>
-    <div class="card-body">
+    <div class="card-header bg-secondary text-white"><strong>📋 Detalle de Pagos <span class="badge bg-light text-dark ms-2">{{ pagos|length }}</span></strong></div>
+    <div class="card-body p-0">
         {% if pagos %}
-        <div class="table-responsive">
-            <table class="table table-striped table-sm">
-                <thead>
-                    <tr class="table-dark">
-                        <th>Fecha</th>
-                        <th>Profesor/Psicólogo</th>
-                        <th>Estudiante</th>
-                        <th>Tipo</th>
-                        <th>Horas</th>
-                        <th>Valor Total</th>
-                        <th>Pago Docencia ($7/h)</th>
-                        <th>Pago Psicología (40.18%)</th>
-                        <th>Total a Pagar</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for p in pagos %}
-                    <tr>
-                        <td>{{ p.fecha }}</td>
-                        <td><strong>{{ p.profesor }}</strong></td>
-                        <td>{{ p.estudiante|title }}</td>
-                        <td>
-                            {% if p.tipo == 'clase' %}
-                                <span class="badge bg-primary">📚 Clase</span>
-                            {% elif p.tipo == 'terapia' %}
-                                <span class="badge bg-success">🧠 Terapia</span>
-                            {% elif p.tipo == 'ambos' %}
-                                <span class="badge bg-warning">📚🧠 Ambos</span>
-                            {% else %}
-                                <span class="badge bg-secondary">🎓 Pre Uni</span>
-                            {% endif %}
-                        </td>
-                        <td class="text-center">{{ p.horas }}</td>
-                        <td class="text-end">${{ "%.2f"|format(p.valor_total) }}</td>
-                        <td class="text-end text-primary">${{ "%.2f"|format(p.pago_docente) }}</td>
-                        <td class="text-end text-success">${{ "%.2f"|format(p.pago_psicologia) }}</td>
-                        <td class="text-end fw-bold">${{ "%.2f"|format(p.total_pagar) }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-                <tfoot class="table-dark">
-                    <tr>
-                        <td colspan="6"><strong>TOTALES</strong></td>
-                        <td class="text-end"><strong>${{ "%.2f"|format(total_docencia) }}</strong></td>
-                        <td class="text-end"><strong>${{ "%.2f"|format(total_psicologia) }}</strong></td>
-                        <td class="text-end"><strong>${{ "%.2f"|format(total_adeudado) }}</strong></td>
-                    </tr>
-                </tfoot>
-            </table>
-        </div>
-        {% else %}
-        <p class="text-muted">No hay pagos registrados para los filtros seleccionados.</p>
-        {% endif %}
+        <div class="table-responsive"><table class="table mb-0"><thead><tr><th>Fecha</th><th>Profesor</th><th>Estudiante</th><th>Tipo</th><th class="text-center">Hrs</th><th class="text-end">Valor</th><th class="text-end">Docencia</th><th class="text-end">Psicología</th><th class="text-end">Total</th><th>Estado</th></tr></thead><tbody>
+        {% for p in pagos %}<tr><td>{{ p.fecha }}</td><td><strong>{{ p.profesor }}</strong></td><td>{{ p.estudiante|title }}</td><td><span class="badge bg-{{ 'primary' if p.tipo=='clase' else 'success' if p.tipo=='terapia' else 'warning' }}">{{ p.tipo }}</span></td><td class="text-center">{{ p.horas }}</td><td class="text-end">${{ "%.2f"|format(p.valor_total) }}</td><td class="text-end text-primary">${{ "%.2f"|format(p.pago_docente) }}</td><td class="text-end text-success">${{ "%.2f"|format(p.pago_psicologia) }}</td><td class="text-end fw-bold">${{ "%.2f"|format(p.total_pagar) }}</td><td><span class="badge bg-{{ 'info' if p.estado=='Cancelado-Pagado' else 'success' }}">{{ p.estado }}</span></td></tr>{% endfor %}</tbody>
+        <tfoot><tr><td colspan="6"><strong>TOTALES</strong></td><td class="text-end"><strong>${{ "%.2f"|format(total_docencia) }}</strong></td><td class="text-end"><strong>${{ "%.2f"|format(total_psicologia) }}</strong></td><td class="text-end"><strong>${{ "%.2f"|format(total_adeudado) }}</strong></td><td></td></tr></tfoot></table></div>
+        {% else %}<div class="text-center py-4 text-muted">No hay pagos registrados</div>{% endif %}
     </div>
 </div>
 
-<!-- ========== REPORTE AGRUPADO POR DOCENTE ========== -->
 <div class="card shadow mb-4">
-    <div class="card-header bg-info text-white">
-        <strong>📊 Reporte Agrupado por Docente / Psicólogo</strong>
-    </div>
-    <div class="card-body">
+    <div class="card-header bg-info text-white"><strong>📊 Agrupado por Docente</strong></div>
+    <div class="card-body p-0">
         {% if consolidado %}
-        <div class="table-responsive">
-            <table class="table table-striped table-hover">
-                <thead>
-                    <tr class="table-dark">
-                        <th>Docente / Psicólogo</th>
-                        <th>Horas Totales</th>
-                        <th>Pago Docencia</th>
-                        <th>Pago Psicología</th>
-                        <th>Total a Pagar</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% set total_horas_agrupado = namespace(valor=0) %}
-                    {% for nombre, datos in consolidado.items() %}
-                    {% set horas_docente = pagos | selectattr('profesor', 'equalto', nombre) | sum(attribute='horas') %}
-                    {% set total_horas_agrupado.valor = total_horas_agrupado.valor + horas_docente %}
-                    <tr>
-                        <td><strong>{{ nombre }}</strong></td>
-                        <td class="text-center">{{ horas_docente }}</td>
-                        <td class="text-end text-primary">${{ "%.2f"|format(datos.pago_docencia) }}</td>
-                        <td class="text-end text-success">${{ "%.2f"|format(datos.pago_psicologia) }}</td>
-                        <td class="text-end fw-bold">${{ "%.2f"|format(datos.total_pagar) }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-                <tfoot class="table-dark">
-                    <tr>
-                        <td><strong>TOTALES</strong></td>
-                        <td class="text-center"><strong>{{ total_horas_agrupado.valor }}</strong></td>
-                        <td class="text-end"><strong>${{ "%.2f"|format(total_docencia) }}</strong></td>
-                        <td class="text-end"><strong>${{ "%.2f"|format(total_psicologia) }}</strong></td>
-                        <td class="text-end"><strong>${{ "%.2f"|format(total_adeudado) }}</strong></td>
-                    </tr>
-                </tfoot>
-            </table>
-        </div>
-        {% else %}
-        <p class="text-muted">No hay datos agrupados para mostrar.</p>
+        <div class="table-responsive"><table class="table mb-0"><thead><tr><th>Docente</th><th class="text-center">Horas</th><th class="text-end">Docencia</th><th class="text-end">Psicología</th><th class="text-end">Total</th></tr></thead><tbody>
+        {% for nombre, datos in consolidado.items() %}{% set hd = pagos|selectattr('profesor','equalto',nombre)|sum(attribute='horas') %}<tr><td><strong>{{ nombre }}</strong></td><td class="text-center">{{ hd }}</td><td class="text-end">${{ "%.2f"|format(datos.pago_docencia) }}</td><td class="text-end">${{ "%.2f"|format(datos.pago_psicologia) }}</td><td class="text-end fw-bold">${{ "%.2f"|format(datos.total_pagar) }}</td></tr>{% endfor %}</tbody>
+        <tfoot><tr><td><strong>TOTALES</strong></td><td class="text-center"><strong>{{ pagos|sum(attribute='horas') }}</strong></td><td class="text-end"><strong>${{ "%.2f"|format(total_docencia) }}</strong></td><td class="text-end"><strong>${{ "%.2f"|format(total_psicologia) }}</strong></td><td class="text-end"><strong>${{ "%.2f"|format(total_adeudado) }}</strong></td></tr></tfoot></table></div>
         {% endif %}
     </div>
 </div>
 
-<!-- Información de tarifas -->
-<div class="alert alert-info mt-3">
-    <strong>💡 Información:</strong>
-    <ul class="mb-0">
-        <li><strong>Docencia (Clases y Pre Universitario):</strong> $7 por hora</li>
-        <li><strong>Psicología (Terapias y Ambos):</strong> 40.18% del valor de la sesión</li>
-    </ul>
-</div>
-
-<!-- Botones de navegación inferiores -->
-<div class="mt-4">
-    <div class="row g-2">
-        <div class="col-3">
-            <a href="/mi-reporte" class="btn btn-outline-primary btn-sm w-100">📊 Mi Reporte</a>
-        </div>
-        <div class="col-3">
-            <a href="/modulo5" class="btn btn-outline-success btn-sm w-100">💵 Mis Pagos</a>
-        </div>
-        <div class="col-3">
-            <a href="/mis-anticipos" class="btn btn-outline-warning btn-sm w-100">🏦 Mis Anticipos</a>
-        </div>
-        <div class="col-3">
-            <a href="/modulo2" class="btn btn-outline-info btn-sm w-100">📅 Calendario</a>
-        </div>
-    </div>
+<div class="d-flex gap-2 mt-3">
+    <a href="/mi-reporte" class="btn btn-outline-primary btn-sm">📊 Mi Reporte</a>
+    <a href="/mis-anticipos" class="btn btn-outline-warning btn-sm">💵 Anticipos</a>
+    <a href="/modulo2" class="btn btn-outline-success btn-sm">📅 Calendario</a>
 </div>
 {% endblock %}

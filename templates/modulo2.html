@@ -2,6 +2,27 @@
 {% block title %}Calendario - Atlas{% endblock %}
 
 {% block content %}
+<style>
+    .card { border-radius: 16px; border: none; box-shadow: 0 3px 15px rgba(0,0,0,0.06); }
+    .card-header { padding: 14px 20px; font-weight: 700; font-size: 15px; border-radius: 16px 16px 0 0 !important; }
+    .bg-success { background: linear-gradient(135deg, #0f9d58, #00695c) !important; }
+    .bg-warning { background: linear-gradient(135deg, #f4b400, #e65100) !important; }
+    .form-control { border-radius: 10px; border: 2px solid #e0e0e0; padding: 8px 14px; }
+    .table { font-size: 13px; }
+    .table thead th { background: #1a1a2e; color: white; font-weight: 600; font-size: 11px; border: none; padding: 10px 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .table tbody td { padding: 8px 12px; vertical-align: middle; border-bottom: 1px solid #f0f0f0; }
+    .table tbody tr:hover { background: #f8f9ff; }
+    .badge { padding: 5px 10px; border-radius: 12px; font-size: 10px; font-weight: 600; }
+    .btn-sm { border-radius: 8px; font-weight: 600; font-size: 11px; }
+    .pendiente-card { background: #fffdf5; border-left: 4px solid #ffc107; margin-bottom: 8px; padding: 12px; border-radius: 10px; transition: all 0.2s; }
+    .pendiente-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+    .list-group-item { border-radius: 10px; margin-bottom: 4px; border: 1px solid #e8e8e8; }
+    input[type="radio"] { accent-color: #1a73e8; transform: scale(1.2); cursor: pointer; }
+    .hora-invalida { border: 2px solid #dc3545 !important; background-color: #ffe6e6 !important; }
+    .error-msg { color: #dc3545; font-size: 12px; margin-top: 5px; display: none; }
+    .btn-outline-secondary, .btn-outline-primary, .btn-outline-success, .btn-outline-info, .btn-outline-warning { border-radius: 10px; font-weight: 500; }
+</style>
+
 <h3>📅 {% if current_user.rol in ['admin', 'socio'] %}Calendario de Clases{% else %}Mis Clases{% endif %}</h3>
 
 <form class="mb-3 d-flex gap-2">
@@ -12,26 +33,6 @@
     {% endif %}
 </form>
 
-<style>
-    .hora-invalida {
-        border: 2px solid #dc3545 !important;
-        background-color: #ffe6e6 !important;
-    }
-    .error-msg {
-        color: #dc3545;
-        font-size: 12px;
-        margin-top: 5px;
-        display: none;
-    }
-    .pendiente-card {
-        background-color: #fff3cd;
-        border-left: 5px solid #ffc107;
-        margin-bottom: 10px;
-        padding: 10px;
-        border-radius: 5px;
-    }
-</style>
-
 <div class="card shadow mb-4">
     <div class="card-header bg-success text-white"><strong>Sesiones del {{ fecha }}</strong></div>
     <div class="card-body">
@@ -41,8 +42,8 @@
                 <thead>
                     <tr>
                         <th>Fecha</th><th>Hora</th><th>Estudiante</th><th>Tipo</th><th>Asig/Tema</th><th>Prof</th>
-                        <th>Estado</th><th>✅</th><th>❌</th>
-                        {% if current_user.rol in ['admin','socio'] %}<th>✏️</th><th>🗑️</th>{% endif %}
+                        <th>Estado</th><th>✅</th><th>❌</th><th>❌💰</th>
+                        {% if current_user.rol in ['admin','socio'] %}<th>🗑️</th>{% endif %}
                     </tr>
                 </thead>
                 <tbody>
@@ -55,10 +56,11 @@
                         <td>{{ s.get('asignatura') or s.get('tema_terapia') or '-' }}</td>
                         <td>{{ s.profesor_terapeuta }}</td>
                         <td>
-                            <span class="badge bg-{{ 'success' if s.estado=='Realizado' else 'danger' if s.estado=='Cancelado' else 'warning' }}">{{ s.estado }}</span>
+                            <span class="badge bg-{{ 'success' if s.estado=='Realizado' else 'danger' if s.estado=='Cancelado' else 'warning' if s.estado=='Planificado' else 'info' }}">{{ s.estado }}</span>
                         </td>
                         <td><input type="radio" name="est_{{ s.id }}" class="radio-sesion" data-id="{{ s.id }}" data-estado="Realizado" {{ 'checked' if s.estado=='Realizado' }}></td>
                         <td><input type="radio" name="est_{{ s.id }}" class="radio-sesion" data-id="{{ s.id }}" data-estado="Cancelado" {{ 'checked' if s.estado=='Cancelado' }}></td>
+                        <td><input type="radio" name="est_{{ s.id }}" class="radio-sesion" data-id="{{ s.id }}" data-estado="Cancelado-Pagado" {{ 'checked' if s.estado=='Cancelado-Pagado' }}></td>
                         {% if current_user.rol in ['admin','socio'] %}
                         <td><button class="btn btn-danger btn-sm" onclick="eliminarSesion({{ s.id }})">🗑️</button></td>
                         {% endif %}
@@ -72,7 +74,6 @@
     </div>
 </div>
 
-<!-- Pendientes - CORREGIDO -->
 <div class="card shadow mb-4">
     <div class="card-header bg-warning text-dark">
         <strong>⏳ Sesiones Pendientes por Marcar</strong>
@@ -90,12 +91,15 @@
 </div>
 
 <script>
-// Función para cambiar estado de sesión
 document.querySelectorAll('.radio-sesion').forEach(r => {
     r.addEventListener('change', function() {
         if (!this.checked) return;
         const id = this.dataset.id, e = this.dataset.estado;
-        if (!confirm('¿Confirmas marcar como ' + e + '?')) {
+        let mensaje = '¿Confirmas marcar como ' + e + '?';
+        if (e === 'Cancelado-Pagado') {
+            mensaje = '⚠️ ¿Marcar como Cancelado-Pagado?\n\n50% para el docente\n50% para Atlas';
+        }
+        if (!confirm(mensaje)) {
             location.reload();
             return;
         }
@@ -107,25 +111,19 @@ document.querySelectorAll('.radio-sesion').forEach(r => {
     });
 });
 
-// Cargar pendientes
 async function cargarPendientes() {
     try {
         const response = await fetch('/api/sesiones/pendientes');
         const pendientes = await response.json();
-        
         const container = document.getElementById('pendientesContainer');
         const countSpan = document.getElementById('pendientesCount');
-        
         if (!container) return;
-        
         if (pendientes.length === 0) {
             container.innerHTML = '<div class="alert alert-success mb-0">✅ No hay sesiones pendientes. Todas están marcadas.</div>';
             if (countSpan) countSpan.innerText = '0';
             return;
         }
-        
         if (countSpan) countSpan.innerText = pendientes.length;
-        
         let html = '<div class="list-group">';
         for (const s of pendientes) {
             html += `
@@ -138,77 +136,47 @@ async function cargarPendientes() {
                             <small>👨‍🏫 ${s.profesor_terapeuta}</small>
                         </div>
                         <div>
-                            <button class="btn btn-success btn-sm me-1" onclick="marcarPendiente(${s.id}, 'Realizado')">✅ Marcar Realizado</button>
-                            <button class="btn btn-warning btn-sm" onclick="marcarPendiente(${s.id}, 'Cancelado')">❌ Marcar Cancelado</button>
+                            <button class="btn btn-success btn-sm me-1" onclick="marcarPendiente(${s.id}, 'Realizado')">✅ Realizado</button>
+                            <button class="btn btn-warning btn-sm me-1" onclick="marcarPendiente(${s.id}, 'Cancelado')">❌ Cancelado</button>
+                            <button class="btn btn-info btn-sm" onclick="marcarPendiente(${s.id}, 'Cancelado-Pagado')">❌💰 Canc-Pag</button>
                         </div>
                     </div>
-                </div>
-            `;
+                </div>`;
         }
         html += '</div>';
         container.innerHTML = html;
     } catch (error) {
-        console.error('Error cargando pendientes:', error);
         document.getElementById('pendientesContainer').innerHTML = '<div class="alert alert-danger">Error al cargar pendientes</div>';
     }
 }
 
 async function marcarPendiente(id, estado) {
-    if (!confirm(`¿Marcar esta sesión como ${estado}?`)) return;
+    let mensaje = `¿Marcar esta sesión como ${estado}?`;
+    if (estado === 'Cancelado-Pagado') mensaje = '⚠️ ¿Marcar como Cancelado-Pagado?\n\n50% para el docente\n50% para Atlas';
+    if (!confirm(mensaje)) return;
     try {
-        const response = await fetch('/api/sesion/' + id + '/toggle', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({estado: estado})
-        });
+        const response = await fetch('/api/sesion/' + id + '/toggle', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({estado: estado})});
         const result = await response.json();
         if (result.success) {
             document.getElementById(`pend-${id}`)?.remove();
             const remaining = document.querySelectorAll('.pendiente-card').length;
             document.getElementById('pendientesCount').innerText = remaining;
-            if (remaining === 0) {
-                document.getElementById('pendientesContainer').innerHTML = '<div class="alert alert-success mb-0">✅ No hay sesiones pendientes. Todas están marcadas.</div>';
-            }
-            // Recargar la tabla principal
+            if (remaining === 0) document.getElementById('pendientesContainer').innerHTML = '<div class="alert alert-success mb-0">✅ No hay sesiones pendientes.</div>';
             location.reload();
-        } else {
-            alert('Error: ' + (result.error || 'Desconocido'));
-        }
-    } catch (error) {
-        alert('Error al marcar: ' + error);
-    }
+        } else { alert('Error: ' + (result.error || 'Desconocido')); }
+    } catch (error) { alert('Error al marcar: ' + error); }
 }
 
 {% if current_user.rol in ['admin','socio'] %}
-async function eliminarSesion(id) {
-    if (!confirm('🗑️ ¿Eliminar esta sesión permanentemente?')) return;
-    try {
-        await fetch('/api/sesion/' + id + '/eliminar', {method: 'POST'});
-        location.reload();
-    } catch (error) {
-        alert('Error al eliminar');
-    }
-}
-
+async function eliminarSesion(id) { if (!confirm('🗑️ ¿Eliminar esta sesión?')) return; await fetch('/api/sesion/' + id + '/eliminar', {method: 'POST'}); location.reload(); }
 async function sincronizarTodos() {
-    if (!confirm('¿Sincronizar TODAS las sesiones de esta fecha con Google Calendar?')) return;
-    const btns = document.querySelectorAll('.radio-sesion');
-    let ok = 0;
-    for (let btn of btns) {
-        const id = btn.dataset.id;
-        if (id) {
-            try {
-                const r = await fetch('/api/sesion/' + id + '/sincronizar', {method: 'POST', headers: {'Content-Type': 'application/json'}});
-                if ((await r.json()).success) ok++;
-            } catch(e) {}
-        }
-    }
-    alert('✅ ' + ok + ' sesiones sincronizadas');
-    location.reload();
+    if (!confirm('¿Sincronizar TODAS las sesiones de esta fecha?')) return;
+    const btns = document.querySelectorAll('.radio-sesion'); let ok = 0;
+    for (let btn of btns) { const id = btn.dataset.id; if (id) { try { const r = await fetch('/api/sesion/' + id + '/sincronizar', {method: 'POST', headers: {'Content-Type': 'application/json'}}); if ((await r.json()).success) ok++; } catch(e) {} } }
+    alert('✅ ' + ok + ' sesiones sincronizadas'); location.reload();
 }
 {% endif %}
 
-// Inicializar
 cargarPendientes();
 </script>
 

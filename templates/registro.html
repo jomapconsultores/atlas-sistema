@@ -2,14 +2,49 @@
 {% block title %}Registro - Atlas{% endblock %}
 
 {% block content %}
+<style>
+    .register-card {
+        border-radius: 24px; border: none; box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        background: white; overflow: hidden;
+    }
+    .register-header {
+        background: linear-gradient(135deg, #0f9d58, #00695c);
+        padding: 25px 20px; text-align: center; color: white;
+    }
+    .register-header h5 { font-weight: 700; font-size: 18px; margin: 0; }
+    .form-control, .form-select {
+        border-radius: 10px; border: 2px solid #e0e0e0; padding: 12px 14px;
+        font-size: 14px; transition: all 0.2s;
+    }
+    .form-control:focus, .form-select:focus {
+        border-color: #0f9d58; box-shadow: 0 0 0 4px rgba(15,157,88,0.1);
+    }
+    .btn-register {
+        background: linear-gradient(135deg, #0f9d58, #00695c); border: none;
+        border-radius: 14px; padding: 14px; font-size: 16px; font-weight: 600;
+        transition: all 0.3s; color: white;
+    }
+    .btn-register:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(15,157,88,0.3); }
+    label { font-weight: 600; font-size: 13px; color: #444; margin-bottom: 4px; }
+    .info-box {
+        background: #f8f9fa; border-radius: 12px; padding: 12px 16px;
+        font-size: 11px; color: #666; line-height: 1.6;
+    }
+    .info-box strong { color: #333; }
+    .alert-premium { border-radius: 12px; font-size: 13px; }
+    small.text-muted { font-size: 11px; }
+</style>
+
 <div class="row justify-content-center mt-4">
-    <div class="col-md-6">
-        <div class="card shadow">
-            <div class="card-header bg-primary text-white">
-                <h5 class="mb-0">📝 Registro de Usuario</h5>
+    <div class="col-md-6 col-lg-5">
+        <div class="register-card">
+            <div class="register-header">
+                <h5>📝 Registro de Usuario</h5>
             </div>
-            <div class="card-body">
-                <p class="text-muted small">Tu cuenta quedará pendiente de aprobación por el administrador.</p>
+            <div class="card-body p-4">
+                <div class="alert alert-info alert-premium mb-3">
+                    <i class="bi bi-info-circle me-2"></i> Tu cuenta quedará pendiente de aprobación por el administrador.
+                </div>
                 <form method="POST">
                     <div class="mb-3">
                         <label class="form-label">Nombre completo *</label>
@@ -36,20 +71,22 @@
                             <option value="padre">👨‍👩‍👧 Padre de Familia</option>
                             <option value="socio">💼 Socio</option>
                         </select>
-                        <small class="text-muted">
-                            👨‍🏫 <strong>Profesor:</strong> Podrás ver tus clases, marcarlas como realizadas y ver tus pagos.<br>
-                            🧠 <strong>Psicólogo:</strong> Podrás ver tus sesiones, marcarlas y ver tus pagos.<br>
-                            🎓 <strong>Estudiante:</strong> Podrás ver tus clases planificadas y tu reporte de pagos.<br>
-                            👨‍👩‍👧 <strong>Padre:</strong> Podrás ver las clases de tus hijos y su reporte de pagos.<br>
-                            💼 <strong>Socio:</strong> Acceso a todos los módulos excepto gestión de usuarios.
-                        </small>
                     </div>
-                    <button type="submit" class="btn btn-primary w-100">
+                    <div class="info-box mb-3">
+                        👨‍🏫 <strong>Profesor:</strong> Podrás ver tus clases, marcarlas como realizadas y ver tus pagos.<br>
+                        🧠 <strong>Psicólogo:</strong> Podrás ver tus sesiones, marcarlas y ver tus pagos.<br>
+                        🎓 <strong>Estudiante:</strong> Podrás ver tus clases planificadas y tu reporte de pagos.<br>
+                        👨‍👩‍👧 <strong>Padre:</strong> Podrás ver las clases de tus hijos y su reporte de pagos.<br>
+                        💼 <strong>Socio:</strong> Acceso a todos los módulos excepto gestión de usuarios.
+                    </div>
+                    <button type="submit" class="btn btn-register w-100">
                         ✅ Solicitar Registro
                     </button>
                 </form>
                 <div class="text-center mt-3">
-                    <a href="/login">¿Ya tienes cuenta? Inicia sesión</a>
+                    <a href="/login" class="text-decoration-none" style="font-size: 13px; color: #0f9d58; font-weight: 500;">
+                        ¿Ya tienes cuenta? Inicia sesión
+                    </a>
                 </div>
             </div>
         </div>

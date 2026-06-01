@@ -2,6 +2,31 @@
 {% block title %}Calendario Público - Atlas{% endblock %}
 
 {% block content %}
+<style>
+    .card { border-radius: 16px; border: none; box-shadow: 0 3px 15px rgba(0,0,0,0.06); }
+    .card-header { padding: 14px 20px; font-weight: 700; font-size: 15px; border-radius: 16px 16px 0 0 !important; }
+    .bg-info { background: linear-gradient(135deg, #00acc1, #006064) !important; }
+    .bg-dark { background: linear-gradient(135deg, #263238, #111) !important; }
+    .bg-success { background: linear-gradient(135deg, #0f9d58, #00695c) !important; }
+    .btn-sm { border-radius: 10px; font-weight: 600; font-size: 11px; }
+    .btn-outline-primary { border-radius: 10px; }
+    .btn-outline-success { border-radius: 10px; }
+    .btn-outline-warning { border-radius: 10px; }
+    .btn-primary { border-radius: 10px; }
+    .btn-success { border-radius: 10px; }
+    .btn-warning { border-radius: 10px; }
+    .btn-danger { border-radius: 10px; }
+    .btn-secondary { border-radius: 10px; }
+    .table { font-size: 12px; }
+    .table thead th { background: #1a1a2e; color: white; font-weight: 600; font-size: 10px; border: none; padding: 8px 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .table tbody td { padding: 7px 10px; vertical-align: middle; border-bottom: 1px solid #f0f0f0; }
+    .table tbody tr:hover { background: #f8f9ff; }
+    .badge { padding: 4px 8px; border-radius: 10px; font-size: 9px; font-weight: 600; }
+    .form-control-sm { border-radius: 8px; }
+    .hora-invalida { border: 2px solid #dc3545 !important; background-color: #ffe6e6 !important; }
+    .error-msg { color: #dc3545; font-size: 12px; margin-top: 5px; display: none; }
+</style>
+
 <h3>📅 Calendario Público</h3>
 
 {% if current_user.rol in ['admin','socio'] %}
@@ -9,19 +34,6 @@
     <button type="button" class="btn btn-outline-primary btn-sm" onclick="sincronizarTodos()">🔄 Sincronizar Todas las Sesiones</button>
 </div>
 {% endif %}
-
-<style>
-    .hora-invalida {
-        border: 2px solid #dc3545 !important;
-        background-color: #ffe6e6 !important;
-    }
-    .error-msg {
-        color: #dc3545;
-        font-size: 12px;
-        margin-top: 5px;
-        display: none;
-    }
-</style>
 
 <div class="row">
     <div class="col-md-9">
@@ -130,16 +142,13 @@
 </div>
 
 <script>
-// Función para validar horas
 function validarHorasEdicion(id) {
     const hIni = document.querySelector(`.hora-inicio-input-${id}`).value;
     const hFin = document.querySelector(`.hora-fin-input-${id}`).value;
     const errorDiv = document.getElementById(`error-${id}`);
-    
     if (hIni && hFin) {
         if (hFin <= hIni) {
-            errorDiv.style.display = 'block';
-            errorDiv.innerHTML = '❌ La hora de fin debe ser mayor a la hora de inicio';
+            errorDiv.style.display = 'block'; errorDiv.innerHTML = '❌ La hora de fin debe ser mayor a la hora de inicio';
             document.querySelector(`.hora-inicio-input-${id}`).classList.add('hora-invalida');
             document.querySelector(`.hora-fin-input-${id}`).classList.add('hora-invalida');
             return false;
@@ -162,106 +171,41 @@ function editarSesion(id) {
     document.querySelector(`.editar-btn-${id}`).style.display = 'none';
     document.querySelector(`.guardar-btn-${id}`).style.display = 'inline-block';
     document.querySelector(`.cancelar-btn-${id}`).style.display = 'inline-block';
-    
-    // Agregar event listeners para validación
-    document.querySelector(`.hora-inicio-input-${id}`).addEventListener('change', function() {
-        validarHorasEdicion(id);
-    });
-    document.querySelector(`.hora-fin-input-${id}`).addEventListener('change', function() {
-        validarHorasEdicion(id);
-    });
 }
-
-function cancelarEdicion(id) {
-    location.reload();
-}
-
+function cancelarEdicion(id) { location.reload(); }
 async function guardarCambios(id) {
-    if (!validarHorasEdicion(id)) {
-        alert('❌ Corrige las horas antes de guardar. La hora de fin debe ser mayor a la hora de inicio.');
-        return;
-    }
-    
+    if (!validarHorasEdicion(id)) { alert('❌ Corrige las horas antes de guardar.'); return; }
     const fecha = document.querySelector(`.fecha-input-${id}`).value;
     const hIni = document.querySelector(`.hora-inicio-input-${id}`).value;
     const hFin = document.querySelector(`.hora-fin-input-${id}`).value;
-    
-    if (!fecha || !hIni || !hFin) {
-        alert('❌ Complete todos los campos');
-        return;
-    }
-    
+    if (!fecha || !hIni || !hFin) { alert('❌ Complete todos los campos'); return; }
     if (!confirm('¿Confirmas los cambios?')) return;
-    
     try {
-        const response = await fetch('/api/sesion/' + id + '/modificar', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({fecha: fecha, hora_inicio: hIni, hora_fin: hFin})
-        });
-        const result = await response.json();
-        if (result.success) {
-            alert('✅ Sesión actualizada');
-            location.reload();
-        } else {
-            alert('❌ Error: ' + (result.error || 'Desconocido'));
-        }
-    } catch (error) {
-        alert('❌ Error al guardar');
-    }
+        const r = await fetch('/api/sesion/' + id + '/modificar', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({fecha: fecha, hora_inicio: hIni, hora_fin: hFin})});
+        const d = await r.json();
+        if (d.success) { alert('✅ Sesión actualizada'); location.reload(); }
+        else { alert('❌ Error: ' + (d.error || 'Desconocido')); }
+    } catch(e) { alert('❌ Error al guardar'); }
 }
-
-function abrirModalEstudiante(id) {
-    // Implementar según necesidad
-    alert('Funcionalidad en desarrollo');
-}
-
-function abrirModalProfesor(id, actual) {
-    // Implementar según necesidad
-    alert('Funcionalidad en desarrollo');
-}
-
-async function eliminarSesion(id) {
-    if (!confirm('🗑️ ¿Eliminar esta sesión?')) return;
-    await fetch('/api/sesion/' + id + '/eliminar', {method: 'POST'});
-    location.reload();
-}
-
+function abrirModalEstudiante(id) { alert('Funcionalidad en desarrollo'); }
+function abrirModalProfesor(id, actual) { alert('Funcionalidad en desarrollo'); }
+async function eliminarSesion(id) { if (!confirm('🗑️ ¿Eliminar esta sesión?')) return; await fetch('/api/sesion/' + id + '/eliminar', {method: 'POST'}); location.reload(); }
 async function sincronizarEvento(id) {
     if (!confirm('¿Sincronizar esta sesión con Google Calendar?')) return;
-    const btn = event.target;
-    btn.disabled = true;
-    btn.textContent = '⏳';
-    try {
-        const r = await fetch('/api/sesion/' + id + '/sincronizar', {method: 'POST', headers: {'Content-Type': 'application/json'}});
-        const d = await r.json();
-        if (d.success) alert('✅ Sincronizado');
-        else alert('❌ ' + (d.error || 'Error'));
-        location.reload();
-    } catch(e) { alert('❌ Error'); }
+    const btn = event.target; btn.disabled = true; btn.textContent = '⏳';
+    try { const r = await fetch('/api/sesion/' + id + '/sincronizar', {method: 'POST', headers: {'Content-Type': 'application/json'}}); const d = await r.json(); if (d.success) alert('✅ Sincronizado'); else alert('❌ ' + (d.error || 'Error')); location.reload(); }
+    catch(e) { alert('❌ Error'); }
 }
-
 async function sincronizarTodos() {
     if (!confirm('¿Sincronizar TODAS las sesiones?')) return;
-    let ok = 0;
-    const btns = document.querySelectorAll('button[onclick^="sincronizarEvento"]');
-    for (let b of btns) {
-        const id = b.getAttribute('onclick').match(/\d+/)[0];
-        try {
-            const r = await fetch('/api/sesion/' + id + '/sincronizar', {method: 'POST', headers: {'Content-Type': 'application/json'}});
-            if ((await r.json()).success) ok++;
-        } catch(e) {}
-    }
-    alert('✅ ' + ok + ' sincronizadas');
-    location.reload();
+    let ok = 0; const btns = document.querySelectorAll('button[onclick^="sincronizarEvento"]');
+    for (let b of btns) { const id = b.getAttribute('onclick').match(/\d+/)[0]; try { const r = await fetch('/api/sesion/' + id + '/sincronizar', {method: 'POST', headers: {'Content-Type': 'application/json'}}); if ((await r.json()).success) ok++; } catch(e) {} }
+    alert('✅ ' + ok + ' sincronizadas'); location.reload();
 }
-
 async function sincronizarReunion(id) {
     if (!confirm('¿Sincronizar esta reunión?')) return;
-    const r = await fetch('/api/reunion/' + id + '/sincronizar', {method: 'POST', headers: {'Content-Type': 'application/json'}});
-    const d = await r.json();
-    alert(d.success ? '✅ Sincronizada' : '❌ ' + (d.error || 'Error'));
-    location.reload();
+    const r = await fetch('/api/reunion/' + id + '/sincronizar', {method: 'POST', headers: {'Content-Type': 'application/json'}}); const d = await r.json();
+    alert(d.success ? '✅ Sincronizada' : '❌ ' + (d.error || 'Error')); location.reload();
 }
 {% endif %}
 </script>
