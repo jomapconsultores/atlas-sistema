@@ -2,37 +2,285 @@
 {% block title %}Estudiantes - Atlas{% endblock %}
 {% block content %}
 <style>
-    .card-premium { border-radius: 20px; border: none; box-shadow: 0 4px 20px rgba(0,0,0,0.06); background: white; margin-bottom: 20px; overflow: hidden; }
-    .card-header-grad { padding: 14px 20px; color: white; font-weight: 700; font-size: 15px; }
-    .grad-blue { background: linear-gradient(135deg, #1a73e8, #0d47a1); }
-    .table-premium { border-radius: 12px; overflow: hidden; border: none; margin: 0; }
-    .table-premium thead th { background: #1a1a2e; color: white; font-weight: 600; font-size: 11px; letter-spacing: 0.5px; border: none; padding: 10px 12px; text-transform: uppercase; }
-    .table-premium tbody td { padding: 8px 12px; font-size: 13px; border-bottom: 1px solid #f0f0f0; }
-    .table-premium tbody tr:hover { background: #f8f9ff; }
-    .btn-premium { border-radius: 10px; font-weight: 600; font-size: 11px; padding: 8px 14px; }
-    .form-control-premium { border-radius: 10px; border: 2px solid #e0e0e0; padding: 10px 14px; font-size: 13px; }
+.card-premium{border-radius:20px;border:none;box-shadow:0 4px 20px rgba(0,0,0,0.06);background:white;margin-bottom:20px;overflow:hidden;}
+.card-header-grad{padding:14px 20px;color:white;font-weight:700;font-size:15px;}
+.grad-blue{background:linear-gradient(135deg,#1a73e8,#0d47a1);}
+.table-premium thead th{background:#1a1a2e;color:white;font-weight:600;font-size:11px;letter-spacing:0.5px;border:none;padding:10px 12px;text-transform:uppercase;}
+.table-premium tbody td{padding:7px 10px;font-size:13px;border-bottom:1px solid #f0f0f0;vertical-align:middle;}
+.table-premium tbody tr:hover{background:#f8f9ff;}
+.celda-edit{cursor:pointer;border-radius:6px;padding:2px 6px;transition:background 0.15s;}
+.celda-edit:hover{background:#e8f0fe;}
+.inline-input{width:100%;border:1px solid #1a73e8;border-radius:6px;padding:3px 7px;font-size:12px;outline:none;}
+.inline-select{width:100%;border:1px solid #1a73e8;border-radius:6px;padding:3px 7px;font-size:12px;background:white;}
+.saving{opacity:0.5;}
 </style>
+
 <h3 style="font-weight:800;color:#1a1a2e;">🎓 Estudiantes</h3>
-<p class="text-muted" style="font-size:13px;margin-bottom:20px;">Gestión de estudiantes activos</p>
+<p class="text-muted" style="font-size:13px;margin-bottom:20px;">Gestión de estudiantes activos · {{ estudiantes|length }} registrados</p>
 
 {% if rol in ['admin','socio'] %}
-<div class="card-premium"><div class="card-header-grad grad-blue">➕ Nuevo Estudiante</div><div class="card-body">
-<form method="POST" action="/api/crear_estudiante_form" class="row g-2">
-    <div class="col-md-4"><input type="text" name="nombres" class="form-control form-control-premium" placeholder="Nombres" required></div>
-    <div class="col-md-4"><input type="text" name="apellidos" class="form-control form-control-premium" placeholder="Apellidos" required></div>
-    <div class="col-md-4"><input type="text" name="nivel_curso" class="form-control form-control-premium" placeholder="Nivel/Curso"></div>
-    <div class="col-md-4"><input type="text" name="procedencia" class="form-control form-control-premium" placeholder="Procedencia"></div>
-    <div class="col-md-4"><input type="text" name="padre_nombre" class="form-control form-control-premium" placeholder="Nombre del padre"></div>
-    <div class="col-md-4"><button type="submit" class="btn btn-primary btn-premium w-100">✅ Registrar</button></div>
-</form></div></div>
+<div class="card-premium">
+    <div class="card-header-grad grad-blue">➕ Nuevo Estudiante</div>
+    <div class="card-body">
+        <form method="POST" action="/api/crear_estudiante_form" class="row g-2" id="formNuevoEst">
+            <div class="col-md-3">
+                <input type="text" name="apellidos" class="form-control form-control-sm" placeholder="Apellidos *" required>
+            </div>
+            <div class="col-md-3">
+                <input type="text" name="nombres" class="form-control form-control-sm" placeholder="Nombres *" required>
+            </div>
+            <div class="col-md-3">
+                <input type="text" name="padre_nombre" class="form-control form-control-sm" placeholder="Nombre del padre/madre">
+            </div>
+            <div class="col-md-3">
+                <input list="lista-instituciones" name="procedencia" class="form-control form-control-sm" placeholder="Institución de procedencia" autocomplete="off">
+                <datalist id="lista-instituciones">
+                    {% for inst in instituciones %}<option value="{{ inst }}">{% endfor %}
+                </datalist>
+            </div>
+            <div class="col-md-3">
+                <select name="tipo_institucion" class="form-select form-select-sm" id="tipoInstNuevo" onchange="actualizarNivelesNuevo()">
+                    <option value="">Tipo institución...</option>
+                    <option value="Universidad">Universidad</option>
+                    <option value="Bachillerato">Bachillerato</option>
+                    <option value="Escuela">Escuela</option>
+                    <option value="Otro">Otro</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select name="nivel_educativo" class="form-select form-select-sm" id="nivelEdNuevo">
+                    <option value="">Nivel educativo...</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <input type="text" name="nivel_curso" class="form-control form-control-sm" placeholder="Nivel/Curso (ej: 3ro A)">
+            </div>
+            <div class="col-md-3">
+                <button type="submit" class="btn btn-primary btn-sm w-100">✅ Registrar Estudiante</button>
+            </div>
+        </form>
+    </div>
+</div>
 {% endif %}
 
-<div class="card-premium"><div class="card-header-grad" style="background:linear-gradient(135deg,#263238,#111);">📋 Lista de Estudiantes</div><div class="card-body p-0">
-<div class="table-responsive"><table class="table table-premium mb-0"><thead><tr><th>Apellidos</th><th>Nombres</th><th>Nivel/Curso</th><th>Procedencia</th><th>Padre</th>{% if rol in ['admin','socio'] %}<th>Acción</th>{% endif %}</tr></thead><tbody>
-{% for e in estudiantes %}<tr><td>{{ e.apellidos }}</td><td>{{ e.nombres }}</td><td>{{ e.get('nivel_curso','') }}</td><td>{{ e.get('procedencia','') }}</td><td>{{ e.get('padre_nombre','') }}</td>{% if rol in ['admin','socio'] %}<td><button class="btn btn-outline-danger btn-sm btn-premium" onclick="eliminarEstudiante({{ e.id }})">🗑️</button></td>{% endif %}</tr>{% endfor %}
-</tbody></table></div></div></div>
+<div class="card-premium">
+    <div class="card-header-grad" style="background:linear-gradient(135deg,#263238,#111);">
+        📋 Lista de Estudiantes
+        {% if rol in ['admin','socio'] %}
+        <small class="fw-normal opacity-75 ms-2">· Haz clic en cualquier celda para editar</small>
+        {% endif %}
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-premium mb-0">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Apellidos</th>
+                        <th>Nombres</th>
+                        <th>Padre/Madre</th>
+                        <th>Institución procedencia</th>
+                        <th>Tipo</th>
+                        <th>Nivel educativo</th>
+                        <th>Nivel/Curso</th>
+                        {% if rol in ['admin','socio'] %}<th class="text-center">Acc.</th>{% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for e in estudiantes %}
+                    <tr id="fila-est-{{ e.id }}">
+                        <td class="text-muted small">{{ loop.index }}</td>
+                        <td>{% if rol in ['admin','socio'] %}
+                            <span class="celda-edit" onclick="editarCelda(this, {{ e.id }}, 'apellidos', 'text')">{{ e.apellidos }}</span>
+                            {% else %}{{ e.apellidos }}{% endif %}
+                        </td>
+                        <td>{% if rol in ['admin','socio'] %}
+                            <span class="celda-edit" onclick="editarCelda(this, {{ e.id }}, 'nombres', 'text')">{{ e.nombres }}</span>
+                            {% else %}{{ e.nombres }}{% endif %}
+                        </td>
+                        <td>{% if rol in ['admin','socio'] %}
+                            <span class="celda-edit" onclick="editarCelda(this, {{ e.id }}, 'padre_nombre', 'text')">{{ e.get('padre_nombre','') or '—' }}</span>
+                            {% else %}{{ e.get('padre_nombre','') or '—' }}{% endif %}
+                        </td>
+                        <td>{% if rol in ['admin','socio'] %}
+                            <span class="celda-edit" onclick="editarCeldaDatalist(this, {{ e.id }}, 'procedencia')">{{ e.get('procedencia','') or '—' }}</span>
+                            {% else %}{{ e.get('procedencia','') or '—' }}{% endif %}
+                        </td>
+                        <td>{% if rol in ['admin','socio'] %}
+                            <span class="celda-edit" onclick="editarCeldaTipo(this, {{ e.id }}, '{{ e.get('tipo_institucion','') }}')">
+                                {% if e.get('tipo_institucion') %}<span class="badge bg-info text-dark">{{ e.get('tipo_institucion') }}</span>{% else %}—{% endif %}
+                            </span>
+                            {% else %}{{ e.get('tipo_institucion','') or '—' }}{% endif %}
+                        </td>
+                        <td>{% if rol in ['admin','socio'] %}
+                            <span class="celda-edit" onclick="editarCeldaNivel(this, {{ e.id }}, '{{ e.get('tipo_institucion','') }}', '{{ e.get('nivel_educativo','') }}')">{{ e.get('nivel_educativo','') or '—' }}</span>
+                            {% else %}{{ e.get('nivel_educativo','') or '—' }}{% endif %}
+                        </td>
+                        <td>{% if rol in ['admin','socio'] %}
+                            <span class="celda-edit" onclick="editarCelda(this, {{ e.id }}, 'nivel_curso', 'text')">{{ e.get('nivel_curso','') or '—' }}</span>
+                            {% else %}{{ e.get('nivel_curso','') or '—' }}{% endif %}
+                        </td>
+                        {% if rol in ['admin','socio'] %}
+                        <td class="text-center">
+                            <button class="btn btn-outline-danger btn-sm border-0 py-0" onclick="eliminarEstudiante({{ e.id }})" title="Desactivar">🗑️</button>
+                        </td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 
 <script>
-async function eliminarEstudiante(id){if(!confirm('¿Desactivar estudiante?'))return;await fetch('/api/estudiante/'+id+'/eliminar',{method:'POST'});location.reload();}
+const NIVELES = {{ niveles_por_tipo | tojson }};
+const INSTITUCIONES = {{ instituciones | tojson }};
+
+// ===== EDICIÓN INLINE TEXTO =====
+function editarCelda(span, id, campo, tipo) {
+    const valorActual = span.innerText === '—' ? '' : span.innerText;
+    const input = document.createElement('input');
+    input.type = tipo;
+    input.value = valorActual;
+    input.className = 'inline-input';
+    span.replaceWith(input);
+    input.focus();
+    const guardar = async () => {
+        const nuevoValor = input.value.trim();
+        const res = await guardarCampo(id, campo, nuevoValor);
+        const span2 = document.createElement('span');
+        span2.className = 'celda-edit';
+        span2.innerText = res.valor || nuevoValor || '—';
+        span2.onclick = () => editarCelda(span2, id, campo, tipo);
+        input.replaceWith(span2);
+    };
+    input.addEventListener('blur', guardar);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); if (e.key === 'Escape') { input.value = valorActual; input.blur(); } });
+}
+
+// ===== EDICIÓN INLINE DATALIST (procedencia) =====
+function editarCeldaDatalist(span, id, campo) {
+    const valorActual = span.innerText === '—' ? '' : span.innerText;
+    const wrapper = document.createElement('div');
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = valorActual;
+    input.className = 'inline-input';
+    input.setAttribute('list', 'dl-instituciones-inline');
+    const dl = document.createElement('datalist');
+    dl.id = 'dl-instituciones-inline';
+    INSTITUCIONES.forEach(i => { const opt = document.createElement('option'); opt.value = i; dl.appendChild(opt); });
+    wrapper.appendChild(input);
+    wrapper.appendChild(dl);
+    span.replaceWith(wrapper);
+    input.focus();
+    const guardar = async () => {
+        const nuevoValor = input.value.trim();
+        await guardarCampo(id, campo, nuevoValor);
+        const span2 = document.createElement('span');
+        span2.className = 'celda-edit';
+        span2.innerText = nuevoValor || '—';
+        span2.onclick = () => editarCeldaDatalist(span2, id, campo);
+        wrapper.replaceWith(span2);
+    };
+    input.addEventListener('blur', guardar);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); });
+}
+
+// ===== EDICIÓN INLINE TIPO INSTITUCIÓN =====
+function editarCeldaTipo(span, id, tipoActual) {
+    const sel = document.createElement('select');
+    sel.className = 'inline-select';
+    [['', 'Seleccionar...'], ['Universidad', 'Universidad'], ['Bachillerato', 'Bachillerato'], ['Escuela', 'Escuela'], ['Otro', 'Otro']]
+        .forEach(([v, t]) => { const o = document.createElement('option'); o.value = v; o.text = t; if (v === tipoActual) o.selected = true; sel.appendChild(o); });
+    span.replaceWith(sel);
+    sel.focus();
+    const guardar = async () => {
+        const nuevoValor = sel.value;
+        await guardarCampo(id, 'tipo_institucion', nuevoValor);
+        const span2 = document.createElement('span');
+        span2.className = 'celda-edit';
+        span2.innerHTML = nuevoValor ? `<span class="badge bg-info text-dark">${nuevoValor}</span>` : '—';
+        span2.onclick = () => editarCeldaTipo(span2, id, nuevoValor);
+        sel.replaceWith(span2);
+    };
+    sel.addEventListener('change', guardar);
+    sel.addEventListener('blur', guardar);
+}
+
+// ===== EDICIÓN INLINE NIVEL EDUCATIVO =====
+function editarCeldaNivel(span, id, tipo, nivelActual) {
+    const niveles = NIVELES[tipo] || [];
+    if (niveles.length === 0) {
+        // Tipo desconocido/otro → input libre
+        editarCelda(span, id, 'nivel_educativo', 'text');
+        return;
+    }
+    const sel = document.createElement('select');
+    sel.className = 'inline-select';
+    const optVacia = document.createElement('option'); optVacia.value = ''; optVacia.text = 'Seleccionar...'; sel.appendChild(optVacia);
+    niveles.forEach(n => { const o = document.createElement('option'); o.value = n; o.text = n; if (n === nivelActual) o.selected = true; sel.appendChild(o); });
+    // opción "Otro"
+    const optOtro = document.createElement('option'); optOtro.value = '__otro__'; optOtro.text = '+ Otro...'; sel.appendChild(optOtro);
+    span.replaceWith(sel);
+    sel.focus();
+    const guardar = async () => {
+        let nuevoValor = sel.value;
+        if (nuevoValor === '__otro__') {
+            nuevoValor = prompt('Ingresa el nivel personalizado:') || '';
+        }
+        if (nuevoValor === '') { sel.replaceWith(span); return; }
+        const res = await guardarCampo(id, 'nivel_educativo', nuevoValor);
+        const span2 = document.createElement('span');
+        span2.className = 'celda-edit';
+        span2.innerText = res.valor || nuevoValor || '—';
+        span2.onclick = () => editarCeldaNivel(span2, id, tipo, res.valor || nuevoValor);
+        sel.replaceWith(span2);
+    };
+    sel.addEventListener('change', guardar);
+    sel.addEventListener('blur', () => setTimeout(() => { if (document.activeElement !== sel) guardar(); }, 150));
+}
+
+// ===== GUARDAR CAMPO VÍA API =====
+async function guardarCampo(id, campo, valor) {
+    const fila = document.getElementById('fila-est-' + id);
+    if (fila) fila.classList.add('saving');
+    try {
+        const r = await fetch('/api/estudiante/' + id + '/editar', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({campo, valor})
+        });
+        const res = await r.json();
+        if (!res.success) console.error('Error guardando:', res.error);
+        return res;
+    } finally {
+        if (fila) fila.classList.remove('saving');
+    }
+}
+
+// ===== SELECTOR NIVEL PARA FORMULARIO NUEVO =====
+function actualizarNivelesNuevo() {
+    const tipo = document.getElementById('tipoInstNuevo').value;
+    const sel = document.getElementById('nivelEdNuevo');
+    sel.innerHTML = '<option value="">Nivel educativo...</option>';
+    (NIVELES[tipo] || []).forEach(n => { const o = document.createElement('option'); o.value = n; o.text = n; sel.appendChild(o); });
+    if ((NIVELES[tipo] || []).length > 0) {
+        const oOtro = document.createElement('option'); oOtro.value = '__otro__'; oOtro.text = '+ Otro...'; sel.appendChild(oOtro);
+    }
+}
+document.getElementById('nivelEdNuevo').addEventListener('change', function() {
+    if (this.value === '__otro__') {
+        const custom = prompt('Ingresa el nivel personalizado:') || '';
+        const o = document.createElement('option'); o.value = custom; o.text = custom; o.selected = true; this.appendChild(o);
+    }
+});
+
+async function eliminarEstudiante(id) {
+    if (!confirm('¿Desactivar este estudiante?')) return;
+    await fetch('/api/estudiante/' + id + '/eliminar', {method: 'POST'});
+    document.getElementById('fila-est-' + id).remove();
+}
 </script>
 {% endblock %}

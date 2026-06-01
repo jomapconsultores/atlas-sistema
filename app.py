@@ -66,6 +66,28 @@ PROFESORES = ['Carmen Reinoso', 'Rosalía Moscoso', 'Marco Antonio Posligua',
 ENCARGADOS = ['CARMEN', 'ROSALÍA', 'EDWIN', 'MAP', 'JOHANNA']
 SOCIOS = ['Carmen Reinoso', 'Rosalía Moscoso', 'Marco Antonio Posligua']
 
+INSTITUCIONES_DEFAULT = [
+    'Unidad Educativa Técnico Salesiano', 'Unidad Educativa Sagrado Corazón de Jesús',
+    'Colegio Benigno Malo', 'Unidad Educativa Central', 'Unidad Educativa Borja',
+    'Unidad Educativa La Salle', 'Unidad Educativa Verbo', 'Unidad Educativa Santo Domingo de Guzmán',
+    'Universidad de Cuenca', 'Universidad del Azuay', 'Universidad Politécnica Salesiana',
+    'UCACUE', 'Universidad Católica de Cuenca',
+]
+
+NIVELES_POR_TIPO = {
+    'Universidad': ['Primer nivel', 'Segundo nivel', 'Tercer nivel', 'Cuarto nivel', 'Quinto nivel',
+                    'Sexto nivel', 'Séptimo nivel', 'Octavo nivel', 'Noveno nivel', 'Décimo nivel'],
+    'Escuela': ['Primero de básica', 'Segundo de básica', 'Tercero de básica', 'Cuarto de básica',
+                'Quinto de básica', 'Sexto de básica', 'Séptimo de básica', 'Octavo de básica',
+                'Noveno de básica', 'Décimo de básica'],
+    'Bachillerato': ['Primero de bachillerato', 'Segundo de bachillerato', 'Tercero de bachillerato'],
+}
+
+def a_oracion(texto):
+    if not texto:
+        return texto
+    return texto.strip().lower().capitalize()
+
 # ========== CONSTANTES DE PAGOS ==========
 PAGO_DOCENCIA_POR_HORA = 7
 PORCENTAJE_PSICOLOGIA = 0.4018
@@ -1277,7 +1299,10 @@ def reportes():
     
     total_ingresos = total_facturado
     
-    gastos_mes = supabase.table('gastos').select('*').eq('mes', mes).eq('anio', anio).execute()
+    try:
+        gastos_mes = supabase.table('gastos').select('*').eq('mes_periodo', mes).eq('anio_periodo', anio).execute()
+    except Exception:
+        gastos_mes = supabase.table('gastos').select('*').eq('mes', mes).eq('anio', anio).execute()
     total_gastos = sum(g.get('monto', 0) or 0 for g in (gastos_mes.data or []))
     for g in (gastos_mes.data or []):
         cat = g.get('categoria', 'Sin categoría')
@@ -1609,16 +1634,13 @@ def liquidacion():
 @app.route('/estudiantes', methods=['GET', 'POST'])
 @login_required
 def gestion_estudiantes():
-    if request.method == 'POST' and current_user.rol in ['admin', 'socio']:
-        supabase.table('estudiantes').update({
-            'nombres': request.form['nombres'], 'apellidos': request.form['apellidos'],
-            'nivel_curso': request.form.get('nivel_curso', ''), 'procedencia': request.form.get('procedencia', ''),
-            'padre_nombre': request.form.get('padre_nombre', '')
-        }).eq('id', int(request.form['estudiante_id'])).execute()
-        flash('✅ Actualizado', 'success')
-        return redirect(url_for('gestion_estudiantes'))
     estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
-    return render_template('estudiantes.html', estudiantes=estudiantes.data or [], rol=current_user.rol)
+    # Instituciones dinámicas: default + las ya registradas en la BD
+    procedencias_bd = list({e.get('procedencia', '') for e in (estudiantes.data or []) if e.get('procedencia')})
+    instituciones = sorted(set(INSTITUCIONES_DEFAULT + procedencias_bd))
+    return render_template('estudiantes.html',
+        estudiantes=estudiantes.data or [], rol=current_user.rol,
+        instituciones=instituciones, niveles_por_tipo=NIVELES_POR_TIPO)
 
 @app.route('/api/crear_estudiante', methods=['POST'])
 @login_required
@@ -1626,8 +1648,12 @@ def api_crear_estudiante():
     data = request.get_json()
     result = supabase.table('estudiantes').insert({
         'nombres': data['nombres'], 'apellidos': data['apellidos'],
-        'nivel_curso': data.get('nivel_curso', ''), 'procedencia': data.get('procedencia', ''),
-        'padre_nombre': data.get('padre_nombre', ''), 'activo': True, 'usuario_id': current_user.id
+        'nivel_curso': a_oracion(data.get('nivel_curso', '')),
+        'procedencia': data.get('procedencia', ''),
+        'padre_nombre': data.get('padre_nombre', ''),
+        'tipo_institucion': data.get('tipo_institucion', ''),
+        'nivel_educativo': a_oracion(data.get('nivel_educativo', '')),
+        'activo': True, 'usuario_id': current_user.id
     }).execute()
     return jsonify({'success': True, 'id': result.data[0]['id'], 'nombre': f"{result.data[0]['apellidos']} {result.data[0]['nombres']}"})
 
@@ -1639,11 +1665,35 @@ def crear_estudiante_form():
         return redirect(url_for('dashboard'))
     supabase.table('estudiantes').insert({
         'nombres': request.form['nombres'], 'apellidos': request.form['apellidos'],
-        'nivel_curso': request.form.get('nivel_curso', ''), 'procedencia': request.form.get('procedencia', ''),
-        'padre_nombre': request.form.get('padre_nombre', ''), 'activo': True, 'usuario_id': current_user.id
+        'nivel_curso': a_oracion(request.form.get('nivel_curso', '')),
+        'procedencia': request.form.get('procedencia', ''),
+        'padre_nombre': request.form.get('padre_nombre', ''),
+        'tipo_institucion': request.form.get('tipo_institucion', ''),
+        'nivel_educativo': a_oracion(request.form.get('nivel_educativo', '')),
+        'activo': True, 'usuario_id': current_user.id
     }).execute()
     flash('✅ Estudiante creado', 'success')
     return redirect(url_for('gestion_estudiantes'))
+
+@app.route('/api/estudiante/<int:id>/editar', methods=['POST'])
+@login_required
+def api_editar_estudiante(id):
+    if current_user.rol not in ['admin', 'socio']:
+        return jsonify({'success': False, 'error': 'Sin permiso'})
+    data = request.get_json()
+    campo = data.get('campo')
+    valor = data.get('valor', '') or ''
+    campos_permitidos = ['nombres', 'apellidos', 'nivel_curso', 'procedencia',
+                         'padre_nombre', 'tipo_institucion', 'nivel_educativo', 'genero']
+    if campo not in campos_permitidos:
+        return jsonify({'success': False, 'error': 'Campo no permitido'})
+    if campo in ['nivel_curso', 'nivel_educativo']:
+        valor = a_oracion(valor)
+    try:
+        supabase.table('estudiantes').update({campo: valor or None}).eq('id', id).execute()
+        return jsonify({'success': True, 'valor': valor})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/estudiante/<int:id>/eliminar', methods=['POST'])
 @login_required
