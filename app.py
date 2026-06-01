@@ -1373,6 +1373,7 @@ def gestion_gastos():
             'concepto': request.form['concepto'], 'monto': float(request.form['monto']),
             'fecha': fecha, 'categoria': request.form.get('categoria', ''),
             'persona': request.form.get('persona', ''), 'reembolso': request.form.get('reembolso') == 'true',
+            'reembolsado_a': request.form.get('reembolsado_a', '') or None,
             'registrado_por': current_user.nombre, 'mes': fecha_obj.month, 'anio': fecha_obj.year,
             'mes_periodo': mes_periodo, 'anio_periodo': anio_periodo
         }

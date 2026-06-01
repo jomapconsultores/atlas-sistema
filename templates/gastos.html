@@ -308,6 +308,19 @@
                 <div class="mb-3">
                     <label class="form-label fw-bold" id="edit_label">Valor</label>
                     <input type="text" id="edit_valor" class="form-control border-0 shadow-sm">
+                    <select id="edit_valor_select" class="form-select border-0 shadow-sm" style="display:none;">
+                        <option value="">Seleccionar...</option>
+                        <option value="Arriendo">🏠 Arriendo</option>
+                        <option value="Telefonía móvil">📱 Telefonía móvil</option>
+                        <option value="Servicios básicos">💡 Servicios básicos (luz, agua)</option>
+                        <option value="Internet">🌐 Internet</option>
+                        <option value="Materiales">📦 Materiales didácticos</option>
+                        <option value="Transporte">🚗 Transporte</option>
+                        <option value="Alimentación">🍽️ Alimentación</option>
+                        <option value="Mantenimiento">🔧 Mantenimiento</option>
+                        <option value="Pago docentes">👨‍🏫 Pago a docentes</option>
+                        <option value="Otros">📋 Otros</option>
+                    </select>
                 </div>
             </div>
             <div class="modal-footer border-0">
@@ -354,15 +367,26 @@ async function eliminarGasto(id) {
 function editarGastoInline(id, campo, valor) {
     document.getElementById('edit_gasto_id').value = id;
     document.getElementById('edit_gasto_campo').value = campo;
-    document.getElementById('edit_valor').value = valor;
     document.getElementById('edit_label').innerText = 'Editar ' + campo.charAt(0).toUpperCase() + campo.slice(1);
+    const txt = document.getElementById('edit_valor');
+    const sel = document.getElementById('edit_valor_select');
+    if (campo === 'categoria') {
+        txt.style.display = 'none';
+        sel.style.display = 'block';
+        sel.value = valor;
+    } else {
+        txt.style.display = 'block';
+        sel.style.display = 'none';
+        txt.value = valor;
+    }
     new bootstrap.Modal(document.getElementById('modalEdicionRapida')).show();
 }
 
 async function guardarEdicionRapida() {
     const id = document.getElementById('edit_gasto_id').value;
     const campo = document.getElementById('edit_gasto_campo').value;
-    const valor = document.getElementById('edit_valor').value;
+    const sel = document.getElementById('edit_valor_select');
+    const valor = (campo === 'categoria') ? sel.value : document.getElementById('edit_valor').value;
     
     try {
         const response = await fetch('/api/gasto/' + id + '/editar', {
