@@ -144,8 +144,12 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-bold">Persona que realiza el gasto *</label>
-                        <input type="text" name="persona" class="form-control border-0 shadow-sm" required list="listaPersonas" autocomplete="off" placeholder="Nombre de quien pagó">
-                        <datalist id="listaPersonas"></datalist>
+                        <select name="persona" class="form-select border-0 shadow-sm" required>
+                            <option value="">Seleccionar socio...</option>
+                            <option value="Carmen Reinoso">Carmen Reinoso</option>
+                            <option value="Rosalía Moscoso">Rosalía Moscoso</option>
+                            <option value="Marco Antonio Posligua">Marco Antonio Posligua</option>
+                        </select>
                     </div>
                     <div class="mb-3 form-check form-switch">
                         <input type="checkbox" name="reembolso" id="reembolso" class="form-check-input" value="true" onchange="toggleReembolso()">
@@ -153,7 +157,12 @@
                     </div>
                     <div class="mb-3" id="divReembolsado" style="display:none;">
                         <label class="form-label fw-bold">Reembolsar a *</label>
-                        <input type="text" name="reembolsado_a" class="form-control border-0 shadow-sm" list="listaPersonas" autocomplete="off" placeholder="Persona a quien se le debe devolver">
+                        <select name="reembolsado_a" class="form-select border-0 shadow-sm">
+                            <option value="">Seleccionar socio...</option>
+                            <option value="Carmen Reinoso">Carmen Reinoso</option>
+                            <option value="Rosalía Moscoso">Rosalía Moscoso</option>
+                            <option value="Marco Antonio Posligua">Marco Antonio Posligua</option>
+                        </select>
                     </div>
                     <button type="submit" class="btn btn-danger w-100 shadow-sm" style="border-radius: 10px;">
                         <i class="bi bi-plus-circle"></i> Registrar Gasto
