@@ -1381,7 +1381,8 @@ def gestion_gastos():
     total = sum(g.get('monto', 0) or 0 for g in (gastos.data or []))
     
     # Obtener pagos a docentes del mes
-    sesiones_mes = supabase.table('sesiones').select('*').in_('estado', ['Realizado', 'Cancelado-Pagado']).gte('fecha', f"{anio}-{mes:02d}-01").lte('fecha', f"{anio}-{mes:02d}-31").execute()
+    _, ultimo_dia = monthrange(anio, mes)
+    sesiones_mes = supabase.table('sesiones').select('*').in_('estado', ['Realizado', 'Cancelado-Pagado']).gte('fecha', f"{anio}-{mes:02d}-01").lte('fecha', f"{anio}-{mes:02d}-{ultimo_dia}").execute()
     
     pagos_docentes_detalle = {}
     total_sesiones_docentes = 0
