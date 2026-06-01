@@ -1653,7 +1653,6 @@ def api_crear_estudiante():
         'padre_nombre': data.get('padre_nombre', ''),
         'madre_nombre': data.get('madre_nombre', ''),
         'tipo_institucion': data.get('tipo_institucion', ''),
-        'nivel_educativo': a_oracion(data.get('nivel_educativo', '')),
         'activo': True, 'usuario_id': current_user.id
     }).execute()
     return jsonify({'success': True, 'id': result.data[0]['id'], 'nombre': f"{result.data[0]['apellidos']} {result.data[0]['nombres']}"})
@@ -1671,7 +1670,6 @@ def crear_estudiante_form():
         'padre_nombre': request.form.get('padre_nombre', ''),
         'madre_nombre': request.form.get('madre_nombre', ''),
         'tipo_institucion': request.form.get('tipo_institucion', ''),
-        'nivel_educativo': a_oracion(request.form.get('nivel_educativo', '')),
         'activo': True, 'usuario_id': current_user.id
     }).execute()
     flash('✅ Estudiante creado', 'success')
@@ -1686,10 +1684,10 @@ def api_editar_estudiante(id):
     campo = data.get('campo')
     valor = data.get('valor', '') or ''
     campos_permitidos = ['nombres', 'apellidos', 'nivel_curso', 'procedencia',
-                         'padre_nombre', 'madre_nombre', 'tipo_institucion', 'nivel_educativo', 'genero']
+                         'padre_nombre', 'madre_nombre', 'tipo_institucion', 'genero']
     if campo not in campos_permitidos:
         return jsonify({'success': False, 'error': 'Campo no permitido'})
-    if campo in ['nivel_curso', 'nivel_educativo']:
+    if campo in ['nivel_curso']:
         valor = a_oracion(valor)
     try:
         supabase.table('estudiantes').update({campo: valor or None}).eq('id', id).execute()

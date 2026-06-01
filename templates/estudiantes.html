@@ -42,10 +42,10 @@
                 <input type="text" name="madre_nombre" class="form-control form-control-sm" placeholder="Nombre completo de la madre">
             </div>
 
-            <!-- Fila 2: Tipo y nivel -->
+            <!-- Fila 2: Tipo e institución -->
             <div class="col-md-3">
                 <label class="form-label fw-semibold small mb-1">Tipo de institución</label>
-                <select name="tipo_institucion" class="form-select form-select-sm" id="tipoInstNuevo" onchange="actualizarNivelesNuevo()">
+                <select name="tipo_institucion" class="form-select form-select-sm" id="tipoInstNuevo">
                     <option value="">Seleccionar tipo...</option>
                     <option value="Universidad">🎓 Universidad</option>
                     <option value="Bachillerato">📗 Bachillerato</option>
@@ -55,20 +55,12 @@
             </div>
             <div class="col-md-3">
                 <label class="form-label fw-semibold small mb-1">Nivel educativo</label>
-                <div id="wrapperNivelNuevo">
-                    <select name="nivel_educativo" class="form-select form-select-sm" id="nivelEdNuevo">
-                        <option value="">— selecciona tipo primero —</option>
-                    </select>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label fw-semibold small mb-1">Paralelo / Sección</label>
                 <select name="nivel_curso" class="form-select form-select-sm" id="paraleloNuevo">
                     <option value="">Seleccionar...</option>
                     <option>Primero</option><option>Segundo</option><option>Tercero</option>
                     <option>Cuarto</option><option>Quinto</option><option>Sexto</option>
                     <option>Séptimo</option><option>Octavo</option><option>Noveno</option><option>Décimo</option>
-                    <option value="__otro__">+ Otro / Letra (A, B, C...)</option>
+                    <option value="__otro__">+ Otro...</option>
                 </select>
             </div>
 
@@ -119,7 +111,6 @@
                         <th>Madre</th>
                         <th>Tipo institución</th>
                         <th>Nivel educativo</th>
-                        <th>Paralelo</th>
                         <th>Institución de procedencia</th>
                         {% if rol in ['admin','socio'] %}<th class="text-center">Acc.</th>{% endif %}
                     </tr>
@@ -150,10 +141,6 @@
                                 {% if e.get('tipo_institucion') %}<span class="badge bg-info text-dark">{{ e.get('tipo_institucion') }}</span>{% else %}<span class="text-muted small">clic para asignar</span>{% endif %}
                             </span>
                             {% else %}{{ e.get('tipo_institucion','') or '—' }}{% endif %}
-                        </td>
-                        <td data-campo-nivel>{% if rol in ['admin','socio'] %}
-                            <span class="celda-edit" onclick="editarCeldaNivel(this, {{ e.id }})">{{ e.get('nivel_educativo','') or '—' }}</span>
-                            {% else %}{{ e.get('nivel_educativo','') or '—' }}{% endif %}
                         </td>
                         <td>{% if rol in ['admin','socio'] %}
                             <span class="celda-edit" onclick="editarCeldaParalelo(this, {{ e.id }})">{{ e.get('nivel_curso','') or '—' }}</span>
@@ -226,45 +213,7 @@ function editarCeldaTipo(span, id) {
     sel.addEventListener('blur', guardar);
 }
 
-// ===== EDICIÓN INLINE NIVEL EDUCATIVO (lee tipo desde data attribute) =====
-function editarCeldaNivel(span, id) {
-    const tipo = getTipoFila(id);
-    const nivelActual = span.innerText === '—' ? '' : span.innerText;
-    const niveles = NIVELES[tipo] || [];
-    if (!tipo || niveles.length === 0) {
-        // Sin tipo asignado o tipo "Otro" → input libre
-        const input = document.createElement('input');
-        input.type='text'; input.value=nivelActual; input.className='inline-input';
-        span.replaceWith(input); input.focus();
-        const g = async () => {
-            const nv=input.value.trim(); const res=await guardarCampo(id,'nivel_educativo',nv);
-            const s2=document.createElement('span'); s2.className='celda-edit'; s2.innerText=res.valor||nv||'—';
-            s2.onclick=()=>editarCeldaNivel(s2,id); input.replaceWith(s2);
-        };
-        input.addEventListener('blur',g);
-        input.addEventListener('keydown',e=>{if(e.key==='Enter')input.blur();});
-        return;
-    }
-    const sel = document.createElement('select'); sel.className = 'inline-select';
-    const oV=document.createElement('option'); oV.value=''; oV.text='Seleccionar nivel...'; sel.appendChild(oV);
-    niveles.forEach(n=>{const o=document.createElement('option');o.value=n;o.text=n;if(n===nivelActual)o.selected=true;sel.appendChild(o);});
-    const oO=document.createElement('option'); oO.value='__otro__'; oO.text='+ Otro personalizado...'; sel.appendChild(oO);
-    span.replaceWith(sel); sel.focus();
-    let guardado=false;
-    const guardar = async () => {
-        if(guardado) return; guardado=true;
-        let nv=sel.value;
-        if(nv==='__otro__') { nv=prompt('Escribe el nivel personalizado:')||''; }
-        if(!nv){guardado=false;return;}
-        const res=await guardarCampo(id,'nivel_educativo',nv);
-        const s2=document.createElement('span'); s2.className='celda-edit'; s2.innerText=res.valor||nv||'—';
-        s2.onclick=()=>editarCeldaNivel(s2,id); sel.replaceWith(s2);
-    };
-    sel.addEventListener('change', guardar);
-    sel.addEventListener('blur', ()=>setTimeout(()=>{if(document.activeElement!==sel)guardar();},150));
-}
-
-// ===== EDICIÓN INLINE PARALELO (select Primero-Décimo + Otro) =====
+// ===== EDICIÓN INLINE NIVEL EDUCATIVO (select Primero-Décimo + Otro) =====
 function editarCeldaParalelo(span, id) {
     const valorActual = span.innerText === '—' ? '' : span.innerText;
     const sel = document.createElement('select'); sel.className = 'inline-select';
@@ -343,24 +292,9 @@ function filtrarTabla(q) {
     if(c) c.textContent = lower ? `${visible} resultado(s) para "${q}"` : `${visible} estudiantes`;
 }
 
-// ===== SELECTOR NIVEL PARA FORMULARIO NUEVO =====
-function actualizarNivelesNuevo() {
-    const tipo=document.getElementById('tipoInstNuevo').value;
-    const sel=document.getElementById('nivelEdNuevo');
-    sel.innerHTML='<option value="">— selecciona nivel —</option>';
-    (NIVELES[tipo]||[]).forEach(n=>{const o=document.createElement('option');o.value=n;o.text=n;sel.appendChild(o);});
-    if((NIVELES[tipo]||[]).length>0){const oO=document.createElement('option');oO.value='__otro__';oO.text='+ Otro...';sel.appendChild(oO);}
-}
 document.getElementById('paraleloNuevo').addEventListener('change',function(){
     if(this.value==='__otro__'){
-        const c=prompt('Escribe el paralelo o letra (ej: A, B, C...):')||'';
-        if(c){const o=document.createElement('option');o.value=c;o.text=c;o.selected=true;this.appendChild(o);}
-        else this.value='';
-    }
-});
-document.getElementById('nivelEdNuevo').addEventListener('change',function(){
-    if(this.value==='__otro__'){
-        const c=prompt('Escribe el nivel personalizado:')||'';
+        const c=prompt('Escribe el nivel educativo personalizado:')||'';
         if(c){const o=document.createElement('option');o.value=c;o.text=c;o.selected=true;this.appendChild(o);}
         else this.value='';
     }
