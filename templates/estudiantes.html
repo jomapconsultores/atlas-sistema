@@ -63,7 +63,13 @@
             </div>
             <div class="col-md-3">
                 <label class="form-label fw-semibold small mb-1">Paralelo / Sección</label>
-                <input type="text" name="nivel_curso" class="form-control form-control-sm" placeholder="Ej: 3ro A, Grupo B">
+                <select name="nivel_curso" class="form-select form-select-sm" id="paraleloNuevo">
+                    <option value="">Seleccionar...</option>
+                    <option>Primero</option><option>Segundo</option><option>Tercero</option>
+                    <option>Cuarto</option><option>Quinto</option><option>Sexto</option>
+                    <option>Séptimo</option><option>Octavo</option><option>Noveno</option><option>Décimo</option>
+                    <option value="__otro__">+ Otro / Letra (A, B, C...)</option>
+                </select>
             </div>
 
             <!-- Fila 3: Institución con buscador -->
@@ -89,15 +95,21 @@
 {% endif %}
 
 <div class="card-premium">
-    <div class="card-header-grad" style="background:linear-gradient(135deg,#263238,#111);">
-        📋 Lista de Estudiantes
-        {% if rol in ['admin','socio'] %}
-        <small class="fw-normal opacity-75 ms-2">· Haz clic en cualquier celda para editar</small>
-        {% endif %}
+    <div class="card-header-grad" style="background:linear-gradient(135deg,#263238,#111); display:flex; justify-content:space-between; align-items:center;">
+        <span>📋 Lista de Estudiantes {% if rol in ['admin','socio'] %}<small class="fw-normal opacity-75 ms-2">· Clic en celda para editar</small>{% endif %}</span>
     </div>
-    <div class="card-body p-0">
+    <!-- Buscador -->
+    <div class="card-body pb-0 pt-3 px-3">
+        <div class="input-group input-group-sm mb-2" style="max-width:400px;">
+            <span class="input-group-text border-0 bg-light">🔍</span>
+            <input type="text" id="buscadorEst" class="form-control border-0 bg-light" placeholder="Buscar por nombre, institución, nivel, padre, madre..." oninput="filtrarTabla(this.value)">
+            <button class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('buscadorEst').value=''; filtrarTabla('');">✕</button>
+        </div>
+        <small class="text-muted" id="contadorEst">{{ estudiantes|length }} estudiantes</small>
+    </div>
+    <div class="card-body p-0 pt-1">
         <div class="table-responsive">
-            <table class="table table-premium mb-0">
+            <table class="table table-premium mb-0" id="tablaEstudiantes">
                 <thead>
                     <tr>
                         <th>#</th>
@@ -105,16 +117,17 @@
                         <th>Nombres</th>
                         <th>Padre</th>
                         <th>Madre</th>
-                        <th>Tipo</th>
+                        <th>Tipo institución</th>
                         <th>Nivel educativo</th>
                         <th>Paralelo</th>
-                        <th>Institución</th>
+                        <th>Institución de procedencia</th>
                         {% if rol in ['admin','socio'] %}<th class="text-center">Acc.</th>{% endif %}
                     </tr>
                 </thead>
                 <tbody>
                     {% for e in estudiantes %}
-                    <tr id="fila-est-{{ e.id }}">
+                    <tr id="fila-est-{{ e.id }}" data-tipo="{{ e.get('tipo_institucion','') }}"
+                        data-buscar="{{ e.apellidos }} {{ e.nombres }} {{ e.get('padre_nombre','') }} {{ e.get('madre_nombre','') }} {{ e.get('procedencia','') }} {{ e.get('nivel_educativo','') }} {{ e.get('tipo_institucion','') }} {{ e.get('nivel_curso','') }}">
                         <td class="text-muted small">{{ loop.index }}</td>
                         <td>{% if rol in ['admin','socio'] %}
                             <span class="celda-edit" onclick="editarCelda(this, {{ e.id }}, 'apellidos', 'text')">{{ e.apellidos }}</span>
@@ -132,18 +145,18 @@
                             <span class="celda-edit" onclick="editarCelda(this, {{ e.id }}, 'madre_nombre', 'text')">{{ e.get('madre_nombre','') or '—' }}</span>
                             {% else %}{{ e.get('madre_nombre','') or '—' }}{% endif %}
                         </td>
-                        <td>{% if rol in ['admin','socio'] %}
-                            <span class="celda-edit" onclick="editarCeldaTipo(this, {{ e.id }}, '{{ e.get('tipo_institucion','') }}')">
-                                {% if e.get('tipo_institucion') %}<span class="badge bg-info text-dark">{{ e.get('tipo_institucion') }}</span>{% else %}—{% endif %}
+                        <td data-campo-tipo>{% if rol in ['admin','socio'] %}
+                            <span class="celda-edit" onclick="editarCeldaTipo(this, {{ e.id }})">
+                                {% if e.get('tipo_institucion') %}<span class="badge bg-info text-dark">{{ e.get('tipo_institucion') }}</span>{% else %}<span class="text-muted small">clic para asignar</span>{% endif %}
                             </span>
                             {% else %}{{ e.get('tipo_institucion','') or '—' }}{% endif %}
                         </td>
-                        <td>{% if rol in ['admin','socio'] %}
-                            <span class="celda-edit" onclick="editarCeldaNivel(this, {{ e.id }}, '{{ e.get('tipo_institucion','') }}', '{{ e.get('nivel_educativo','') }}')">{{ e.get('nivel_educativo','') or '—' }}</span>
+                        <td data-campo-nivel>{% if rol in ['admin','socio'] %}
+                            <span class="celda-edit" onclick="editarCeldaNivel(this, {{ e.id }})">{{ e.get('nivel_educativo','') or '—' }}</span>
                             {% else %}{{ e.get('nivel_educativo','') or '—' }}{% endif %}
                         </td>
                         <td>{% if rol in ['admin','socio'] %}
-                            <span class="celda-edit" onclick="editarCelda(this, {{ e.id }}, 'nivel_curso', 'text')">{{ e.get('nivel_curso','') or '—' }}</span>
+                            <span class="celda-edit" onclick="editarCeldaParalelo(this, {{ e.id }})">{{ e.get('nivel_curso','') or '—' }}</span>
                             {% else %}{{ e.get('nivel_curso','') or '—' }}{% endif %}
                         </td>
                         <td>{% if rol in ['admin','socio'] %}
@@ -166,185 +179,215 @@
 <script>
 const NIVELES = {{ niveles_por_tipo | tojson }};
 const INSTITUCIONES = {{ instituciones | tojson }};
+const PARALELOS = ['Primero','Segundo','Tercero','Cuarto','Quinto','Sexto','Séptimo','Octavo','Noveno','Décimo'];
+
+// ===== HELPERS =====
+function getFila(id) { return document.getElementById('fila-est-' + id); }
+function getTipoFila(id) { return (getFila(id) || {}).dataset?.tipo || ''; }
+function setTipoFila(id, tipo) { const f = getFila(id); if (f) f.dataset.tipo = tipo; }
 
 // ===== EDICIÓN INLINE TEXTO =====
-function editarCelda(span, id, campo, tipo) {
+function editarCelda(span, id, campo) {
     const valorActual = span.innerText === '—' ? '' : span.innerText;
     const input = document.createElement('input');
-    input.type = tipo;
-    input.value = valorActual;
-    input.className = 'inline-input';
-    span.replaceWith(input);
-    input.focus();
+    input.type = 'text'; input.value = valorActual; input.className = 'inline-input';
+    span.replaceWith(input); input.focus();
     const guardar = async () => {
-        const nuevoValor = input.value.trim();
-        const res = await guardarCampo(id, campo, nuevoValor);
-        const span2 = document.createElement('span');
-        span2.className = 'celda-edit';
-        span2.innerText = res.valor || nuevoValor || '—';
-        span2.onclick = () => editarCelda(span2, id, campo, tipo);
-        input.replaceWith(span2);
+        const nv = input.value.trim();
+        const res = await guardarCampo(id, campo, nv);
+        const s2 = document.createElement('span');
+        s2.className = 'celda-edit'; s2.innerText = res.valor || nv || '—';
+        s2.onclick = () => editarCelda(s2, id, campo);
+        input.replaceWith(s2);
     };
     input.addEventListener('blur', guardar);
-    input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); if (e.key === 'Escape') { input.value = valorActual; input.blur(); } });
-}
-
-// ===== EDICIÓN INLINE DATALIST (procedencia) =====
-function editarCeldaDatalist(span, id, campo) {
-    const valorActual = span.innerText === '—' ? '' : span.innerText;
-    const wrapper = document.createElement('div');
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.value = valorActual;
-    input.className = 'inline-input';
-    input.setAttribute('list', 'dl-instituciones-inline');
-    const dl = document.createElement('datalist');
-    dl.id = 'dl-instituciones-inline';
-    INSTITUCIONES.forEach(i => { const opt = document.createElement('option'); opt.value = i; dl.appendChild(opt); });
-    wrapper.appendChild(input);
-    wrapper.appendChild(dl);
-    span.replaceWith(wrapper);
-    input.focus();
-    const guardar = async () => {
-        const nuevoValor = input.value.trim();
-        await guardarCampo(id, campo, nuevoValor);
-        const span2 = document.createElement('span');
-        span2.className = 'celda-edit';
-        span2.innerText = nuevoValor || '—';
-        span2.onclick = () => editarCeldaDatalist(span2, id, campo);
-        wrapper.replaceWith(span2);
-    };
-    input.addEventListener('blur', guardar);
-    input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); });
+    input.addEventListener('keydown', e => { if (e.key==='Enter') input.blur(); if (e.key==='Escape'){input.value=valorActual;input.blur();} });
 }
 
 // ===== EDICIÓN INLINE TIPO INSTITUCIÓN =====
-function editarCeldaTipo(span, id, tipoActual) {
-    const sel = document.createElement('select');
-    sel.className = 'inline-select';
-    [['', 'Seleccionar...'], ['Universidad', 'Universidad'], ['Bachillerato', 'Bachillerato'], ['Escuela', 'Escuela'], ['Otro', 'Otro']]
-        .forEach(([v, t]) => { const o = document.createElement('option'); o.value = v; o.text = t; if (v === tipoActual) o.selected = true; sel.appendChild(o); });
-    span.replaceWith(sel);
-    sel.focus();
+function editarCeldaTipo(span, id) {
+    const tipoActual = getTipoFila(id);
+    const sel = document.createElement('select'); sel.className = 'inline-select';
+    [['','Seleccionar tipo...'],['Universidad','🎓 Universidad'],['Bachillerato','📗 Bachillerato'],['Escuela','📘 Escuela / Básica'],['Otro','📋 Otro']]
+        .forEach(([v,t]) => { const o=document.createElement('option'); o.value=v; o.text=t; if(v===tipoActual)o.selected=true; sel.appendChild(o); });
+    span.replaceWith(sel); sel.focus();
+    let guardado = false;
     const guardar = async () => {
-        const nuevoValor = sel.value;
-        await guardarCampo(id, 'tipo_institucion', nuevoValor);
-        const span2 = document.createElement('span');
-        span2.className = 'celda-edit';
-        span2.innerHTML = nuevoValor ? `<span class="badge bg-info text-dark">${nuevoValor}</span>` : '—';
-        span2.onclick = () => editarCeldaTipo(span2, id, nuevoValor);
-        sel.replaceWith(span2);
+        if (guardado) return; guardado = true;
+        const nv = sel.value;
+        const res = await guardarCampo(id, 'tipo_institucion', nv);
+        if (res.success !== false) setTipoFila(id, nv);
+        const s2 = document.createElement('span'); s2.className = 'celda-edit';
+        s2.innerHTML = nv ? `<span class="badge bg-info text-dark">${nv}</span>` : '<span class="text-muted small">clic para asignar</span>';
+        s2.onclick = () => editarCeldaTipo(s2, id);
+        sel.replaceWith(s2);
     };
     sel.addEventListener('change', guardar);
     sel.addEventListener('blur', guardar);
 }
 
-// ===== EDICIÓN INLINE NIVEL EDUCATIVO =====
-function editarCeldaNivel(span, id, tipo, nivelActual) {
+// ===== EDICIÓN INLINE NIVEL EDUCATIVO (lee tipo desde data attribute) =====
+function editarCeldaNivel(span, id) {
+    const tipo = getTipoFila(id);
+    const nivelActual = span.innerText === '—' ? '' : span.innerText;
     const niveles = NIVELES[tipo] || [];
-    if (niveles.length === 0) {
-        // Tipo desconocido/otro → input libre
-        editarCelda(span, id, 'nivel_educativo', 'text');
+    if (!tipo || niveles.length === 0) {
+        // Sin tipo asignado o tipo "Otro" → input libre
+        const input = document.createElement('input');
+        input.type='text'; input.value=nivelActual; input.className='inline-input';
+        span.replaceWith(input); input.focus();
+        const g = async () => {
+            const nv=input.value.trim(); const res=await guardarCampo(id,'nivel_educativo',nv);
+            const s2=document.createElement('span'); s2.className='celda-edit'; s2.innerText=res.valor||nv||'—';
+            s2.onclick=()=>editarCeldaNivel(s2,id); input.replaceWith(s2);
+        };
+        input.addEventListener('blur',g);
+        input.addEventListener('keydown',e=>{if(e.key==='Enter')input.blur();});
         return;
     }
-    const sel = document.createElement('select');
-    sel.className = 'inline-select';
-    const optVacia = document.createElement('option'); optVacia.value = ''; optVacia.text = 'Seleccionar...'; sel.appendChild(optVacia);
-    niveles.forEach(n => { const o = document.createElement('option'); o.value = n; o.text = n; if (n === nivelActual) o.selected = true; sel.appendChild(o); });
-    // opción "Otro"
-    const optOtro = document.createElement('option'); optOtro.value = '__otro__'; optOtro.text = '+ Otro...'; sel.appendChild(optOtro);
-    span.replaceWith(sel);
-    sel.focus();
+    const sel = document.createElement('select'); sel.className = 'inline-select';
+    const oV=document.createElement('option'); oV.value=''; oV.text='Seleccionar nivel...'; sel.appendChild(oV);
+    niveles.forEach(n=>{const o=document.createElement('option');o.value=n;o.text=n;if(n===nivelActual)o.selected=true;sel.appendChild(o);});
+    const oO=document.createElement('option'); oO.value='__otro__'; oO.text='+ Otro personalizado...'; sel.appendChild(oO);
+    span.replaceWith(sel); sel.focus();
+    let guardado=false;
     const guardar = async () => {
-        let nuevoValor = sel.value;
-        if (nuevoValor === '__otro__') {
-            nuevoValor = prompt('Ingresa el nivel personalizado:') || '';
-        }
-        if (nuevoValor === '') { sel.replaceWith(span); return; }
-        const res = await guardarCampo(id, 'nivel_educativo', nuevoValor);
-        const span2 = document.createElement('span');
-        span2.className = 'celda-edit';
-        span2.innerText = res.valor || nuevoValor || '—';
-        span2.onclick = () => editarCeldaNivel(span2, id, tipo, res.valor || nuevoValor);
-        sel.replaceWith(span2);
+        if(guardado) return; guardado=true;
+        let nv=sel.value;
+        if(nv==='__otro__') { nv=prompt('Escribe el nivel personalizado:')||''; }
+        if(!nv){guardado=false;return;}
+        const res=await guardarCampo(id,'nivel_educativo',nv);
+        const s2=document.createElement('span'); s2.className='celda-edit'; s2.innerText=res.valor||nv||'—';
+        s2.onclick=()=>editarCeldaNivel(s2,id); sel.replaceWith(s2);
     };
     sel.addEventListener('change', guardar);
-    sel.addEventListener('blur', () => setTimeout(() => { if (document.activeElement !== sel) guardar(); }, 150));
+    sel.addEventListener('blur', ()=>setTimeout(()=>{if(document.activeElement!==sel)guardar();},150));
+}
+
+// ===== EDICIÓN INLINE PARALELO (select Primero-Décimo + Otro) =====
+function editarCeldaParalelo(span, id) {
+    const valorActual = span.innerText === '—' ? '' : span.innerText;
+    const sel = document.createElement('select'); sel.className = 'inline-select';
+    const oV=document.createElement('option'); oV.value=''; oV.text='Seleccionar...'; sel.appendChild(oV);
+    PARALELOS.forEach(p=>{const o=document.createElement('option');o.value=p;o.text=p;if(p===valorActual)o.selected=true;sel.appendChild(o);});
+    const oO=document.createElement('option'); oO.value='__otro__'; oO.text='+ Otro / Letra...'; sel.appendChild(oO);
+    span.replaceWith(sel); sel.focus();
+    let guardado=false;
+    const guardar = async () => {
+        if(guardado) return; guardado=true;
+        let nv=sel.value;
+        if(nv==='__otro__') { nv=prompt('Escribe el paralelo o sección (ej: A, B, C...):')||''; }
+        if(!nv){guardado=false;return;}
+        const res=await guardarCampo(id,'nivel_curso',nv);
+        const s2=document.createElement('span'); s2.className='celda-edit'; s2.innerText=res.valor||nv||'—';
+        s2.onclick=()=>editarCeldaParalelo(s2,id); sel.replaceWith(s2);
+    };
+    sel.addEventListener('change', guardar);
+    sel.addEventListener('blur', ()=>setTimeout(()=>{if(document.activeElement!==sel)guardar();},150));
+}
+
+// ===== EDICIÓN INLINE INSTITUCIÓN (datalist con dropdown) =====
+function editarCeldaDatalist(span, id, campo) {
+    const valorActual = span.innerText==='—'?'':span.innerText;
+    const wrapper=document.createElement('div'); wrapper.style.position='relative';
+    const input=document.createElement('input');
+    input.type='text'; input.value=valorActual; input.className='inline-input';
+    input.setAttribute('list','dl-inst-inline'); input.setAttribute('autocomplete','off');
+    const dl=document.createElement('datalist'); dl.id='dl-inst-inline';
+    INSTITUCIONES.forEach(i=>{const opt=document.createElement('option');opt.value=i;dl.appendChild(opt);});
+    wrapper.appendChild(input); wrapper.appendChild(dl);
+    span.replaceWith(wrapper); input.focus();
+    const guardar = async () => {
+        const nv=input.value.trim();
+        if(nv && !INSTITUCIONES.includes(nv)) INSTITUCIONES.push(nv);
+        await guardarCampo(id,campo,nv);
+        const s2=document.createElement('span'); s2.className='celda-edit'; s2.innerText=nv||'—';
+        s2.onclick=()=>editarCeldaDatalist(s2,id,campo); wrapper.replaceWith(s2);
+    };
+    input.addEventListener('blur',guardar);
+    input.addEventListener('keydown',e=>{if(e.key==='Enter')input.blur();});
 }
 
 // ===== GUARDAR CAMPO VÍA API =====
 async function guardarCampo(id, campo, valor) {
-    const fila = document.getElementById('fila-est-' + id);
-    if (fila) fila.classList.add('saving');
+    const fila = getFila(id); if(fila) fila.classList.add('saving');
     try {
-        const r = await fetch('/api/estudiante/' + id + '/editar', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({campo, valor})
+        const r = await fetch('/api/estudiante/'+id+'/editar',{
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({campo,valor})
         });
         const res = await r.json();
-        if (!res.success) console.error('Error guardando:', res.error);
+        if(!res.success) {
+            const msg = res.error || 'Error desconocido';
+            if(msg.includes('does not exist')) {
+                alert('⚠️ Falta crear columna en la base de datos.\nEjecuta en Supabase SQL Editor:\n\nALTER TABLE estudiantes ADD COLUMN IF NOT EXISTS '+campo+' varchar;');
+            }
+        }
+        if(fila) { fila.dataset.buscar = fila.dataset.buscar + ' ' + valor; }
         return res;
-    } finally {
-        if (fila) fila.classList.remove('saving');
-    }
+    } catch(e) { return {success:false, error:e.message}; }
+    finally { if(fila) fila.classList.remove('saving'); }
+}
+
+// ===== BUSCADOR DE TABLA =====
+function filtrarTabla(q) {
+    const lower = q.toLowerCase().trim();
+    let visible = 0;
+    document.querySelectorAll('#tablaEstudiantes tbody tr').forEach(tr => {
+        const texto = (tr.dataset.buscar || '').toLowerCase();
+        const mostrar = !lower || texto.includes(lower);
+        tr.style.display = mostrar ? '' : 'none';
+        if(mostrar) visible++;
+    });
+    const c = document.getElementById('contadorEst');
+    if(c) c.textContent = lower ? `${visible} resultado(s) para "${q}"` : `${visible} estudiantes`;
 }
 
 // ===== SELECTOR NIVEL PARA FORMULARIO NUEVO =====
 function actualizarNivelesNuevo() {
-    const tipo = document.getElementById('tipoInstNuevo').value;
-    const sel = document.getElementById('nivelEdNuevo');
-    sel.innerHTML = '<option value="">— selecciona nivel —</option>';
-    (NIVELES[tipo] || []).forEach(n => { const o = document.createElement('option'); o.value = n; o.text = n; sel.appendChild(o); });
-    if ((NIVELES[tipo] || []).length > 0) {
-        const oOtro = document.createElement('option'); oOtro.value = '__otro__'; oOtro.text = '+ Otro...'; sel.appendChild(oOtro);
-    }
+    const tipo=document.getElementById('tipoInstNuevo').value;
+    const sel=document.getElementById('nivelEdNuevo');
+    sel.innerHTML='<option value="">— selecciona nivel —</option>';
+    (NIVELES[tipo]||[]).forEach(n=>{const o=document.createElement('option');o.value=n;o.text=n;sel.appendChild(o);});
+    if((NIVELES[tipo]||[]).length>0){const oO=document.createElement('option');oO.value='__otro__';oO.text='+ Otro...';sel.appendChild(oO);}
 }
-document.getElementById('nivelEdNuevo').addEventListener('change', function() {
-    if (this.value === '__otro__') {
-        const custom = prompt('Escribe el nivel personalizado:') || '';
-        if (custom) { const o = document.createElement('option'); o.value = custom; o.text = custom; o.selected = true; this.appendChild(o); }
-        else this.value = '';
+document.getElementById('paraleloNuevo').addEventListener('change',function(){
+    if(this.value==='__otro__'){
+        const c=prompt('Escribe el paralelo o letra (ej: A, B, C...):')||'';
+        if(c){const o=document.createElement('option');o.value=c;o.text=c;o.selected=true;this.appendChild(o);}
+        else this.value='';
+    }
+});
+document.getElementById('nivelEdNuevo').addEventListener('change',function(){
+    if(this.value==='__otro__'){
+        const c=prompt('Escribe el nivel personalizado:')||'';
+        if(c){const o=document.createElement('option');o.value=c;o.text=c;o.selected=true;this.appendChild(o);}
+        else this.value='';
     }
 });
 
-// ===== BUSCADOR DE INSTITUCIÓN CON DROPDOWN =====
-let _instTimer = null;
-function filtrarInstituciones(q) {
-    clearTimeout(_instTimer);
-    _instTimer = setTimeout(() => _mostrarOpciones(q), 150);
+// ===== BUSCADOR DE INSTITUCIÓN (formulario nuevo) =====
+let _instTimer=null;
+function filtrarInstituciones(q){clearTimeout(_instTimer);_instTimer=setTimeout(()=>_mostrarOpciones(q),150);}
+function _mostrarOpciones(q){
+    const dd=document.getElementById('dropdownInst');
+    const lower=q.toLowerCase().trim();
+    const matches=lower?INSTITUCIONES.filter(i=>i.toLowerCase().includes(lower)):INSTITUCIONES;
+    let html=matches.map(i=>`<div onmousedown="seleccionarInst('${i.replace(/'/g,"\\'")}')" style="padding:7px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid #f5f5f5;" onmouseover="this.style.background='#e8f0fe'" onmouseout="this.style.background=''">${i}</div>`).join('');
+    if(q.trim()&&!INSTITUCIONES.some(i=>i.toLowerCase()===lower))
+        html+=`<div onmousedown="crearInst('${q.replace(/'/g,"\\'")}')" style="padding:7px 12px;cursor:pointer;font-size:13px;color:#1a73e8;font-weight:600;" onmouseover="this.style.background='#e3f2fd'" onmouseout="this.style.background=''">➕ Crear: "${q}"</div>`;
+    dd.innerHTML=html||'<div style="padding:8px 12px;color:#999;font-size:12px;">Sin resultados</div>';
+    dd.style.display='block';
 }
-function _mostrarOpciones(q) {
-    const dd = document.getElementById('dropdownInst');
-    const lower = q.toLowerCase().trim();
-    const matches = lower ? INSTITUCIONES.filter(i => i.toLowerCase().includes(lower)) : INSTITUCIONES;
-    let html = matches.map(i => `<div class="inst-option" onmousedown="seleccionarInst('${i.replace(/'/g, "\\'")}')"
-        style="padding:7px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid #f5f5f5;"
-        onmouseover="this.style.background='#e8f0fe'" onmouseout="this.style.background=''">${i}</div>`).join('');
-    if (q.trim() && !INSTITUCIONES.some(i => i.toLowerCase() === lower)) {
-        html += `<div class="inst-option" onmousedown="crearInst('${q.replace(/'/g, "\\'")}')"
-            style="padding:7px 12px;cursor:pointer;font-size:13px;color:#1a73e8;font-weight:600;background:#f8f9ff;"
-            onmouseover="this.style.background='#e3f2fd'" onmouseout="this.style.background='#f8f9ff'">
-            ➕ Crear: "${q}"</div>`;
-    }
-    dd.innerHTML = html || '<div style="padding:8px 12px;color:#999;font-size:12px;">Sin coincidencias</div>';
-    dd.style.display = 'block';
-}
-function seleccionarInst(valor) {
-    document.getElementById('inputInstNuevo').value = valor;
-    document.getElementById('dropdownInst').style.display = 'none';
-}
-function crearInst(valor) {
-    if (!INSTITUCIONES.includes(valor)) INSTITUCIONES.push(valor);
-    seleccionarInst(valor);
-}
-function mostrarDropdown() { _mostrarOpciones(document.getElementById('inputInstNuevo').value); }
-function ocultarDropdown() { setTimeout(() => { document.getElementById('dropdownInst').style.display = 'none'; }, 200); }
+function seleccionarInst(v){document.getElementById('inputInstNuevo').value=v;document.getElementById('dropdownInst').style.display='none';}
+function crearInst(v){if(!INSTITUCIONES.includes(v))INSTITUCIONES.push(v);seleccionarInst(v);}
+function mostrarDropdown(){_mostrarOpciones(document.getElementById('inputInstNuevo').value);}
+function ocultarDropdown(){setTimeout(()=>{document.getElementById('dropdownInst').style.display='none';},200);}
 
-async function eliminarEstudiante(id) {
-    if (!confirm('¿Desactivar este estudiante?')) return;
-    await fetch('/api/estudiante/' + id + '/eliminar', {method: 'POST'});
-    document.getElementById('fila-est-' + id).remove();
+async function eliminarEstudiante(id){
+    if(!confirm('¿Desactivar este estudiante?'))return;
+    await fetch('/api/estudiante/'+id+'/eliminar',{method:'POST'});
+    const f=getFila(id); if(f)f.remove();
 }
 </script>
 {% endblock %}
