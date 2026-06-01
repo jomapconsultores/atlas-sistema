@@ -8,16 +8,18 @@
         background: white; overflow: hidden;
     }
     .login-header {
-        background: linear-gradient(135deg, #1a73e8, #0d47a1);
-        padding: 30px 20px; text-align: center; color: white;
+        background: linear-gradient(160deg, #1a2a7a 0%, #1a3c9e 60%, #0d47a1 100%);
+        padding: 32px 20px 24px; text-align: center; color: white;
     }
     .login-header .logo-icon {
-        width: 60px; height: 60px; border-radius: 16px;
-        background: rgba(255,255,255,0.2); display: flex; align-items: center;
-        justify-content: center; font-size: 28px; margin: 0 auto 12px;
+        width: 90px; height: 90px; border-radius: 50%;
+        object-fit: cover; margin: 0 auto 14px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.35);
+        border: 3px solid rgba(240,192,64,0.5);
+        display: block;
     }
-    .login-header h3 { font-weight: 700; font-size: 20px; margin: 0; }
-    .login-header p { font-size: 12px; opacity: 0.8; margin: 5px 0 0; }
+    .login-header h3 { font-weight: 800; font-size: 22px; margin: 0; color: #f0c040; letter-spacing: -0.3px; }
+    .login-header p { font-size: 11px; opacity: 0.75; margin: 5px 0 0; letter-spacing: 1.5px; text-transform: uppercase; }
     .form-control-lg {
         border-radius: 12px; border: 2px solid #e0e0e0; padding: 14px 16px;
         font-size: 15px; transition: all 0.2s;
@@ -41,9 +43,9 @@
     <div class="col-md-4 col-sm-8">
         <div class="login-card">
             <div class="login-header">
-                <div class="logo-icon">📚</div>
+                <img src="/static/img/logo_atlas.png" alt="Atlas" class="logo-icon">
                 <h3>Atlas</h3>
-                <p>Sistema de Gestión Académica</p>
+                <p>Centro de Estudios</p>
             </div>
             <div class="card-body p-4">
                 <form method="POST">

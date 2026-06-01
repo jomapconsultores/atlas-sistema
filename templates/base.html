@@ -87,7 +87,13 @@
     {% if current_user.is_authenticated %}
     <nav class="navbar-premium">
         <div class="container-fluid" style="max-width: 1300px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center;">
-            <span class="navbar-brand">📚 ATLAS</span>
+            <a href="/dashboard" style="text-decoration:none; display:flex; align-items:center; gap:10px;">
+                <img src="/static/img/logo_atlas.png" alt="Atlas" style="height:42px; width:42px; border-radius:50%; object-fit:cover; box-shadow:0 2px 8px rgba(0,0,0,0.3);">
+                <div style="line-height:1.1;">
+                    <div style="font-weight:800; font-size:17px; color:#f0c040; letter-spacing:-0.3px;">Atlas</div>
+                    <div style="font-size:9px; color:rgba(255,255,255,0.65); letter-spacing:1.5px; text-transform:uppercase;">Centro de Estudios</div>
+                </div>
+            </a>
             <div style="display: flex; align-items: center; gap: 15px;">
                 <span class="nav-user">{{ current_user.nombre }} <span style="opacity:0.6;">({{ current_user.rol }})</span></span>
                 <a href="/logout" class="btn-logout">🚪 Salir</a>
