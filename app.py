@@ -1464,22 +1464,58 @@ def eliminar_gasto(id):
 def liquidacion():
     mes = int(request.args.get('mes', date.today().month))
     anio = int(request.args.get('anio', date.today().year))
-    saldo_cuenta = float(request.args.get('saldo_cuenta', 0))
 
+    # Cargar o crear registro de liquidación guardado
+    try:
+        liq_r = supabase.table('liquidaciones').select('*').eq('mes', mes).eq('anio', anio).execute()
+        liq_record = liq_r.data[0] if liq_r.data else None
+    except Exception:
+        liq_record = None
+
+    if request.method == 'POST':
+        saldo_cuenta = float(request.form.get('saldo_cuenta', 0))
+        try:
+            if liq_record:
+                supabase.table('liquidaciones').update({
+                    'saldo_cuenta': saldo_cuenta
+                }).eq('id', liq_record['id']).execute()
+            else:
+                supabase.table('liquidaciones').insert({
+                    'mes': mes, 'anio': anio,
+                    'saldo_cuenta': saldo_cuenta,
+                    'registrado_por': current_user.nombre
+                }).execute()
+        except Exception:
+            pass
+        flash('✅ Saldo guardado', 'success')
+        return redirect(url_for('liquidacion', mes=mes, anio=anio))
+
+    saldo_cuenta = float(liq_record['saldo_cuenta']) if liq_record else 0.0
     _, ultimo_dia = monthrange(anio, mes)
 
-    # Gastos del período (filtrados por mes_periodo/anio_periodo si existe, si no por mes/anio)
+    # Gastos del período
     try:
         gastos_periodo = supabase.table('gastos').select('*').eq('mes_periodo', mes).eq('anio_periodo', anio).order('fecha', desc=True).execute()
     except Exception:
         gastos_periodo = supabase.table('gastos').select('*').eq('mes', mes).eq('anio', anio).order('fecha', desc=True).execute()
+
     total_gastos = sum(g.get('monto', 0) or 0 for g in (gastos_periodo.data or []))
     gastos_por_cat = {}
+    reembolsos_por_socio = {}
     for g in (gastos_periodo.data or []):
         cat = g.get('categoria', 'Sin categoría')
         gastos_por_cat[cat] = gastos_por_cat.get(cat, 0) + (g.get('monto', 0) or 0)
+        if g.get('reembolso') and g.get('reembolsado_a'):
+            benef = g['reembolsado_a']
+            reembolsos_por_socio[benef] = reembolsos_por_socio.get(benef, 0) + (g.get('monto', 0) or 0)
 
-    # Ingresos del período (pagos recibidos)
+    # Gastos pendientes de reembolso (de cualquier período anterior también)
+    try:
+        gastos_reembolso_pend = supabase.table('gastos').select('*').eq('reembolso', True).execute()
+    except Exception:
+        gastos_reembolso_pend = type('obj', (object,), {'data': []})()
+
+    # Ingresos del período
     pagos_mes = supabase.table('pagos').select('*').gte('fecha_pago', f"{anio}-{mes:02d}-01").lte('fecha_pago', f"{anio}-{mes:02d}-{ultimo_dia}").execute()
     total_ingresos = sum(p.get('monto', 0) or 0 for p in (pagos_mes.data or []))
 
@@ -1503,25 +1539,28 @@ def liquidacion():
         pago_por_docente[prof] = pago_por_docente.get(prof, 0) + pago
         total_pago_docentes += pago
 
-    # Balance: saldo cuenta - gastos - pago docentes
     balance = saldo_cuenta - total_gastos - total_pago_docentes
-
-    # Distribución entre los 3 socios
     parte_por_socio = balance / 3
+
     distribucion_socios = []
     for socio in SOCIOS:
         pago_docente_socio = pago_por_docente.get(socio, 0)
-        neto = parte_por_socio + pago_docente_socio
+        reembolso_socio = reembolsos_por_socio.get(socio, 0)
+        neto = parte_por_socio + pago_docente_socio + reembolso_socio
         distribucion_socios.append({
             'nombre': socio,
             'parte_alicuota': parte_por_socio,
             'pago_docente': pago_docente_socio,
+            'reembolso': reembolso_socio,
             'neto': neto
         })
 
     return render_template('liquidacion.html',
         mes=mes, anio=anio, saldo_cuenta=saldo_cuenta,
+        liq_guardada=liq_record is not None,
         gastos=gastos_periodo.data or [], total_gastos=total_gastos, gastos_por_cat=gastos_por_cat,
+        reembolsos_por_socio=reembolsos_por_socio,
+        gastos_reembolso_pend=gastos_reembolso_pend.data or [],
         total_ingresos=total_ingresos, total_pago_docentes=total_pago_docentes,
         pago_por_docente=pago_por_docente, balance=balance,
         distribucion_socios=distribucion_socios)

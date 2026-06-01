@@ -7,10 +7,10 @@
 <!-- Filtros y saldo -->
 <div class="card shadow border-0 mb-4" style="border-radius:15px;">
     <div class="card-body">
-        <form method="GET" class="row g-3 align-items-end">
+        <form method="GET" class="row g-3 align-items-end" id="formFiltro">
             <div class="col-auto">
                 <label class="form-label fw-bold">Mes</label>
-                <select name="mes" class="form-select">
+                <select name="mes" class="form-select" onchange="document.getElementById('formFiltro').submit()">
                     {% for m in range(1,13) %}
                     <option value="{{ m }}" {{ 'selected' if m==mes }}>{{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][m-1] }}</option>
                     {% endfor %}
@@ -18,18 +18,36 @@
             </div>
             <div class="col-auto">
                 <label class="form-label fw-bold">Año</label>
-                <select name="anio" class="form-select">
+                <select name="anio" class="form-select" onchange="document.getElementById('formFiltro').submit()">
                     {% for a in range(2025,2031) %}
                     <option value="{{ a }}" {{ 'selected' if a==anio }}>{{ a }}</option>
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-auto">
-                <label class="form-label fw-bold">Saldo cuenta de ahorros ($)</label>
-                <input type="number" name="saldo_cuenta" class="form-control" step="0.01" value="{{ saldo_cuenta }}" placeholder="0.00">
+        </form>
+    </div>
+</div>
+
+<!-- Saldo cuenta (POST para guardar) -->
+<div class="card shadow border-0 mb-4" style="border-radius:15px;">
+    <div class="card-header text-white fw-bold" style="background:linear-gradient(135deg,#2e7d32,#1b5e20); border-radius:15px 15px 0 0;">
+        🏦 Saldo de la Cuenta de Ahorros
+        {% if liq_guardada %}<span class="badge bg-light text-success ms-2" style="font-size:12px;">✅ Guardado</span>{% endif %}
+    </div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('liquidacion', mes=mes, anio=anio) }}" class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label fw-bold">Saldo actual ($)</label>
+                <div class="input-group">
+                    <span class="input-group-text border-0 bg-light">$</span>
+                    <input type="number" name="saldo_cuenta" class="form-control border-0 shadow-sm" step="0.01" value="{{ '%.2f'|format(saldo_cuenta) }}" placeholder="0.00">
+                </div>
             </div>
             <div class="col-auto">
-                <button type="submit" class="btn btn-primary">🔄 Calcular</button>
+                <button type="submit" class="btn btn-success shadow-sm">💾 Guardar saldo</button>
+            </div>
+            <div class="col-12">
+                <small class="text-muted">Este valor se guarda y persiste para el mes seleccionado. Los demás cálculos se actualizan automáticamente con los datos reales.</small>
             </div>
         </form>
     </div>
@@ -58,7 +76,7 @@
     <div class="col-md-3">
         <div class="card border-0 shadow-sm text-center p-3" style="border-radius:12px; background:{{ '#e3f2fd' if balance>=0 else '#ffebee' }};">
             <div style="font-size:28px; font-weight:700; color:{{ '#1565c0' if balance>=0 else '#c62828' }};">${{ "%.2f"|format(balance) }}</div>
-            <small class="text-muted">Balance disponible</small>
+            <small class="text-muted">Balance a distribuir</small>
         </div>
     </div>
 </div>
@@ -66,17 +84,21 @@
 <!-- Cálculo -->
 <div class="card shadow border-0 mb-4" style="border-radius:15px;">
     <div class="card-header text-white fw-bold" style="background:linear-gradient(135deg,#1a73e8,#0d47a1); border-radius:15px 15px 0 0;">
-        📊 Cálculo de Liquidación — {{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][mes-1] }} {{ anio }}
+        📊 Cálculo — {{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][mes-1] }} {{ anio }}
     </div>
     <div class="card-body">
-        <table class="table table-sm">
+        <table class="table table-sm mb-0">
             <tbody>
                 <tr><td>Saldo cuenta de ahorros</td><td class="text-end fw-bold">${{ "%.2f"|format(saldo_cuenta) }}</td></tr>
                 <tr class="text-danger"><td>(-) Total gastos del período</td><td class="text-end">-${{ "%.2f"|format(total_gastos) }}</td></tr>
                 <tr class="text-warning"><td>(-) Total pago docentes</td><td class="text-end">-${{ "%.2f"|format(total_pago_docentes) }}</td></tr>
                 <tr class="fw-bold border-top" style="font-size:16px;">
-                    <td>Balance a distribuir</td>
+                    <td>Balance a distribuir (÷ 3)</td>
                     <td class="text-end {{ 'text-success' if balance>=0 else 'text-danger' }}">${{ "%.2f"|format(balance) }}</td>
+                </tr>
+                <tr class="text-muted">
+                    <td>Parte alícuota por socio</td>
+                    <td class="text-end">${{ "%.2f"|format(balance/3) }}</td>
                 </tr>
             </tbody>
         </table>
@@ -86,17 +108,17 @@
 <!-- Distribución socios -->
 <div class="card shadow border-0 mb-4" style="border-radius:15px;">
     <div class="card-header text-white fw-bold" style="background:linear-gradient(135deg,#6f42c1,#4527a0); border-radius:15px 15px 0 0;">
-        👥 Distribución entre Socios (33.33% cada uno)
+        👥 Distribución entre Socios
     </div>
     <div class="card-body p-0">
         <table class="table table-hover mb-0">
             <thead style="background:#f8f9fa;">
                 <tr>
                     <th class="ps-3">Socio</th>
-                    <th class="text-end">Parte alícuota (balance/3)</th>
-                    <th class="text-end">Pago como docente</th>
+                    <th class="text-end">Parte alícuota</th>
+                    <th class="text-end">Pago docente</th>
+                    <th class="text-end text-warning">Reembolsos</th>
                     <th class="text-end fw-bold">Total a recibir</th>
-                    <th class="text-center">Estado</th>
                 </tr>
             </thead>
             <tbody>
@@ -107,15 +129,11 @@
                         ${{ "%.2f"|format(s.parte_alicuota) }}
                     </td>
                     <td class="text-end text-primary">${{ "%.2f"|format(s.pago_docente) }}</td>
+                    <td class="text-end text-warning fw-bold">
+                        {% if s.reembolso > 0 %}+${{ "%.2f"|format(s.reembolso) }}{% else %}-{% endif %}
+                    </td>
                     <td class="text-end fw-bold fs-6 {{ 'text-success' if s.neto>=0 else 'text-danger' }}">
                         ${{ "%.2f"|format(s.neto) }}
-                    </td>
-                    <td class="text-center">
-                        {% if s.neto >= 0 %}
-                        <span class="badge bg-success">A favor del socio</span>
-                        {% else %}
-                        <span class="badge bg-danger">Socio debe aportar</span>
-                        {% endif %}
                     </td>
                 </tr>
                 {% endfor %}
@@ -125,13 +143,53 @@
                     <td class="ps-3">TOTAL</td>
                     <td class="text-end">${{ "%.2f"|format(balance) }}</td>
                     <td class="text-end text-primary">${{ "%.2f"|format(total_pago_docentes) }}</td>
-                    <td class="text-end fs-6">${{ "%.2f"|format(distribucion_socios|sum(attribute='neto')) }}</td>
-                    <td></td>
+                    <td class="text-end text-warning">${{ "%.2f"|format(distribucion_socios|sum(attribute='reembolso')) }}</td>
+                    <td class="text-end">${{ "%.2f"|format(distribucion_socios|sum(attribute='neto')) }}</td>
                 </tr>
             </tfoot>
         </table>
     </div>
 </div>
+
+<!-- Reembolsos pendientes del período -->
+{% set gastos_con_reembolso = gastos | selectattr('reembolso') | list %}
+{% if gastos_con_reembolso %}
+<div class="card shadow border-0 mb-4" style="border-radius:15px;">
+    <div class="card-header text-white fw-bold" style="background:linear-gradient(135deg,#f57c00,#e65100); border-radius:15px 15px 0 0;">
+        💸 Reembolsos incluidos en este período
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-sm table-hover mb-0">
+            <thead style="background:#f8f9fa;">
+                <tr>
+                    <th class="ps-3">Fecha</th>
+                    <th>Concepto</th>
+                    <th>Pagó</th>
+                    <th>Reembolsar a</th>
+                    <th class="text-end">Monto</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for g in gastos_con_reembolso %}
+                <tr>
+                    <td class="ps-3">{{ g['fecha'] }}</td>
+                    <td>{{ g['concepto'] }}</td>
+                    <td>{{ g.get('persona','') }}</td>
+                    <td><span class="badge bg-warning text-dark">{{ g.get('reembolsado_a','') }}</span></td>
+                    <td class="text-end fw-bold text-warning">${{ "%.2f"|format(g['monto']) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot style="background:#f8f9fa; font-weight:bold;">
+                <tr>
+                    <td colspan="4" class="ps-3">Total reembolsos del período</td>
+                    <td class="text-end text-warning">${{ "%.2f"|format(gastos_con_reembolso | sum(attribute='monto')) }}</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+{% endif %}
 
 <!-- Detalle pago por docente -->
 {% if pago_por_docente %}
@@ -171,7 +229,7 @@
     <div class="card-body p-0">
         <table class="table table-sm table-hover mb-0">
             <thead style="background:#f8f9fa;">
-                <tr><th class="ps-3">Fecha pago</th><th>Concepto</th><th>Categoría</th><th>Persona</th><th class="text-end">Monto</th></tr>
+                <tr><th class="ps-3">Fecha</th><th>Concepto</th><th>Categoría</th><th>Persona</th><th class="text-center">Reembolso</th><th class="text-end">Monto</th></tr>
             </thead>
             <tbody>
                 {% for g in gastos %}
@@ -180,18 +238,23 @@
                     <td>{{ g['concepto'] }}</td>
                     <td><span class="badge bg-secondary">{{ g.get('categoria','') }}</span></td>
                     <td>{{ g.get('persona','') }}</td>
+                    <td class="text-center">
+                        {% if g.get('reembolso') %}
+                        <span class="badge bg-warning text-dark">↩ {{ g.get('reembolsado_a','') }}</span>
+                        {% else %}-{% endif %}
+                    </td>
                     <td class="text-end">${{ "%.2f"|format(g['monto']) }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
             <tfoot style="background:#f8f9fa; font-weight:bold;">
-                <tr><td colspan="4" class="ps-3">Total gastos</td><td class="text-end">${{ "%.2f"|format(total_gastos) }}</td></tr>
+                <tr><td colspan="5" class="ps-3">Total gastos</td><td class="text-end">${{ "%.2f"|format(total_gastos) }}</td></tr>
             </tfoot>
         </table>
     </div>
 </div>
 {% else %}
-<div class="alert alert-info">No hay gastos registrados para este período. Verifica que los gastos tengan el período correcto asignado.</div>
+<div class="alert alert-info">No hay gastos registrados para este período.</div>
 {% endif %}
 
 {% endblock %}
