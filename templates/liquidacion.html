@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+{% block title %}Liquidación - Atlas{% endblock %}
+
+{% block content %}
+<h3>⚖️ Liquidación Mensual</h3>
+
+<!-- Filtros y saldo -->
+<div class="card shadow border-0 mb-4" style="border-radius:15px;">
+    <div class="card-body">
+        <form method="GET" class="row g-3 align-items-end">
+            <div class="col-auto">
+                <label class="form-label fw-bold">Mes</label>
+                <select name="mes" class="form-select">
+                    {% for m in range(1,13) %}
+                    <option value="{{ m }}" {{ 'selected' if m==mes }}>{{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][m-1] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <label class="form-label fw-bold">Año</label>
+                <select name="anio" class="form-select">
+                    {% for a in range(2025,2031) %}
+                    <option value="{{ a }}" {{ 'selected' if a==anio }}>{{ a }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <label class="form-label fw-bold">Saldo cuenta de ahorros ($)</label>
+                <input type="number" name="saldo_cuenta" class="form-control" step="0.01" value="{{ saldo_cuenta }}" placeholder="0.00">
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary">🔄 Calcular</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Resumen financiero -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm text-center p-3" style="border-radius:12px; background:#e8f5e9;">
+            <div style="font-size:28px; font-weight:700; color:#2e7d32;">${{ "%.2f"|format(total_ingresos) }}</div>
+            <small class="text-muted">Ingresos del mes</small>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm text-center p-3" style="border-radius:12px; background:#ffebee;">
+            <div style="font-size:28px; font-weight:700; color:#c62828;">${{ "%.2f"|format(total_gastos) }}</div>
+            <small class="text-muted">Gastos del período</small>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm text-center p-3" style="border-radius:12px; background:#fff3e0;">
+            <div style="font-size:28px; font-weight:700; color:#e65100;">${{ "%.2f"|format(total_pago_docentes) }}</div>
+            <small class="text-muted">Pago a docentes</small>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm text-center p-3" style="border-radius:12px; background:{{ '#e3f2fd' if balance>=0 else '#ffebee' }};">
+            <div style="font-size:28px; font-weight:700; color:{{ '#1565c0' if balance>=0 else '#c62828' }};">${{ "%.2f"|format(balance) }}</div>
+            <small class="text-muted">Balance disponible</small>
+        </div>
+    </div>
+</div>
+
+<!-- Cálculo -->
+<div class="card shadow border-0 mb-4" style="border-radius:15px;">
+    <div class="card-header text-white fw-bold" style="background:linear-gradient(135deg,#1a73e8,#0d47a1); border-radius:15px 15px 0 0;">
+        📊 Cálculo de Liquidación — {{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][mes-1] }} {{ anio }}
+    </div>
+    <div class="card-body">
+        <table class="table table-sm">
+            <tbody>
+                <tr><td>Saldo cuenta de ahorros</td><td class="text-end fw-bold">${{ "%.2f"|format(saldo_cuenta) }}</td></tr>
+                <tr class="text-danger"><td>(-) Total gastos del período</td><td class="text-end">-${{ "%.2f"|format(total_gastos) }}</td></tr>
+                <tr class="text-warning"><td>(-) Total pago docentes</td><td class="text-end">-${{ "%.2f"|format(total_pago_docentes) }}</td></tr>
+                <tr class="fw-bold border-top" style="font-size:16px;">
+                    <td>Balance a distribuir</td>
+                    <td class="text-end {{ 'text-success' if balance>=0 else 'text-danger' }}">${{ "%.2f"|format(balance) }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Distribución socios -->
+<div class="card shadow border-0 mb-4" style="border-radius:15px;">
+    <div class="card-header text-white fw-bold" style="background:linear-gradient(135deg,#6f42c1,#4527a0); border-radius:15px 15px 0 0;">
+        👥 Distribución entre Socios (33.33% cada uno)
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+            <thead style="background:#f8f9fa;">
+                <tr>
+                    <th class="ps-3">Socio</th>
+                    <th class="text-end">Parte alícuota (balance/3)</th>
+                    <th class="text-end">Pago como docente</th>
+                    <th class="text-end fw-bold">Total a recibir</th>
+                    <th class="text-center">Estado</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in distribucion_socios %}
+                <tr>
+                    <td class="ps-3 fw-bold">{{ s.nombre }}</td>
+                    <td class="text-end {{ 'text-success' if s.parte_alicuota>=0 else 'text-danger' }}">
+                        ${{ "%.2f"|format(s.parte_alicuota) }}
+                    </td>
+                    <td class="text-end text-primary">${{ "%.2f"|format(s.pago_docente) }}</td>
+                    <td class="text-end fw-bold fs-6 {{ 'text-success' if s.neto>=0 else 'text-danger' }}">
+                        ${{ "%.2f"|format(s.neto) }}
+                    </td>
+                    <td class="text-center">
+                        {% if s.neto >= 0 %}
+                        <span class="badge bg-success">A favor del socio</span>
+                        {% else %}
+                        <span class="badge bg-danger">Socio debe aportar</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot style="background:#f8f9fa; font-weight:bold;">
+                <tr>
+                    <td class="ps-3">TOTAL</td>
+                    <td class="text-end">${{ "%.2f"|format(balance) }}</td>
+                    <td class="text-end text-primary">${{ "%.2f"|format(total_pago_docentes) }}</td>
+                    <td class="text-end fs-6">${{ "%.2f"|format(distribucion_socios|sum(attribute='neto')) }}</td>
+                    <td></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+
+<!-- Detalle pago por docente -->
+{% if pago_por_docente %}
+<div class="card shadow border-0 mb-4" style="border-radius:15px;">
+    <div class="card-header text-white fw-bold" style="background:linear-gradient(135deg,#17a2b8,#00695c); border-radius:15px 15px 0 0;">
+        👨‍🏫 Detalle Pago por Docente
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+            <thead style="background:#f8f9fa;"><tr><th class="ps-3">Docente</th><th class="text-end">Monto</th><th class="text-center">Es socio</th></tr></thead>
+            <tbody>
+                {% for docente, monto in pago_por_docente.items() %}
+                <tr>
+                    <td class="ps-3">{{ docente }}</td>
+                    <td class="text-end">${{ "%.2f"|format(monto) }}</td>
+                    <td class="text-center">
+                        {% if docente in ['Carmen Reinoso', 'Rosalía Moscoso', 'Marco Antonio Posligua'] %}
+                        <span class="badge bg-primary">Sí</span>
+                        {% else %}
+                        <span class="badge bg-secondary">No</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- Detalle gastos del período -->
+{% if gastos %}
+<div class="card shadow border-0 mb-4" style="border-radius:15px;">
+    <div class="card-header text-white fw-bold" style="background:linear-gradient(135deg,#dc3545,#b71c1c); border-radius:15px 15px 0 0;">
+        📋 Gastos del Período
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-sm table-hover mb-0">
+            <thead style="background:#f8f9fa;">
+                <tr><th class="ps-3">Fecha pago</th><th>Concepto</th><th>Categoría</th><th>Persona</th><th class="text-end">Monto</th></tr>
+            </thead>
+            <tbody>
+                {% for g in gastos %}
+                <tr>
+                    <td class="ps-3">{{ g['fecha'] }}</td>
+                    <td>{{ g['concepto'] }}</td>
+                    <td><span class="badge bg-secondary">{{ g.get('categoria','') }}</span></td>
+                    <td>{{ g.get('persona','') }}</td>
+                    <td class="text-end">${{ "%.2f"|format(g['monto']) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot style="background:#f8f9fa; font-weight:bold;">
+                <tr><td colspan="4" class="ps-3">Total gastos</td><td class="text-end">${{ "%.2f"|format(total_gastos) }}</td></tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-info">No hay gastos registrados para este período. Verifica que los gastos tengan el período correcto asignado.</div>
+{% endif %}
+
+{% endblock %}

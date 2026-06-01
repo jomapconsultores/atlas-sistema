@@ -64,6 +64,7 @@ PROFESORES = ['Carmen Reinoso', 'Rosalía Moscoso', 'Marco Antonio Posligua',
               'Edwin Rumipulla', 'Catherine Alvear', 'Alexander Nivelo',
               'Daniel Castillo', 'Johanna Nievecela']
 ENCARGADOS = ['CARMEN', 'ROSALÍA', 'EDWIN', 'MAP', 'JOHANNA']
+SOCIOS = ['Carmen Reinoso', 'Rosalía Moscoso', 'Marco Antonio Posligua']
 
 # ========== CONSTANTES DE PAGOS ==========
 PAGO_DOCENCIA_POR_HORA = 7
@@ -1366,11 +1367,14 @@ def gestion_gastos():
     if request.method == 'POST':
         fecha = request.form['fecha']
         fecha_obj = datetime.strptime(fecha, '%Y-%m-%d')
+        mes_periodo = int(request.form.get('mes_periodo', fecha_obj.month))
+        anio_periodo = int(request.form.get('anio_periodo', fecha_obj.year))
         supabase.table('gastos').insert({
             'concepto': request.form['concepto'], 'monto': float(request.form['monto']),
             'fecha': fecha, 'categoria': request.form.get('categoria', ''),
             'persona': request.form.get('persona', ''), 'reembolso': request.form.get('reembolso') == 'true',
-            'registrado_por': current_user.nombre, 'mes': fecha_obj.month, 'anio': fecha_obj.year
+            'registrado_por': current_user.nombre, 'mes': fecha_obj.month, 'anio': fecha_obj.year,
+            'mes_periodo': mes_periodo, 'anio_periodo': anio_periodo
         }).execute()
         flash('✅ Gasto registrado', 'success')
         return redirect(url_for('gestion_gastos'))
@@ -1446,6 +1450,72 @@ def gestion_gastos():
 def eliminar_gasto(id):
     supabase.table('gastos').delete().eq('id', id).execute()
     return jsonify({'success': True})
+
+# ========== LIQUIDACIÓN ==========
+@app.route('/liquidacion', methods=['GET', 'POST'])
+@login_required
+@socio_admin_required
+def liquidacion():
+    mes = int(request.args.get('mes', date.today().month))
+    anio = int(request.args.get('anio', date.today().year))
+    saldo_cuenta = float(request.args.get('saldo_cuenta', 0))
+
+    _, ultimo_dia = monthrange(anio, mes)
+
+    # Gastos del período (filtrados por mes_periodo/anio_periodo)
+    gastos_periodo = supabase.table('gastos').select('*').eq('mes_periodo', mes).eq('anio_periodo', anio).order('fecha', desc=True).execute()
+    total_gastos = sum(g.get('monto', 0) or 0 for g in (gastos_periodo.data or []))
+    gastos_por_cat = {}
+    for g in (gastos_periodo.data or []):
+        cat = g.get('categoria', 'Sin categoría')
+        gastos_por_cat[cat] = gastos_por_cat.get(cat, 0) + (g.get('monto', 0) or 0)
+
+    # Ingresos del período (pagos recibidos)
+    pagos_mes = supabase.table('pagos').select('*').gte('fecha_pago', f"{anio}-{mes:02d}-01").lte('fecha_pago', f"{anio}-{mes:02d}-{ultimo_dia}").execute()
+    total_ingresos = sum(p.get('monto', 0) or 0 for p in (pagos_mes.data or []))
+
+    # Pago a docentes del período
+    sesiones_mes = supabase.table('sesiones').select('*').in_('estado', ['Realizado', 'Cancelado-Pagado']).gte('fecha', f"{anio}-{mes:02d}-01").lte('fecha', f"{anio}-{mes:02d}-{ultimo_dia}").execute()
+
+    pago_por_docente = {}
+    total_pago_docentes = 0
+    for s in (sesiones_mes.data or []):
+        prof = s.get('profesor_terapeuta', 'Desconocido')
+        tipo = s.get('tipo_sesion', 'clase')
+        horas = s.get('horas', 0) or 0
+        valor = s.get('valor_total', 0) or 0
+        estado = s.get('estado', '')
+        if estado == 'Cancelado-Pagado':
+            pago = s.get('valor_pagar_docente', 0) or 0
+        elif tipo in ['clase', 'preuniversitario']:
+            pago = horas * PAGO_DOCENCIA_POR_HORA
+        else:
+            pago = valor * PORCENTAJE_PSICOLOGIA
+        pago_por_docente[prof] = pago_por_docente.get(prof, 0) + pago
+        total_pago_docentes += pago
+
+    # Balance: saldo cuenta - gastos - pago docentes
+    balance = saldo_cuenta - total_gastos - total_pago_docentes
+
+    # Distribución entre los 3 socios
+    parte_por_socio = balance / 3
+    distribucion_socios = []
+    for socio in SOCIOS:
+        pago_docente_socio = pago_por_docente.get(socio, 0)
+        neto = parte_por_socio + pago_docente_socio
+        distribucion_socios.append({
+            'nombre': socio,
+            'parte_alicuota': parte_por_socio,
+            'pago_docente': pago_docente_socio,
+            'neto': neto
+        })
+
+    return render_template('liquidacion.html',
+        mes=mes, anio=anio, saldo_cuenta=saldo_cuenta,
+        gastos=gastos_periodo.data or [], total_gastos=total_gastos, gastos_por_cat=gastos_por_cat,
+        total_ingresos=total_ingresos, total_pago_docentes=total_pago_docentes,
+        pago_por_docente=pago_por_docente, balance=balance,
+        distribucion_socios=distribucion_socios)
 
 # ========== ESTUDIANTES ==========
 @app.route('/estudiantes', methods=['GET', 'POST'])
