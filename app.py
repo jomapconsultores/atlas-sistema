@@ -1444,19 +1444,58 @@ def gestion_gastos():
             pagos_docentes_detalle[nombre]['fecha_pago'] = f.get('fecha_pago')
             pagos_docentes_detalle[nombre]['pagado'] = f.get('pagado', False)
     
-    return render_template('gastos.html', 
+    # Reembolsos pendientes (todos los períodos, no pagados)
+    try:
+        reembolsos_pend = supabase.table('gastos').select('*').eq('reembolso', True).neq('reembolso_pagado', True).order('fecha', desc=True).execute()
+    except Exception:
+        reembolsos_pend = supabase.table('gastos').select('*').eq('reembolso', True).order('fecha', desc=True).execute()
+
+    return render_template('gastos.html',
                          gastos=gastos.data or [], total=total, mes=mes, anio=anio, today=date.today(),
                          pagos_docentes_detalle=pagos_docentes_detalle,
                          total_pago_docentes_mes=total_pago_docentes_mes,
                          total_docencia_mes=total_docencia_mes,
                          total_psicologia_mes=total_psicologia_mes,
-                         total_sesiones_docentes=total_sesiones_docentes)
+                         total_sesiones_docentes=total_sesiones_docentes,
+                         reembolsos_pend=reembolsos_pend.data or [],
+                         socios=SOCIOS)
 
 @app.route('/api/gasto/<int:id>/eliminar', methods=['POST'])
 @login_required
 def eliminar_gasto(id):
     supabase.table('gastos').delete().eq('id', id).execute()
     return jsonify({'success': True})
+
+@app.route('/api/gasto/<int:id>/reembolso', methods=['POST'])
+@login_required
+@socio_admin_required
+def api_actualizar_reembolso(id):
+    data = request.get_json()
+    update = {}
+    if 'reembolsado_a' in data:
+        update['reembolsado_a'] = data['reembolsado_a'] or None
+    if 'reembolso' in data:
+        update['reembolso'] = bool(data['reembolso'])
+    try:
+        supabase.table('gastos').update(update).eq('id', id).execute()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/gasto/<int:id>/marcar-reembolso-pagado', methods=['POST'])
+@login_required
+@socio_admin_required
+def api_marcar_reembolso_pagado(id):
+    data = request.get_json() or {}
+    fecha = data.get('fecha', date.today().isoformat())
+    try:
+        supabase.table('gastos').update({
+            'reembolso_pagado': True,
+            'fecha_reembolso_pagado': fecha
+        }).eq('id', id).execute()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 # ========== LIQUIDACIÓN ==========
 @app.route('/liquidacion', methods=['GET', 'POST'])

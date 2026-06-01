@@ -262,37 +262,74 @@
             </div>
         </div>
         
-        <!-- REEMBOLSOS PENDIENTES -->
-        <div class="card shadow border-0 mt-3" style="border-radius: 15px; overflow: hidden;">
-            <div class="card-header bg-gradient text-white" style="background: linear-gradient(135deg, #ffc107, #f57f17);">
-                <strong>🔄 Reembolsos Pendientes</strong>
-            </div>
-            <div class="card-body p-2">
-                {% set reembolsos = gastos|selectattr('reembolso', 'equalto', True)|list %}
-                {% if reembolsos %}
-                <table class="table table-sm table-borderless mb-0">
-                    <thead><tr><th>Persona</th><th>Concepto</th><th class="text-end">Monto</th><th>Reembolsar a</th></tr></thead>
-                    <tbody>
-                        {% for r in reembolsos %}
-                        <tr>
-                            <td>{{ r.get('persona', '') }}</td>
-                            <td>{{ r['concepto'][:25] }}</td>
-                            <td class="text-end">${{ "%.2f"|format(r['monto']) }}</td>
-                            <td><strong>{{ r.get('reembolsado_a', r.get('persona', '')) }}</strong></td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                    <tfoot>
-                        <tr class="fw-bold"><td colspan="2">Total</td><td class="text-end" colspan="2">${{ "%.2f"|format(reembolsos|sum(attribute='monto')) }}</td></tr>
-                    </tfoot>
-                </table>
-                {% else %}
-                <p class="text-muted text-center mb-0">No hay reembolsos pendientes</p>
-                {% endif %}
-            </div>
-        </div>
     </div>
 </div>
+
+<!-- GESTIÓN DE REEMBOLSOS (admin/socio) -->
+{% if current_user.rol in ['admin', 'socio'] %}
+<div class="card shadow border-0 mt-4" style="border-radius:15px; overflow:hidden;">
+    <div class="card-header text-white d-flex justify-content-between align-items-center" style="background:linear-gradient(135deg,#f57c00,#e65100);">
+        <strong>💸 Gestión de Reembolsos Pendientes</strong>
+        {% if reembolsos_pend %}
+        <span class="badge bg-light text-danger fs-6">${{ "%.2f"|format(reembolsos_pend|sum(attribute='monto')) }}</span>
+        {% endif %}
+    </div>
+    <div class="card-body p-0">
+        {% if reembolsos_pend %}
+        <table class="table table-hover table-sm mb-0">
+            <thead style="background:#f8f9fa;">
+                <tr>
+                    <th class="ps-3">Fecha</th>
+                    <th>Concepto</th>
+                    <th>Categoría</th>
+                    <th>Pagó</th>
+                    <th>Reembolsar a</th>
+                    <th class="text-end">Monto</th>
+                    <th class="text-center">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in reembolsos_pend %}
+                <tr id="reembolso-fila-{{ r['id'] }}">
+                    <td class="ps-3 text-muted small">{{ r['fecha'] }}</td>
+                    <td>{{ r['concepto'][:35] }}{% if r['concepto']|length > 35 %}…{% endif %}</td>
+                    <td><span class="badge bg-secondary">{{ r.get('categoria','') }}</span></td>
+                    <td>{{ r.get('persona','—') }}</td>
+                    <td>
+                        <select class="form-select form-select-sm border-0 shadow-sm" style="min-width:160px;"
+                            onchange="actualizarReembolsadoA({{ r['id'] }}, this.value)">
+                            <option value="">Sin asignar</option>
+                            {% for s in socios %}
+                            <option value="{{ s }}" {{ 'selected' if r.get('reembolsado_a') == s }}>{{ s }}</option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td class="text-end fw-bold text-warning">${{ "%.2f"|format(r['monto']) }}</td>
+                    <td class="text-center">
+                        <button class="btn btn-success btn-sm shadow-sm" onclick="marcarReembolsoPagado({{ r['id'] }})" title="Marcar como pagado">
+                            ✅ Pagado
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot style="background:#f8f9fa; font-weight:bold;">
+                <tr>
+                    <td colspan="5" class="ps-3">Total pendiente de reembolso</td>
+                    <td class="text-end text-warning">${{ "%.2f"|format(reembolsos_pend|sum(attribute='monto')) }}</td>
+                    <td></td>
+                </tr>
+            </tfoot>
+        </table>
+        {% else %}
+        <div class="text-center py-4 text-muted">
+            <i class="bi bi-check-circle" style="font-size:32px; color:#28a745;"></i>
+            <p class="mt-2 mb-0">No hay reembolsos pendientes</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
 
 <!-- MODAL DE EDICIÓN RÁPIDA -->
 <div class="modal fade" id="modalEdicionRapida" tabindex="-1">
@@ -454,11 +491,32 @@ async function guardarTogglePagado(nombre) {
 }
 
 // Cargar sugerencias
-const personas = new Set();
-{% for g in gastos %}
-    {% if g.get('persona') %}personas.add('{{ g['persona'] }}');{% endif %}
-    {% if g.get('reembolsado_a') %}personas.add('{{ g['reembolsado_a'] }}');{% endif %}
-{% endfor %}
-document.getElementById('listaPersonas').innerHTML = [...personas].map(p => `<option value="${p}">`).join('');
+async function actualizarReembolsadoA(id, valor) {
+    const r = await fetch('/api/gasto/' + id + '/reembolso', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({reembolsado_a: valor})
+    });
+    const res = await r.json();
+    if (!res.success) alert('❌ Error al guardar');
+}
+
+async function marcarReembolsoPagado(id) {
+    if (!confirm('¿Confirmar que este reembolso ya fue pagado?')) return;
+    const hoy = new Date().toISOString().split('T')[0];
+    const r = await fetch('/api/gasto/' + id + '/marcar-reembolso-pagado', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({fecha: hoy})
+    });
+    const res = await r.json();
+    if (res.success) {
+        const fila = document.getElementById('reembolso-fila-' + id);
+        if (fila) { fila.style.opacity = '0.4'; fila.style.transition = 'opacity 0.4s'; }
+        setTimeout(() => location.reload(), 500);
+    } else {
+        alert('❌ Error: ' + (res.error || 'No se pudo marcar'));
+    }
+}
 </script>
 {% endblock %}
