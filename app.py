@@ -1017,7 +1017,7 @@ def mis_anticipos():
             elif tipo in ['clase', 'preuniversitario']:
                 total_pagar_mes += (s.get('horas', 0) or 0) * 7
             else:
-                total_pagar_mes += (s.get('valor_total', 0) or 0) * 0.4018
+                total_pagar_mes += (s.get('valor_total', 0) or 0) * PORCENTAJE_PSICOLOGIA
     anticipos_aprobados = sum(a.get('monto', 0) for a in (anticipos.data or []) if a.get('estado') == 'aprobado')
     return render_template('mis_anticipos.html',
                          anticipos=anticipos.data or [],
@@ -1276,7 +1276,7 @@ def reportes():
                     total_docencia += pago_docente
                 else:
                     pago_docente = 0
-                    pago_psicologia = valor * 0.4018
+                    pago_psicologia = valor * PORCENTAJE_PSICOLOGIA
                     total_psicologia += pago_psicologia
             
             total_pagar = pago_docente + pago_psicologia
@@ -1810,7 +1810,7 @@ def mi_reporte():
             elif tipo in ['clase', 'preuniversitario']:
                 mi_pago = horas * 7
             else:
-                mi_pago = valor * 0.4018
+                mi_pago = valor * PORCENTAJE_PSICOLOGIA
                 
             total_a_pagar += mi_pago
             total_horas += horas
