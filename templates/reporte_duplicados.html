@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Reporte Clases Grupales - Atlas{% endblock %}
+
+{% block content %}
+<style>
+    .card { border-radius:16px; border:none; box-shadow:0 3px 15px rgba(0,0,0,0.06); }
+    .card-header { padding:14px 20px; font-weight:700; font-size:15px; border-radius:16px 16px 0 0 !important; }
+    .bg-danger { background:linear-gradient(135deg,#dc3545,#a71d2a) !important; }
+    .bg-warning { background:linear-gradient(135deg,#f4b400,#e65100) !important; }
+    .table thead th { background:#1a1a2e; color:white; font-weight:600; font-size:11px; border:none; padding:10px 12px; text-transform:uppercase; letter-spacing:0.5px; }
+    .table tbody td { padding:8px 12px; vertical-align:middle; font-size:13px; }
+    .badge { padding:5px 10px; border-radius:12px; font-size:10px; font-weight:600; }
+</style>
+
+<h3>🔍 Reporte de Clases Grupales — Pagos Docentes</h3>
+<p class="text-muted">Muestra sesiones donde el mismo docente enseñó a múltiples estudiantes en el mismo horario.<br>
+El pago al docente se calcula <strong>una sola vez por sesión física</strong>, independientemente del número de estudiantes.</p>
+
+{% if duplicados %}
+<div class="card shadow mb-4">
+    <div class="card-header bg-danger text-white">
+        ⚠️ Clases grupales detectadas: <strong>{{ duplicados|length }}</strong> &nbsp;|&nbsp; Diferencia total corregida: <strong>${{ "%.2f"|format(total_sobrepago) }}</strong>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered mb-0">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Horario</th>
+                        <th>Docente</th>
+                        <th>Asignatura</th>
+                        <th>Estudiantes</th>
+                        <th class="text-center">Horas</th>
+                        <th class="text-end">Pago correcto</th>
+                        <th class="text-end">Pago sin corrección</th>
+                        <th class="text-end text-danger">Diferencia</th>
+                        <th>IDs sesión</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for d in duplicados %}
+                <tr>
+                    <td>{{ d.fecha }}</td>
+                    <td class="text-nowrap">{{ d.hora_inicio }}–{{ d.hora_fin }}</td>
+                    <td><strong>{{ d.profesor }}</strong></td>
+                    <td>{{ d.asignatura }}</td>
+                    <td>
+                        {% for est in d.estudiantes %}
+                            <span class="badge bg-secondary">{{ est }}</span>
+                        {% endfor %}
+                    </td>
+                    <td class="text-center">{{ d.horas }}h</td>
+                    <td class="text-end text-success fw-bold">${{ "%.2f"|format(d.pago_correcto) }}</td>
+                    <td class="text-end text-muted">${{ "%.2f"|format(d.pago_anterior) }}</td>
+                    <td class="text-end text-danger fw-bold">${{ "%.2f"|format(d.sobrepago) }}</td>
+                    <td class="text-muted small">{{ d.ids|join(', ') }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+                <tfoot class="table-dark">
+                    <tr>
+                        <td colspan="6"><strong>TOTAL DIFERENCIA CORREGIDA</strong></td>
+                        <td colspan="2"></td>
+                        <td class="text-end text-warning fw-bold">${{ "%.2f"|format(total_sobrepago) }}</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+<div class="alert" style="background:#fff8e1;border:1px solid #f4b400;color:#1a1a1a;border-radius:12px;">
+    <strong>ℹ️ ¿Qué significa esto?</strong><br>
+    Estos registros son <strong>clases grupales legítimas</strong> donde un docente atendió a varios estudiantes simultáneamente.
+    El sistema ahora calcula el pago docente <strong>una sola vez por sesión física</strong> en todos los módulos
+    (Módulo 5, Reportes, Gastos, Liquidación, Mis Anticipos, Mi Reporte).
+    La columna <em>Diferencia</em> muestra cuánto se habría pagado de más antes de la corrección.
+</div>
+{% else %}
+<div class="alert alert-success" style="color:#1a1a1a;">
+    ✅ No se encontraron clases grupales con pago duplicado. Todos los pagos docentes son correctos.
+</div>
+{% endif %}
+{% endblock %}

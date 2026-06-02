@@ -8,6 +8,7 @@ from google_calendar import crear_evento_calendar, eliminar_evento_calendar, cre
 from datetime import datetime, date
 from calendar import monthrange
 from functools import wraps
+import uuid
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -92,6 +93,25 @@ def a_oracion(texto):
 PAGO_DOCENCIA_POR_HORA = 7
 PORCENTAJE_PSICOLOGIA = 0.4018
 COMISION_CLIENTE_EXTERNO = 0.25
+
+def dedup_sesiones_docente(sesiones):
+    """Devuelve una fila por sesión física (profesor+fecha+horario).
+    Evita contar el pago al docente múltiples veces cuando varios
+    estudiantes asisten a la misma clase en el mismo horario."""
+    seen = set()
+    result = []
+    for s in sesiones:
+        gid = s.get('sesion_grupo_id')
+        key = str(gid) if gid else '|'.join([
+            str(s.get('profesor_terapeuta', '')),
+            str(s.get('fecha', '')),
+            str(s.get('hora_inicio', '')),
+            str(s.get('hora_fin', ''))
+        ])
+        if key not in seen:
+            seen.add(key)
+            result.append(s)
+    return result
 
 # ========== CARGAR COSTOS DESDE SUPABASE ==========
 def cargar_costos():
@@ -238,6 +258,7 @@ def modulo1():
                     precio = float(precio_hora)
                     valor_inicial = 0
                 
+                grupo_id = str(uuid.uuid4())
                 estudiantes_nombres = []
                 for est_num in range(1, num_estudiantes + 1):
                     eid = request.form.get(f'estudiante_id_{est_num}', '')
@@ -249,7 +270,8 @@ def modulo1():
                             'horas': horas, 'estado': 'Planificado',
                             'encargado_apertura': encargado, 'precio_hora': precio,
                             'valor_total': valor_inicial, 'cobro_por_sesion': es_terapia,
-                            'estudiante_id': int(eid), 'usuario_id': int(current_user.id)
+                            'estudiante_id': int(eid), 'usuario_id': int(current_user.id),
+                            'sesion_grupo_id': grupo_id
                         }).execute()
                         est_info = supabase.table('estudiantes').select('apellidos, nombres').eq('id', int(eid)).execute()
                         if est_info.data:
@@ -772,7 +794,9 @@ def modulo5():
     total_adeudado = 0
     consolidado = {}
     profesores_lista = set()
-    
+
+    sesiones_data = dedup_sesiones_docente(sesiones_data)
+
     for s in sesiones_data:
         horas = s.get('horas', 0) or 0
         valor = s.get('valor_total', 0) or 0
@@ -1009,13 +1033,13 @@ def mis_anticipos():
     anio_actual = date.today().year
     sesiones = supabase.table('sesiones').select('*').in_('estado', ['Realizado', 'Cancelado-Pagado']).eq('profesor_terapeuta', current_user.nombre).execute()
     total_pagar_mes = 0
-    for s in (sesiones.data or []):
+    for s in dedup_sesiones_docente(sesiones.data or []):
         if s.get('fecha', '')[:7] == f"{anio_actual}-{mes_actual:02d}":
             tipo = s.get('tipo_sesion', 'clase')
             if s.get('estado') == 'Cancelado-Pagado':
                 total_pagar_mes += s.get('valor_pagar_docente', 0) or 0
             elif tipo in ['clase', 'preuniversitario']:
-                total_pagar_mes += (s.get('horas', 0) or 0) * 7
+                total_pagar_mes += (s.get('horas', 0) or 0) * PAGO_DOCENCIA_POR_HORA
             else:
                 total_pagar_mes += (s.get('valor_total', 0) or 0) * PORCENTAJE_PSICOLOGIA
     anticipos_aprobados = sum(a.get('monto', 0) for a in (anticipos.data or []) if a.get('estado') == 'aprobado')
@@ -1252,12 +1276,12 @@ def reportes():
         ingresos_por_tipo['clase'] = ingresos_por_tipo.get('clase', 0) + ejecutado_clases_est
         ingresos_por_tipo['terapia'] = ingresos_por_tipo.get('terapia', 0) + ejecutado_psico_est
         
-        for s in ses_data:
+        for s in dedup_sesiones_docente(ses_data):
             tipo = s.get('tipo_sesion', 'clase')
             valor = s.get('valor_total', 0) or 0
             prof = s.get('profesor_terapeuta', 'Desconocido')
             horas = s.get('horas', 0) or 0
-            
+
             if s['estado'] == 'Cancelado-Pagado':
                 pago_docente = s.get('valor_pagar_docente', 0) or 0
                 valor_atlas = s.get('valor_atlas', 0) or 0
@@ -1432,13 +1456,13 @@ def gestion_gastos():
     total_psicologia_mes = 0
     total_pago_docentes_mes = 0
     
-    for s in (sesiones_mes.data or []):
+    for s in dedup_sesiones_docente(sesiones_mes.data or []):
         tipo = s.get('tipo_sesion', 'clase')
         horas = s.get('horas', 0) or 0
         valor = s.get('valor_total', 0) or 0
         prof = s.get('profesor_terapeuta', 'Desconocido')
         estado = s.get('estado', '')
-        
+
         if prof not in pagos_docentes_detalle:
             pagos_docentes_detalle[prof] = {'pago_docencia': 0, 'pago_psicologia': 0, 'total_pagar': 0, 'sesiones': 0, 'fecha_pago': None, 'pagado': False}
         
@@ -1595,7 +1619,7 @@ def liquidacion():
 
     pago_por_docente = {}
     total_pago_docentes = 0
-    for s in (sesiones_mes.data or []):
+    for s in dedup_sesiones_docente(sesiones_mes.data or []):
         prof = s.get('profesor_terapeuta', 'Desconocido')
         tipo = s.get('tipo_sesion', 'clase')
         horas = s.get('horas', 0) or 0
@@ -1773,7 +1797,7 @@ def mi_reporte():
     for a in (anticipos.data or []):
         anticipos_aprobados += a.get('monto', 0)
     
-    for s in (sesiones.data or []):
+    for s in dedup_sesiones_docente(sesiones.data or []):
         if mes != 0 and s.get('fecha', '') and s['fecha'][:7] != f"{anio}-{mes:02d}":
             continue
         profesor = (s.get('profesor_terapeuta') or '').strip().lower()
@@ -1934,6 +1958,75 @@ def api_toggle_pago_docente():
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+
+# ========== REPORTE DE CLASES GRUPALES / DUPLICADOS ==========
+@app.route('/reporte-duplicados')
+@login_required
+def reporte_duplicados():
+    if current_user.rol not in ['admin', 'socio']:
+        flash('❌ Acceso restringido', 'error')
+        return redirect(url_for('dashboard'))
+
+    sesiones = supabase.table('sesiones').select(
+        'id,fecha,hora_inicio,hora_fin,profesor_terapeuta,estudiante_id,horas,tipo_sesion,estado,valor_total,asignatura,tema_terapia,sesion_grupo_id,estudiantes(nombres,apellidos)'
+    ).in_('estado', ['Realizado', 'Cancelado-Pagado']).order('fecha', desc=True).execute()
+
+    from collections import defaultdict
+    grupos = defaultdict(list)
+    for s in (sesiones.data or []):
+        gid = s.get('sesion_grupo_id')
+        key = str(gid) if gid else '|'.join([
+            str(s.get('profesor_terapeuta', '')),
+            str(s.get('fecha', '')),
+            str(s.get('hora_inicio', '')),
+            str(s.get('hora_fin', ''))
+        ])
+        grupos[key].append(s)
+
+    duplicados = []
+    total_sobrepago = 0.0
+    for key, rows in sorted(grupos.items(), key=lambda x: x[1][0].get('fecha',''), reverse=True):
+        if len(rows) < 2:
+            continue
+        rep = rows[0]
+        horas = rep.get('horas', 0) or 0
+        tipo = rep.get('tipo_sesion', 'clase')
+        if tipo in ['clase', 'preuniversitario']:
+            pago_correcto = horas * PAGO_DOCENCIA_POR_HORA
+            pago_actual   = pago_correcto * len(rows)
+        else:
+            valor = rep.get('valor_total', 0) or 0
+            pago_correcto = round(valor * PORCENTAJE_PSICOLOGIA, 2)
+            pago_actual   = round(pago_correcto * len(rows), 2)
+        sobrepago = round(pago_actual - pago_correcto, 2)
+        total_sobrepago += sobrepago
+
+        estudiantes_lista = []
+        for r in rows:
+            est = r.get('estudiantes') or {}
+            nombre = f"{est.get('apellidos','')} {est.get('nombres','')}".strip() or f"ID {r.get('estudiante_id','?')}"
+            estudiantes_lista.append(nombre)
+
+        duplicados.append({
+            'fecha': rep.get('fecha'),
+            'hora_inicio': (rep.get('hora_inicio') or '')[:5],
+            'hora_fin': (rep.get('hora_fin') or '')[:5],
+            'profesor': rep.get('profesor_terapeuta'),
+            'asignatura': rep.get('asignatura') or rep.get('tema_terapia') or '-',
+            'tipo': tipo,
+            'horas': horas,
+            'num_estudiantes': len(rows),
+            'estudiantes': estudiantes_lista,
+            'pago_correcto': pago_correcto,
+            'pago_anterior': pago_actual,
+            'sobrepago': sobrepago,
+            'ids': [r['id'] for r in rows],
+        })
+
+    return render_template('reporte_duplicados.html',
+                           duplicados=duplicados,
+                           total_sobrepago=round(total_sobrepago, 2))
+
 
 # ========== INICIALIZACIÓN ==========
 if __name__ == '__main__':
