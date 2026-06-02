@@ -659,12 +659,18 @@ def modulo3():
             nuevo_monto = float(request.form['nuevo_monto'])
             cambiado_por = request.form.get('cambiado_por', current_user.nombre)
             motivo = request.form['motivo']
-            supabase.table('pagos').update({'monto': nuevo_monto}).eq('id', pago_id).execute()
+            updates = {'monto': nuevo_monto}
+            if request.form.get('fecha_pago'):
+                updates['fecha_pago'] = request.form['fecha_pago']
+            if request.form.get('tipo_pago'):
+                updates['tipo_pago'] = request.form['tipo_pago']
+            updates['concepto'] = request.form.get('concepto', '')
+            supabase.table('pagos').update(updates).eq('id', pago_id).execute()
             supabase.table('correcciones_pagos').insert({
                 'pago_id': pago_id, 'monto_anterior': 0, 'monto_nuevo': nuevo_monto,
                 'cambiado_por': cambiado_por, 'motivo': motivo
             }).execute()
-            flash('✅ Pago corregido', 'success')
+            flash('✅ Pago editado correctamente', 'success')
         elif accion == 'eliminar_pago':
             pago_id = int(request.form['pago_id'])
             supabase.table('pagos').delete().eq('id', pago_id).execute()
