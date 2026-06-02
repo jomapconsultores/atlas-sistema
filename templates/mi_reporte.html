@@ -125,7 +125,7 @@
                     {% for d in datos %}
                     <tr>
                         <td>{{ d.fecha }}</td>
-                        <td>{{ d.estudiante|title }}</td>
+                        <td>{% if d.es_grupal %}<span class="badge bg-warning text-dark me-1">👥 Grupal</span>{% for e in d.todos_estudiantes %}<span class="badge bg-secondary me-1">{{ e }}</span>{% endfor %}{% else %}{{ d.estudiante|title }}{% endif %}</td>
                         <td>
                             {% if d.tipo == 'clase' %}
                                 <span class="badge bg-primary">📚 Clase</span>

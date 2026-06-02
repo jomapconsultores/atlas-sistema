@@ -793,6 +793,20 @@ def modulo5():
         docente = a.get('usuario_nombre', '')
         anticipos_por_docente[docente] = anticipos_por_docente.get(docente, 0) + a.get('monto', 0)
     
+    # Mapa grupo_id → lista de estudiantes (antes del dedup)
+    estudiantes_por_grupo = {}
+    for _s in sesiones_data:
+        _gid = str(_s.get('sesion_grupo_id') or '|'.join([
+            str(_s.get('profesor_terapeuta','')), str(_s.get('fecha','')),
+            str(_s.get('hora_inicio','')), str(_s.get('hora_fin',''))]))
+        _est = _s.get('estudiantes') or {}
+        _nom = f"{_est.get('apellidos','')} {_est.get('nombres','')}".strip()
+        if _nom:
+            if _gid not in estudiantes_por_grupo:
+                estudiantes_por_grupo[_gid] = []
+            if _nom not in estudiantes_por_grupo[_gid]:
+                estudiantes_por_grupo[_gid].append(_nom)
+
     pagos = []
     total_docencia = 0
     total_psicologia = 0
@@ -839,10 +853,16 @@ def modulo5():
         total_adeudado += total_pagar
         
         est = s.get('estudiantes', {})
+        _gid_key = str(s.get('sesion_grupo_id') or '|'.join([
+            str(s.get('profesor_terapeuta','')), str(s.get('fecha','')),
+            str(s.get('hora_inicio','')), str(s.get('hora_fin',''))]))
+        todos_ests = estudiantes_por_grupo.get(_gid_key, [f"{est.get('apellidos','')} {est.get('nombres','')}".strip()])
         pagos.append({
             'fecha': s['fecha'],
             'profesor': profesor,
             'estudiante': f"{est.get('apellidos', '')} {est.get('nombres', '')}".title(),
+            'todos_estudiantes': [e.title() for e in todos_ests],
+            'es_grupal': len(todos_ests) > 1,
             'tipo': tipo,
             'horas': horas,
             'valor_total': valor,
@@ -1797,11 +1817,25 @@ def mi_reporte():
     nombre_usuario = current_user.nombre.strip().lower()
     palabras_usuario = nombre_usuario.split()
     sesiones = supabase.table('sesiones').select('*, estudiantes(*)').in_('estado', ['Realizado', 'Cancelado-Pagado']).order('fecha', desc=True).execute()
-    
+
+    # Mapa grupo_id → lista de estudiantes para clases grupales
+    _ests_por_grupo_mr = {}
+    for _s in (sesiones.data or []):
+        _gid = str(_s.get('sesion_grupo_id') or '|'.join([
+            str(_s.get('profesor_terapeuta','')), str(_s.get('fecha','')),
+            str(_s.get('hora_inicio','')), str(_s.get('hora_fin',''))]))
+        _est2 = _s.get('estudiantes') or {}
+        _nom2 = f"{_est2.get('apellidos','')} {_est2.get('nombres','')}".strip()
+        if _nom2:
+            if _gid not in _ests_por_grupo_mr:
+                _ests_por_grupo_mr[_gid] = []
+            if _nom2 not in _ests_por_grupo_mr[_gid]:
+                _ests_por_grupo_mr[_gid].append(_nom2)
+
     anticipos = supabase.table('anticipos_solicitudes').select('*').eq('usuario_id', current_user.id).eq('estado', 'aprobado').execute()
     for a in (anticipos.data or []):
         anticipos_aprobados += a.get('monto', 0)
-    
+
     for s in dedup_sesiones_docente(sesiones.data or []):
         if mes != 0 and s.get('fecha', '') and s['fecha'][:7] != f"{anio}-{mes:02d}":
             continue
@@ -1843,9 +1877,15 @@ def mi_reporte():
                 
             total_a_pagar += mi_pago
             total_horas += horas
+            _gid_mr = str(s.get('sesion_grupo_id') or '|'.join([
+                str(s.get('profesor_terapeuta','')), str(s.get('fecha','')),
+                str(s.get('hora_inicio','')), str(s.get('hora_fin',''))]))
+            todos_ests_mr = _ests_por_grupo_mr.get(_gid_mr, [nombre_est])
             datos.append({
                 'fecha': s['fecha'],
                 'estudiante': nombre_est,
+                'todos_estudiantes': [e.title() for e in todos_ests_mr],
+                'es_grupal': len(todos_ests_mr) > 1,
                 'tipo': tipo,
                 'asignatura': s.get('asignatura') or s.get('tema_terapia') or '-',
                 'horas': horas,
