@@ -263,7 +263,7 @@ def modulo1():
                 for est_num in range(1, num_estudiantes + 1):
                     eid = request.form.get(f'estudiante_id_{est_num}', '')
                     if eid and eid != 'nuevo':
-                        supabase.table('sesiones').insert({
+                        datos_sesion = {
                             'tipo_sesion': tipo, 'asignatura': asignatura,
                             'tema_terapia': tema, 'profesor_terapeuta': profesor,
                             'fecha': fecha, 'hora_inicio': h_ini, 'hora_fin': h_fin,
@@ -272,7 +272,12 @@ def modulo1():
                             'valor_total': valor_inicial, 'cobro_por_sesion': es_terapia,
                             'estudiante_id': int(eid), 'usuario_id': int(current_user.id),
                             'sesion_grupo_id': grupo_id
-                        }).execute()
+                        }
+                        try:
+                            supabase.table('sesiones').insert(datos_sesion).execute()
+                        except Exception:
+                            datos_sesion.pop('sesion_grupo_id', None)
+                            supabase.table('sesiones').insert(datos_sesion).execute()
                         est_info = supabase.table('estudiantes').select('apellidos, nombres').eq('id', int(eid)).execute()
                         if est_info.data:
                             nombre_completo = f"{est_info.data[0]['apellidos']} {est_info.data[0]['nombres']}"
@@ -1967,9 +1972,14 @@ def reporte_duplicados():
         flash('❌ Acceso restringido', 'error')
         return redirect(url_for('dashboard'))
 
-    sesiones = supabase.table('sesiones').select(
-        'id,fecha,hora_inicio,hora_fin,profesor_terapeuta,estudiante_id,horas,tipo_sesion,estado,valor_total,asignatura,tema_terapia,sesion_grupo_id,estudiantes(nombres,apellidos)'
-    ).in_('estado', ['Realizado', 'Cancelado-Pagado']).order('fecha', desc=True).execute()
+    try:
+        sesiones = supabase.table('sesiones').select(
+            'id,fecha,hora_inicio,hora_fin,profesor_terapeuta,estudiante_id,horas,tipo_sesion,estado,valor_total,asignatura,tema_terapia,sesion_grupo_id,estudiantes(nombres,apellidos)'
+        ).in_('estado', ['Realizado', 'Cancelado-Pagado']).order('fecha', desc=True).execute()
+    except Exception:
+        sesiones = supabase.table('sesiones').select(
+            'id,fecha,hora_inicio,hora_fin,profesor_terapeuta,estudiante_id,horas,tipo_sesion,estado,valor_total,asignatura,tema_terapia,estudiantes(nombres,apellidos)'
+        ).in_('estado', ['Realizado', 'Cancelado-Pagado']).order('fecha', desc=True).execute()
 
     from collections import defaultdict
     grupos = defaultdict(list)
