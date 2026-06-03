@@ -259,11 +259,22 @@ function validarHoras(sesionNum) {
 const ESTUDIANTES = [{% for e in estudiantes %}{id:{{ e['id'] }}, nombre:"{{ e['apellidos'] }} {{ e['nombres'] }}"},{% endfor %}];
 const PROFESORES = [{% for p in profesores %}"{{ p }}",{% endfor %}];
 const ENCARGADOS = [{% for e in encargados %}"{{ e }}",{% endfor %}];
+const PRECIOS_CLASE = [{% for pr in precios_clase %}{{ pr }},{% endfor %}{% for pr in precios_matricula %}{{ pr }},{% endfor %}{% for pr in precios_pension %}{{ pr }},{% endfor %}];
 
 function mostrarEstudiantes() {
     const num = parseInt(document.getElementById('numEstudiantes').value);
+    const tipo = document.getElementById('tipoSesion').value;
+    const esClase = ['clase','preuniversitario','ambos'].includes(tipo);
+    const precioGlobal = document.querySelector('[name="precio_hora"]')?.value || PRECIOS_CLASE[0] || 10;
     let html = '';
     for (let i = 1; i <= num; i++) {
+        const selectorPrecio = (esClase && num > 1) ? `
+            <div class="mt-1">
+                <label class="form-label small fw-bold text-primary">💰 Precio/hora para este estudiante</label>
+                <select name="precio_hora_${i}" class="form-select form-select-sm">
+                    ${PRECIOS_CLASE.map(pr => `<option value="${pr}" ${pr == precioGlobal ? 'selected' : ''}>$${pr}/h</option>`).join('')}
+                </select>
+            </div>` : '';
         html += `
         <div class="border rounded p-2 mb-2">
             <strong>Estudiante ${i}</strong>
@@ -272,6 +283,7 @@ function mostrarEstudiantes() {
                 ${ESTUDIANTES.map(e => `<option value="${e.id}">${e.nombre}</option>`).join('')}
                 <option value="nuevo">➕ Crear nuevo estudiante</option>
             </select>
+            ${selectorPrecio}
             <div id="nuevoEstudiante_${i}" style="display:none;">
                 <div class="row">
                     <div class="col-md-6"><input type="text" id="nuevo_nombre_${i}" class="form-control mb-1" placeholder="Nombres *"></div>
@@ -326,6 +338,7 @@ function mostrarCampos() {
     document.getElementById('camposClase').style.display = (tipo === 'clase' || tipo === 'ambos' || tipo === 'preuniversitario') ? 'block' : 'none';
     document.getElementById('camposTerapia').style.display = (tipo === 'terapia' || tipo === 'ambos') ? 'block' : 'none';
     document.getElementById('camposPrecio').style.display = (tipo === 'terapia') ? 'none' : 'block';
+    mostrarEstudiantes();
 }
 
 function mostrarFechas() {

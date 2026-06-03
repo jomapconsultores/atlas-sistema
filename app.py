@@ -263,12 +263,18 @@ def modulo1():
                 for est_num in range(1, num_estudiantes + 1):
                     eid = request.form.get(f'estudiante_id_{est_num}', '')
                     if eid and eid != 'nuevo':
+                        # Para clases con múltiples estudiantes se puede pactar un precio distinto por estudiante
+                        if not es_terapia:
+                            precio_est_str = request.form.get(f'precio_hora_{est_num}', '')
+                            precio_est = float(precio_est_str) if precio_est_str else precio
+                        else:
+                            precio_est = precio
                         datos_sesion = {
                             'tipo_sesion': tipo, 'asignatura': asignatura,
                             'tema_terapia': tema, 'profesor_terapeuta': profesor,
                             'fecha': fecha, 'hora_inicio': h_ini, 'hora_fin': h_fin,
                             'horas': horas, 'estado': 'Planificado',
-                            'encargado_apertura': encargado, 'precio_hora': precio,
+                            'encargado_apertura': encargado, 'precio_hora': precio_est,
                             'valor_total': valor_inicial, 'cobro_por_sesion': es_terapia,
                             'estudiante_id': int(eid), 'usuario_id': int(current_user.id),
                             'sesion_grupo_id': grupo_id
