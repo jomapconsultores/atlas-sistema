@@ -273,11 +273,11 @@ function mostrarEstudiantes() {
             <strong class="text-nowrap">💰 ¿Mismo precio para todos?</strong>
             <div class="form-check form-check-inline mb-0">
                 <input class="form-check-input" type="radio" name="mismo_precio" id="mismoPrecioSi" value="si" ${mismoPrecio?'checked':''} onchange="togglePreciosIndividuales()">
-                <label class="form-check-label" for="mismoPrecioSi">Sí — usar <strong>$${precioGlobal}/h</strong> para todos</label>
+                <label class="form-check-label" for="mismoPrecioSi">Sí — precio único (según selección arriba)</label>
             </div>
             <div class="form-check form-check-inline mb-0">
                 <input class="form-check-input" type="radio" name="mismo_precio" id="mismoPrecioNo" value="no" ${!mismoPrecio?'checked':''} onchange="togglePreciosIndividuales()">
-                <label class="form-check-label" for="mismoPrecioNo">No — precios distintos por estudiante</label>
+                <label class="form-check-label" for="mismoPrecioNo">No — precio distinto por estudiante</label>
             </div>
         </div>`;
     }
@@ -286,7 +286,7 @@ function mostrarEstudiantes() {
         const selectorPrecio = (esClase && num > 1) ? `
             <div class="precio-individual mt-1" style="display:${mostrar?'block':'none'};">
                 <label class="form-label small fw-bold text-primary">💰 Precio/hora — Estudiante ${i}</label>
-                <select name="precio_hora_${i}" class="form-select form-select-sm">
+                <select name="precio_hora_${i}" class="form-select form-select-sm" ${!mostrar?'disabled':''}>
                     ${PRECIOS_CLASE.map(pr => `<option value="${pr}" ${pr == precioGlobal ? 'selected' : ''}>$${pr}/h</option>`).join('')}
                 </select>
             </div>` : '';
@@ -359,7 +359,10 @@ function togglePreciosIndividuales() {
     const distintos = document.getElementById('mismoPrecioNo')?.checked;
     document.querySelectorAll('.precio-individual').forEach(el => {
         el.style.display = distintos ? 'block' : 'none';
+        el.querySelectorAll('select').forEach(s => s.disabled = !distintos);
     });
+    const cp = document.getElementById('camposPrecio');
+    if (cp) cp.style.display = distintos ? 'none' : 'block';
 }
 
 function mostrarFechas() {
