@@ -229,7 +229,17 @@
         </div>
     </div>
     
-    <div class="card report-card mb-4">
+    <!-- Botones de navegación rápida -->
+    <div class="d-flex flex-wrap gap-2 mb-3">
+        <a href="/modulo3" class="btn btn-outline-success btn-sm">💰 Pagos Estudiantes</a>
+        <a href="/modulo5" class="btn btn-outline-primary btn-sm">💵 Pagos Docentes</a>
+        <a href="/gastos" class="btn btn-outline-danger btn-sm">📋 Gastos</a>
+        <a href="/liquidacion" class="btn btn-outline-warning btn-sm">⚖️ Liquidación</a>
+        <a href="#seccion-ingresos" class="btn btn-outline-info btn-sm">📊 Ingresos</a>
+        <a href="#seccion-docentes" class="btn btn-outline-secondary btn-sm">👨‍🏫 Docentes</a>
+    </div>
+
+    <div id="seccion-docentes" class="card report-card mb-4">
         <div class="card-header gradient-orange text-white" style="border-radius: 20px 20px 0 0;">
             <strong>💲 Pagos a Docentes y Psicólogos</strong>
         </div>
@@ -266,7 +276,56 @@
             </div>
         </div>
     </div>
-    
+
+    <!-- Reporte de ingresos por estudiante -->
+    <div id="seccion-ingresos" class="card report-card mb-4">
+        <div class="card-header text-white" style="background:linear-gradient(135deg,#0f9d58,#00695c); border-radius:20px 20px 0 0;">
+            <strong>📊 Reporte de Ingresos por Estudiante — {{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][mes-1] }} {{ anio }}</strong>
+        </div>
+        <div class="card-body p-0">
+            {% if datos_ingresos %}
+            <div class="table-responsive">
+                <table class="table table-premium mb-0">
+                    <thead><tr>
+                        <th>Estudiante</th>
+                        <th>Docente</th>
+                        <th class="text-center">Horas</th>
+                        <th class="text-center">Tarifa</th>
+                        <th class="text-end">Total planificado</th>
+                        <th class="text-end">Total pagado</th>
+                        <th class="text-end">Saldo</th>
+                    </tr></thead>
+                    <tbody>
+                        {% for d in datos_ingresos %}
+                        <tr>
+                            <td><strong>{{ d.estudiante }}</strong></td>
+                            <td>{{ d.profesor or '—' }}</td>
+                            <td class="text-center">{{ d.horas }}h</td>
+                            <td class="text-center"><span class="badge bg-secondary">{{ d.tasa }}</span></td>
+                            <td class="text-end">${{ "%.2f"|format(d.cobrar) }}</td>
+                            <td class="text-end text-success">${{ "%.2f"|format(d.pagado) }}</td>
+                            <td class="text-end {% if d.saldo > 0 %}text-danger fw-bold{% elif d.saldo < 0 %}text-success fw-bold{% else %}text-muted{% endif %}">
+                                {% if d.saldo > 0 %}⬆ ${{ "%.2f"|format(d.saldo) }}{% elif d.saldo < 0 %}✅ ${{ "%.2f"|format(d.saldo|abs) }} a favor{% else %}✅ Al día{% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="4"><strong>TOTALES</strong></td>
+                            <td class="text-end"><strong>${{ "%.2f"|format(datos_ingresos|sum(attribute='cobrar')) }}</strong></td>
+                            <td class="text-end text-success"><strong>${{ "%.2f"|format(datos_ingresos|sum(attribute='pagado')) }}</strong></td>
+                            <td class="text-end"><strong>${{ "%.2f"|format(datos_ingresos|sum(attribute='saldo')) }}</strong></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-4 text-muted">Sin datos de ingresos para este período</div>
+            {% endif %}
+        </div>
+    </div>
+
 </div>
 
 <script>

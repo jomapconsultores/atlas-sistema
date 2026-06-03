@@ -62,16 +62,18 @@
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card border-0 shadow-sm text-center p-3" style="border-radius:12px; background:#ffebee;">
+        <a href="#seccion-gastos" style="text-decoration:none;">
+        <div class="card border-0 shadow-sm text-center p-3" style="border-radius:12px; background:#ffebee; cursor:pointer;" title="Ver detalle gastos">
             <div style="font-size:28px; font-weight:700; color:#c62828;">${{ "%.2f"|format(total_gastos) }}</div>
-            <small class="text-muted">Gastos del período</small>
-        </div>
+            <small class="text-muted">Gastos del período ↓</small>
+        </div></a>
     </div>
     <div class="col-md-3">
-        <div class="card border-0 shadow-sm text-center p-3" style="border-radius:12px; background:#fff3e0;">
+        <a href="#seccion-docentes" style="text-decoration:none;">
+        <div class="card border-0 shadow-sm text-center p-3" style="border-radius:12px; background:#fff3e0; cursor:pointer;" title="Ver detalle docentes">
             <div style="font-size:28px; font-weight:700; color:#e65100;">${{ "%.2f"|format(total_pago_docentes) }}</div>
-            <small class="text-muted">Pago a docentes</small>
-        </div>
+            <small class="text-muted">Pago a docentes ↓</small>
+        </div></a>
     </div>
     <div class="col-md-3">
         <div class="card border-0 shadow-sm text-center p-3" style="border-radius:12px; background:{{ '#e3f2fd' if balance>=0 else '#ffebee' }};">
@@ -193,7 +195,7 @@
 
 <!-- Detalle pago por docente -->
 {% if pago_por_docente %}
-<div class="card shadow border-0 mb-4" style="border-radius:15px;">
+<div id="seccion-docentes" class="card shadow border-0 mb-4" style="border-radius:15px;">
     <div class="card-header text-white fw-bold" style="background:linear-gradient(135deg,#17a2b8,#00695c); border-radius:15px 15px 0 0;">
         👨‍🏫 Detalle Pago por Docente
     </div>
@@ -222,7 +224,7 @@
 
 <!-- Detalle gastos del período -->
 {% if gastos %}
-<div class="card shadow border-0 mb-4" style="border-radius:15px;">
+<div id="seccion-gastos" class="card shadow border-0 mb-4" style="border-radius:15px;">
     <div class="card-header text-white fw-bold" style="background:linear-gradient(135deg,#dc3545,#b71c1c); border-radius:15px 15px 0 0;">
         📋 Gastos del Período
     </div>

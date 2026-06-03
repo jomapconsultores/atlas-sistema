@@ -266,11 +266,26 @@ function mostrarEstudiantes() {
     const tipo = document.getElementById('tipoSesion').value;
     const esClase = ['clase','preuniversitario','ambos'].includes(tipo);
     const precioGlobal = document.querySelector('[name="precio_hora"]')?.value || PRECIOS_CLASE[0] || 10;
+    const mismoPrecio = !document.getElementById('mismoPrecioNo')?.checked;
     let html = '';
+    if (esClase && num > 1) {
+        html += `<div class="alert alert-info py-2 px-3 mb-2 d-flex flex-wrap align-items-center gap-3" style="border-radius:10px;">
+            <strong class="text-nowrap">💰 ¿Mismo precio para todos?</strong>
+            <div class="form-check form-check-inline mb-0">
+                <input class="form-check-input" type="radio" name="mismo_precio" id="mismoPrecioSi" value="si" ${mismoPrecio?'checked':''} onchange="togglePreciosIndividuales()">
+                <label class="form-check-label" for="mismoPrecioSi">Sí — usar <strong>$${precioGlobal}/h</strong> para todos</label>
+            </div>
+            <div class="form-check form-check-inline mb-0">
+                <input class="form-check-input" type="radio" name="mismo_precio" id="mismoPrecioNo" value="no" ${!mismoPrecio?'checked':''} onchange="togglePreciosIndividuales()">
+                <label class="form-check-label" for="mismoPrecioNo">No — precios distintos por estudiante</label>
+            </div>
+        </div>`;
+    }
     for (let i = 1; i <= num; i++) {
+        const mostrar = esClase && num > 1 && !mismoPrecio;
         const selectorPrecio = (esClase && num > 1) ? `
-            <div class="mt-1">
-                <label class="form-label small fw-bold text-primary">💰 Precio/hora para este estudiante</label>
+            <div class="precio-individual mt-1" style="display:${mostrar?'block':'none'};">
+                <label class="form-label small fw-bold text-primary">💰 Precio/hora — Estudiante ${i}</label>
                 <select name="precio_hora_${i}" class="form-select form-select-sm">
                     ${PRECIOS_CLASE.map(pr => `<option value="${pr}" ${pr == precioGlobal ? 'selected' : ''}>$${pr}/h</option>`).join('')}
                 </select>
@@ -339,6 +354,12 @@ function mostrarCampos() {
     document.getElementById('camposTerapia').style.display = (tipo === 'terapia' || tipo === 'ambos') ? 'block' : 'none';
     document.getElementById('camposPrecio').style.display = (tipo === 'terapia') ? 'none' : 'block';
     mostrarEstudiantes();
+}
+function togglePreciosIndividuales() {
+    const distintos = document.getElementById('mismoPrecioNo')?.checked;
+    document.querySelectorAll('.precio-individual').forEach(el => {
+        el.style.display = distintos ? 'block' : 'none';
+    });
 }
 
 function mostrarFechas() {
