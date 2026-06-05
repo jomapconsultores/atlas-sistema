@@ -541,7 +541,7 @@
         .sidebar-backdrop.show { opacity: 1; visibility: visible; }
 
         /* Empuje del contenido */
-        body.has-sidebar .main-container { margin-left: var(--sidebar-w); margin-top: var(--nav-h); max-width: calc(1380px); }
+        body.has-sidebar .main-container { margin-left: var(--sidebar-w); margin-top: calc(var(--nav-h) + 26px); max-width: calc(1380px); }
         body.has-sidebar footer { margin-left: var(--sidebar-w); }
 
         @media (max-width: 991px) {
