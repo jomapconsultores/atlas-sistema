@@ -81,10 +81,10 @@
 
 <div class="container-fluid px-0">
     
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="page-hero d-flex justify-content-between align-items-center flex-wrap gap-3">
         <div>
-            <h4 style="font-weight: 800; color: var(--dark); margin: 0;">📊 Dashboard de Reportes</h4>
-            <small class="text-muted">{{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][mes-1] }} {{ anio }}</small>
+            <h2 style="margin:0;">📊 Dashboard de Reportes</h2>
+            <p style="margin:4px 0 0;">{{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][mes-1] }} {{ anio }}</p>
         </div>
         <form class="d-flex gap-2">
             <select name="mes" class="form-select form-select-sm" onchange="this.form.submit()" style="width: 130px;">

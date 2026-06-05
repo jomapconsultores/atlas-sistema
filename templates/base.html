@@ -460,19 +460,113 @@
         }
         .module-grid .btn i,
         .module-grid .btn::before { font-size: 2.2rem; }
+
+        /* ── PAGE HERO (encabezado de módulo) ────────── */
+        .page-hero {
+            background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%);
+            border-radius: var(--radius-lg);
+            padding: 22px 28px;
+            color: #fff;
+            margin-bottom: 22px;
+            box-shadow: var(--shadow-md);
+        }
+        .page-hero h2 { font-weight: 800; font-size: 1.55rem; margin: 0; display: flex; align-items: center; gap: 12px; color: #fff; letter-spacing: -0.5px; }
+        .page-hero h2::before { font-size: inherit; }
+        .page-hero p { margin: 6px 0 0; color: rgba(255,255,255,0.7); font-size: 13px; }
+        .page-hero .hero-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+        /* ── LAYOUT CON SIDEBAR ──────────────────────── */
+        :root { --nav-h: 84px; --sidebar-w: 268px; }
+
+        .navbar-premium { position: fixed; top: 0; left: 0; right: 0; height: var(--nav-h); z-index: 1060; }
+        .navbar-premium > .container-fluid { height: 100%; padding-top: 0 !important; padding-bottom: 0 !important; }
+
+        .app-sidebar {
+            position: fixed;
+            top: var(--nav-h);
+            left: 0;
+            width: var(--sidebar-w);
+            bottom: 0;
+            background: #ffffff;
+            border-right: 1px solid var(--atlas-border);
+            box-shadow: 2px 0 12px rgba(0,0,0,0.03);
+            overflow-y: auto;
+            z-index: 1040;
+            padding: 14px 12px 30px;
+            transition: transform .28s ease;
+        }
+        .app-sidebar .side-section {
+            font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.2px;
+            color: #94a3b8; padding: 16px 12px 6px; margin-top: 4px;
+        }
+        .app-sidebar a, .app-sidebar .nav-group-toggle {
+            display: flex; align-items: center; gap: 11px;
+            width: 100%; text-align: left;
+            padding: 10px 13px; border-radius: 10px;
+            font-size: 13.5px; font-weight: 600; color: var(--atlas-text);
+            text-decoration: none; border: none; background: transparent;
+            transition: all .15s; cursor: pointer; margin-bottom: 2px;
+        }
+        .app-sidebar a:hover, .app-sidebar .nav-group-toggle:hover { background: #f1f5f9; color: var(--atlas-blue); }
+        .app-sidebar a.active { background: linear-gradient(135deg,#1e3a5f,#1e40af); color: #fff; box-shadow: var(--shadow-sm); }
+        .app-sidebar a .ico, .app-sidebar .nav-group-toggle .ico { font-size: 17px; width: 22px; text-align: center; flex-shrink: 0; }
+        .app-sidebar .nav-group-toggle .chev { margin-left: auto; font-size: 11px; transition: transform .2s; color: #94a3b8; }
+        .app-sidebar .nav-group.open .nav-group-toggle .chev { transform: rotate(90deg); }
+        .app-sidebar .nav-group-items { max-height: 0; overflow: hidden; transition: max-height .28s ease; padding-left: 6px; }
+        .app-sidebar .nav-group.open .nav-group-items { max-height: 600px; }
+        .app-sidebar .nav-group-items a {
+            font-size: 12.8px; font-weight: 500; padding: 8px 12px 8px 16px; color: var(--atlas-muted);
+            position: relative; margin-bottom: 1px;
+        }
+        .app-sidebar .nav-group-items a::before {
+            content: ''; width: 6px; height: 6px; border-radius: 50%;
+            background: #cbd5e1; flex-shrink: 0;
+        }
+        .app-sidebar .nav-group-items a:hover { color: var(--atlas-blue); }
+        .app-sidebar .nav-group-items a:hover::before { background: var(--atlas-accent2); }
+        .app-sidebar .nav-group-items a.active { color: #fff; }
+        .app-sidebar .nav-group-items a.active::before { background: var(--atlas-accent); }
+        .app-sidebar .side-badge { margin-left: auto; background: var(--atlas-danger); color:#fff; font-size:10px; font-weight:700; border-radius: 20px; padding: 1px 7px; }
+
+        /* Botón hamburguesa (móvil) */
+        .sidebar-toggle {
+            background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+            color: #fff; border-radius: var(--radius-sm); padding: 8px 12px; font-size: 18px;
+            display: none; align-items: center; cursor: pointer; line-height: 1;
+        }
+        .sidebar-backdrop {
+            position: fixed; inset: 0; background: rgba(15,23,42,0.5); z-index: 1035;
+            opacity: 0; visibility: hidden; transition: opacity .25s;
+        }
+        .sidebar-backdrop.show { opacity: 1; visibility: visible; }
+
+        /* Empuje del contenido */
+        body.has-sidebar .main-container { margin-left: var(--sidebar-w); margin-top: var(--nav-h); max-width: calc(1380px); }
+        body.has-sidebar footer { margin-left: var(--sidebar-w); }
+
+        @media (max-width: 991px) {
+            .app-sidebar { transform: translateX(-100%); width: 280px; }
+            .app-sidebar.open { transform: translateX(0); }
+            .sidebar-toggle { display: inline-flex; }
+            body.has-sidebar .main-container { margin-left: 0; }
+            body.has-sidebar footer { margin-left: 0; }
+        }
     </style>
 </head>
-<body>
+<body class="{% if current_user.is_authenticated %}has-sidebar{% endif %}">
     {% if current_user.is_authenticated %}
     <nav class="navbar-premium">
-        <div class="container-fluid" style="max-width: 1400px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; padding: 18px 28px;">
-            <a href="/dashboard" style="text-decoration:none; display:flex; align-items:center; gap:16px;">
-                <img src="/static/img/logo_atlas.png" alt="Atlas" style="height:62px; width:62px; border-radius:50%; object-fit:cover; box-shadow:0 0 0 4px rgba(240,192,64,0.5), 0 4px 16px rgba(0,0,0,0.4); transition: transform 0.2s;">
-                <div style="line-height:1.15;">
-                    <div style="font-weight:800; font-size:24px; color:#f0c040; letter-spacing:-0.5px;">Atlas</div>
-                    <div style="font-size:10px; color:rgba(255,255,255,0.6); letter-spacing:2px; text-transform:uppercase; font-weight:600;">Centro de Estudios</div>
-                </div>
-            </a>
+        <div class="container-fluid" style="max-width: 100%; margin: 0; display: flex; justify-content: space-between; align-items: center; padding: 0 24px;">
+            <div style="display:flex; align-items:center; gap:14px;">
+                <button class="sidebar-toggle" id="sidebarToggle" aria-label="Menú">☰</button>
+                <a href="/dashboard" style="text-decoration:none; display:flex; align-items:center; gap:14px;">
+                    <img src="/static/img/logo_atlas.png" alt="Atlas" style="height:52px; width:52px; border-radius:50%; object-fit:cover; box-shadow:0 0 0 3px rgba(240,192,64,0.5), 0 4px 16px rgba(0,0,0,0.4);">
+                    <div style="line-height:1.15;">
+                        <div style="font-weight:800; font-size:22px; color:#f0c040; letter-spacing:-0.5px;">Atlas</div>
+                        <div style="font-size:10px; color:rgba(255,255,255,0.6); letter-spacing:2px; text-transform:uppercase; font-weight:600;">Centro de Estudios</div>
+                    </div>
+                </a>
+            </div>
             <div style="display: flex; align-items: center; gap: 18px;">
                 <div style="text-align: right;">
                     <div style="color: white; font-weight: 600; font-size: 13px;">{{ current_user.nombre }}</div>
@@ -484,12 +578,98 @@
             </div>
         </div>
     </nav>
+
+    {% set p = request.path %}
+    {% set rol = current_user.rol %}
+    <aside class="app-sidebar" id="appSidebar">
+        <a href="/dashboard" class="{% if p=='/dashboard' %}active{% endif %}"><span class="ico">🏠</span> Inicio</a>
+
+        {% if rol in ['admin','socio'] %}
+        <div class="side-section">Académico</div>
+
+        {% set plan_active = p in ['/modulo1','/editar-planificaciones','/editar-planificacion-masiva'] %}
+        <div class="nav-group {% if plan_active %}open{% endif %}">
+            <button type="button" class="nav-group-toggle"><span class="ico">📋</span> Planificación <span class="chev">▶</span></button>
+            <div class="nav-group-items">
+                <a href="/modulo1" class="{% if p=='/modulo1' %}active{% endif %}">Nueva planificación</a>
+                <a href="/editar-planificaciones" class="{% if p=='/editar-planificaciones' %}active{% endif %}">Editar planificaciones</a>
+                <a href="/editar-planificacion-masiva" class="{% if p=='/editar-planificacion-masiva' %}active{% endif %}">Edición masiva</a>
+            </div>
+        </div>
+
+        {% set cal_active = p in ['/modulo2','/modulo4'] %}
+        <div class="nav-group {% if cal_active %}open{% endif %}">
+            <button type="button" class="nav-group-toggle"><span class="ico">📅</span> Calendario <span class="chev">▶</span></button>
+            <div class="nav-group-items">
+                <a href="/modulo2" class="{% if p=='/modulo2' %}active{% endif %}">Calendario diario</a>
+                <a href="/modulo4" class="{% if p=='/modulo4' %}active{% endif %}">Calendario general</a>
+            </div>
+        </div>
+
+        <a href="/modulo6" class="{% if p=='/modulo6' %}active{% endif %}"><span class="ico">👥</span> Reuniones</a>
+
+        <div class="side-section">Personas</div>
+        <a href="/estudiantes" class="{% if p=='/estudiantes' %}active{% endif %}"><span class="ico">🎓</span> Estudiantes</a>
+        <a href="/padres" class="{% if p=='/padres' %}active{% endif %}"><span class="ico">👨‍👩‍👧</span> Padres</a>
+
+        <div class="side-section">Pagos y finanzas</div>
+        {% set pago_active = p in ['/modulo3','/modulo5'] %}
+        <div class="nav-group {% if pago_active %}open{% endif %}">
+            <button type="button" class="nav-group-toggle"><span class="ico">💰</span> Pagos <span class="chev">▶</span></button>
+            <div class="nav-group-items">
+                <a href="/modulo3" class="{% if p=='/modulo3' %}active{% endif %}">Pagos de estudiantes</a>
+                <a href="/modulo5" class="{% if p=='/modulo5' %}active{% endif %}">Pagos a docentes</a>
+            </div>
+        </div>
+        <a href="/reportes" class="{% if p=='/reportes' %}active{% endif %}"><span class="ico">📊</span> Reportes</a>
+        <a href="/gastos" class="{% if p=='/gastos' %}active{% endif %}"><span class="ico">📉</span> Gastos</a>
+        <a href="/liquidacion" class="{% if p=='/liquidacion' %}active{% endif %}"><span class="ico">⚖️</span> Liquidación</a>
+        <a href="/gestion-anticipos" class="{% if p=='/gestion-anticipos' %}active{% endif %}"><span class="ico">🏦</span> Anticipos {% if solicitudes_pendientes and solicitudes_pendientes>0 %}<span class="side-badge">{{ solicitudes_pendientes }}</span>{% endif %}</a>
+
+        <div class="side-section">Psicología</div>
+        <a href="/psicologia-especial" class="{% if p=='/psicologia-especial' %}active{% endif %}"><span class="ico">🧠</span> Psicología especial</a>
+
+        <div class="side-section">Administración</div>
+        <a href="/admin/costos" class="{% if p=='/admin/costos' %}active{% endif %}"><span class="ico">⚙️</span> Costos</a>
+        {% if rol=='admin' %}<a href="/usuarios" class="{% if p=='/usuarios' %}active{% endif %}"><span class="ico">👤</span> Usuarios</a>{% endif %}
+        <a href="/reporte-duplicados" class="{% if p=='/reporte-duplicados' %}active{% endif %}"><span class="ico">🧹</span> Reporte duplicados</a>
+
+        {% elif rol=='profesor' %}
+        <div class="side-section">Mi trabajo</div>
+        <a href="/modulo2" class="{% if p=='/modulo2' %}active{% endif %}"><span class="ico">📅</span> Mis clases</a>
+        <a href="/mi-reporte" class="{% if p=='/mi-reporte' %}active{% endif %}"><span class="ico">📊</span> Mi reporte</a>
+        <a href="/mis-anticipos" class="{% if p=='/mis-anticipos' %}active{% endif %}"><span class="ico">🏦</span> Mis anticipos</a>
+        <a href="/gastos" class="{% if p=='/gastos' %}active{% endif %}"><span class="ico">📉</span> Gastos</a>
+
+        {% elif rol=='psicologo' %}
+        <div class="side-section">Mi trabajo</div>
+        <a href="/modulo2" class="{% if p=='/modulo2' %}active{% endif %}"><span class="ico">📅</span> Mis sesiones</a>
+        <a href="/mi-reporte" class="{% if p=='/mi-reporte' %}active{% endif %}"><span class="ico">📊</span> Mi reporte</a>
+        <a href="/mis-clientes" class="{% if p=='/mis-clientes' %}active{% endif %}"><span class="ico">🧠</span> Mis clientes</a>
+        <a href="/mis-anticipos" class="{% if p=='/mis-anticipos' %}active{% endif %}"><span class="ico">🏦</span> Mis anticipos</a>
+        <a href="/gastos" class="{% if p=='/gastos' %}active{% endif %}"><span class="ico">📉</span> Gastos</a>
+
+        {% elif rol=='estudiante' %}
+        <div class="side-section">Mi cuenta</div>
+        <a href="/modulo2" class="{% if p=='/modulo2' %}active{% endif %}"><span class="ico">📅</span> Mis clases</a>
+        <a href="/mi-reporte" class="{% if p=='/mi-reporte' %}active{% endif %}"><span class="ico">📊</span> Mi reporte</a>
+
+        {% elif rol=='padre' %}
+        <div class="side-section">Mi cuenta</div>
+        <a href="/modulo2" class="{% if p=='/modulo2' %}active{% endif %}"><span class="ico">📅</span> Clases de mis hijos</a>
+        <a href="/mi-reporte" class="{% if p=='/mi-reporte' %}active{% endif %}"><span class="ico">📊</span> Reporte de mis hijos</a>
+        {% endif %}
+
+        <div class="side-section">Cuenta</div>
+        <a href="/editar-perfil" class="{% if p=='/editar-perfil' %}active{% endif %}"><span class="ico">✏️</span> Editar perfil</a>
+        <a href="/logout"><span class="ico">🚪</span> Cerrar sesión</a>
+    </aside>
+    <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
     {% endif %}
-    
+
     <div class="main-container">
         {% if current_user.is_authenticated %}
         <div class="nav-buttons">
-            <a href="/dashboard" class="btn btn-outline-dark"><i class="bi bi-house"></i> Inicio</a>
             <button onclick="history.back()" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Volver</button>
         </div>
         {% endif %}
@@ -513,5 +693,28 @@
     </footer>
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+    // ── Sidebar: submenús colapsables + apertura en móvil ──
+    (function () {
+        document.querySelectorAll('.app-sidebar .nav-group-toggle').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                btn.closest('.nav-group').classList.toggle('open');
+            });
+        });
+        var sidebar = document.getElementById('appSidebar');
+        var backdrop = document.getElementById('sidebarBackdrop');
+        var toggle = document.getElementById('sidebarToggle');
+        function abrir() { if (sidebar) sidebar.classList.add('open'); if (backdrop) backdrop.classList.add('show'); }
+        function cerrar() { if (sidebar) sidebar.classList.remove('open'); if (backdrop) backdrop.classList.remove('show'); }
+        if (toggle) toggle.addEventListener('click', function () {
+            sidebar.classList.contains('open') ? cerrar() : abrir();
+        });
+        if (backdrop) backdrop.addEventListener('click', cerrar);
+        // Cerrar al navegar (en móvil) tras hacer clic en un enlace
+        document.querySelectorAll('.app-sidebar a').forEach(function (a) {
+            a.addEventListener('click', function () { if (window.innerWidth < 992) cerrar(); });
+        });
+    })();
+    </script>
 </body>
 </html>

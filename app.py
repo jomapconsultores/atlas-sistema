@@ -40,6 +40,18 @@ def socio_admin_required(f):
         return f(*args, **kwargs)
     return decorated
 
+# Inyecta el contador de anticipos pendientes en TODAS las plantillas (badge del menú lateral)
+@app.context_processor
+def inyectar_globales():
+    pendientes = 0
+    try:
+        if current_user.is_authenticated and getattr(current_user, 'rol', None) in ['admin', 'socio']:
+            solicitudes = supabase.table('anticipos_solicitudes').select('id').eq('estado', 'pendiente').execute()
+            pendientes = len(solicitudes.data or [])
+    except Exception:
+        pendientes = 0
+    return {'solicitudes_pendientes': pendientes}
+
 # ========== CONSTANTES ==========
 ASIGNATURAS = [
     'Contabilidad general', 'Contabilidad de costos', 'Matemáticas', 'Geometría',
@@ -219,14 +231,52 @@ def modulo1():
             if es_paquete:
                 num_sesiones = 4
             
+            # ── VALIDACIÓN ESTRICTA: ningún dato puede faltar y los horarios deben ser coherentes ──
+            # 1) Al menos un estudiante seleccionado (válido)
+            estudiantes_validos = [
+                request.form.get(f'estudiante_id_{e}', '')
+                for e in range(1, num_estudiantes + 1)
+            ]
+            estudiantes_validos = [e for e in estudiantes_validos if e and e != 'nuevo']
+            if not estudiantes_validos:
+                flash('❌ Debe seleccionar al menos un estudiante válido', 'error')
+                return redirect(url_for('modulo1'))
+            if len(estudiantes_validos) < num_estudiantes:
+                flash('❌ Hay estudiantes sin seleccionar. Complete todos los estudiantes antes de grabar', 'error')
+                return redirect(url_for('modulo1'))
+
+            # 2) Cada sesión: datos completos y horario coherente (sin horas en retroceso ni negativas)
             for sesion_num in range(1, num_sesiones + 1):
                 fecha = request.form.get(f'fecha_{sesion_num}')
                 h_ini = request.form.get(f'hora_inicio_{sesion_num}')
                 h_fin = request.form.get(f'hora_fin_{sesion_num}')
-                if fecha and h_ini and h_fin and h_fin <= h_ini:
-                    flash(f'❌ Error en Sesión {sesion_num}: La hora de fin debe ser mayor a la hora de inicio', 'error')
+                encargado_v = request.form.get(f'encargado_{sesion_num}', '')
+                profesor_v = request.form.get(f'profesor_{sesion_num}', '')
+                nuevo_prof_v = request.form.get(f'nuevo_profesor_{sesion_num}', '')
+
+                if not fecha or not h_ini or not h_fin:
+                    flash(f'❌ Sesión {sesion_num}: faltan fecha u horario. Complete todos los campos', 'error')
                     return redirect(url_for('modulo1'))
-            
+                if not encargado_v:
+                    flash(f'❌ Sesión {sesion_num}: debe seleccionar el encargado de apertura', 'error')
+                    return redirect(url_for('modulo1'))
+                if profesor_v == 'nuevo' and not nuevo_prof_v.strip():
+                    flash(f'❌ Sesión {sesion_num}: escriba el nombre del profesor nuevo', 'error')
+                    return redirect(url_for('modulo1'))
+
+                ini_dt = datetime.strptime(f"{fecha} {h_ini}", '%Y-%m-%d %H:%M')
+                fin_dt = datetime.strptime(f"{fecha} {h_fin}", '%Y-%m-%d %H:%M')
+                horas_v = (fin_dt - ini_dt).total_seconds() / 3600
+                if horas_v < 0:
+                    flash(f'❌ Sesión {sesion_num}: horario en retroceso. La hora de fin no puede ser anterior al inicio', 'error')
+                    return redirect(url_for('modulo1'))
+                if horas_v == 0:
+                    flash(f'❌ Sesión {sesion_num}: la duración no puede ser 0 horas', 'error')
+                    return redirect(url_for('modulo1'))
+                if horas_v < 0.5:
+                    flash(f'❌ Sesión {sesion_num}: duración muy corta ({int(horas_v*60)} min). El mínimo es 30 minutos', 'error')
+                    return redirect(url_for('modulo1'))
+
             for sesion_num in range(1, num_sesiones + 1):
                 fecha = request.form.get(f'fecha_{sesion_num}')
                 h_ini = request.form.get(f'hora_inicio_{sesion_num}')
@@ -425,9 +475,19 @@ def api_editar_sesion(id):
         fin = datetime.strptime(f"{data['fecha']} {hora_fin_str}", '%Y-%m-%d %H:%M')
         horas = round((fin - inicio).total_seconds() / 3600, 2)
         
-        if horas <= 0:
-            return jsonify({'success': False, 'error': 'La duración de la sesión debe ser mayor a 0 horas'})
-        
+        if horas < 0:
+            return jsonify({'success': False, 'error': 'Horario en retroceso: la hora de fin no puede ser anterior al inicio'})
+        if horas == 0:
+            return jsonify({'success': False, 'error': 'La duración de la sesión no puede ser 0 horas'})
+        if horas < 0.5:
+            return jsonify({'success': False, 'error': f'Duración muy corta ({int(horas*60)} min). El mínimo es 30 minutos'})
+        if not data.get('estudiante_id'):
+            return jsonify({'success': False, 'error': 'Debe seleccionar un estudiante'})
+        if not (data.get('profesor_terapeuta') or '').strip():
+            return jsonify({'success': False, 'error': 'Debe indicar el profesor/terapeuta'})
+        if not (data.get('encargado_apertura') or '').strip():
+            return jsonify({'success': False, 'error': 'Debe indicar el encargado de apertura'})
+
         valor_total = data.get('valor_total', 0)
         precio_hora = data.get('precio_hora', 10)
         es_terapia = data['tipo_sesion'] in ['terapia', 'ambos']

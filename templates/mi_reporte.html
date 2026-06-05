@@ -2,8 +2,10 @@
 {% block title %}Mi Reporte - Atlas{% endblock %}
 
 {% block content %}
-<h3>📊 Mi Reporte Personal</h3>
-<p class="text-muted">{{ current_user.nombre }} ({{ current_user.rol }})</p>
+<div class="page-hero">
+    <h2>📊 Mi Reporte Personal</h2>
+    <p>{{ current_user.nombre }} ({{ current_user.rol }})</p>
+</div>
 
 <!-- Filtros -->
 <form class="row g-2 mb-4">

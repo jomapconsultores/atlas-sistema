@@ -27,7 +27,10 @@
     .error-msg { color: #dc3545; font-size: 12px; margin-top: 5px; display: none; }
 </style>
 
-<h3>📅 Calendario Público</h3>
+<div class="page-hero">
+    <h2>📅 Calendario Público</h2>
+    <p>Vista general de todas las sesiones y reuniones programadas.</p>
+</div>
 
 {% if current_user.rol in ['admin','socio'] %}
 <div class="mb-3">

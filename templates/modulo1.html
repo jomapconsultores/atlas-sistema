@@ -3,277 +3,245 @@
 
 {% block content %}
 <style>
-    .card { border-radius: 16px; border: none; box-shadow: 0 3px 15px rgba(0,0,0,0.06); transition: all 0.3s; }
-    .card:hover { box-shadow: 0 6px 25px rgba(0,0,0,0.1); }
-    .card-header { padding: 14px 20px; font-weight: 700; font-size: 15px; border-radius: 16px 16px 0 0 !important; }
-    .bg-primary { background: linear-gradient(135deg, #1a73e8, #0d47a1) !important; }
-    .form-control, .form-select { border-radius: 10px; border: 2px solid #e0e0e0; padding: 10px 14px; font-size: 13px; transition: all 0.2s; }
-    .form-control:focus, .form-select:focus { border-color: #1a73e8; box-shadow: 0 0 0 3px rgba(26,115,232,0.1); }
-    .btn-primary { background: linear-gradient(135deg, #1a73e8, #0d47a1); border: none; border-radius: 12px; font-weight: 600; padding: 12px; font-size: 14px; }
-    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(26,115,232,0.3); }
-    .btn-warning { border-radius: 12px; font-weight: 600; }
-    .btn-secondary { border-radius: 12px; font-weight: 600; }
-    .btn-danger { border-radius: 12px; font-weight: 600; }
-    .btn-outline-danger { border-radius: 12px; }
-    .border.rounded { border-radius: 12px; border: 1px solid #e8e8e8; background: #fafafa; }
-    label { font-weight: 600; font-size: 12px; color: #555; }
-    .hora-invalida { border: 2px solid #dc3545 !important; background-color: #ffe6e6 !important; }
-    .mensaje-error { color: #dc3545; font-size: 12px; margin-top: 5px; display: none; }
-    .btn-group .btn { border-radius: 10px; margin: 0 2px; }
+    /* ── Cabecera de la página ───────────────────────── */
+    .plan-hero {
+        background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%);
+        border-radius: var(--radius-lg);
+        padding: 24px 28px;
+        color: #fff;
+        margin-bottom: 22px;
+        box-shadow: var(--shadow-md);
+    }
+    .plan-hero h2 { font-weight: 800; font-size: 1.6rem; margin: 0; letter-spacing: -0.5px; display:flex; align-items:center; gap:12px; }
+    .plan-hero p { margin: 6px 0 0; color: rgba(255,255,255,0.7); font-size: 13px; }
+
+    /* ── Pasos numerados ─────────────────────────────── */
+    .step-block { border: 1.5px solid var(--atlas-border); border-radius: var(--radius-md); padding: 20px 22px; margin-bottom: 20px; background: #fff; transition: border-color .2s, box-shadow .2s; }
+    .step-block.activo { border-color: var(--atlas-accent2); box-shadow: 0 0 0 3px rgba(59,130,246,0.08); }
+    .step-head { display:flex; align-items:center; gap:12px; margin-bottom: 16px; }
+    .step-num { width: 34px; height: 34px; min-width:34px; border-radius: 50%; background: linear-gradient(135deg,#1e3a5f,#1e40af); color:#fff; font-weight:800; display:flex; align-items:center; justify-content:center; font-size:15px; box-shadow: var(--shadow-sm); }
+    .step-title { font-weight: 800; font-size: 15px; color: var(--atlas-navy); margin:0; }
+    .step-sub { font-size: 11.5px; color: var(--atlas-muted); margin:0; }
+
+    /* ── Tarjeta de sesión ───────────────────────────── */
+    .sesion-card { border: 1.5px solid var(--atlas-border); border-radius: var(--radius-md); padding: 16px; margin-bottom: 14px; background: #f8fafc; transition: all .2s; }
+    .sesion-card.invalida { border-color: var(--atlas-danger); background: #fff5f5; }
+    .sesion-card.valida { border-color: var(--atlas-success); background: #f0fdf8; }
+    .sesion-card .sesion-top { display:flex; align-items:center; justify-content:space-between; margin-bottom: 12px; flex-wrap: wrap; gap:8px; }
+    .sesion-tag { font-weight:800; color: var(--atlas-navy); font-size:14px; display:flex; align-items:center; gap:8px; }
+    .sesion-tag .dot { width:10px; height:10px; border-radius:50%; background:#cbd5e1; }
+    .sesion-card.valida .sesion-tag .dot { background: var(--atlas-success); }
+    .sesion-card.invalida .sesion-tag .dot { background: var(--atlas-danger); }
+
+    /* Badge de duración en vivo */
+    .badge-duracion { font-size: 12px; font-weight: 700; padding: 6px 12px !important; border-radius: 20px !important; display:inline-flex; align-items:center; gap:6px; }
+    .badge-duracion.ok { background:#d1fae5; color:#065f46; }
+    .badge-duracion.error { background:#fee2e2; color:#991b1b; }
+    .badge-duracion.vacio { background:#e2e8f0; color:#64748b; }
+
+    .hora-invalida { border-color: var(--atlas-danger) !important; background-color: #fff0f0 !important; }
+    .campo-faltante { border-color: var(--atlas-accent) !important; box-shadow: 0 0 0 3px rgba(240,192,64,0.15) !important; }
+    .mensaje-error { color: var(--atlas-danger); font-size: 12px; margin-top: 8px; font-weight:600; display: none; align-items:center; gap:6px; }
+
+    /* ── Panel de validación ─────────────────────────── */
+    .panel-validacion { border-radius: var(--radius-md); padding: 16px 20px; margin-top: 8px; font-size: 13px; transition: all .25s; }
+    .panel-validacion.incompleto { background:#fffbeb; border:1.5px solid #fde68a; }
+    .panel-validacion.completo { background:#ecfdf5; border:1.5px solid #a7f3d0; }
+    .panel-validacion h6 { font-weight:800; font-size:13px; margin:0 0 8px; display:flex; align-items:center; gap:8px; }
+    .panel-validacion.incompleto h6 { color:#92400e; }
+    .panel-validacion.completo h6 { color:#065f46; }
+    .lista-faltantes { margin:0; padding-left: 0; list-style:none; }
+    .lista-faltantes li { padding: 4px 0 4px 24px; position:relative; color:#78350f; font-weight:500; }
+    .lista-faltantes li::before { content:'⚠️'; position:absolute; left:0; font-size:12px; }
+
+    #btnPlanificar:disabled { opacity:.55; cursor:not-allowed; filter: grayscale(.3); transform:none !important; box-shadow:none !important; }
+
+    .precio-individual label { color: var(--atlas-accent2); }
+    label.small { font-size:11px; font-weight:700; color: var(--atlas-muted); text-transform:uppercase; letter-spacing:.4px; margin-bottom:3px; }
 </style>
 
-<!-- Botones de sincronización y edición -->
+<!-- ── Cabecera ─────────────────────────────────────── -->
+<div class="plan-hero">
+    <h2>📋 Planificación de Sesiones</h2>
+    <p>Registra clases y atenciones psicológicas. Completa cada paso — el sistema validará en tiempo real que no falte ningún dato y que los horarios sean coherentes antes de permitir grabar.</p>
+</div>
+
+<!-- ── Acciones ─────────────────────────────────────── -->
 <div class="d-flex justify-content-between mb-3 flex-wrap gap-2">
-    <div>
-        <a href="/editar-planificaciones" class="btn btn-warning">
-            ✏️ Editar Planificaciones Existentes
-        </a>
-        <a href="/editar-planificacion-masiva" class="btn btn-secondary ms-2">
-            🔄 Edición Masiva
-        </a>
+    <div class="d-flex gap-2 flex-wrap">
+        <a href="/editar-planificaciones" class="btn btn-warning">✏️ Editar Existentes</a>
+        <a href="/editar-planificacion-masiva" class="btn btn-secondary">🔄 Edición Masiva</a>
     </div>
     <div class="btn-group" role="group">
-        <button type="button" class="btn btn-danger" onclick="sincronizarTodoCalendario()" style="background-color: #dc3545; border-color: #dc3545;">
-            🔄 Sincronizar TODO con Google Calendar
-        </button>
-        <button type="button" class="btn btn-outline-danger" onclick="sincronizarMesActual()">
-            📅 Solo este mes
-        </button>
+        <button type="button" class="btn btn-danger" onclick="sincronizarTodoCalendario()">🔄 Sincronizar TODO</button>
+        <button type="button" class="btn btn-outline-danger" onclick="sincronizarMesActual()">📅 Solo este mes</button>
     </div>
 </div>
 
 <div class="card shadow mb-4">
-    <div class="card-header bg-primary text-white"><strong>➕ Nueva Planificación</strong></div>
+    <div class="card-header bg-primary text-white">➕ Nueva Planificación</div>
     <div class="card-body">
-        <form method="POST" id="formPlanificar">
-            
-            <div class="mb-2">
-                <label class="form-label">Número de Estudiantes *</label>
-                <select name="num_estudiantes" id="numEstudiantes" class="form-select" onchange="mostrarEstudiantes()">
-                    {% for i in range(1, 11) %}
-                    <option value="{{ i }}">{{ i }} estudiante(s)</option>
-                    {% endfor %}
-                </select>
-            </div>
-            
-            <div id="contenedorEstudiantes"></div>
-            
-            <div class="mb-2">
-                <label class="form-label">Tipo de Sesión *</label>
-                <select name="tipo_sesion" id="tipoSesion" class="form-select" required onchange="mostrarCampos()">
-                    <option value="">Seleccionar...</option>
-                    <option value="clase">📚 Clase</option>
-                    <option value="terapia">🧠 Atención Psicológica</option>
-                    <option value="ambos">📚🧠 Ambos</option>
-                    <option value="preuniversitario">🎓 Pre Universitario</option>
-                </select>
-            </div>
-            
-            <div id="camposClase" style="display:none;">
-                <div class="mb-2">
-                    <label class="form-label">Asignatura *</label>
-                    <select name="asignatura" class="form-select">
-                        <option value="">Seleccionar...</option>
-                        {% for a in asignaturas %}
-                        <option value="{{ a }}">{{ a }}</option>
+        <form method="POST" id="formPlanificar" novalidate>
+
+            <!-- ── PASO 1: Estudiantes ──────────────────── -->
+            <div class="step-block" id="step1">
+                <div class="step-head">
+                    <div class="step-num">1</div>
+                    <div>
+                        <p class="step-title">Estudiantes</p>
+                        <p class="step-sub">¿Cuántos estudiantes y quiénes participan en la sesión?</p>
+                    </div>
+                </div>
+                <div class="mb-2" style="max-width:320px;">
+                    <label class="form-label">Número de Estudiantes *</label>
+                    <select name="num_estudiantes" id="numEstudiantes" class="form-select" onchange="mostrarEstudiantes()">
+                        {% for i in range(1, 11) %}
+                        <option value="{{ i }}">{{ i }} estudiante(s)</option>
                         {% endfor %}
                     </select>
                 </div>
+                <div id="contenedorEstudiantes"></div>
             </div>
-            
-            <div id="camposTerapia" style="display:none;">
-                <div class="mb-2">
-                    <label class="form-label">Tipo de Atención *</label>
-                    <select name="atencion_psicologica" id="atencionPsicologica" class="form-select" onchange="verificarPaquete()">
+
+            <!-- ── PASO 2: Tipo y costo ─────────────────── -->
+            <div class="step-block" id="step2">
+                <div class="step-head">
+                    <div class="step-num">2</div>
+                    <div>
+                        <p class="step-title">Tipo de sesión y costo</p>
+                        <p class="step-sub">Define qué tipo de atención es y el precio aplicable.</p>
+                    </div>
+                </div>
+
+                <div class="mb-2" style="max-width:420px;">
+                    <label class="form-label">Tipo de Sesión *</label>
+                    <select name="tipo_sesion" id="tipoSesion" class="form-select" required onchange="mostrarCampos()">
                         <option value="">Seleccionar...</option>
-                        {% for item in atencion_psicologica %}
-                        <option value="{{ item['nombre'] }}" data-precio="{{ item['precio'] }}" data-sesiones="{{ item.get('sesiones', 1) }}">
-                            {{ item['nombre'] }} - ${{ item['precio'] }}
-                            {% if item.get('sesiones', 1) > 1 %}
-                                ({{ item['sesiones'] }} sesiones)
-                            {% endif %}
-                        </option>
-                        {% endfor %}
+                        <option value="clase">📚 Clase</option>
+                        <option value="terapia">🧠 Atención Psicológica</option>
+                        <option value="ambos">📚🧠 Ambos</option>
+                        <option value="preuniversitario">🎓 Pre Universitario</option>
+                    </select>
+                </div>
+
+                <div id="camposClase" style="display:none;">
+                    <div class="mb-2" style="max-width:420px;">
+                        <label class="form-label">Asignatura *</label>
+                        <select name="asignatura" class="form-select">
+                            <option value="">Seleccionar...</option>
+                            {% for a in asignaturas %}
+                            <option value="{{ a }}">{{ a }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div id="camposTerapia" style="display:none;">
+                    <div class="mb-2" style="max-width:420px;">
+                        <label class="form-label">Tipo de Atención *</label>
+                        <select name="atencion_psicologica" id="atencionPsicologica" class="form-select" onchange="verificarPaquete()">
+                            <option value="">Seleccionar...</option>
+                            {% for item in atencion_psicologica %}
+                            <option value="{{ item['nombre'] }}" data-precio="{{ item['precio'] }}" data-sesiones="{{ item.get('sesiones', 1) }}">
+                                {{ item['nombre'] }} - ${{ item['precio'] }}
+                                {% if item.get('sesiones', 1) > 1 %}({{ item['sesiones'] }} sesiones){% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div id="camposPrecio" class="mb-2" style="max-width:420px;">
+                    <label class="form-label">Precio por Hora *</label>
+                    <select name="precio_hora" class="form-select">
+                        <option value="">Seleccionar...</option>
+                        <optgroup label="Clases">
+                            {% for pr in precios_clase %}<option value="{{ pr }}">${{ pr }}</option>{% endfor %}
+                        </optgroup>
+                        <optgroup label="Matrícula Pre">
+                            {% for pr in precios_matricula %}<option value="{{ pr }}">${{ pr }}</option>{% endfor %}
+                        </optgroup>
+                        <optgroup label="Pensión Pre">
+                            {% for pr in precios_pension %}<option value="{{ pr }}">${{ pr }}</option>{% endfor %}
+                        </optgroup>
                     </select>
                 </div>
             </div>
-            
-            <div id="camposPrecio" class="mb-2">
-                <label class="form-label">Precio por Hora *</label>
-                <select name="precio_hora" class="form-select">
-                    <optgroup label="Clases">
-                        {% for pr in precios_clase %}<option value="{{ pr }}">${{ pr }}</option>{% endfor %}
-                    </optgroup>
-                    <optgroup label="Matrícula Pre">
-                        {% for pr in precios_matricula %}<option value="{{ pr }}">${{ pr }}</option>{% endfor %}
-                    </optgroup>
-                    <optgroup label="Pensión Pre">
-                        {% for pr in precios_pension %}<option value="{{ pr }}">${{ pr }}</option>{% endfor %}
-                    </optgroup>
-                </select>
+
+            <!-- ── PASO 3: Sesiones y horarios ──────────── -->
+            <div class="step-block" id="step3">
+                <div class="step-head">
+                    <div class="step-num">3</div>
+                    <div>
+                        <p class="step-title">Sesiones y horarios</p>
+                        <p class="step-sub">Fecha, hora de inicio y fin. La duración se calcula y valida automáticamente.</p>
+                    </div>
+                </div>
+                <div class="mb-3" style="max-width:320px;">
+                    <label class="form-label">Número de Sesiones *</label>
+                    <select name="num_sesiones" id="numSesiones" class="form-select" onchange="mostrarFechas()">
+                        {% for i in range(1, 11) %}
+                        <option value="{{ i }}">{{ i }} sesión(es)</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div id="contenedorFechas"></div>
             </div>
-            
-            <div class="mb-2">
-                <label class="form-label">Número de Sesiones *</label>
-                <select name="num_sesiones" id="numSesiones" class="form-select" onchange="mostrarFechas()">
-                    {% for i in range(1, 11) %}
-                    <option value="{{ i }}">{{ i }} sesión(es)</option>
-                    {% endfor %}
-                </select>
+
+            <!-- ── Panel de validación en vivo ──────────── -->
+            <div id="panelValidacion" class="panel-validacion incompleto">
+                <h6 id="panelTitulo">⏳ Revisando datos...</h6>
+                <ul class="lista-faltantes" id="listaFaltantes"></ul>
             </div>
-            
-            <div id="contenedorFechas"></div>
-            
-            <button type="submit" class="btn btn-primary btn-lg w-100 mt-3" id="btnPlanificar">✅ Planificar</button>
+
+            <button type="submit" class="btn btn-primary btn-lg w-100 mt-3" id="btnPlanificar" disabled>
+                ✅ Planificar
+            </button>
         </form>
     </div>
 </div>
 
 <script>
-// Función para verificar si es paquete de terapias
-function verificarPaquete() {
-    const select = document.getElementById('atencionPsicologica');
-    const selectedOption = select.options[select.selectedIndex];
-    const sesiones = selectedOption ? parseInt(selectedOption.dataset.sesiones) : 1;
-    
-    if (sesiones > 1) {
-        const numSesionesSelect = document.getElementById('numSesiones');
-        numSesionesSelect.value = sesiones;
-        numSesionesSelect.disabled = true;
-        mostrarFechas();
-    } else {
-        document.getElementById('numSesiones').disabled = false;
-    }
-}
-
-// ========== VARIABLES GLOBALES ==========
-let fechasValidas = {};
-
-// CONFIRMACIÓN AL PLANIFICAR CON VALIDACIONES
-document.getElementById('formPlanificar').addEventListener('submit', function(e) {
-    e.preventDefault();
-    
-    let todasValidas = true;
-    let errores = [];
-    const numSesiones = document.getElementById('numSesiones').value;
-    
-    for (let i = 1; i <= numSesiones; i++) {
-        if (!fechasValidas[i]) {
-            todasValidas = false;
-            errores.push(`Sesión ${i}`);
-        }
-    }
-    
-    if (!todasValidas) {
-        alert(`❌ No se puede planificar.\n\nLas siguientes sesiones tienen errores:\n${errores.join('\n')}\n\nCorrige las horas antes de continuar.`);
-        return;
-    }
-    
-    const numEstudiantes = document.getElementById('numEstudiantes').value;
-    const tipo = document.getElementById('tipoSesion').value;
-    
-    let fechas = [];
-    for (let i = 1; i <= numSesiones; i++) {
-        const fecha = document.querySelector(`[name="fecha_${i}"]`)?.value;
-        const hIni = document.querySelector(`[name="hora_inicio_${i}"]`)?.value;
-        const hFin = document.querySelector(`[name="hora_fin_${i}"]`)?.value;
-        if (fecha && hIni && hFin) {
-            const inicio = new Date(`${fecha}T${hIni}:00`);
-            const fin = new Date(`${fecha}T${hFin}:00`);
-            const horas = (fin - inicio) / 3600000;
-            fechas.push(`📅 Sesión ${i}: ${fecha} de ${hIni} a ${hFin} (${horas.toFixed(2)} horas)`);
-        }
-    }
-    
-    let mensaje = `✅ ¿Confirmas la planificación?\n\n`;
-    mensaje += `📋 Tipo: ${tipo}\n`;
-    mensaje += `👨‍🎓 Estudiantes: ${numEstudiantes}\n`;
-    mensaje += `📅 Sesiones: ${numSesiones}\n\n`;
-    mensaje += `Detalle:\n${fechas.join('\n')}`;
-    
-    if (confirm(mensaje)) {
-        this.submit();
-    }
-});
-
-function validarHoras(sesionNum) {
-    const fecha = document.querySelector(`[name="fecha_${sesionNum}"]`)?.value;
-    const hIni = document.querySelector(`[name="hora_inicio_${sesionNum}"]`)?.value;
-    const hFin = document.querySelector(`[name="hora_fin_${sesionNum}"]`)?.value;
-    
-    const inputIni = document.querySelector(`[name="hora_inicio_${sesionNum}"]`);
-    const inputFin = document.querySelector(`[name="hora_fin_${sesionNum}"]`);
-    const mensajeError = document.getElementById(`error_${sesionNum}`);
-    
-    if (!hIni || !hFin) {
-        if (mensajeError) mensajeError.style.display = 'none';
-        fechasValidas[sesionNum] = false;
-        return;
-    }
-    
-    if (hFin <= hIni) {
-        inputIni.classList.add('hora-invalida');
-        inputFin.classList.add('hora-invalida');
-        if (mensajeError) {
-            mensajeError.style.display = 'block';
-            mensajeError.innerHTML = '❌ La hora de fin debe ser mayor que la hora de inicio';
-        }
-        fechasValidas[sesionNum] = false;
-        return;
-    }
-    
-    if (fecha && hIni && hFin) {
-        const inicio = new Date(`${fecha}T${hIni}:00`);
-        const fin = new Date(`${fecha}T${hFin}:00`);
-        const horas = (fin - inicio) / 3600000;
-        
-        if (horas <= 0) {
-            inputIni.classList.add('hora-invalida');
-            inputFin.classList.add('hora-invalida');
-            if (mensajeError) {
-                mensajeError.style.display = 'block';
-                mensajeError.innerHTML = '❌ La duración debe ser mayor a 0 horas';
-            }
-            fechasValidas[sesionNum] = false;
-            return;
-        }
-        
-        if (horas < 0.5) {
-            inputIni.classList.add('hora-invalida');
-            inputFin.classList.add('hora-invalida');
-            if (mensajeError) {
-                mensajeError.style.display = 'block';
-                mensajeError.innerHTML = '⚠️ Duración muy corta (mínimo 30 minutos)';
-            }
-            fechasValidas[sesionNum] = false;
-            return;
-        }
-    }
-    
-    inputIni.classList.remove('hora-invalida');
-    inputFin.classList.remove('hora-invalida');
-    if (mensajeError) mensajeError.style.display = 'none';
-    fechasValidas[sesionNum] = true;
-}
-
+// ===== DATOS DESDE EL SERVIDOR =====
 const ESTUDIANTES = [{% for e in estudiantes %}{id:{{ e['id'] }}, nombre:"{{ e['apellidos'] }} {{ e['nombres'] }}"},{% endfor %}];
 const PROFESORES = [{% for p in profesores %}"{{ p }}",{% endfor %}];
 const ENCARGADOS = [{% for e in encargados %}"{{ e }}",{% endfor %}];
 const PRECIOS_CLASE = [{% for pr in precios_clase %}{{ pr }},{% endfor %}{% for pr in precios_matricula %}{{ pr }},{% endfor %}{% for pr in precios_pension %}{{ pr }},{% endfor %}];
 
+const $ = (sel) => document.querySelector(sel);
+const tipoEsClase = (t) => ['clase','preuniversitario','ambos'].includes(t);
+const tipoEsTerapia = (t) => ['terapia','ambos'].includes(t);
+
+// ===== PAQUETE DE TERAPIAS =====
+function verificarPaquete() {
+    const select = document.getElementById('atencionPsicologica');
+    const opt = select.options[select.selectedIndex];
+    const sesiones = opt ? parseInt(opt.dataset.sesiones || 1) : 1;
+    const numSesionesSelect = document.getElementById('numSesiones');
+    if (sesiones > 1) {
+        numSesionesSelect.value = sesiones;
+        numSesionesSelect.disabled = true;
+        mostrarFechas();
+    } else {
+        numSesionesSelect.disabled = false;
+    }
+    actualizarEstado();
+}
+
+// ===== RENDER ESTUDIANTES =====
 function mostrarEstudiantes() {
     const num = parseInt(document.getElementById('numEstudiantes').value);
     const tipo = document.getElementById('tipoSesion').value;
-    const esClase = ['clase','preuniversitario','ambos'].includes(tipo);
-    const precioGlobal = document.querySelector('[name="precio_hora"]')?.value || PRECIOS_CLASE[0] || 10;
+    const esClase = tipoEsClase(tipo);
+    const precioGlobal = $('[name="precio_hora"]')?.value || PRECIOS_CLASE[0] || 10;
     const mismoPrecio = !document.getElementById('mismoPrecioNo')?.checked;
     let html = '';
     if (esClase && num > 1) {
-        html += `<div class="alert alert-info py-2 px-3 mb-2 d-flex flex-wrap align-items-center gap-3" style="border-radius:10px;">
+        html += `<div class="alert alert-info py-2 px-3 mb-3 d-flex flex-wrap align-items-center gap-3" style="border-radius:10px;">
             <strong class="text-nowrap">💰 ¿Mismo precio para todos?</strong>
             <div class="form-check form-check-inline mb-0">
                 <input class="form-check-input" type="radio" name="mismo_precio" id="mismoPrecioSi" value="si" ${mismoPrecio?'checked':''} onchange="togglePreciosIndividuales()">
-                <label class="form-check-label" for="mismoPrecioSi">Sí — precio único (según selección arriba)</label>
+                <label class="form-check-label" for="mismoPrecioSi">Sí — precio único</label>
             </div>
             <div class="form-check form-check-inline mb-0">
                 <input class="form-check-input" type="radio" name="mismo_precio" id="mismoPrecioNo" value="no" ${!mismoPrecio?'checked':''} onchange="togglePreciosIndividuales()">
@@ -284,27 +252,27 @@ function mostrarEstudiantes() {
     for (let i = 1; i <= num; i++) {
         const mostrar = esClase && num > 1 && !mismoPrecio;
         const selectorPrecio = (esClase && num > 1) ? `
-            <div class="precio-individual mt-1" style="display:${mostrar?'block':'none'};">
-                <label class="form-label small fw-bold text-primary">💰 Precio/hora — Estudiante ${i}</label>
+            <div class="precio-individual mt-2" style="display:${mostrar?'block':'none'};">
+                <label class="small">💰 Precio/hora — Estudiante ${i}</label>
                 <select name="precio_hora_${i}" class="form-select form-select-sm" ${!mostrar?'disabled':''}>
                     ${PRECIOS_CLASE.map(pr => `<option value="${pr}" ${pr == precioGlobal ? 'selected' : ''}>$${pr}/h</option>`).join('')}
                 </select>
             </div>` : '';
         html += `
-        <div class="border rounded p-2 mb-2">
-            <strong>Estudiante ${i}</strong>
-            <select name="estudiante_id_${i}" id="estSelect_${i}" class="form-select mb-1" onchange="toggleNuevo(${i}, this.value)">
+        <div class="border rounded p-3 mb-2" style="background:#f8fafc;border-radius:12px;">
+            <strong style="font-size:13px;color:var(--atlas-navy);">👤 Estudiante ${i}</strong>
+            <select name="estudiante_id_${i}" id="estSelect_${i}" class="form-select mt-1 mb-1" onchange="toggleNuevo(${i}, this.value)">
                 <option value="">Seleccionar existente o crear nuevo...</option>
                 ${ESTUDIANTES.map(e => `<option value="${e.id}">${e.nombre}</option>`).join('')}
                 <option value="nuevo">➕ Crear nuevo estudiante</option>
             </select>
             ${selectorPrecio}
-            <div id="nuevoEstudiante_${i}" style="display:none;">
-                <div class="row">
+            <div id="nuevoEstudiante_${i}" style="display:none;" class="mt-2">
+                <div class="row g-2">
                     <div class="col-md-6"><input type="text" id="nuevo_nombre_${i}" class="form-control mb-1" placeholder="Nombres *"></div>
                     <div class="col-md-6"><input type="text" id="nuevo_apellido_${i}" class="form-control mb-1" placeholder="Apellidos *"></div>
                 </div>
-                <div class="row">
+                <div class="row g-2">
                     <div class="col-md-6"><input type="text" id="nuevo_nivel_${i}" class="form-control mb-1" placeholder="Nivel/Curso"></div>
                     <div class="col-md-6"><input type="text" id="nuevo_procedencia_${i}" class="form-control mb-1" placeholder="Institución"></div>
                 </div>
@@ -314,21 +282,21 @@ function mostrarEstudiantes() {
         </div>`;
     }
     document.getElementById('contenedorEstudiantes').innerHTML = html;
+    actualizarEstado();
 }
 
 function toggleNuevo(num, val) {
     document.getElementById('nuevoEstudiante_' + num).style.display = (val === 'nuevo') ? 'block' : 'none';
+    actualizarEstado();
 }
 
 async function crearEstudianteAPI(num) {
     const nombre = document.getElementById('nuevo_nombre_' + num).value.trim();
     const apellido = document.getElementById('nuevo_apellido_' + num).value.trim();
     if (!nombre || !apellido) { alert('❌ Nombres y apellidos obligatorios'); return; }
-    
     try {
         const resp = await fetch('/api/crear_estudiante', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            method: 'POST', headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
                 nombres: nombre, apellidos: apellido,
                 nivel_curso: document.getElementById('nuevo_nivel_' + num).value.trim(),
@@ -344,17 +312,20 @@ async function crearEstudianteAPI(num) {
             select.insertBefore(option, select.lastChild);
             document.getElementById('nuevoEstudiante_' + num).style.display = 'none';
             alert('✅ Estudiante creado: ' + result.nombre);
+            actualizarEstado();
         }
     } catch (e) { alert('❌ Error de conexión'); }
 }
 
+// ===== RENDER CAMPOS POR TIPO =====
 function mostrarCampos() {
     const tipo = document.getElementById('tipoSesion').value;
-    document.getElementById('camposClase').style.display = (tipo === 'clase' || tipo === 'ambos' || tipo === 'preuniversitario') ? 'block' : 'none';
-    document.getElementById('camposTerapia').style.display = (tipo === 'terapia' || tipo === 'ambos') ? 'block' : 'none';
+    document.getElementById('camposClase').style.display = tipoEsClase(tipo) ? 'block' : 'none';
+    document.getElementById('camposTerapia').style.display = tipoEsTerapia(tipo) ? 'block' : 'none';
     document.getElementById('camposPrecio').style.display = (tipo === 'terapia') ? 'none' : 'block';
     mostrarEstudiantes();
 }
+
 function togglePreciosIndividuales() {
     const distintos = document.getElementById('mismoPrecioNo')?.checked;
     document.querySelectorAll('.precio-individual').forEach(el => {
@@ -363,31 +334,36 @@ function togglePreciosIndividuales() {
     });
     const cp = document.getElementById('camposPrecio');
     if (cp) cp.style.display = distintos ? 'none' : 'block';
+    actualizarEstado();
 }
 
+// ===== RENDER SESIONES =====
 function mostrarFechas() {
     const num = parseInt(document.getElementById('numSesiones').value);
     let html = '';
     for (let i = 1; i <= num; i++) {
         html += `
-        <div class="border rounded p-2 mb-2" id="sesion_${i}">
-            <strong>Sesión ${i}</strong>
-            <div class="row">
-                <div class="col-md-3"><label class="small">Fecha</label><input type="date" name="fecha_${i}" class="form-control" value="{{ today }}" required></div>
-                <div class="col-md-3"><label class="small">Inicio</label><input type="time" name="hora_inicio_${i}" class="form-control" required onchange="validarHoras(${i})" oninput="validarHoras(${i})"></div>
-                <div class="col-md-3"><label class="small">Fin</label><input type="time" name="hora_fin_${i}" class="form-control" required onchange="validarHoras(${i})" oninput="validarHoras(${i})"></div>
+        <div class="sesion-card" id="sesion_${i}">
+            <div class="sesion-top">
+                <span class="sesion-tag"><span class="dot"></span> Sesión ${i}</span>
+                <span class="badge-duracion vacio" id="duracion_${i}">⏱️ Sin horario</span>
+            </div>
+            <div class="row g-2">
+                <div class="col-md-3"><label class="small">Fecha *</label><input type="date" name="fecha_${i}" class="form-control" value="{{ today }}" required></div>
+                <div class="col-md-3"><label class="small">Inicio *</label><input type="time" name="hora_inicio_${i}" class="form-control" required></div>
+                <div class="col-md-3"><label class="small">Fin *</label><input type="time" name="hora_fin_${i}" class="form-control" required></div>
                 <div class="col-md-3">
-                    <label class="small">Profesor</label>
+                    <label class="small">Profesor *</label>
                     <select name="profesor_${i}" class="form-select" onchange="toggleNuevoProf(${i}, this.value)">
                         ${PROFESORES.map(p => `<option value="${p}">${p}</option>`).join('')}
                         <option value="nuevo">➕ Nuevo</option>
                     </select>
-                    <input type="text" name="nuevo_profesor_${i}" class="form-control mt-1" placeholder="Nombre" style="display:none;" id="nuevoProfInput_${i}">
+                    <input type="text" name="nuevo_profesor_${i}" class="form-control mt-1" placeholder="Nombre del profesor" style="display:none;" id="nuevoProfInput_${i}">
                 </div>
             </div>
-            <div class="row mt-1">
+            <div class="row g-2 mt-1">
                 <div class="col-md-6">
-                    <label class="small">Encargado Apertura</label>
+                    <label class="small">Encargado de Apertura *</label>
                     <select name="encargado_${i}" class="form-select">
                         <option value="">Seleccionar...</option>
                         ${ENCARGADOS.map(e => `<option value="${e}">${e}</option>`).join('')}
@@ -398,62 +374,199 @@ function mostrarFechas() {
         </div>`;
     }
     document.getElementById('contenedorFechas').innerHTML = html;
-    fechasValidas = {};
-    for (let i = 1; i <= num; i++) {
-        fechasValidas[i] = false;
-    }
+    actualizarEstado();
 }
 
 function toggleNuevoProf(num, val) {
     document.getElementById('nuevoProfInput_' + num).style.display = (val === 'nuevo') ? 'block' : 'none';
+    actualizarEstado();
 }
 
+// ===== CÁLCULO Y VALIDACIÓN DE DURACIÓN POR SESIÓN =====
+// Devuelve {estado:'vacio'|'ok'|'error', horas, msg}
+function evaluarSesion(i) {
+    const hIni = $(`[name="hora_inicio_${i}"]`)?.value;
+    const hFin = $(`[name="hora_fin_${i}"]`)?.value;
+    const inputIni = $(`[name="hora_inicio_${i}"]`);
+    const inputFin = $(`[name="hora_fin_${i}"]`);
+    const badge = document.getElementById(`duracion_${i}`);
+    const errorBox = document.getElementById(`error_${i}`);
+    const card = document.getElementById(`sesion_${i}`);
+
+    const limpiar = () => { inputIni?.classList.remove('hora-invalida'); inputFin?.classList.remove('hora-invalida'); };
+
+    if (!hIni || !hFin) {
+        limpiar();
+        if (badge) { badge.className = 'badge-duracion vacio'; badge.textContent = '⏱️ Sin horario'; }
+        if (errorBox) errorBox.style.display = 'none';
+        card?.classList.remove('valida','invalida');
+        return { estado:'vacio', horas:0, msg:'Falta el horario' };
+    }
+
+    const [hi, mi] = hIni.split(':').map(Number);
+    const [hf, mf] = hFin.split(':').map(Number);
+    const horas = ((hf*60+mf) - (hi*60+mi)) / 60;
+
+    const marcarError = (texto) => {
+        inputIni?.classList.add('hora-invalida'); inputFin?.classList.add('hora-invalida');
+        if (badge) { badge.className = 'badge-duracion error'; badge.textContent = '⛔ ' + texto; }
+        if (errorBox) { errorBox.style.display = 'flex'; errorBox.innerHTML = '⛔ ' + texto; }
+        card?.classList.add('invalida'); card?.classList.remove('valida');
+    };
+
+    if (horas < 0) { marcarError(`Horario en retroceso (${horas.toFixed(2)} h). El fin no puede ser antes del inicio`); return { estado:'error', horas, msg:'Horario en retroceso' }; }
+    if (horas === 0) { marcarError('La duración no puede ser 0 horas'); return { estado:'error', horas, msg:'Duración cero' }; }
+    if (horas < 0.5) { marcarError(`Duración muy corta: ${(horas*60).toFixed(0)} min (mínimo 30)`); return { estado:'error', horas, msg:'Duración muy corta' }; }
+
+    // válido
+    limpiar();
+    if (badge) { badge.className = 'badge-duracion ok'; badge.textContent = `⏱️ ${horas.toFixed(2)} h (${(horas*60).toFixed(0)} min)`; }
+    if (errorBox) errorBox.style.display = 'none';
+    card?.classList.add('valida'); card?.classList.remove('invalida');
+    return { estado:'ok', horas, msg:'' };
+}
+
+// ===== VALIDACIÓN GLOBAL Y PANEL EN VIVO =====
+function recolectarErrores() {
+    const errores = [];
+    const tipo = document.getElementById('tipoSesion').value;
+    const numEst = parseInt(document.getElementById('numEstudiantes').value);
+    const numSes = parseInt(document.getElementById('numSesiones').value);
+
+    // Paso 2: tipo
+    if (!tipo) errores.push('Selecciona el tipo de sesión (Paso 2)');
+
+    // Paso 1: estudiantes
+    for (let i = 1; i <= numEst; i++) {
+        const sel = $(`[name="estudiante_id_${i}"]`);
+        if (!sel || !sel.value) errores.push(`Estudiante ${i}: selecciona un estudiante`);
+        else if (sel.value === 'nuevo') errores.push(`Estudiante ${i}: termina de crear el estudiante nuevo`);
+    }
+
+    // Paso 2: asignatura / atención / precio
+    if (tipoEsClase(tipo)) {
+        const asig = $('[name="asignatura"]');
+        if (asig && !asig.value) errores.push('Selecciona la asignatura (Paso 2)');
+    }
+    if (tipoEsTerapia(tipo)) {
+        const at = $('[name="atencion_psicologica"]');
+        if (at && !at.value) errores.push('Selecciona el tipo de atención psicológica (Paso 2)');
+    }
+    if (tipo && tipo !== 'terapia') {
+        const usaIndividual = numEst > 1 && document.getElementById('mismoPrecioNo')?.checked;
+        if (!usaIndividual) {
+            const precio = $('[name="precio_hora"]');
+            if (precio && !precio.value) errores.push('Selecciona el precio por hora (Paso 2)');
+        }
+    }
+
+    // Paso 3: sesiones
+    for (let i = 1; i <= numSes; i++) {
+        const fecha = $(`[name="fecha_${i}"]`)?.value;
+        const enc = $(`[name="encargado_${i}"]`)?.value;
+        const prof = $(`[name="profesor_${i}"]`)?.value;
+        const profNuevo = $(`[name="nuevo_profesor_${i}"]`)?.value?.trim();
+        if (!fecha) errores.push(`Sesión ${i}: falta la fecha`);
+        if (!enc) errores.push(`Sesión ${i}: selecciona el encargado de apertura`);
+        if (prof === 'nuevo' && !profNuevo) errores.push(`Sesión ${i}: escribe el nombre del profesor nuevo`);
+
+        const ev = evaluarSesion(i);
+        if (ev.estado === 'vacio') errores.push(`Sesión ${i}: falta la hora de inicio o fin`);
+        else if (ev.estado === 'error') errores.push(`Sesión ${i}: ${ev.msg}`);
+    }
+    return errores;
+}
+
+function actualizarEstado() {
+    const errores = recolectarErrores();
+    const panel = document.getElementById('panelValidacion');
+    const titulo = document.getElementById('panelTitulo');
+    const lista = document.getElementById('listaFaltantes');
+    const btn = document.getElementById('btnPlanificar');
+
+    if (errores.length === 0) {
+        panel.className = 'panel-validacion completo';
+        titulo.textContent = '✅ Todo listo — puedes grabar la planificación';
+        lista.innerHTML = '';
+        btn.disabled = false;
+    } else {
+        panel.className = 'panel-validacion incompleto';
+        titulo.textContent = `⚠️ Faltan ${errores.length} dato(s) por completar — no se puede grabar todavía`;
+        lista.innerHTML = errores.map(e => `<li>${e}</li>`).join('');
+        btn.disabled = true;
+    }
+    return errores;
+}
+
+// ===== ENVÍO CON CONFIRMACIÓN =====
+document.getElementById('formPlanificar').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const errores = actualizarEstado();
+    if (errores.length > 0) {
+        alert('❌ No se puede planificar.\n\nCorrige lo siguiente:\n\n• ' + errores.join('\n• '));
+        document.getElementById('panelValidacion').scrollIntoView({behavior:'smooth', block:'center'});
+        return;
+    }
+
+    const numSes = parseInt(document.getElementById('numSesiones').value);
+    const numEst = document.getElementById('numEstudiantes').value;
+    const tipo = document.getElementById('tipoSesion').value;
+    let fechas = [], totalHoras = 0;
+    for (let i = 1; i <= numSes; i++) {
+        const fecha = $(`[name="fecha_${i}"]`)?.value;
+        const hIni = $(`[name="hora_inicio_${i}"]`)?.value;
+        const hFin = $(`[name="hora_fin_${i}"]`)?.value;
+        const ev = evaluarSesion(i);
+        totalHoras += ev.horas;
+        fechas.push(`📅 Sesión ${i}: ${fecha}  ${hIni} → ${hFin}  (${ev.horas.toFixed(2)} h)`);
+    }
+
+    let msg = `✅ ¿Confirmas la planificación?\n\n`;
+    msg += `📋 Tipo: ${tipo}\n👨‍🎓 Estudiantes: ${numEst}\n📅 Sesiones: ${numSes}\n⏱️ Total horas: ${totalHoras.toFixed(2)} h\n\n`;
+    msg += `Detalle:\n${fechas.join('\n')}`;
+    if (confirm(msg)) this.submit();
+});
+
+// ===== DELEGACIÓN DE EVENTOS (campos dinámicos) =====
+const form = document.getElementById('formPlanificar');
+form.addEventListener('input', actualizarEstado);
+form.addEventListener('change', actualizarEstado);
+
+// ===== INICIALIZACIÓN =====
 mostrarEstudiantes();
 mostrarFechas();
+actualizarEstado();
 
-// ========== FUNCIONES DE SINCRONIZACIÓN MASIVA ==========
+// ===== SINCRONIZACIÓN CON GOOGLE CALENDAR =====
 async function sincronizarTodoCalendario() {
-    if (!confirm('⚠️ ¿Estás seguro de sincronizar TODAS las sesiones con Google Calendar?\n\nEsto actualizará o creará eventos para todas las sesiones en estado "Realizado".\nPuede tomar varios segundos...')) return;
-    
+    if (!confirm('⚠️ ¿Sincronizar TODAS las sesiones con Google Calendar?\n\nActualizará o creará eventos para todas las sesiones en estado "Realizado".\nPuede tomar varios segundos...')) return;
     const btn = event.target;
     const textoOriginal = btn.innerText;
-    btn.disabled = true;
-    btn.innerText = '⏳ Sincronizando...';
-    
+    btn.disabled = true; btn.innerText = '⏳ Sincronizando...';
     try {
         const response = await fetch('/api/sesiones/para-sincronizar');
         const sesiones = await response.json();
-        
-        if (sesiones.length === 0) {
-            alert('No hay sesiones realizadas para sincronizar');
-            btn.disabled = false;
-            btn.innerText = textoOriginal;
-            return;
-        }
-        
+        if (sesiones.length === 0) { alert('No hay sesiones realizadas para sincronizar'); btn.disabled = false; btn.innerText = textoOriginal; return; }
         let procesadas = 0, exitosas = 0, errores = 0;
         const progressDiv = document.createElement('div');
         progressDiv.className = 'alert alert-info mt-3';
         progressDiv.innerHTML = '<strong>🔄 Sincronizando...</strong><br><div class="progress"><div id="syncProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%">0%</div></div><p id="syncStatus" class="mt-2">Procesando 0 de ' + sesiones.length + ' sesiones...</p>';
         const formCard = document.querySelector('.card.shadow.mb-4');
         if (formCard) formCard.parentNode.insertBefore(progressDiv, formCard.nextSibling);
-        
         for (let i = 0; i < sesiones.length; i++) {
             const s = sesiones[i];
             try {
-                const syncResponse = await fetch('/api/sesion/' + s.id + '/sincronizar', {method: 'POST', headers: {'Content-Type': 'application/json'}});
-                const result = await syncResponse.json();
-                if (result.success) exitosas++;
-                else errores++;
+                const r = await fetch('/api/sesion/' + s.id + '/sincronizar', {method: 'POST', headers: {'Content-Type': 'application/json'}});
+                const result = await r.json();
+                if (result.success) exitosas++; else errores++;
             } catch (err) { errores++; }
             procesadas++;
-            const porcentaje = Math.round((procesadas / sesiones.length) * 100);
-            const progressBar = document.getElementById('syncProgressBar');
-            if (progressBar) { progressBar.style.width = porcentaje + '%'; progressBar.innerText = porcentaje + '%'; }
-            const statusElem = document.getElementById('syncStatus');
-            if (statusElem) statusElem.innerText = `Procesando ${procesadas} de ${sesiones.length}... ✅ ${exitosas} | ❌ ${errores}`;
+            const pct = Math.round((procesadas / sesiones.length) * 100);
+            const bar = document.getElementById('syncProgressBar');
+            if (bar) { bar.style.width = pct + '%'; bar.innerText = pct + '%'; }
+            const st = document.getElementById('syncStatus');
+            if (st) st.innerText = `Procesando ${procesadas} de ${sesiones.length}... ✅ ${exitosas} | ❌ ${errores}`;
         }
-        
         const resultDiv = document.createElement('div');
         resultDiv.className = `alert ${errores === 0 ? 'alert-success' : 'alert-warning'} mt-3`;
         resultDiv.innerHTML = `<strong>📊 Sincronización completada</strong><br>✅ Exitosas: ${exitosas}<br>❌ Errores: ${errores}<br>📅 Total: ${procesadas}`;
@@ -469,15 +582,12 @@ async function sincronizarMesActual() {
     const hoy = new Date();
     const anio = hoy.getFullYear();
     const mes = hoy.getMonth() + 1;
-    const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
     const nombreMes = meses[mes - 1];
-    
     if (!confirm(`⚠️ ¿Sincronizar solo las sesiones de ${nombreMes} ${anio}?`)) return;
     const btn = event.target;
     const textoOriginal = btn.innerText;
-    btn.disabled = true;
-    btn.innerText = '⏳...';
-    
+    btn.disabled = true; btn.innerText = '⏳...';
     try {
         const response = await fetch(`/api/sesiones/para-sincronizar?mes=${mes}&anio=${anio}`);
         const sesiones = await response.json();
@@ -485,10 +595,9 @@ async function sincronizarMesActual() {
         let exitosas = 0, errores = 0;
         for (const s of sesiones) {
             try {
-                const syncResponse = await fetch('/api/sesion/' + s.id + '/sincronizar', {method: 'POST', headers: {'Content-Type': 'application/json'}});
-                const result = await syncResponse.json();
-                if (result.success) exitosas++;
-                else errores++;
+                const r = await fetch('/api/sesion/' + s.id + '/sincronizar', {method: 'POST', headers: {'Content-Type': 'application/json'}});
+                const result = await r.json();
+                if (result.success) exitosas++; else errores++;
             } catch (err) { errores++; }
         }
         alert(`📅 ${nombreMes} ${anio}\n✅ Exitosas: ${exitosas}\n❌ Errores: ${errores}`);

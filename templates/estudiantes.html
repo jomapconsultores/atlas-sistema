@@ -15,8 +15,10 @@
 .saving{opacity:0.5;}
 </style>
 
-<h3 style="font-weight:800;color:#1a1a2e;">🎓 Estudiantes</h3>
-<p class="text-muted" style="font-size:13px;margin-bottom:20px;">Gestión de estudiantes activos · {{ estudiantes|length }} registrados</p>
+<div class="page-hero">
+    <h2>🎓 Estudiantes</h2>
+    <p>Gestión de estudiantes activos · {{ estudiantes|length }} registrados.</p>
+</div>
 
 {% if rol in ['admin','socio'] %}
 <div class="card-premium">

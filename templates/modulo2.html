@@ -23,7 +23,10 @@
     .btn-outline-secondary, .btn-outline-primary, .btn-outline-success, .btn-outline-info, .btn-outline-warning { border-radius: 10px; font-weight: 500; }
 </style>
 
-<h3>📅 {% if current_user.rol in ['admin', 'socio'] %}Calendario de Clases{% else %}Mis Clases{% endif %}</h3>
+<div class="page-hero">
+    <h2>📅 {% if current_user.rol in ['admin', 'socio'] %}Calendario de Clases{% else %}Mis Clases{% endif %}</h2>
+    <p>Marca asistencia, cancela o cambia el estado de las sesiones del día.</p>
+</div>
 
 <form class="mb-3 d-flex gap-2">
     <input type="date" name="fecha" value="{{ fecha }}" class="form-control d-inline w-auto" onchange="this.form.submit()">
