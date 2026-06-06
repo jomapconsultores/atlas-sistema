@@ -439,6 +439,18 @@
         }
         h3::before { font-size: 2rem; }
 
+        /* Encabezados dentro de secciones de fondo OSCURO: texto claro legible.
+           Anula el azul marino global de h1-h4 que, sobre fondos oscuros, queda ilegible
+           (p. ej. "¡Bienvenido!" del dashboard, page-hero, stat-cards y heros inline). */
+        .welcome-section h1, .welcome-section h2, .welcome-section h3, .welcome-section h4,
+        .page-hero h1, .page-hero h2, .page-hero h3, .page-hero h4,
+        [style*="color:#fff"] h1, [style*="color:#fff"] h2, [style*="color:#fff"] h3, [style*="color:#fff"] h4,
+        [style*="color: #fff"] h1, [style*="color: #fff"] h2, [style*="color: #fff"] h3, [style*="color: #fff"] h4,
+        [style*="color:white"] h1, [style*="color:white"] h2, [style*="color:white"] h3, [style*="color:white"] h4,
+        [style*="color: white"] h1, [style*="color: white"] h2, [style*="color: white"] h3, [style*="color: white"] h4 {
+            color: #fff !important;
+        }
+
         /* Texto subtítulo */
         .page-subtitle {
             font-size: 13px;
