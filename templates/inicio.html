@@ -193,6 +193,54 @@
         footer.site .fbrand { color: var(--gold); font-weight: 800; font-size: 16px; letter-spacing: -0.3px; }
         footer.site a { color: var(--gold); text-decoration: none; }
         footer.site strong { color: rgba(255,255,255,0.92); }
+
+        /* ── CONTACTO ────────────────────────────── */
+        .contact-wrap { display: grid; grid-template-columns: 1.4fr 1fr; gap: 26px; max-width: 980px; margin: 0 auto; align-items: stretch; }
+        .contact-form { background: #fff; border: 1px solid var(--line); border-radius: 22px; padding: 30px 30px 26px; box-shadow: 0 8px 30px rgba(13,42,107,0.07); }
+        .cf-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .cf-field { margin-bottom: 16px; display: flex; flex-direction: column; }
+        .cf-field label { font-size: 12.5px; font-weight: 700; color: var(--ink); margin-bottom: 6px; }
+        .cf-field input, .cf-field textarea {
+            border: 1.6px solid var(--line); border-radius: 11px; padding: 11px 14px; font-size: 14px;
+            font-family: inherit; color: var(--ink); transition: border-color .2s, box-shadow .2s; resize: vertical;
+        }
+        .cf-field input:focus, .cf-field textarea:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 4px rgba(26,115,232,0.12); }
+        .btn-contact {
+            width: 100%; border: none; cursor: pointer; margin-top: 4px;
+            background: linear-gradient(135deg, var(--navy2), var(--blue)); color: #fff;
+            font-weight: 800; font-size: 15px; padding: 14px; border-radius: 13px;
+            display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+            transition: transform .2s, box-shadow .2s; box-shadow: 0 8px 22px rgba(26,115,232,0.3);
+        }
+        .btn-contact:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(26,115,232,0.4); }
+        .cf-note { font-size: 11.5px; color: var(--muted); margin: 12px 0 0; text-align: center; }
+        .wa-card {
+            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+            text-align: center; text-decoration: none; border-radius: 22px; padding: 30px 24px;
+            background: linear-gradient(150deg, #128c4a 0%, #25d366 100%); color: #fff;
+            box-shadow: 0 10px 30px rgba(37,211,102,0.35); transition: transform .2s;
+        }
+        .wa-card:hover { transform: translateY(-3px); color: #fff; }
+        .wa-card i { font-size: 52px; }
+        .wa-card strong { font-size: 18px; font-weight: 800; display: block; }
+        .wa-card span { font-size: 22px; font-weight: 800; letter-spacing: 0.5px; }
+        .wa-card small { font-size: 12.5px; opacity: 0.9; }
+        @media (max-width: 760px) { .contact-wrap { grid-template-columns: 1fr; } .cf-row { grid-template-columns: 1fr; } }
+
+        /* Botón flotante de WhatsApp */
+        .wa-float {
+            position: fixed; bottom: 22px; right: 22px; z-index: 1200;
+            width: 60px; height: 60px; border-radius: 50%; background: #25d366; color: #fff;
+            display: flex; align-items: center; justify-content: center; font-size: 33px;
+            text-decoration: none; box-shadow: 0 8px 24px rgba(37,211,102,0.45);
+            transition: transform .2s; animation: wa-pulse 2.6s infinite;
+        }
+        .wa-float:hover { transform: scale(1.08); color: #fff; }
+        @keyframes wa-pulse {
+            0%   { box-shadow: 0 8px 24px rgba(37,211,102,0.45), 0 0 0 0 rgba(37,211,102,0.5); }
+            70%  { box-shadow: 0 8px 24px rgba(37,211,102,0.45), 0 0 0 16px rgba(37,211,102,0); }
+            100% { box-shadow: 0 8px 24px rgba(37,211,102,0.45), 0 0 0 0 rgba(37,211,102,0); }
+        }
     </style>
 </head>
 <body>
@@ -211,6 +259,7 @@
                 <a href="#programas" class="tl hide-sm">Programas</a>
                 <a href="#psicologia" class="tl hide-sm">Psicología</a>
                 <a href="#precios" class="tl hide-sm">Precios</a>
+                <a href="#contacto" class="tl hide-sm">Contacto</a>
                 <a href="/modulo4" class="tl hide-sm">Calendario</a>
                 <a href="/login" class="tl">Iniciar Sesión</a>
                 <a href="/registro" class="tl btn-cta">Regístrate</a>
@@ -537,12 +586,67 @@
         </div>
     </div>
 
+    <!-- CONTACTO -->
+    <section class="block" id="contacto">
+        <div class="sec-head">
+            <div class="sec-tag">Contacto</div>
+            <h2>¿Deseas que te contactemos?</h2>
+            <p>Déjanos tus datos y un asesor de Atlas se comunicará contigo. O escríbenos directamente por WhatsApp.</p>
+        </div>
+        {% if request.args.get('enviado') %}
+        <div style="max-width:980px;margin:0 auto 22px;background:#d1fae5;color:#065f46;border:1px solid #6ee7b7;border-radius:14px;padding:16px 20px;font-weight:700;text-align:center;">
+            ✅ ¡Gracias! Hemos recibido tus datos y te contactaremos muy pronto.
+        </div>
+        {% elif request.args.get('error') %}
+        <div style="max-width:980px;margin:0 auto 22px;background:#fee2e2;color:#7f1d1d;border:1px solid #fca5a5;border-radius:14px;padding:16px 20px;font-weight:700;text-align:center;">
+            ❌ Indica tu nombre y al menos un teléfono o correo, e inténtalo de nuevo (o escríbenos por WhatsApp).
+        </div>
+        {% endif %}
+        <div class="contact-wrap">
+            <form class="contact-form" method="POST" action="/contacto">
+                <div class="cf-row">
+                    <div class="cf-field">
+                        <label>Nombre completo *</label>
+                        <input type="text" name="nombre" required placeholder="Tu nombre">
+                    </div>
+                    <div class="cf-field">
+                        <label>Teléfono / WhatsApp</label>
+                        <input type="tel" name="telefono" placeholder="09XXXXXXXX">
+                    </div>
+                </div>
+                <div class="cf-field">
+                    <label>Correo electrónico</label>
+                    <input type="email" name="email" placeholder="tucorreo@ejemplo.com">
+                </div>
+                <div class="cf-field">
+                    <label>¿En qué te podemos ayudar?</label>
+                    <textarea name="mensaje" rows="3" placeholder="Cuéntanos qué programa te interesa..."></textarea>
+                </div>
+                <button type="submit" class="btn-contact"><i class="bi bi-send-fill"></i> Enviar y que me contacten</button>
+                <p class="cf-note">* Indica al menos un teléfono o un correo para poder responderte.</p>
+            </form>
+            <a href="https://wa.me/593990948817?text=Hola%20Atlas%2C%20deseo%20m%C3%A1s%20informaci%C3%B3n" target="_blank" rel="noopener" class="wa-card">
+                <i class="bi bi-whatsapp"></i>
+                <div>
+                    <strong>Escríbenos por WhatsApp</strong>
+                    <span>099 094 8817</span>
+                </div>
+                <small>Respuesta rápida en horario de atención</small>
+            </a>
+        </div>
+    </section>
+
     <!-- FOOTER -->
     <footer class="site">
         <div class="fbrand">atlas <span style="color:rgba(255,255,255,0.5); font-weight:600; font-size:12px;">CENTRO DE ESTUDIOS</span></div>
         <p style="margin:12px 0 6px;">Nivelación · Preuniversitario · Cursos Especiales · Psicología y Psicopedagogía</p>
         <p style="margin:0;">Sistema creado por <strong>Marco Antonio Posligua San Martín</strong> &nbsp;|&nbsp; ATLAS v2.0</p>
     </footer>
+
+    <!-- BOTÓN FLOTANTE DE WHATSAPP -->
+    <a href="https://wa.me/593990948817?text=Hola%20Atlas%2C%20deseo%20m%C3%A1s%20informaci%C3%B3n" target="_blank" rel="noopener" class="wa-float" aria-label="Contáctanos por WhatsApp" title="Escríbenos por WhatsApp">
+        <i class="bi bi-whatsapp"></i>
+    </a>
 
 </body>
 </html>

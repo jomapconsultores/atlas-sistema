@@ -640,6 +640,7 @@
         <div class="side-section">Personas</div>
         <a href="/estudiantes" class="{% if p=='/estudiantes' %}active{% endif %}"><span class="ico">🎓</span> Estudiantes</a>
         <a href="/padres" class="{% if p=='/padres' %}active{% endif %}"><span class="ico">👨‍👩‍👧</span> Padres</a>
+        <a href="/contactos" class="{% if p=='/contactos' %}active{% endif %}"><span class="ico">📨</span> Contactos {% if contactos_nuevos and contactos_nuevos>0 %}<span class="side-badge">{{ contactos_nuevos }}</span>{% endif %}</a>
 
         <div class="side-section">Pagos y finanzas</div>
         {% set pago_active = p in ['/modulo3','/modulo5'] %}

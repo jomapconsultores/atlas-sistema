@@ -40,17 +40,23 @@ def socio_admin_required(f):
         return f(*args, **kwargs)
     return decorated
 
-# Inyecta el contador de anticipos pendientes en TODAS las plantillas (badge del menú lateral)
+# Inyecta contadores (anticipos pendientes y contactos nuevos) en TODAS las plantillas (badges del menú lateral)
 @app.context_processor
 def inyectar_globales():
     pendientes = 0
+    contactos_nuevos = 0
     try:
         if current_user.is_authenticated and getattr(current_user, 'rol', None) in ['admin', 'socio']:
             solicitudes = supabase.table('anticipos_solicitudes').select('id').eq('estado', 'pendiente').execute()
             pendientes = len(solicitudes.data or [])
+            try:
+                cont = supabase.table('contactos').select('id').eq('estado', 'nuevo').execute()
+                contactos_nuevos = len(cont.data or [])
+            except Exception:
+                contactos_nuevos = 0
     except Exception:
         pendientes = 0
-    return {'solicitudes_pendientes': pendientes}
+    return {'solicitudes_pendientes': pendientes, 'contactos_nuevos': contactos_nuevos}
 
 # Evita que el navegador cachee las páginas HTML (causa de "no veo los cambios" tras desplegar).
 # Los recursos estáticos (logo, etc.) NO se tocan y siguen cacheando normalmente.
@@ -162,6 +168,26 @@ def inicio():
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
     return render_template('inicio.html')
+
+@app.route('/contacto', methods=['POST'])
+def contacto():
+    """Recibe el formulario de contacto de la landing pública y lo guarda.
+    Genera una alerta (badge) para socios y administradores."""
+    nombre = (request.form.get('nombre') or '').strip()
+    telefono = (request.form.get('telefono') or '').strip()
+    email = (request.form.get('email') or '').strip()
+    mensaje = (request.form.get('mensaje') or '').strip()
+    if not nombre or not (telefono or email):
+        return redirect(url_for('inicio', error=1, _anchor='contacto'))
+    try:
+        supabase.table('contactos').insert({
+            'nombre': nombre[:120], 'telefono': telefono[:40],
+            'email': email[:120], 'mensaje': mensaje[:1000], 'estado': 'nuevo'
+        }).execute()
+        return redirect(url_for('inicio', enviado=1, _anchor='contacto'))
+    except Exception as e:
+        print(f'⚠️ Error al guardar contacto: {e}')
+        return redirect(url_for('inicio', error=1, _anchor='contacto'))
 
 @app.route('/registro', methods=['GET', 'POST'])
 def registro():
@@ -1247,6 +1273,43 @@ def rechazar_anticipo(id):
     supabase.table('anticipos_solicitudes').update({'estado': 'rechazado', 'motivo_rechazo': request.form.get('motivo_rechazo', 'Sin motivo')}).eq('id', id).execute()
     flash('❌ Anticipo rechazado', 'info')
     return redirect(url_for('gestion_anticipos'))
+
+# ========== CONTACTOS (solicitudes desde la landing) ==========
+@app.route('/contactos')
+@login_required
+@socio_admin_required
+def contactos_lista():
+    try:
+        contactos = supabase.table('contactos').select('*').order('fecha_registro', desc=True).execute().data or []
+    except Exception as e:
+        contactos = []
+        flash(f'⚠️ No se pudo cargar contactos (¿falta ejecutar migration_contactos.sql?): {e}', 'warning')
+    return render_template('contactos.html', contactos=contactos)
+
+@app.route('/contacto/<int:id>/atender', methods=['POST'])
+@login_required
+@socio_admin_required
+def atender_contacto(id):
+    try:
+        supabase.table('contactos').update({
+            'estado': 'atendido', 'atendido_por': current_user.nombre,
+            'fecha_atendido': date.today().isoformat()
+        }).eq('id', id).execute()
+        flash('✅ Contacto marcado como atendido', 'success')
+    except Exception as e:
+        flash(f'❌ Error: {e}', 'error')
+    return redirect(url_for('contactos_lista'))
+
+@app.route('/contacto/<int:id>/eliminar', methods=['POST'])
+@login_required
+@socio_admin_required
+def eliminar_contacto(id):
+    try:
+        supabase.table('contactos').delete().eq('id', id).execute()
+        flash('🗑️ Contacto eliminado', 'info')
+    except Exception as e:
+        flash(f'❌ Error: {e}', 'error')
+    return redirect(url_for('contactos_lista'))
 
 # ========== PSICOLOGÍA ESPECIAL ==========
 @app.route('/psicologia-especial')

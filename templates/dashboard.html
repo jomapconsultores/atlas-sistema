@@ -94,7 +94,15 @@
         <div class="subtitle">Sistema de Gestión Académica Atlas</div>
         <span class="role-badge {% if current_user.rol=='admin' %}role-admin{% elif current_user.rol=='socio' %}role-socio{% elif current_user.rol=='profesor' %}role-profesor{% elif current_user.rol=='psicologo' %}role-psicologo{% elif current_user.rol=='estudiante' %}role-estudiante{% else %}role-padre{% endif %}">{{ current_user.rol }}</span>
     </div>
-    
+
+    {% if current_user.rol in ['admin', 'socio'] and contactos_nuevos and contactos_nuevos > 0 %}
+    <a href="/contactos" style="display:flex; align-items:center; gap:14px; text-decoration:none; background:linear-gradient(135deg,#92400e,#d97706); color:#fff; border-radius:16px; padding:16px 22px; margin-bottom:24px; box-shadow:0 6px 22px rgba(217,119,6,0.3);">
+        <span style="font-size:28px;">🔔</span>
+        <span style="flex:1; font-weight:700; font-size:15px;">Tienes {{ contactos_nuevos }} nueva(s) solicitud(es) de contacto sin atender</span>
+        <span style="background:rgba(255,255,255,0.2); padding:8px 16px; border-radius:10px; font-weight:700; font-size:13px;">Ver contactos →</span>
+    </a>
+    {% endif %}
+
     {% if current_user.rol in ['admin', 'socio'] %}
     <div class="module-grid">
         <a href="/modulo1" class="module-card">
