@@ -52,6 +52,16 @@ def inyectar_globales():
         pendientes = 0
     return {'solicitudes_pendientes': pendientes}
 
+# Evita que el navegador cachee las páginas HTML (causa de "no veo los cambios" tras desplegar).
+# Los recursos estáticos (logo, etc.) NO se tocan y siguen cacheando normalmente.
+@app.after_request
+def no_cache_html(response):
+    if response.mimetype == 'text/html':
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+    return response
+
 # ========== CONSTANTES ==========
 ASIGNATURAS = [
     'Contabilidad general', 'Contabilidad de costos', 'Matemáticas', 'Geometría',
