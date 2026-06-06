@@ -31,7 +31,7 @@
 
 <div class="card-premium"><div class="card-header-grad grad-dark">📋 Usuarios Registrados</div><div class="card-body p-0">
 <div class="table-responsive"><table class="table table-premium mb-0"><thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Estado</th><th>Acción</th></tr></thead><tbody>
-{% for u in usuarios %}<tr><td>{{ u.nombre }}</td><td>{{ u.email }}</td><td><span class="badge-premium bg-{{ 'dark' if u.rol=='admin' else 'primary' if u.rol=='socio' else 'success' if u.rol=='profesor' else 'purple' if u.rol=='psicologo' else 'info' }}">{{ u.rol }}</span></td><td><span class="badge-premium bg-{{ 'success' if u.activo else 'danger' }}">{{ 'Activo' if u.activo else 'Inactivo' }}</span></td><td>
+{% for u in usuarios %}<tr><td>{{ u.nombre }}</td><td>{{ u.email }}</td><td><span class="badge-premium text-white bg-{{ 'dark' if u.rol=='admin' else 'primary' if u.rol=='socio' else 'success' if u.rol=='profesor' else 'purple' if u.rol=='psicologo' else 'info' }}">{{ u.rol }}</span></td><td><span class="badge-premium text-white bg-{{ 'success' if u.activo else 'danger' }}">{{ 'Activo' if u.activo else 'Inactivo' }}</span></td><td>
 <form method="POST" style="display:inline;"><input type="hidden" name="usuario_id" value="{{ u.id }}"><input type="hidden" name="accion" value="{{ 'rechazar' if u.activo else 'aprobar' }}"><button type="submit" class="btn btn-sm btn-{{ 'warning' if u.activo else 'success' }} btn-premium">{{ '❌ Desactivar' if u.activo else '✅ Aprobar' }}</button></form>
 </td></tr>{% endfor %}
 </tbody></table></div></div></div>

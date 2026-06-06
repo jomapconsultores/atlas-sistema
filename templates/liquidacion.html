@@ -180,7 +180,7 @@
                     <td class="ps-3">{{ g['fecha'] }}</td>
                     <td>{{ g['concepto'] }}</td>
                     <td>{{ g.get('persona','') }}</td>
-                    <td><span class="badge bg-warning text-dark">{{ g.get('reembolsado_a','') }}</span></td>
+                    <td><span class="badge bg-warning text-white">{{ g.get('reembolsado_a','') }}</span></td>
                     <td class="text-end fw-bold text-warning">${{ "%.2f"|format(g['monto']) }}</td>
                 </tr>
                 {% endfor %}
@@ -245,7 +245,7 @@
                     <td>{{ g.get('persona','') }}</td>
                     <td class="text-center">
                         {% if g.get('reembolso') %}
-                        <span class="badge bg-warning text-dark">↩ {{ g.get('reembolsado_a','') }}</span>
+                        <span class="badge bg-warning text-white">↩ {{ g.get('reembolsado_a','') }}</span>
                         {% else %}-{% endif %}
                     </td>
                     <td class="text-end">${{ "%.2f"|format(g['monto']) }}</td>

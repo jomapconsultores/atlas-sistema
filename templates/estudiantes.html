@@ -140,7 +140,7 @@
                         </td>
                         <td data-campo-tipo>{% if rol in ['admin','socio'] %}
                             <span class="celda-edit" onclick="editarCeldaTipo(this, {{ e.id }})">
-                                {% if e.get('tipo_institucion') %}<span class="badge bg-info text-dark">{{ e.get('tipo_institucion') }}</span>{% else %}<span class="text-muted small">clic para asignar</span>{% endif %}
+                                {% if e.get('tipo_institucion') %}<span class="badge bg-info text-white">{{ e.get('tipo_institucion') }}</span>{% else %}<span class="text-muted small">clic para asignar</span>{% endif %}
                             </span>
                             {% else %}{{ e.get('tipo_institucion','') or '—' }}{% endif %}
                         </td>
@@ -207,7 +207,7 @@ function editarCeldaTipo(span, id) {
         const res = await guardarCampo(id, 'tipo_institucion', nv);
         if (res.success !== false) setTipoFila(id, nv);
         const s2 = document.createElement('span'); s2.className = 'celda-edit';
-        s2.innerHTML = nv ? `<span class="badge bg-info text-dark">${nv}</span>` : '<span class="text-muted small">clic para asignar</span>';
+        s2.innerHTML = nv ? `<span class="badge bg-info text-white">${nv}</span>` : '<span class="text-muted small">clic para asignar</span>';
         s2.onclick = () => editarCeldaTipo(s2, id);
         sel.replaceWith(s2);
     };

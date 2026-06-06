@@ -54,14 +54,14 @@
                     <tr>
                         <td>{{ c.concepto }}</td>
                         <td>
-                            <span class="badge-premium bg-{{ 'success' if c.tipo=='psicologia' else 'primary' if c.tipo=='clase' else 'warning' if c.tipo=='matricula' else 'info' }}">
+                            <span class="badge-premium text-white bg-{{ 'success' if c.tipo=='psicologia' else 'primary' if c.tipo=='clase' else 'warning' if c.tipo=='matricula' else 'info' }}">
                                 {{ c.tipo }}
                             </span>
                         </td>
                         <td class="text-end fw-bold">${{ "%.2f"|format(c.precio) }}</td>
                         <td><small>{{ c.get('nombre_modificador', 'Sistema') }}</small></td>
                         <td>
-                            <span class="badge-premium bg-{{ 'success' if c.activo else 'danger' }}">
+                            <span class="badge-premium text-white bg-{{ 'success' if c.activo else 'danger' }}">
                                 {{ 'Activo' if c.activo else 'Inactivo' }}
                             </span>
                         </td>

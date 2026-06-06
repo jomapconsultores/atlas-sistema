@@ -240,6 +240,23 @@
 
         /* ── BADGES ──────────────────────────────────── */
         .badge { border-radius: 20px !important; font-weight: 600 !important; letter-spacing: 0.3px; padding: 4px 10px !important; }
+        /* Contraste garantizado: blanco sobre fondos oscuros, oscuro sobre fondos claros.
+           Como bg-warning/info/secondary/dark se redefinen a degradados OSCUROS, el texto
+           por defecto (oscuro) quedaría ilegible; forzamos blanco salvo text-* explícito. */
+        .badge.bg-primary, .badge.bg-success, .badge.bg-danger,
+        .badge.bg-warning, .badge.bg-info, .badge.bg-secondary, .badge.bg-dark { color: #fff; }
+        .badge.bg-light, .badge.bg-white { color: #1e293b; }
+        /* Headers/cajas con fondo oscuro: el texto y subtítulos heredan blanco legible */
+        .card-header.bg-primary, .card-header.bg-success, .card-header.bg-warning,
+        .card-header.bg-info, .card-header.bg-danger, .card-header.bg-secondary, .card-header.bg-dark,
+        .modal-header.bg-primary, .modal-header.bg-success, .modal-header.bg-warning,
+        .modal-header.bg-info, .modal-header.bg-danger, .modal-header.bg-secondary, .modal-header.bg-dark { color: #fff; }
+        /* Badges con clase custom (.badge-premium u otras) sobre fondos de color del sistema */
+        .bg-primary:not(.alert):not(.btn), .bg-success:not(.alert):not(.btn),
+        .bg-danger:not(.alert):not(.btn), .bg-warning:not(.alert):not(.btn),
+        .bg-info:not(.alert):not(.btn), .bg-secondary:not(.alert):not(.btn),
+        .bg-dark:not(.alert):not(.btn) { color: #fff; }
+        .bg-light, .bg-white { color: #1e293b; }
 
         /* ── ALERTS ──────────────────────────────────── */
         .alert { border-radius: var(--radius-md) !important; font-size: 13px; border: none !important; }

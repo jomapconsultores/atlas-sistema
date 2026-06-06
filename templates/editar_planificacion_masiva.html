@@ -36,7 +36,7 @@
 
 <div id="resumenSeleccion" style="display:none"><div class="card shadow mb-4"><div class="card-header bg-success text-white"><strong>📊 Seleccionada</strong></div><div class="card-body" id="resumenActual"></div></div></div>
 
-<div id="formEdicion" style="display:none"><div class="card shadow mb-4"><div class="card-header bg-warning text-dark"><strong>✏️ Editar</strong></div><div class="card-body"><input type="hidden" id="sesion_id">
+<div id="formEdicion" style="display:none"><div class="card shadow mb-4"><div class="card-header bg-warning text-white"><strong>✏️ Editar</strong></div><div class="card-body"><input type="hidden" id="sesion_id">
 <div class="mb-2"><label class="form-label">Tipo *</label><select id="tipoSesion" class="form-select" onchange="cambioTipoMasivo()"><option value="clase">📚 Clase</option><option value="terapia">🧠 Terapia</option><option value="ambos">📚🧠 Ambos</option><option value="preuniversitario">🎓 Pre Uni</option></select></div>
 
 <div class="mb-2"><label class="form-label">Asignatura</label><div class="input-group"><select id="asignatura_select" class="form-select" onchange="asigCambio()"><option value="">Seleccionar o crear...</option><option value="NUEVO">➕ Nueva...</option>{% for a in asignaturas %}<option value="{{ a }}">{{ a }}</option>{% endfor %}</select><input type="text" id="asignatura_nuevo" class="form-control" style="display:none" placeholder="Nueva asignatura"></div></div>

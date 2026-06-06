@@ -36,7 +36,7 @@
                         <td class="ps-3 fw-bold">{{ nombre }}</td>
                         <td class="text-center">
                             {% if datos.pago_psicologia > 0 and datos.pago_docencia > 0 %}
-                                <span class="badge bg-warning text-dark">Ambos</span>
+                                <span class="badge bg-warning text-white">Ambos</span>
                             {% elif datos.pago_psicologia > 0 %}
                                 <span class="badge bg-success">🧠 Psicólogo</span>
                             {% else %}
@@ -236,7 +236,7 @@
                                 </td>
                                 <td class="text-center">
                                     {% if g.get('reembolso') %}
-                                    <span class="badge bg-warning text-dark" title="Reembolsar a: {{ g.get('reembolsado_a', '') }}">Sí</span>
+                                    <span class="badge bg-warning text-white" title="Reembolsar a: {{ g.get('reembolsado_a', '') }}">Sí</span>
                                     {% else %}
                                     <span class="text-muted">—</span>
                                     {% endif %}
