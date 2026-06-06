@@ -428,6 +428,29 @@ def api_sesiones_todas():
         })
     return jsonify(resultado)
 
+@app.route('/api/sesiones/para-sincronizar')
+@login_required
+def api_sesiones_para_sincronizar():
+    """Devuelve las sesiones en estado 'Realizado' listas para sincronizar con Google Calendar.
+    Acepta filtros opcionales ?mes=&anio= para limitar a un mes concreto."""
+    mes = request.args.get('mes')
+    anio = request.args.get('anio')
+    query = supabase.table('sesiones').select('id, fecha, hora_inicio, hora_fin').eq('estado', 'Realizado')
+    if mes and anio:
+        try:
+            mes_i, anio_i = int(mes), int(anio)
+            ultimo_dia = monthrange(anio_i, mes_i)[1]
+            query = query.gte('fecha', f"{anio_i:04d}-{mes_i:02d}-01").lte('fecha', f"{anio_i:04d}-{mes_i:02d}-{ultimo_dia:02d}")
+        except (ValueError, TypeError):
+            pass
+    sesiones = query.order('fecha').execute()
+    resultado = [
+        {'id': s['id'], 'fecha': s.get('fecha', '')}
+        for s in (sesiones.data or [])
+        if s.get('fecha') and s.get('hora_inicio') and s.get('hora_fin')
+    ]
+    return jsonify(resultado)
+
 @app.route('/api/estudiante/<int:id>/sesiones')
 @login_required
 def api_estudiante_sesiones(id):
@@ -1012,24 +1035,29 @@ def eliminar_reunion(id):
 @login_required
 @socio_admin_required
 def sincronizar_reunion(id):
-    reunion = supabase.table('reuniones').select('*').eq('id', id).execute()
-    if not reunion.data:
-        return jsonify({'success': False, 'error': 'Reunión no encontrada'})
-    r = reunion.data[0]
-    if crear_evento_calendar:
-        evento_id = crear_evento_calendar({
-            'asignatura': f"{r.get('titulo', 'Reunión')} - {r.get('tema', '')}",
-            'profesor': r.get('encargado', ''),
-            'estudiantes': r.get('asistentes', ''),
+    try:
+        reunion = supabase.table('reuniones').select('*').eq('id', id).execute()
+        if not reunion.data:
+            return jsonify({'success': False, 'error': 'Reunión no encontrada'})
+        r = reunion.data[0]
+        if not r.get('fecha') or not r.get('hora_inicio') or not r.get('hora_fin'):
+            return jsonify({'success': False, 'error': 'Faltan datos (fecha u horario)'})
+        encargado = (r.get('encargado') or '').strip()
+        evento_id = crear_o_actualizar_evento_calendar({
+            'asignatura': f"{r.get('titulo') or 'Reunión'} - {r.get('tema') or ''}",
+            'profesor': encargado,
+            'estudiantes': r.get('asistentes') or '',
             'fecha': str(r['fecha']),
             'hora_inicio': str(r['hora_inicio'])[:5],
             'hora_fin': str(r['hora_fin'])[:5],
-            'encargado_apertura': r.get('encargado', '')[:10]
-        })
+            'encargado_apertura': encargado[:10]
+        }, r.get('evento_calendar_id'))
         if evento_id:
             supabase.table('reuniones').update({'evento_calendar_id': evento_id}).eq('id', id).execute()
             return jsonify({'success': True})
-    return jsonify({'success': False})
+        return jsonify({'success': False, 'error': 'No se pudo crear/actualizar el evento en Google Calendar'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 # ========== API ENCARGADOS ==========
 @app.route('/api/encargados')

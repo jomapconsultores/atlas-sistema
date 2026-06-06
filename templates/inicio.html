@@ -3,86 +3,492 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Atlas - Centro de Apoyo Académico</title>
+    <title>Atlas Académico — Nivelación y Preparación Preuniversitaria</title>
+    <meta name="description" content="Atlas Académico: nivelación académica, preparación preuniversitaria y cursos especiales. Clases individuales y en grupos reducidos con atención personalizada.">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        * { font-family: 'Inter', sans-serif; }
-        body { 
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 40%, #0f3460 70%, #1a73e8 100%);
-            min-height: 100vh; display: flex; align-items: center; position: relative; overflow: hidden;
+        :root {
+            --navy:   #0d2a6b;
+            --navy2:  #1a3c9e;
+            --blue:   #1a73e8;
+            --gold:   #f0c040;
+            --gold2:  #ffd84d;
+            --ink:    #1a1a2e;
+            --muted:  #5b6478;
+            --bg:     #f5f7fb;
+            --line:   #e6eaf2;
         }
-        body::before {
-            content: ''; position: absolute; top: -200px; right: -200px;
-            width: 600px; height: 600px; background: rgba(255,255,255,0.02); border-radius: 50%;
+        * { font-family: 'Inter', sans-serif; box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+        body { margin: 0; background: var(--bg); color: var(--ink); overflow-x: hidden; }
+
+        /* ── TOPBAR ──────────────────────────────── */
+        .topbar {
+            position: sticky; top: 0; z-index: 1000;
+            background: rgba(13,42,107,0.97); backdrop-filter: blur(8px);
+            box-shadow: 0 2px 18px rgba(0,0,0,0.18);
         }
-        body::after {
-            content: ''; position: absolute; bottom: -150px; left: -150px;
-            width: 400px; height: 400px; background: rgba(255,255,255,0.02); border-radius: 50%;
+        .topbar-inner {
+            max-width: 1200px; margin: 0 auto; padding: 12px 22px;
+            display: flex; align-items: center; justify-content: space-between; gap: 14px;
         }
-        .card-inicio { 
-            border-radius: 24px; border: none; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            background: white; position: relative; z-index: 1;
+        .topbar .brand { display: flex; align-items: center; gap: 11px; text-decoration: none; }
+        .topbar .brand img {
+            height: 46px; width: 46px; border-radius: 50%; object-fit: cover;
+            box-shadow: 0 0 0 2px rgba(240,192,64,0.55);
         }
-        .logo-icon {
-            width: 110px; height: 110px; border-radius: 50%;
-            object-fit: cover; margin: 0 auto 12px; display: block;
-            box-shadow: 0 8px 30px rgba(0,0,0,0.25);
-            border: 3px solid rgba(240,192,64,0.6);
+        .topbar .brand .bn { font-weight: 900; font-size: 22px; color: var(--gold); letter-spacing: -0.5px; line-height: 1; }
+        .topbar .brand .bs { font-size: 9px; color: rgba(255,255,255,0.6); letter-spacing: 2.5px; text-transform: uppercase; font-weight: 600; }
+        .topbar-links { display: flex; align-items: center; gap: 6px; }
+        .topbar-links a.tl {
+            color: rgba(255,255,255,0.8); text-decoration: none; font-size: 13.5px; font-weight: 600;
+            padding: 8px 12px; border-radius: 9px; transition: all .2s;
         }
-        h1 { font-weight: 800; font-size: 26px; color: #1a1a2e; letter-spacing: -1px; margin-bottom: 2px; }
-        .subtitle { font-size: 13px; color: #888; margin-bottom: 28px; }
-        .btn-inicio { 
-            padding: 14px; font-size: 15px; border-radius: 14px; margin: 6px 0;
-            font-weight: 600; transition: all 0.3s; position: relative; overflow: hidden;
+        .topbar-links a.tl:hover { color: #fff; background: rgba(255,255,255,0.1); }
+        .btn-cta {
+            background: linear-gradient(135deg, var(--gold), var(--gold2)); color: var(--navy) !important;
+            font-weight: 800 !important; padding: 9px 18px !important; border-radius: 10px;
+            box-shadow: 0 6px 18px rgba(240,192,64,0.35);
         }
-        .btn-primary {
-            background: linear-gradient(135deg, #1a73e8, #0d47a1); border: none;
+        .btn-cta:hover { background: var(--gold2); transform: translateY(-1px); }
+        @media (max-width: 720px) { .topbar-links .hide-sm { display: none; } }
+
+        /* ── HERO ────────────────────────────────── */
+        .hero {
+            position: relative;
+            background: radial-gradient(1200px 600px at 80% -10%, #2a52c4 0%, transparent 55%),
+                        linear-gradient(135deg, #0a1f52 0%, #0d2a6b 45%, #1a3c9e 100%);
+            color: #fff; overflow: hidden;
+            padding: 70px 22px 90px;
         }
-        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(26,115,232,0.3); }
-        .btn-outline-primary { border: 2px solid #1a73e8; color: #1a73e8; }
-        .btn-outline-primary:hover { background: #e3f2fd; transform: translateY(-2px); }
-        .btn-outline-success { border: 2px solid #0f9d58; color: #0f9d58; }
-        .btn-outline-success:hover { background: #e8f5e9; transform: translateY(-2px); }
-        .footer-text { color: rgba(255,255,255,0.6); font-size: 12px; }
-        .footer-text strong { color: rgba(255,255,255,0.9); }
-        hr { margin: 25px 0; opacity: 0.3; }
+        .hero::after {
+            content: ''; position: absolute; bottom: -1px; left: 0; right: 0; height: 70px;
+            background: var(--bg); clip-path: polygon(0 100%, 100% 100%, 100% 0);
+        }
+        .hero-inner { max-width: 1100px; margin: 0 auto; position: relative; z-index: 2; text-align: center; }
+        .hero img.logo {
+            height: 120px; width: 120px; border-radius: 50%; object-fit: cover; margin: 0 auto 22px;
+            display: block; box-shadow: 0 10px 40px rgba(0,0,0,0.35), 0 0 0 4px rgba(240,192,64,0.4);
+        }
+        .hero .pill {
+            display: inline-block; background: rgba(240,192,64,0.15); border: 1px solid rgba(240,192,64,0.4);
+            color: var(--gold); font-weight: 700; font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase;
+            padding: 7px 16px; border-radius: 30px; margin-bottom: 22px;
+        }
+        .hero h1 { font-weight: 900; font-size: clamp(34px, 6vw, 58px); line-height: 1.05; letter-spacing: -1.5px; margin: 0 0 18px; }
+        .hero h1 .hl { color: var(--gold); }
+        .hero p.lead { font-size: clamp(15px, 2.2vw, 19px); color: rgba(255,255,255,0.82); max-width: 720px; margin: 0 auto 34px; line-height: 1.6; }
+        .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+        .hero-actions a {
+            text-decoration: none; font-weight: 800; font-size: 15px; padding: 14px 28px; border-radius: 14px;
+            transition: all .25s; display: inline-flex; align-items: center; gap: 9px;
+        }
+        .a-gold { background: linear-gradient(135deg, var(--gold), var(--gold2)); color: var(--navy); box-shadow: 0 10px 30px rgba(240,192,64,0.4); }
+        .a-gold:hover { transform: translateY(-3px); box-shadow: 0 14px 36px rgba(240,192,64,0.5); }
+        .a-ghost { background: rgba(255,255,255,0.08); color: #fff; border: 2px solid rgba(255,255,255,0.25); }
+        .a-ghost:hover { background: rgba(255,255,255,0.16); transform: translateY(-3px); }
+
+        /* ── SECTIONS ────────────────────────────── */
+        section.block { max-width: 1180px; margin: 0 auto; padding: 64px 22px; }
+        .sec-head { text-align: center; max-width: 740px; margin: 0 auto 44px; }
+        .sec-tag { color: var(--blue); font-weight: 800; font-size: 13px; letter-spacing: 2px; text-transform: uppercase; }
+        .sec-head h2 { font-weight: 900; font-size: clamp(26px, 4vw, 38px); letter-spacing: -1px; color: var(--ink); margin: 10px 0 14px; }
+        .sec-head p { color: var(--muted); font-size: 15.5px; line-height: 1.7; margin: 0; }
+
+        /* ── CARDS GRID ──────────────────────────── */
+        .grid { display: grid; gap: 22px; }
+        .grid-3 { grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); }
+        .grid-2 { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+        .ac-card {
+            background: #fff; border: 1px solid var(--line); border-radius: 20px; padding: 28px 26px;
+            box-shadow: 0 4px 20px rgba(13,42,107,0.05); transition: all .25s; position: relative; overflow: hidden;
+        }
+        .ac-card:hover { transform: translateY(-5px); box-shadow: 0 16px 40px rgba(13,42,107,0.13); border-color: #cfd9ee; }
+        .ac-card .ic {
+            width: 56px; height: 56px; border-radius: 16px; display: flex; align-items: center; justify-content: center;
+            font-size: 27px; color: #fff; margin-bottom: 18px; box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+        }
+        .ic-math { background: linear-gradient(135deg, #ff6a3d, #ff8a4c); }
+        .ic-sci  { background: linear-gradient(135deg, #0bb5d6, #36cfe0); }
+        .ic-lang { background: linear-gradient(135deg, #34a853, #5bd17a); }
+        .ic-soc  { background: linear-gradient(135deg, #1a73e8, #4f95f5); }
+        .ic-gen  { background: linear-gradient(135deg, #8e44 ad, #a55ed1); }
+        .ic-gen  { background: linear-gradient(135deg, #8e44ad, #a55ed1); }
+        .ic-blue { background: linear-gradient(135deg, var(--navy2), var(--blue)); }
+        .ic-gold { background: linear-gradient(135deg, #d99a16, #f0c040); }
+        .ic-purp { background: linear-gradient(135deg, #7c3aed, #a855f7); }
+        .ac-card h3 { font-weight: 800; font-size: 19px; margin: 0 0 6px; color: var(--ink); }
+        .ac-card .sub { color: var(--blue); font-weight: 700; font-size: 12.5px; margin-bottom: 14px; }
+        .ac-card ul { list-style: none; padding: 0; margin: 0; }
+        .ac-card ul li { font-size: 13.8px; color: var(--muted); padding: 5px 0 5px 24px; position: relative; line-height: 1.45; }
+        .ac-card ul li::before {
+            content: '\F26E'; font-family: 'bootstrap-icons'; position: absolute; left: 0; top: 5px;
+            color: var(--gold); font-size: 13px; font-weight: 700;
+        }
+
+        /* ── BANDS ───────────────────────────────── */
+        .band-tint { background: linear-gradient(180deg, #eef2fb 0%, #f5f7fb 100%); }
+        .band-dark { background: linear-gradient(135deg, #0a1f52 0%, #102f7d 100%); color: #fff; }
+        .band-dark .sec-head h2 { color: #fff; }
+        .band-dark .sec-tag { color: var(--gold); }
+        .band-dark .sec-head p { color: rgba(255,255,255,0.75); }
+
+        /* ── PROCESO (steps) ─────────────────────── */
+        .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 18px; }
+        .step {
+            background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.13); border-radius: 18px;
+            padding: 24px 22px; transition: all .25s;
+        }
+        .step:hover { background: rgba(255,255,255,0.11); transform: translateY(-4px); }
+        .step .n {
+            font-weight: 900; font-size: 30px; color: var(--gold);
+            -webkit-text-stroke: 0; line-height: 1; margin-bottom: 12px;
+        }
+        .step h4 { font-weight: 800; font-size: 15.5px; margin: 0 0 7px; color: #fff; }
+        .step p { font-size: 13px; color: rgba(255,255,255,0.7); margin: 0; line-height: 1.5; }
+
+        /* ── QUOTE ───────────────────────────────── */
+        .quote {
+            max-width: 880px; margin: 44px auto 0; background: rgba(240,192,64,0.1);
+            border-left: 4px solid var(--gold); border-radius: 0 16px 16px 0; padding: 24px 28px;
+            font-size: 16px; font-style: italic; color: rgba(255,255,255,0.9); line-height: 1.6;
+        }
+
+        /* ── PRECIOS ─────────────────────────────── */
+        .price-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 26px; max-width: 880px; margin: 0 auto; }
+        .price-card {
+            background: #fff; border: 1px solid var(--line); border-radius: 24px; padding: 36px 32px; text-align: center;
+            box-shadow: 0 8px 30px rgba(13,42,107,0.07); position: relative; transition: all .25s;
+        }
+        .price-card.featured { border: 2px solid var(--gold); box-shadow: 0 14px 44px rgba(240,192,64,0.25); }
+        .price-card:hover { transform: translateY(-6px); box-shadow: 0 20px 50px rgba(13,42,107,0.15); }
+        .price-card .tag-pop {
+            position: absolute; top: -13px; left: 50%; transform: translateX(-50%);
+            background: linear-gradient(135deg, var(--gold), var(--gold2)); color: var(--navy);
+            font-weight: 800; font-size: 11px; letter-spacing: 1px; text-transform: uppercase;
+            padding: 5px 16px; border-radius: 20px; box-shadow: 0 6px 16px rgba(240,192,64,0.4);
+        }
+        .price-card .pic {
+            width: 64px; height: 64px; border-radius: 50%; margin: 0 auto 18px; display: flex; align-items: center;
+            justify-content: center; font-size: 30px; color: #fff;
+        }
+        .price-card h3 { font-weight: 800; font-size: 21px; margin: 0 0 4px; }
+        .price-card .amount { font-weight: 900; font-size: 44px; color: var(--navy2); line-height: 1; margin: 12px 0 2px; letter-spacing: -1.5px; }
+        .price-card .amount span { font-size: 16px; font-weight: 700; color: var(--muted); }
+        .price-card .per { font-size: 13px; color: var(--muted); font-weight: 600; margin-bottom: 16px; }
+        .price-card p.desc { color: var(--muted); font-size: 14px; line-height: 1.6; margin: 0; }
+
+        /* ── FINAL CTA ───────────────────────────── */
+        .final-cta { text-align: center; padding: 70px 22px; }
+        .final-cta h2 { font-weight: 900; font-size: clamp(26px, 4vw, 40px); letter-spacing: -1px; margin: 0 0 14px; }
+        .final-cta p { color: var(--muted); font-size: 16px; max-width: 560px; margin: 0 auto 30px; line-height: 1.6; }
+
+        /* ── FOOTER ──────────────────────────────── */
+        footer.site {
+            background: var(--navy); color: rgba(255,255,255,0.65); text-align: center;
+            padding: 34px 22px; font-size: 13px;
+        }
+        footer.site .fbrand { color: var(--gold); font-weight: 800; font-size: 16px; letter-spacing: -0.3px; }
+        footer.site a { color: var(--gold); text-decoration: none; }
+        footer.site strong { color: rgba(255,255,255,0.92); }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="row justify-content-center">
-            <div class="col-md-5 col-lg-4">
-                <div class="card card-inicio shadow">
-                    <div class="card-body text-center p-5">
-                        <img src="/static/img/logo_atlas.png" alt="Atlas" class="logo-icon">
-                        <h1>Atlas</h1>
-                        <p class="subtitle">Centro de Estudios</p>
-                        
-                        <a href="/login" class="btn btn-primary btn-inicio w-100">
-                            <i class="bi bi-box-arrow-in-right me-2"></i> Iniciar Sesión
-                        </a>
-                        
-                        <a href="/registro" class="btn btn-outline-primary btn-inicio w-100">
-                            <i class="bi bi-person-plus me-2"></i> Registrarme
-                        </a>
-                        
-                        <a href="/modulo4" class="btn btn-outline-success btn-inicio w-100">
-                            <i class="bi bi-calendar-check me-2"></i> Ver Calendario de Clases
-                        </a>
-                        
-                        <hr>
-                        <small class="text-muted">¿Eres administrador?</small>
-                        <br>
-                        <small class="text-muted fw-bold">admin@atlas.com</small>
-                    </div>
+
+    <!-- TOPBAR -->
+    <header class="topbar">
+        <div class="topbar-inner">
+            <a href="/" class="brand">
+                <img src="/static/img/logo_atlas.png" alt="Atlas Académico">
+                <div>
+                    <div class="bn">atlas</div>
+                    <div class="bs">Académico</div>
                 </div>
-                <div class="text-center mt-4">
-                    <small class="footer-text">Sistema creado por <strong>Marco Antonio Posligua San Martín</strong></small>
-                </div>
+            </a>
+            <nav class="topbar-links">
+                <a href="#programas" class="tl hide-sm">Programas</a>
+                <a href="#precios" class="tl hide-sm">Precios</a>
+                <a href="/modulo4" class="tl hide-sm">Calendario</a>
+                <a href="/login" class="tl">Iniciar Sesión</a>
+                <a href="/registro" class="tl btn-cta">Regístrate</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- HERO -->
+    <div class="hero">
+        <div class="hero-inner">
+            <img src="/static/img/logo_atlas.png" alt="Atlas Académico" class="logo">
+            <span class="pill">Centro de Estudios</span>
+            <h1>Fortalecemos las bases de tu <span class="hl">éxito académico</span></h1>
+            <p class="lead">
+                En Atlas Académico te acompañamos con programas de nivelación, preparación preuniversitaria
+                y cursos especiales. Clases individuales o en grupos reducidos, con atención 100% personalizada.
+            </p>
+            <div class="hero-actions">
+                <a href="/registro" class="a-gold"><i class="bi bi-person-plus-fill"></i> Comienza ahora</a>
+                <a href="/login" class="a-ghost"><i class="bi bi-box-arrow-in-right"></i> Iniciar Sesión</a>
+                <a href="/modulo4" class="a-ghost"><i class="bi bi-calendar-check"></i> Ver Calendario</a>
             </div>
         </div>
     </div>
+
+    <!-- NIVELACIÓN ACADÉMICA -->
+    <section class="block" id="programas">
+        <div class="sec-head">
+            <div class="sec-tag">Programa 01</div>
+            <h2>Nivelación Académica</h2>
+            <p>
+                Diseñado para fortalecer las bases fundamentales del conocimiento en áreas clave. Cada módulo está
+                cuidadosamente estructurado para garantizar una comprensión profunda y progresiva de los conceptos esenciales.
+            </p>
+        </div>
+        <div class="grid grid-3">
+            <div class="ac-card">
+                <div class="ic ic-math"><i class="bi bi-calculator"></i></div>
+                <h3>Matemáticas</h3>
+                <div class="sub">Desde aritmética básica hasta cálculo avanzado</div>
+                <ul>
+                    <li>Aritmética y operaciones fundamentales</li>
+                    <li>Álgebra: ecuaciones, inecuaciones y polinomios</li>
+                    <li>Funciones, gráficas y trigonometría</li>
+                    <li>Geometría plana y espacial</li>
+                    <li>Probabilidad y estadística básica</li>
+                    <li>Límites, derivadas e integrales</li>
+                </ul>
+            </div>
+            <div class="ac-card">
+                <div class="ic ic-sci"><i class="bi bi-thermometer-half"></i></div>
+                <h3>Ciencias Naturales</h3>
+                <div class="sub">Exploración completa del mundo natural</div>
+                <ul>
+                    <li>Biología: células, genética y sistemas corporales</li>
+                    <li>Física: cinemática, dinámica y energía</li>
+                    <li>Química: estructura atómica y reacciones</li>
+                    <li>Evolución, biodiversidad y ecología</li>
+                    <li>Termodinámica, óptica y ondas</li>
+                </ul>
+            </div>
+            <div class="ac-card">
+                <div class="ic ic-lang"><i class="bi bi-chat-square-text"></i></div>
+                <h3>Lenguaje</h3>
+                <div class="sub">Desarrollo de habilidades comunicativas</div>
+                <ul>
+                    <li>Comprensión lectora y análisis literario</li>
+                    <li>Tipos de texto y estructura</li>
+                    <li>Redacción profesional y ortografía</li>
+                    <li>Argumentación escrita efectiva</li>
+                    <li>Gramática y normas lingüísticas</li>
+                </ul>
+            </div>
+            <div class="ac-card">
+                <div class="ic ic-soc"><i class="bi bi-globe-americas"></i></div>
+                <h3>Ciencias Sociales</h3>
+                <div class="sub">Comprender nuestro mundo y sociedad</div>
+                <ul>
+                    <li>Historia universal y nacional</li>
+                    <li>Geografía física y política</li>
+                    <li>Ciudadanía y democracia</li>
+                    <li>Economía básica y sistemas sociales</li>
+                </ul>
+            </div>
+            <div class="ac-card">
+                <div class="ic ic-gen"><i class="bi bi-diagram-3"></i></div>
+                <h3>Genética Universitaria</h3>
+                <div class="sub">Especialización avanzada en genética moderna</div>
+                <ul>
+                    <li>ADN, ARN y síntesis de proteínas</li>
+                    <li>Herencia mendeliana y no mendeliana</li>
+                    <li>Biotecnología y técnicas modernas</li>
+                    <li>Mutaciones, variabilidad y genómica</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <!-- PREPARACIÓN PREUNIVERSITARIA -->
+    <div class="band-dark">
+        <section class="block">
+            <div class="sec-head">
+                <div class="sec-tag">Programa 02</div>
+                <h2>Preparación Preuniversitaria</h2>
+                <p>
+                    Curso intensivo que combina conocimientos fundamentales con técnicas avanzadas de resolución de
+                    problemas, pensamiento crítico y análisis profundo para destacar en los exámenes de admisión.
+                </p>
+            </div>
+            <div class="grid grid-2">
+                <div class="ac-card" style="background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.12);">
+                    <div class="ic ic-math"><i class="bi bi-graph-up-arrow"></i></div>
+                    <h3 style="color:#fff;">Matemáticas Aplicadas</h3>
+                    <p style="color:rgba(255,255,255,0.72); font-size:14px; margin:0; line-height:1.6;">
+                        Resolución avanzada de problemas con enfoque en razonamiento lógico, álgebra, funciones,
+                        geometría analítica, trigonometría aplicada, probabilidad y estadística.
+                    </p>
+                </div>
+                <div class="ac-card" style="background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.12);">
+                    <div class="ic ic-sci"><i class="bi bi-droplet-half"></i></div>
+                    <h3 style="color:#fff;">Ciencias Naturales</h3>
+                    <p style="color:rgba(255,255,255,0.72); font-size:14px; margin:0; line-height:1.6;">
+                        Integración de biología celular, genética, ecología, física del movimiento, fuerzas, energía,
+                        química de reacciones, estequiometría y enlaces químicos.
+                    </p>
+                </div>
+                <div class="ac-card" style="background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.12);">
+                    <div class="ic ic-gold"><i class="bi bi-bank"></i></div>
+                    <h3 style="color:#fff;">Ciencias Sociales</h3>
+                    <p style="color:rgba(255,255,255,0.72); font-size:14px; margin:0; line-height:1.6;">
+                        Análisis crítico de historia, cultura general, derecho básico, geopolítica, economía,
+                        sociedad, filosofía y desarrollo del pensamiento crítico.
+                    </p>
+                </div>
+                <div class="ac-card" style="background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.12);">
+                    <div class="ic ic-purp"><i class="bi bi-pencil-square"></i></div>
+                    <h3 style="color:#fff;">Lenguaje Crítico</h3>
+                    <p style="color:rgba(255,255,255,0.72); font-size:14px; margin:0; line-height:1.6;">
+                        Lectura crítica avanzada, análisis textual profundo, inferencias, argumentación, normas
+                        ortográficas y técnicas profesionales de redacción.
+                    </p>
+                </div>
+            </div>
+
+            <div class="quote">
+                "La preparación preuniversitaria no solo se trata de aprobar exámenes, sino de desarrollar las
+                habilidades de pensamiento crítico y análisis que te acompañarán durante toda tu carrera
+                académica y profesional."
+            </div>
+
+            <div style="margin-top:44px;">
+                <div class="steps">
+                    <div class="step"><div class="n">01</div><h4>Evaluación Diagnóstica</h4><p>Identificamos fortalezas y áreas de mejora.</p></div>
+                    <div class="step"><div class="n">02</div><h4>Plan Personalizado</h4><p>Diseñamos estrategias adaptadas a cada estudiante.</p></div>
+                    <div class="step"><div class="n">03</div><h4>Práctica Intensiva</h4><p>Simulacros y ejercicios tipo examen de admisión.</p></div>
+                    <div class="step"><div class="n">04</div><h4>Evaluación Continua</h4><p>Monitoreo del progreso y ajustes necesarios.</p></div>
+                    <div class="step"><div class="n">05</div><h4>Preparación Final</h4><p>Técnicas de manejo de estrés y estrategias de examen.</p></div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- CURSOS ESPECIALES -->
+    <div class="band-tint">
+        <section class="block">
+            <div class="sec-head">
+                <div class="sec-tag">Programa 03</div>
+                <h2>Cursos Especiales y Competencias</h2>
+                <p>
+                    Complementamos la formación académica con cursos especializados que desarrollan competencias
+                    prácticas esenciales para el mundo profesional moderno.
+                </p>
+            </div>
+            <div class="grid grid-3">
+                <div class="ac-card">
+                    <div class="ic ic-blue"><i class="bi bi-journal-text"></i></div>
+                    <h3>Contabilidad</h3>
+                    <p class="desc" style="color:var(--muted); font-size:14px; line-height:1.6; margin:0;">
+                        Principios contables, activos, pasivos, patrimonio, estados financieros, registro y cierre contable profesional.
+                    </p>
+                </div>
+                <div class="ac-card">
+                    <div class="ic ic-gold"><i class="bi bi-receipt"></i></div>
+                    <h3>Tributación</h3>
+                    <p class="desc" style="color:var(--muted); font-size:14px; line-height:1.6; margin:0;">
+                        Impuestos nacionales, IVA, impuesto a la renta, declaraciones, formularios, régimen RIMPE y obligaciones del contribuyente.
+                    </p>
+                </div>
+                <div class="ac-card">
+                    <div class="ic ic-math"><i class="bi bi-lightbulb"></i></div>
+                    <h3>Emprendimiento</h3>
+                    <p class="desc" style="color:var(--muted); font-size:14px; line-height:1.6; margin:0;">
+                        Ideas innovadoras, modelo Canvas, marketing estratégico, público objetivo, finanzas básicas y plan de negocios.
+                    </p>
+                </div>
+                <div class="ac-card">
+                    <div class="ic ic-soc"><i class="bi bi-file-earmark-word"></i></div>
+                    <h3>Microsoft Office</h3>
+                    <div class="sub">Word · Excel · PowerPoint</div>
+                    <ul>
+                        <li>Word: documentos corporativos de alta calidad</li>
+                        <li>Excel: fórmulas, tablas dinámicas y análisis de datos</li>
+                        <li>PowerPoint: presentaciones profesionales y memorables</li>
+                    </ul>
+                </div>
+                <div class="ac-card">
+                    <div class="ic ic-sci"><i class="bi bi-search"></i></div>
+                    <h3>Investigación Académica</h3>
+                    <ul>
+                        <li>Planteamiento del problema</li>
+                        <li>Marco teórico y metodología científica</li>
+                        <li>Análisis de datos y redacción de informes</li>
+                    </ul>
+                </div>
+                <div class="ac-card">
+                    <div class="ic ic-purp"><i class="bi bi-clipboard-check"></i></div>
+                    <h3>Metodología y Organización</h3>
+                    <ul>
+                        <li>Métodos efectivos de estudio y aprendizaje</li>
+                        <li>Gestión del tiempo y priorización de tareas</li>
+                        <li>Hábitos productivos y balance vida-estudio</li>
+                    </ul>
+                </div>
+            </div>
+            <p style="text-align:center; max-width:760px; margin:36px auto 0; color:var(--muted); font-size:13.5px; line-height:1.6;">
+                <i class="bi bi-patch-check-fill" style="color:var(--blue);"></i>
+                <strong>Todos nuestros cursos especiales incluyen certificación</strong> al completar exitosamente el programa,
+                material didáctico actualizado y acceso a recursos digitales complementarios.
+            </p>
+        </section>
+    </div>
+
+    <!-- PRECIOS -->
+    <section class="block" id="precios">
+        <div class="sec-head">
+            <div class="sec-tag">Inversión</div>
+            <h2>Invierte en tu Educación</h2>
+            <p>
+                Nuestras clases están diseñadas para maximizar la efectividad del aprendizaje, con opciones
+                personalizadas que se adaptan a las necesidades de cada estudiante.
+            </p>
+        </div>
+        <div class="price-grid">
+            <div class="price-card">
+                <div class="pic" style="background: linear-gradient(135deg, #ff6a3d, #ff8a4c);"><i class="bi bi-person-fill"></i></div>
+                <h3>Clases Individuales</h3>
+                <div class="amount">$15 <span>/ hora</span></div>
+                <div class="per">Atención 1 a 1</div>
+                <p class="desc">Atención personalizada y enfoque 100% adaptado a tus necesidades.</p>
+            </div>
+            <div class="price-card featured">
+                <div class="tag-pop">Más popular</div>
+                <div class="pic" style="background: linear-gradient(135deg, #0bb5d6, #36cfe0);"><i class="bi bi-people-fill"></i></div>
+                <h3>Grupos (2-10 estudiantes)</h3>
+                <div class="amount">$12 <span>/ hora</span></div>
+                <div class="per">Por estudiante</div>
+                <p class="desc">Grupos reducidos de máximo 10 estudiantes para garantizar atención personalizada y aprendizaje colaborativo efectivo.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- FINAL CTA -->
+    <div class="band-tint">
+        <div class="final-cta">
+            <h2>¿Listo para alcanzar tu máximo potencial?</h2>
+            <p>Únete a Atlas Académico y da el siguiente paso hacia tu éxito académico y profesional.</p>
+            <div class="hero-actions">
+                <a href="/registro" class="a-gold" style="color:var(--navy);"><i class="bi bi-person-plus-fill"></i> Regístrate ahora</a>
+                <a href="/login" class="a-ghost" style="color:var(--navy2); border-color:var(--navy2); background:transparent;"><i class="bi bi-box-arrow-in-right"></i> Ya tengo cuenta</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- FOOTER -->
+    <footer class="site">
+        <div class="fbrand">atlas <span style="color:rgba(255,255,255,0.5); font-weight:600; font-size:12px;">ACADÉMICO</span></div>
+        <p style="margin:12px 0 6px;">Nivelación · Preuniversitario · Cursos Especiales</p>
+        <p style="margin:0;">Sistema creado por <strong>Marco Antonio Posligua San Martín</strong> &nbsp;|&nbsp; ATLAS v2.0</p>
+    </footer>
+
 </body>
 </html>

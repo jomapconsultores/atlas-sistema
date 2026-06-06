@@ -172,11 +172,26 @@ async function marcarPendiente(id, estado) {
 
 {% if current_user.rol in ['admin','socio'] %}
 async function eliminarSesion(id) { if (!confirm('🗑️ ¿Eliminar esta sesión?')) return; await fetch('/api/sesion/' + id + '/eliminar', {method: 'POST'}); location.reload(); }
+async function fetchJSON(url, opts) {
+    const r = await fetch(url, opts);
+    const ct = r.headers.get('content-type') || '';
+    if (!ct.includes('application/json')) throw new Error('El servidor respondió ' + r.status + ' (ruta no disponible o sesión expirada)');
+    return await r.json();
+}
 async function sincronizarTodos() {
     if (!confirm('¿Sincronizar TODAS las sesiones de esta fecha?')) return;
-    const btns = document.querySelectorAll('.radio-sesion'); let ok = 0;
-    for (let btn of btns) { const id = btn.dataset.id; if (id) { try { const r = await fetch('/api/sesion/' + id + '/sincronizar', {method: 'POST', headers: {'Content-Type': 'application/json'}}); if ((await r.json()).success) ok++; } catch(e) {} } }
-    alert('✅ ' + ok + ' sesiones sincronizadas'); location.reload();
+    const btns = document.querySelectorAll('.radio-sesion'); let ok = 0, err = 0, ultimoError = '';
+    for (let btn of btns) {
+        const id = btn.dataset.id;
+        if (id) {
+            try {
+                const d = await fetchJSON('/api/sesion/' + id + '/sincronizar', {method: 'POST', headers: {'Content-Type': 'application/json'}});
+                if (d.success) ok++; else { err++; ultimoError = d.error || ''; }
+            } catch(e) { err++; ultimoError = e.message; }
+        }
+    }
+    alert('✅ ' + ok + ' sincronizadas' + (err ? '\n❌ ' + err + ' con error' + (ultimoError ? ': ' + ultimoError : '') : ''));
+    location.reload();
 }
 {% endif %}
 

@@ -78,7 +78,7 @@
                                 <td>
                                     <span class="badge bg-{{ 'success' if s['estado']=='Realizado' else 'danger' if s['estado']=='Cancelado' else 'warning' }}">{{ s['estado'] }}</span>
                                     {% if current_user.rol in ['admin','socio'] %}
-                                        {% if s.get('evento_calendario_id') %}
+                                        {% if s.get('evento_calendar_id') %}
                                         <span class="badge bg-success" title="Sincronizado">📅</span>
                                         {% else %}
                                         <button class="btn btn-outline-success btn-sm" onclick="sincronizarEvento({{ s['id'] }})">🔄</button>
@@ -121,7 +121,7 @@
                             <td>{{ r.get('asistentes','')[:30] }}</td>
                             <td>{{ r.get('tema','') }}</td>
                             <td>{{ r['encargado'] }}</td>
-                            <td>{% if r.get('evento_calendario_id') %}<span class="badge bg-success">📅</span>{% else %}<button class="btn btn-outline-success btn-sm" onclick="sincronizarReunion({{ r['id'] }})">🔄</button>{% endif %}</td>
+                            <td>{% if r.get('evento_calendar_id') %}<span class="badge bg-success">📅</span>{% else %}<button class="btn btn-outline-success btn-sm" onclick="sincronizarReunion({{ r['id'] }})">🔄</button>{% endif %}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -193,22 +193,38 @@ async function guardarCambios(id) {
 function abrirModalEstudiante(id) { alert('Funcionalidad en desarrollo'); }
 function abrirModalProfesor(id, actual) { alert('Funcionalidad en desarrollo'); }
 async function eliminarSesion(id) { if (!confirm('🗑️ ¿Eliminar esta sesión?')) return; await fetch('/api/sesion/' + id + '/eliminar', {method: 'POST'}); location.reload(); }
+async function fetchJSON(url, opts) {
+    const r = await fetch(url, opts);
+    const ct = r.headers.get('content-type') || '';
+    if (!ct.includes('application/json')) throw new Error('El servidor respondió ' + r.status + ' (ruta no disponible o sesión expirada)');
+    return await r.json();
+}
 async function sincronizarEvento(id) {
     if (!confirm('¿Sincronizar esta sesión con Google Calendar?')) return;
     const btn = event.target; btn.disabled = true; btn.textContent = '⏳';
-    try { const r = await fetch('/api/sesion/' + id + '/sincronizar', {method: 'POST', headers: {'Content-Type': 'application/json'}}); const d = await r.json(); if (d.success) alert('✅ Sincronizado'); else alert('❌ ' + (d.error || 'Error')); location.reload(); }
-    catch(e) { alert('❌ Error'); }
+    try { const d = await fetchJSON('/api/sesion/' + id + '/sincronizar', {method: 'POST', headers: {'Content-Type': 'application/json'}}); if (d.success) alert('✅ Sincronizado'); else alert('❌ ' + (d.error || 'Error')); location.reload(); }
+    catch(e) { btn.disabled = false; btn.textContent = '🔄'; alert('❌ ' + e.message); }
 }
 async function sincronizarTodos() {
     if (!confirm('¿Sincronizar TODAS las sesiones?')) return;
-    let ok = 0; const btns = document.querySelectorAll('button[onclick^="sincronizarEvento"]');
-    for (let b of btns) { const id = b.getAttribute('onclick').match(/\d+/)[0]; try { const r = await fetch('/api/sesion/' + id + '/sincronizar', {method: 'POST', headers: {'Content-Type': 'application/json'}}); if ((await r.json()).success) ok++; } catch(e) {} }
-    alert('✅ ' + ok + ' sincronizadas'); location.reload();
+    let ok = 0, err = 0, ultimoError = ''; const btns = document.querySelectorAll('button[onclick^="sincronizarEvento"]');
+    for (let b of btns) {
+        const id = b.getAttribute('onclick').match(/\d+/)[0];
+        try {
+            const d = await fetchJSON('/api/sesion/' + id + '/sincronizar', {method: 'POST', headers: {'Content-Type': 'application/json'}});
+            if (d.success) ok++; else { err++; ultimoError = d.error || ''; }
+        } catch(e) { err++; ultimoError = e.message; }
+    }
+    alert('✅ ' + ok + ' sincronizadas' + (err ? '\n❌ ' + err + ' con error' + (ultimoError ? ': ' + ultimoError : '') : ''));
+    location.reload();
 }
 async function sincronizarReunion(id) {
     if (!confirm('¿Sincronizar esta reunión?')) return;
-    const r = await fetch('/api/reunion/' + id + '/sincronizar', {method: 'POST', headers: {'Content-Type': 'application/json'}}); const d = await r.json();
-    alert(d.success ? '✅ Sincronizada' : '❌ ' + (d.error || 'Error')); location.reload();
+    try {
+        const d = await fetchJSON('/api/reunion/' + id + '/sincronizar', {method: 'POST', headers: {'Content-Type': 'application/json'}});
+        alert(d.success ? '✅ Sincronizada' : '❌ ' + (d.error || 'Error'));
+    } catch(e) { alert('❌ ' + e.message); }
+    location.reload();
 }
 {% endif %}
 </script>
