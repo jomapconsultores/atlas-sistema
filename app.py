@@ -210,35 +210,6 @@ def devoluciones_por_estudiante(estudiante_id):
         return 0.0
     return sum(d.get('monto', 0) or 0 for d in (res.data or []))
 
-# Marca de versión para verificar despliegues desde fuera (público, sin login).
-APP_VERSION = 'v2.1-deploy-check-1'
-
-@app.route('/version')
-def version():
-    return jsonify({'version': APP_VERSION})
-
-@app.route('/debug-deploy')
-def debug_deploy():
-    """Diagnóstico temporal: confirma qué cambios están realmente en el servidor."""
-    import os as _os
-    base_dir = _os.path.dirname(_os.path.abspath(__file__))
-    def leer(rel):
-        try:
-            with open(_os.path.join(base_dir, rel), encoding='utf-8') as fh:
-                return fh.read()
-        except Exception as e:
-            return f'__error__ {e}'
-    base = leer('templates/base.html')
-    gastos = leer('templates/gastos.html')
-    return jsonify({
-        'version': APP_VERSION,
-        'sidebar_devoluciones': '/devoluciones' in base,
-        'sidebar_movimientos': '/movimientos-cuenta' in base,
-        'gastos_atlas_cuenta_directa': 'Atlas (cuenta directa)' in gastos,
-        'gastos_filtro_docentes': 'onchange="this.form.submit()"' in gastos,
-        'pago_cancelado_constante': PAGO_DOCENCIA_CANCELADO,
-    })
-
 # ========== RUTAS PRINCIPALES ==========
 @app.route('/')
 def inicio():
