@@ -2267,15 +2267,18 @@ def api_fecha_pago_docente():
     data = request.get_json()
     docente = data.get('docente')
     fecha = data.get('fecha')
+    # Mes/año del período que se está viendo (no el de hoy) para que filtre bien
+    mes = int(data.get('mes') or date.today().month)
+    anio = int(data.get('anio') or date.today().year)
     try:
-        # Guardar en tabla de fechas_pago
-        supabase.table('fechas_pago_docentes').upsert({
-            'docente_nombre': docente,
-            'fecha_pago': fecha,
-            'mes': date.today().month,
-            'anio': date.today().year,
-            'registrado_por': current_user.nombre
-        }).execute()
+        existente = supabase.table('fechas_pago_docentes').select('*').eq('docente_nombre', docente).eq('mes', mes).eq('anio', anio).execute()
+        if existente.data:
+            supabase.table('fechas_pago_docentes').update({'fecha_pago': fecha}).eq('id', existente.data[0]['id']).execute()
+        else:
+            supabase.table('fechas_pago_docentes').insert({
+                'docente_nombre': docente, 'fecha_pago': fecha,
+                'mes': mes, 'anio': anio, 'registrado_por': current_user.nombre
+            }).execute()
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
@@ -2285,20 +2288,18 @@ def api_fecha_pago_docente():
 def api_toggle_pago_docente():
     data = request.get_json()
     docente = data.get('docente')
+    mes = int(data.get('mes') or date.today().month)
+    anio = int(data.get('anio') or date.today().year)
     try:
-        # Verificar estado actual
-        existente = supabase.table('fechas_pago_docentes').select('*').eq('docente_nombre', docente).eq('mes', date.today().month).eq('anio', date.today().year).execute()
+        existente = supabase.table('fechas_pago_docentes').select('*').eq('docente_nombre', docente).eq('mes', mes).eq('anio', anio).execute()
         if existente.data and existente.data[0].get('pagado'):
             supabase.table('fechas_pago_docentes').update({'pagado': False}).eq('id', existente.data[0]['id']).execute()
         elif existente.data:
             supabase.table('fechas_pago_docentes').update({'pagado': True}).eq('id', existente.data[0]['id']).execute()
         else:
             supabase.table('fechas_pago_docentes').insert({
-                'docente_nombre': docente,
-                'pagado': True,
-                'mes': date.today().month,
-                'anio': date.today().year,
-                'registrado_por': current_user.nombre
+                'docente_nombre': docente, 'pagado': True,
+                'mes': mes, 'anio': anio, 'registrado_por': current_user.nombre
             }).execute()
         return jsonify({'success': True})
     except Exception as e:

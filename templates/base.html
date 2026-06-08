@@ -656,13 +656,13 @@
         <a href="/gastos" class="{% if p=='/gastos' %}active{% endif %}"><span class="ico">📉</span> Gastos</a>
         <a href="/liquidacion" class="{% if p=='/liquidacion' %}active{% endif %}"><span class="ico">⚖️</span> Liquidación</a>
         <a href="/gestion-anticipos" class="{% if p=='/gestion-anticipos' %}active{% endif %}"><span class="ico">🏦</span> Anticipos {% if solicitudes_pendientes and solicitudes_pendientes>0 %}<span class="side-badge">{{ solicitudes_pendientes }}</span>{% endif %}</a>
+        {% if rol=='admin' %}<a href="/movimientos-cuenta" class="{% if p=='/movimientos-cuenta' %}active{% endif %}"><span class="ico">🏦</span> Movimientos en cuenta</a>{% endif %}
 
         <div class="side-section">Psicología</div>
         <a href="/psicologia-especial" class="{% if p=='/psicologia-especial' %}active{% endif %}"><span class="ico">🧠</span> Psicología especial</a>
 
         <div class="side-section">Administración</div>
         <a href="/admin/costos" class="{% if p=='/admin/costos' %}active{% endif %}"><span class="ico">⚙️</span> Costos</a>
-        {% if rol=='admin' %}<a href="/movimientos-cuenta" class="{% if p=='/movimientos-cuenta' %}active{% endif %}"><span class="ico">🏦</span> Movimientos en cuenta</a>{% endif %}
         {% if rol=='admin' %}<a href="/usuarios" class="{% if p=='/usuarios' %}active{% endif %}"><span class="ico">👤</span> Usuarios</a>{% endif %}
         <a href="/reporte-duplicados" class="{% if p=='/reporte-duplicados' %}active{% endif %}"><span class="ico">🧹</span> Reporte duplicados</a>
 

@@ -10,9 +10,19 @@
 <!-- ========== PAGOS A DOCENTES Y PSICÓLOGOS ========== -->
 <div class="card shadow mb-4 border-0" style="border-radius: 15px; overflow: hidden;">
     <div class="card-header bg-gradient text-white" style="background: linear-gradient(135deg, #1a73e8, #0d47a1);">
-        <div class="d-flex justify-content-between align-items-center">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
             <strong>💵 Pagos a Docentes y Psicólogos - {{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][mes-1] }} {{ anio }}</strong>
-            <span class="badge bg-light text-dark fs-6">Total: ${{ "%.2f"|format(total_pago_docentes_mes or 0) }}</span>
+            <div class="d-flex align-items-center gap-2">
+                <form method="get" class="d-flex gap-1 mb-0">
+                    <select name="mes" class="form-select form-select-sm border-0" style="width:auto;" onchange="this.form.submit()">
+                        {% for m in range(1,13) %}<option value="{{ m }}" {{ 'selected' if m == mes }}>{{ ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][m-1] }}</option>{% endfor %}
+                    </select>
+                    <select name="anio" class="form-select form-select-sm border-0" style="width:auto;" onchange="this.form.submit()">
+                        {% for a in range(2025, 2031) %}<option value="{{ a }}" {{ 'selected' if a == anio }}>{{ a }}</option>{% endfor %}
+                    </select>
+                </form>
+                <span class="badge bg-light text-dark fs-6">Total: ${{ "%.2f"|format(total_pago_docentes_mes or 0) }}</span>
+            </div>
         </div>
     </div>
     <div class="card-body p-0">
@@ -148,11 +158,13 @@
                     <div class="mb-3">
                         <label class="form-label fw-bold">Persona que realiza el gasto *</label>
                         <select name="persona" class="form-select border-0 shadow-sm" required>
-                            <option value="">Seleccionar socio...</option>
+                            <option value="">Seleccionar...</option>
+                            <option value="Atlas (cuenta directa)">🏦 Atlas (cuenta directa)</option>
                             <option value="Carmen Reinoso">Carmen Reinoso</option>
                             <option value="Rosalía Moscoso">Rosalía Moscoso</option>
                             <option value="Marco Antonio Posligua">Marco Antonio Posligua</option>
                         </select>
+                        <small class="text-muted">"Atlas (cuenta directa)" = pagado directamente desde la cuenta del centro (sin reembolso a un socio).</small>
                     </div>
                     <div class="mb-3 form-check form-switch">
                         <input type="checkbox" name="reembolso" id="reembolso" class="form-check-input" value="true" onchange="toggleReembolso()">
@@ -458,7 +470,7 @@ async function guardarFechaPagoDocente(nombre, fecha) {
         const response = await fetch('/api/pago-docente/fecha', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({docente: nombre, fecha: fecha})
+            body: JSON.stringify({docente: nombre, fecha: fecha, mes: {{ mes }}, anio: {{ anio }}})
         });
         const result = await response.json();
         if (result.success) {
@@ -482,7 +494,7 @@ async function guardarTogglePagado(nombre) {
         const response = await fetch('/api/pago-docente/toggle', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({docente: nombre})
+            body: JSON.stringify({docente: nombre, mes: {{ mes }}, anio: {{ anio }}})
         });
         const result = await response.json();
         if (result.success) {
