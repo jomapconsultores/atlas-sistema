@@ -651,6 +651,7 @@
                 <a href="/modulo5" class="{% if p=='/modulo5' %}active{% endif %}">Pagos a docentes</a>
             </div>
         </div>
+        <a href="/devoluciones" class="{% if p=='/devoluciones' %}active{% endif %}"><span class="ico">↩️</span> Devoluciones</a>
         <a href="/reportes" class="{% if p=='/reportes' %}active{% endif %}"><span class="ico">📊</span> Reportes</a>
         <a href="/gastos" class="{% if p=='/gastos' %}active{% endif %}"><span class="ico">📉</span> Gastos</a>
         <a href="/liquidacion" class="{% if p=='/liquidacion' %}active{% endif %}"><span class="ico">⚖️</span> Liquidación</a>
@@ -661,6 +662,7 @@
 
         <div class="side-section">Administración</div>
         <a href="/admin/costos" class="{% if p=='/admin/costos' %}active{% endif %}"><span class="ico">⚙️</span> Costos</a>
+        {% if rol=='admin' %}<a href="/movimientos-cuenta" class="{% if p=='/movimientos-cuenta' %}active{% endif %}"><span class="ico">🏦</span> Movimientos en cuenta</a>{% endif %}
         {% if rol=='admin' %}<a href="/usuarios" class="{% if p=='/usuarios' %}active{% endif %}"><span class="ico">👤</span> Usuarios</a>{% endif %}
         <a href="/reporte-duplicados" class="{% if p=='/reporte-duplicados' %}active{% endif %}"><span class="ico">🧹</span> Reporte duplicados</a>
 

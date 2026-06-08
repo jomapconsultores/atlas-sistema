@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}Movimientos en cuenta - Atlas{% endblock %}
+
+{% block content %}
+{% set meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'] %}
+<div class="page-hero">
+    <h2>🏦 Movimientos en cuenta</h2>
+    <p>Sube el estado de cuenta del banco (Excel o PDF) y se cruza con los pagos y gastos registrados. Lo que no cuadra se resalta para revisar o justificar.</p>
+</div>
+
+{% if not openpyxl_ok or not pdf_ok %}
+<div class="alert alert-warning">
+    {% if not openpyxl_ok %}⚠️ Falta <code>openpyxl</code> (lectura de Excel).{% endif %}
+    {% if not pdf_ok %} ⚠️ Falta <code>pdfplumber</code> (lectura de PDF).{% endif %}
+    Ejecuta <code>pip install -r requirements.txt</code> en el servidor.
+</div>
+{% endif %}
+
+<!-- Subir estado de cuenta -->
+<div class="card mb-4">
+    <div class="card-header bg-primary">📤 Subir estado de cuenta</div>
+    <div class="card-body">
+        <form method="post" action="/movimientos-cuenta/subir" enctype="multipart/form-data" class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label">Archivo (.xlsx recomendado, .pdf best-effort)</label>
+                <input type="file" name="archivo" class="form-control" accept=".xlsx,.xls,.xlsm,.pdf" required>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Banco (opcional)</label>
+                <input type="text" name="banco" class="form-control" placeholder="Pichincha, Guayaquil...">
+            </div>
+            <div class="col-md-4">
+                <button class="btn btn-primary w-100">📤 Procesar</button>
+            </div>
+        </form>
+        <small class="text-muted d-block mt-2">Si vuelves a subir el mismo estado de cuenta, solo se agregan los movimientos nuevos (los repetidos se ignoran automáticamente).</small>
+    </div>
+</div>
+
+<!-- Filtro + resumen -->
+<form method="get" class="d-flex gap-2 align-items-end mb-3 flex-wrap">
+    <div>
+        <label class="form-label">Mes</label>
+        <select name="mes" class="form-select">
+            <option value="">Todos</option>
+            {% for i in range(1,13) %}<option value="{{ i }}" {% if mes and i==mes|int %}selected{% endif %}>{{ meses[i-1] }}</option>{% endfor %}
+        </select>
+    </div>
+    <div>
+        <label class="form-label">Año</label>
+        <input type="number" name="anio" class="form-control" value="{{ anio }}" style="width:110px;" placeholder="{{ today[:4] }}">
+    </div>
+    <button class="btn btn-secondary">Filtrar</button>
+</form>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="stat-card" style="background: linear-gradient(135deg,#065f46,#059669);">
+            <small>Conciliado</small><h3>${{ "%.2f"|format(total_conciliado or 0) }}</h3>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="stat-card" style="background: linear-gradient(135deg,#92400e,#d97706);">
+            <small>Pendiente (sin cuadrar)</small><h3>${{ "%.2f"|format(total_pendiente or 0) }}</h3>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="stat-card" style="background: linear-gradient(135deg,#1e293b,#475569);">
+            <small>Movimientos por revisar</small><h3>{{ n_pendientes }}</h3>
+        </div>
+    </div>
+</div>
+
+<!-- Tabla de movimientos -->
+<div class="card">
+    <div class="card-header bg-dark">📑 Movimientos del estado de cuenta</div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Fecha</th><th>Descripción</th><th>Ref.</th>
+                        <th class="text-end">Monto</th><th class="text-center">Estado</th><th class="text-end">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for m in movimientos %}
+                    {% set est = m.estado_conciliacion %}
+                    <tr class="{% if est=='conciliado' %}table-success{% elif est=='justificado' %}table-info{% else %}table-warning{% endif %}">
+                        <td>{{ m.fecha }}</td>
+                        <td>
+                            <small>{{ m.descripcion or '—' }}</small>
+                            {% if est=='justificado' and m.justificacion %}
+                                <br><small class="text-muted">📝 {{ m.justificacion }}</small>
+                            {% endif %}
+                            {% if est=='conciliado' and m.conciliado_tipo %}
+                                <br><small class="text-success">✓ {{ m.conciliado_tipo }} #{{ m.conciliado_id }}</small>
+                            {% endif %}
+                        </td>
+                        <td><small>{{ m.referencia or '' }}</small></td>
+                        <td class="text-end fw-bold {% if (m.monto or 0) < 0 %}text-danger{% else %}text-success{% endif %}">
+                            ${{ "%.2f"|format(m.monto or 0) }}
+                        </td>
+                        <td class="text-center">
+                            {% if est=='conciliado' %}<span class="badge bg-success">Conciliado</span>
+                            {% elif est=='justificado' %}<span class="badge bg-info">Justificado</span>
+                            {% else %}<span class="badge bg-warning">⚠️ Pendiente</span>{% endif %}
+                        </td>
+                        <td class="text-end">
+                            {% if est=='pendiente' %}
+                                <button class="btn btn-sm btn-outline-info" onclick="justificar({{ m.id }})">Justificar</button>
+                                <button class="btn btn-sm btn-outline-success" onclick="conciliar({{ m.id }})">Conciliar</button>
+                            {% else %}
+                                <button class="btn btn-sm btn-outline-secondary" onclick="revertir({{ m.id }})">↺</button>
+                            {% endif %}
+                            <button class="btn btn-sm btn-outline-danger" onclick="eliminar({{ m.id }})">🗑️</button>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="6" class="text-center text-muted py-4">No hay movimientos cargados.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+function justificar(id) {
+    var txt = prompt('Justificación de este movimiento (por qué no cuadra o cómo se explica):');
+    if (!txt) return;
+    fetch('/api/movimiento/' + id + '/justificar', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({justificacion: txt})
+    }).then(r => r.json()).then(d => { if (d.success) location.reload(); else alert('Error: ' + (d.error||'')); });
+}
+function conciliar(id) {
+    var tipo = prompt('Tipo de registro con el que cuadra: pago / gasto / cita / devolucion', 'pago');
+    if (!tipo) return;
+    var ref = prompt('ID del registro (opcional, déjalo vacío si no lo tienes):', '');
+    fetch('/api/movimiento/' + id + '/conciliar', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({tipo: tipo.trim(), ref_id: ref})
+    }).then(r => r.json()).then(d => { if (d.success) location.reload(); else alert('Error'); });
+}
+function revertir(id) {
+    fetch('/api/movimiento/' + id + '/pendiente', {method: 'POST'})
+        .then(r => r.json()).then(d => { if (d.success) location.reload(); });
+}
+function eliminar(id) {
+    if (!confirm('¿Eliminar este movimiento?')) return;
+    fetch('/api/movimiento/' + id + '/eliminar', {method: 'POST'})
+        .then(r => r.json()).then(d => { if (d.success) location.reload(); });
+}
+</script>
+{% endblock %}

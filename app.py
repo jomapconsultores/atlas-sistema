@@ -5,10 +5,25 @@ from config import Config
 from models import check_password, Usuario
 from supabase_client import supabase
 from google_calendar import crear_evento_calendar, eliminar_evento_calendar, crear_o_actualizar_evento_calendar
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from calendar import monthrange
 from functools import wraps
 import uuid
+import io
+import csv
+import hashlib
+import re
+
+# Lectura de estados de cuenta. Se importan de forma opcional para no romper
+# el arranque si la dependencia no está instalada (el módulo avisa al usuario).
+try:
+    import openpyxl
+except Exception:
+    openpyxl = None
+try:
+    import pdfplumber
+except Exception:
+    pdfplumber = None
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -161,6 +176,38 @@ def cargar_costos():
         return psicologia, precios_clase or [10], precios_matricula or [0, 18, 20], precios_pension or [99, 100, 110]
     except:
         return ATENCION_PSICOLOGICA, PRECIOS_CLASE, PRECIOS_MATRICULA, PRECIOS_PENSION
+
+# ========== DEVOLUCIONES (helpers) ==========
+def devoluciones_periodo(anio, mes):
+    """Suma de devoluciones de dinero a clientes en el período indicado.
+    Se usa para RESTAR de los ingresos en Reportes y Liquidación.
+    Filtra por mes_periodo/anio_periodo (como gastos); si esos campos
+    faltan, cae a la fecha de la devolución."""
+    try:
+        res = supabase.table('devoluciones').select('*').execute()
+    except Exception:
+        return 0.0
+    total = 0.0
+    for d in (res.data or []):
+        mp = d.get('mes_periodo')
+        ap = d.get('anio_periodo')
+        if mp and ap:
+            if int(mp) == int(mes) and int(ap) == int(anio):
+                total += d.get('monto', 0) or 0
+        else:
+            f = d.get('fecha', '') or ''
+            if f[:7] == f"{anio}-{mes:02d}":
+                total += d.get('monto', 0) or 0
+    return total
+
+def devoluciones_por_estudiante(estudiante_id):
+    """Total devuelto a un estudiante (todas las fechas). Se resta del
+    'pagado' para obtener el pagado neto y el saldo real en el Módulo 3."""
+    try:
+        res = supabase.table('devoluciones').select('monto').eq('estudiante_id', estudiante_id).execute()
+    except Exception:
+        return 0.0
+    return sum(d.get('monto', 0) or 0 for d in (res.data or []))
 
 # ========== RUTAS PRINCIPALES ==========
 @app.route('/')
@@ -600,6 +647,15 @@ def api_editar_sesion(id):
 @login_required
 def eliminar_sesion(id):
     try:
+        # Borrar primero el evento del Google Calendar (si existe) antes de eliminar la fila
+        try:
+            ses = supabase.table('sesiones').select('evento_calendar_id').eq('id', id).execute()
+            if ses.data:
+                ev_id = ses.data[0].get('evento_calendar_id')
+                if ev_id:
+                    eliminar_evento_calendar(ev_id)
+        except Exception as e:
+            print(f'⚠️ No se pudo eliminar evento de Calendar al borrar sesión {id}: {e}')
         supabase.table('sesiones').delete().eq('id', id).execute()
         return jsonify({'success': True})
     except Exception as e:
@@ -607,20 +663,29 @@ def eliminar_sesion(id):
 
 def _sincronizar_sesion_en_calendar(id):
     """Crea o actualiza el evento de Google Calendar de una sesión.
-    Si la sesión está 'Cancelado', el evento se marca como CANCELADO.
-    Devuelve (evento_id|None, error|None)."""
+    Si la sesión está 'Cancelado', el evento se ELIMINA del calendario.
+    Devuelve (evento_id|None, error|None). Cuando se elimina por cancelación,
+    devuelve ('eliminado', None)."""
     sesion = supabase.table('sesiones').select('*, estudiantes(apellidos, nombres)').eq('id', id).execute()
     if not sesion.data:
         return None, 'Sesión no encontrada'
     s = sesion.data[0]
+    # Si la sesión está cancelada, borrar el evento del calendario y limpiar el id guardado
+    if (s.get('estado') or '') == 'Cancelado':
+        ev_id = s.get('evento_calendar_id')
+        if ev_id:
+            try:
+                eliminar_evento_calendar(ev_id)
+            except Exception as e:
+                print(f'⚠️ Error eliminando evento cancelado de Calendar (sesión {id}): {e}')
+            supabase.table('sesiones').update({'evento_calendar_id': None}).eq('id', id).execute()
+        return 'eliminado', None
     if not s.get('fecha') or not s.get('hora_inicio') or not s.get('hora_fin'):
         return None, 'Faltan datos (fecha u horario)'
     est = s.get('estudiantes') or {}
     nombre_est = f"{est.get('apellidos', '')} {est.get('nombres', '')}".strip()
     encargado = (s.get('encargado_apertura') or '').strip() or 'Por definir'
     asignatura = (s.get('asignatura') or s.get('tema_terapia') or 'Sesión')[:50]
-    if (s.get('estado') or '') == 'Cancelado':
-        asignatura = f"❌ CANCELADO - {asignatura}"[:70]
     evento_id = crear_o_actualizar_evento_calendar({
         'asignatura': asignatura,
         'profesor': (s.get('profesor_terapeuta') or 'Profesor')[:50],
@@ -875,8 +940,12 @@ def modulo3():
         pag = supabase.table('pagos').select('*').eq('estudiante_id', e['id']).order('fecha_pago', desc=True).execute()
         cobrar = sum(s.get('valor_total', 0) or 0 for s in (ses.data or []) if s.get('estado') in ['Realizado', 'Cancelado-Pagado'])
         pagado = sum(p.get('monto', 0) or 0 for p in (pag.data or []))
-        if cobrar > 0 or pagado > 0:
-            datos.append({'id': e['id'], 'nombre': nombre_completo, 'cobrar': cobrar, 'pagado': pagado, 'saldo': cobrar - pagado, 'pagos': pag.data or [], 'sesiones': ses.data or []})
+        devuelto = devoluciones_por_estudiante(e['id'])
+        pagado_neto = pagado - devuelto
+        if cobrar > 0 or pagado > 0 or devuelto > 0:
+            datos.append({'id': e['id'], 'nombre': nombre_completo, 'cobrar': cobrar,
+                          'pagado': pagado, 'devuelto': devuelto, 'pagado_neto': pagado_neto,
+                          'saldo': cobrar - pagado_neto, 'pagos': pag.data or [], 'sesiones': ses.data or []})
     return render_template('modulo3.html', estudiantes=datos, today=date.today(),
                            sesiones_dia=sesiones_dia, filtro_fecha=filtro_fecha,
                            filtro_estudiante=filtro_estudiante, filtro_docente=filtro_docente,
@@ -1569,8 +1638,9 @@ def reportes():
                 'saldo': cobrar - pagado,
             })
     
-    total_ingresos = total_facturado
-    
+    total_devoluciones = devoluciones_periodo(anio, mes)
+    total_ingresos = total_facturado - total_devoluciones
+
     try:
         gastos_mes = supabase.table('gastos').select('*').eq('mes_periodo', mes).eq('anio_periodo', anio).execute()
     except Exception:
@@ -1634,6 +1704,8 @@ def reportes():
                          total_pagado_estudiantes=total_pagado_estudiantes,
                          total_por_pagar_estudiantes=total_cobrar_estudiantes - total_pagado_estudiantes,
                          total_ingresos=total_ingresos,
+                         total_facturado_bruto=total_facturado,
+                         total_devoluciones=total_devoluciones,
                          total_gastos=total_gastos, balance=balance,
                          gastos=gastos_mes.data or [], mes=mes, anio=anio,
                          ingresos_por_tipo=ingresos_por_tipo, gastos_por_categoria=gastos_por_categoria,
@@ -1853,9 +1925,11 @@ def liquidacion():
     except Exception:
         gastos_reembolso_pend = type('obj', (object,), {'data': []})()
 
-    # Ingresos del período
+    # Ingresos del período (netos de devoluciones)
     pagos_mes = supabase.table('pagos').select('*').gte('fecha_pago', f"{anio}-{mes:02d}-01").lte('fecha_pago', f"{anio}-{mes:02d}-{ultimo_dia}").execute()
-    total_ingresos = sum(p.get('monto', 0) or 0 for p in (pagos_mes.data or []))
+    total_ingresos_bruto = sum(p.get('monto', 0) or 0 for p in (pagos_mes.data or []))
+    total_devoluciones = devoluciones_periodo(anio, mes)
+    total_ingresos = total_ingresos_bruto - total_devoluciones
 
     # Pago a docentes del período
     sesiones_mes = supabase.table('sesiones').select('*').in_('estado', ['Realizado', 'Cancelado-Pagado']).gte('fecha', f"{anio}-{mes:02d}-01").lte('fecha', f"{anio}-{mes:02d}-{ultimo_dia}").execute()
@@ -1899,7 +1973,8 @@ def liquidacion():
         gastos=gastos_periodo.data or [], total_gastos=total_gastos, gastos_por_cat=gastos_por_cat,
         reembolsos_por_socio=reembolsos_por_socio,
         gastos_reembolso_pend=gastos_reembolso_pend.data or [],
-        total_ingresos=total_ingresos, total_pago_docentes=total_pago_docentes,
+        total_ingresos=total_ingresos, total_ingresos_bruto=total_ingresos_bruto,
+        total_devoluciones=total_devoluciones, total_pago_docentes=total_pago_docentes,
         pago_por_docente=pago_por_docente, balance=balance,
         distribucion_socios=distribucion_socios)
 
@@ -2294,6 +2369,528 @@ def reporte_duplicados():
     return render_template('reporte_duplicados.html',
                            duplicados=duplicados,
                            total_sobrepago=round(total_sobrepago, 2))
+
+
+# ========== DEVOLUCIONES DE DINERO ==========
+@app.route('/devoluciones', methods=['GET', 'POST'])
+@login_required
+@socio_admin_required
+def devoluciones():
+    if request.method == 'POST':
+        accion = request.form.get('accion', 'registrar')
+        if accion == 'registrar':
+            tipo_cliente = request.form.get('tipo_cliente', 'estudiante')
+            fecha = request.form.get('fecha') or date.today().isoformat()
+            try:
+                fecha_obj = datetime.strptime(fecha, '%Y-%m-%d')
+            except Exception:
+                fecha_obj = datetime.today()
+            monto = float(request.form.get('monto', 0) or 0)
+            tipo_pago = request.form.get('tipo_pago', 'efectivo')
+            motivo = (request.form.get('motivo', '') or '').strip()
+            pagar_docente = request.form.get('pagar_docente') == 'true'
+            docente_nombre = (request.form.get('docente_nombre', '') or '').strip() or None
+            monto_docente = float(request.form.get('monto_docente', 0) or 0) if pagar_docente else 0
+
+            if monto <= 0:
+                flash('❌ El monto a devolver debe ser mayor a 0', 'error')
+                return redirect(url_for('devoluciones'))
+
+            estudiante_id = None
+            cliente_id = None
+            cita_id = None
+            nombre_cliente = ''
+            if tipo_cliente == 'estudiante':
+                estudiante_id = int(request.form['estudiante_id']) if request.form.get('estudiante_id') else None
+                if not estudiante_id:
+                    flash('❌ Selecciona un estudiante', 'error')
+                    return redirect(url_for('devoluciones'))
+            else:
+                cliente_id = int(request.form['cliente_id']) if request.form.get('cliente_id') else None
+                cita_id = int(request.form['cita_id']) if request.form.get('cita_id') else None
+
+            # 1) Gasto automático vinculado si hay que pagar al docente igual
+            gasto_id = None
+            if pagar_docente and monto_docente > 0:
+                concepto = f"Devolución - pago docente ({docente_nombre or 's/d'})"
+                if motivo:
+                    concepto += f" · {motivo[:60]}"
+                gasto_data = {
+                    'concepto': concepto, 'monto': monto_docente, 'fecha': fecha,
+                    'categoria': 'Devolución - pago docente', 'persona': docente_nombre or '',
+                    'reembolso': False, 'registrado_por': current_user.nombre,
+                    'mes': fecha_obj.month, 'anio': fecha_obj.year,
+                    'mes_periodo': fecha_obj.month, 'anio_periodo': fecha_obj.year
+                }
+                try:
+                    g = supabase.table('gastos').insert(gasto_data).execute()
+                    gasto_id = g.data[0]['id'] if g.data else None
+                except Exception:
+                    gasto_data.pop('mes_periodo', None)
+                    gasto_data.pop('anio_periodo', None)
+                    g = supabase.table('gastos').insert(gasto_data).execute()
+                    gasto_id = g.data[0]['id'] if g.data else None
+
+            # 2) Registrar la devolución
+            supabase.table('devoluciones').insert({
+                'fecha': fecha, 'tipo_cliente': tipo_cliente,
+                'estudiante_id': estudiante_id, 'cliente_id': cliente_id, 'cita_id': cita_id,
+                'monto': monto, 'tipo_pago': tipo_pago, 'motivo': motivo,
+                'pagar_docente': pagar_docente, 'docente_nombre': docente_nombre,
+                'monto_docente': monto_docente, 'gasto_id': gasto_id,
+                'mes_periodo': fecha_obj.month, 'anio_periodo': fecha_obj.year,
+                'registrado_por': current_user.nombre
+            }).execute()
+
+            # 3) Si es cliente externo con cita, restar de lo pagado de la cita
+            if tipo_cliente == 'externo' and cita_id:
+                cita = supabase.table('citas_psicologia').select('*').eq('id', cita_id).execute()
+                if cita.data:
+                    c = cita.data[0]
+                    nuevo_pagado = max(0, (c.get('monto_pagado', 0) or 0) - monto)
+                    if nuevo_pagado <= 0:
+                        nuevo_estado = 'agendada'
+                    elif nuevo_pagado >= (c.get('valor', 0) or 0):
+                        nuevo_estado = 'pagada'
+                    else:
+                        nuevo_estado = 'parcial'
+                    supabase.table('citas_psicologia').update({
+                        'monto_pagado': nuevo_pagado, 'estado': nuevo_estado
+                    }).eq('id', cita_id).execute()
+
+            flash('✅ Devolución registrada', 'success')
+        return redirect(url_for('devoluciones'))
+
+    # GET
+    mes = int(request.args.get('mes', date.today().month))
+    anio = int(request.args.get('anio', date.today().year))
+
+    estudiantes = supabase.table('estudiantes').select('id,nombres,apellidos').eq('activo', True).order('apellidos').execute()
+    estudiantes_lista = [{'id': e['id'], 'nombre': f"{e['apellidos']} {e['nombres']}"} for e in (estudiantes.data or [])]
+
+    try:
+        clientes_ext = supabase.table('clientes_externos').select('id,nombre').eq('activo', True).order('nombre').execute().data or []
+    except Exception:
+        clientes_ext = []
+    try:
+        citas = supabase.table('citas_psicologia').select('id,cliente_id,fecha,valor,monto_pagado,psicologo_nombre').gt('monto_pagado', 0).order('fecha', desc=True).execute().data or []
+    except Exception:
+        citas = []
+
+    # Devoluciones del período + enriquecer con nombre del cliente
+    try:
+        devs = supabase.table('devoluciones').select('*').order('fecha', desc=True).execute().data or []
+    except Exception:
+        devs = []
+    est_map = {e['id']: e['nombre'] for e in estudiantes_lista}
+    cli_map = {c['id']: c['nombre'] for c in clientes_ext}
+    devs_periodo = []
+    total_devuelto = 0.0
+    total_docente = 0.0
+    for d in devs:
+        mp, ap = d.get('mes_periodo'), d.get('anio_periodo')
+        en_periodo = (int(mp) == mes and int(ap) == anio) if (mp and ap) else ((d.get('fecha','') or '')[:7] == f"{anio}-{mes:02d}")
+        if d.get('tipo_cliente') == 'estudiante':
+            d['cliente_nombre'] = est_map.get(d.get('estudiante_id'), 'Estudiante')
+        else:
+            d['cliente_nombre'] = cli_map.get(d.get('cliente_id'), 'Cliente externo')
+        if en_periodo:
+            devs_periodo.append(d)
+            total_devuelto += d.get('monto', 0) or 0
+            total_docente += d.get('monto_docente', 0) or 0
+
+    return render_template('devoluciones.html',
+                           estudiantes=estudiantes_lista, clientes_externos=clientes_ext, citas=citas,
+                           devoluciones=devs_periodo, total_devuelto=total_devuelto, total_docente=total_docente,
+                           profesores=PROFESORES, mes=mes, anio=anio, today=date.today().isoformat())
+
+@app.route('/api/devolucion/<int:id>/eliminar', methods=['POST'])
+@login_required
+@socio_admin_required
+def eliminar_devolucion(id):
+    dev = supabase.table('devoluciones').select('*').eq('id', id).execute()
+    if not dev.data:
+        return jsonify({'success': False, 'error': 'No encontrada'})
+    d = dev.data[0]
+    # Revertir el gasto vinculado
+    if d.get('gasto_id'):
+        try:
+            supabase.table('gastos').delete().eq('id', d['gasto_id']).execute()
+        except Exception:
+            pass
+    # Revertir el pago de la cita externa (volver a sumar lo devuelto)
+    if d.get('tipo_cliente') == 'externo' and d.get('cita_id'):
+        cita = supabase.table('citas_psicologia').select('*').eq('id', d['cita_id']).execute()
+        if cita.data:
+            c = cita.data[0]
+            nuevo_pagado = (c.get('monto_pagado', 0) or 0) + (d.get('monto', 0) or 0)
+            nuevo_estado = 'pagada' if nuevo_pagado >= (c.get('valor', 0) or 0) else 'parcial'
+            supabase.table('citas_psicologia').update({
+                'monto_pagado': nuevo_pagado, 'estado': nuevo_estado
+            }).eq('id', d['cita_id']).execute()
+    supabase.table('devoluciones').delete().eq('id', id).execute()
+    return jsonify({'success': True})
+
+
+# ========== MOVIMIENTOS EN CUENTA (conciliación bancaria) — SOLO ADMIN ==========
+def _norm_num(v):
+    """Convierte un valor de celda a float. Maneja $, separadores de miles,
+    coma decimal y paréntesis (negativos). Devuelve 0.0 si no es numérico."""
+    if v is None:
+        return 0.0
+    if isinstance(v, (int, float)):
+        return float(v)
+    s = str(v).strip()
+    if not s:
+        return 0.0
+    neg = s.startswith('(') and s.endswith(')')
+    s = s.replace('$', '').replace('USD', '').replace('(', '').replace(')', '').replace(' ', '')
+    if ',' in s and '.' in s:
+        # 1.234,56 -> miles '.', decimal ','
+        s = s.replace('.', '').replace(',', '.')
+    elif ',' in s:
+        s = s.replace(',', '.')
+    try:
+        n = float(s)
+    except ValueError:
+        return 0.0
+    return -n if neg else n
+
+def _norm_fecha(v):
+    """Devuelve 'YYYY-MM-DD' a partir de varios formatos comunes o None."""
+    if v is None or v == '':
+        return None
+    if isinstance(v, (datetime, date)):
+        return v.strftime('%Y-%m-%d')
+    s = str(v).strip()
+    # quita parte de hora si viene 'YYYY-MM-DD HH:MM:SS'
+    s = s.split(' ')[0]
+    for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y', '%d/%m/%y', '%d-%m-%y', '%m/%d/%Y'):
+        try:
+            return datetime.strptime(s, fmt).strftime('%Y-%m-%d')
+        except ValueError:
+            continue
+    return None
+
+def hash_movimiento(m):
+    """md5 estable de los campos clave para deduplicar el estado de cuenta."""
+    base = '|'.join([
+        str(m.get('fecha') or ''),
+        f"{float(m.get('monto') or 0):.2f}",
+        (m.get('descripcion') or '').strip().lower()[:80],
+        (m.get('referencia') or '').strip().lower()
+    ])
+    return hashlib.md5(base.encode('utf-8')).hexdigest()
+
+# Palabras clave para mapear columnas del estado de cuenta
+_COL_KEYS = {
+    'fecha': ['fecha', 'date'],
+    'descripcion': ['descrip', 'concepto', 'detalle', 'transacc', 'glosa'],
+    'debito': ['debito', 'débito', 'retiro', 'cargo', 'egreso', 'debe'],
+    'credito': ['credito', 'crédito', 'deposito', 'depósito', 'abono', 'ingreso', 'haber'],
+    'monto': ['monto', 'valor', 'importe'],
+    'saldo': ['saldo', 'balance'],
+    'referencia': ['referencia', 'documento', 'comprobante', 'num', 'nº', 'no.', 'doc'],
+}
+
+def _mapear_columnas(headers):
+    """headers: lista de strings de la fila de cabecera. Devuelve dict col->idx."""
+    mapa = {}
+    for idx, h in enumerate(headers):
+        hl = (str(h) if h is not None else '').strip().lower()
+        if not hl:
+            continue
+        for campo, claves in _COL_KEYS.items():
+            if campo in mapa:
+                continue
+            if any(k in hl for k in claves):
+                mapa[campo] = idx
+                break
+    return mapa
+
+def _fila_a_movimiento(row, mapa):
+    """Convierte una fila (lista) en un movimiento normalizado o None."""
+    def cell(campo):
+        i = mapa.get(campo)
+        return row[i] if (i is not None and i < len(row)) else None
+    fecha = _norm_fecha(cell('fecha'))
+    if not fecha:
+        return None
+    descripcion = str(cell('descripcion') or '').strip()
+    referencia = str(cell('referencia') or '').strip()
+    saldo = _norm_num(cell('saldo')) if mapa.get('saldo') is not None else None
+    # Monto: prioriza débito/crédito separados; si no, columna única
+    monto = 0.0
+    if mapa.get('credito') is not None or mapa.get('debito') is not None:
+        cr = _norm_num(cell('credito'))
+        de = _norm_num(cell('debito'))
+        monto = abs(cr) - abs(de)
+    elif mapa.get('monto') is not None:
+        monto = _norm_num(cell('monto'))
+    if monto == 0:
+        return None
+    return {
+        'fecha': fecha, 'descripcion': descripcion, 'referencia': referencia,
+        'monto': round(monto, 2), 'tipo': 'credito' if monto > 0 else 'debito',
+        'saldo': round(saldo, 2) if saldo is not None else None
+    }
+
+def parsear_estado_cuenta(file_bytes, filename):
+    """Devuelve (lista_movimientos, error_msg). error_msg None si todo ok."""
+    nombre = (filename or '').lower()
+    if nombre.endswith(('.xlsx', '.xlsm', '.xls')):
+        if openpyxl is None:
+            return [], 'Falta la librería openpyxl en el servidor (pip install openpyxl).'
+        try:
+            wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True, read_only=True)
+        except Exception as e:
+            return [], f'No se pudo abrir el Excel: {e}'
+        ws = wb.active
+        filas = [[c for c in row] for row in ws.iter_rows(values_only=True)]
+        # Buscar fila de cabecera en las primeras 20 filas
+        mapa, header_idx = {}, None
+        for i, fila in enumerate(filas[:20]):
+            m = _mapear_columnas([str(c) if c is not None else '' for c in fila])
+            if 'fecha' in m and (('credito' in m or 'debito' in m) or 'monto' in m):
+                mapa, header_idx = m, i
+                break
+        if header_idx is None:
+            return [], 'No se reconocieron las columnas (fecha y débito/crédito o monto) en el Excel.'
+        movs = []
+        for fila in filas[header_idx + 1:]:
+            mv = _fila_a_movimiento(list(fila), mapa)
+            if mv:
+                movs.append(mv)
+        return movs, None
+    elif nombre.endswith('.pdf'):
+        if pdfplumber is None:
+            return [], 'Falta la librería pdfplumber en el servidor (pip install pdfplumber).'
+        movs = []
+        try:
+            with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+                texto = '\n'.join((p.extract_text() or '') for p in pdf.pages)
+        except Exception as e:
+            return [], f'No se pudo leer el PDF: {e}'
+        # Best-effort: líneas que empiezan con fecha y traen al menos un monto
+        patron_fecha = re.compile(r'^(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s+(.*)')
+        patron_monto = re.compile(r'-?\$?\(?\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})\)?')
+        for linea in texto.splitlines():
+            linea = linea.strip()
+            mf = patron_fecha.match(linea)
+            if not mf:
+                continue
+            fecha = _norm_fecha(mf.group(1))
+            if not fecha:
+                continue
+            resto = mf.group(2)
+            montos = patron_monto.findall(resto)
+            if not montos:
+                continue
+            # El último número suele ser el saldo; el penúltimo (si hay) el movimiento
+            valores = [_norm_num(x) for x in montos]
+            if len(valores) >= 2:
+                monto, saldo = valores[-2], valores[-1]
+            else:
+                monto, saldo = valores[-1], None
+            descripcion = patron_monto.sub('', resto).strip()
+            if monto == 0:
+                continue
+            movs.append({
+                'fecha': fecha, 'descripcion': descripcion, 'referencia': '',
+                'monto': round(monto, 2), 'tipo': 'credito' if monto > 0 else 'debito',
+                'saldo': round(saldo, 2) if saldo is not None else None
+            })
+        if not movs:
+            return [], 'No se pudieron extraer movimientos del PDF (formato no reconocido). Sube el Excel del estado de cuenta.'
+        return movs, None
+    return [], 'Formato no soportado. Sube un archivo .xlsx o .pdf.'
+
+def conciliar_nuevos(movs):
+    """Cruza una lista de movimientos (dicts con id) con pagos y gastos.
+    Crédito ↔ pago (mismo monto, ±5 días). Débito ↔ gasto. Actualiza la BD."""
+    if not movs:
+        return
+    fechas = [m['fecha'] for m in movs if m.get('fecha')]
+    if not fechas:
+        return
+    fmin = (datetime.strptime(min(fechas), '%Y-%m-%d') - timedelta(days=5)).strftime('%Y-%m-%d')
+    fmax = (datetime.strptime(max(fechas), '%Y-%m-%d') + timedelta(days=5)).strftime('%Y-%m-%d')
+    pagos = supabase.table('pagos').select('id,monto,fecha_pago').gte('fecha_pago', fmin).lte('fecha_pago', fmax).execute().data or []
+    gastos = supabase.table('gastos').select('id,monto,fecha').gte('fecha', fmin).lte('fecha', fmax).execute().data or []
+    usados_pago, usados_gasto = set(), set()
+    for m in movs:
+        mf = datetime.strptime(m['fecha'], '%Y-%m-%d')
+        objetivo = abs(m['monto'])
+        tipo, ref_id = None, None
+        if m['monto'] > 0:  # crédito ↔ pago de estudiante
+            for p in pagos:
+                if p['id'] in usados_pago:
+                    continue
+                if abs((p.get('monto') or 0) - objetivo) < 0.01 and p.get('fecha_pago'):
+                    try:
+                        if abs((datetime.strptime(p['fecha_pago'][:10], '%Y-%m-%d') - mf).days) <= 5:
+                            tipo, ref_id = 'pago', p['id']
+                            usados_pago.add(p['id'])
+                            break
+                    except Exception:
+                        continue
+        else:  # débito ↔ gasto
+            for g in gastos:
+                if g['id'] in usados_gasto:
+                    continue
+                if abs((g.get('monto') or 0) - objetivo) < 0.01 and g.get('fecha'):
+                    try:
+                        if abs((datetime.strptime(g['fecha'][:10], '%Y-%m-%d') - mf).days) <= 5:
+                            tipo, ref_id = 'gasto', g['id']
+                            usados_gasto.add(g['id'])
+                            break
+                    except Exception:
+                        continue
+        if tipo:
+            supabase.table('movimientos_cuenta').update({
+                'estado_conciliacion': 'conciliado', 'conciliado_tipo': tipo, 'conciliado_id': ref_id
+            }).eq('id', m['id']).execute()
+
+@app.route('/movimientos-cuenta')
+@login_required
+@admin_required
+def movimientos_cuenta():
+    mes = request.args.get('mes', '')
+    anio = request.args.get('anio', '')
+    q = supabase.table('movimientos_cuenta').select('*').order('fecha', desc=True)
+    movs = q.execute().data or []
+    if mes and anio:
+        movs = [m for m in movs if (m.get('fecha', '') or '')[:7] == f"{int(anio)}-{int(mes):02d}"]
+    total_conc = sum(m.get('monto', 0) or 0 for m in movs if m.get('estado_conciliacion') == 'conciliado')
+    total_pend = sum(m.get('monto', 0) or 0 for m in movs if m.get('estado_conciliacion') == 'pendiente')
+    n_pend = sum(1 for m in movs if m.get('estado_conciliacion') == 'pendiente')
+    return render_template('movimientos_cuenta.html',
+                           movimientos=movs, total_conciliado=total_conc, total_pendiente=total_pend,
+                           n_pendientes=n_pend, mes=mes, anio=anio,
+                           openpyxl_ok=openpyxl is not None, pdf_ok=pdfplumber is not None,
+                           today=date.today().isoformat())
+
+@app.route('/movimientos-cuenta/subir', methods=['POST'])
+@login_required
+@admin_required
+def subir_estado_cuenta():
+    archivo = request.files.get('archivo')
+    if not archivo or not archivo.filename:
+        flash('❌ Selecciona un archivo (.xlsx o .pdf)', 'error')
+        return redirect(url_for('movimientos_cuenta'))
+    banco = (request.form.get('banco', '') or '').strip()
+    movs, error = parsear_estado_cuenta(archivo.read(), archivo.filename)
+    if error:
+        flash(f'❌ {error}', 'error')
+        return redirect(url_for('movimientos_cuenta'))
+    if not movs:
+        flash('⚠️ No se encontraron movimientos en el archivo', 'warning')
+        return redirect(url_for('movimientos_cuenta'))
+
+    # Calcular hash y deduplicar contra lo ya guardado
+    for m in movs:
+        m['hash_mov'] = hash_movimiento(m)
+    hashes = list({m['hash_mov'] for m in movs})
+    existentes = set()
+    for i in range(0, len(hashes), 100):
+        chunk = hashes[i:i + 100]
+        try:
+            r = supabase.table('movimientos_cuenta').select('hash_mov').in_('hash_mov', chunk).execute()
+            existentes.update(x['hash_mov'] for x in (r.data or []))
+        except Exception:
+            pass
+
+    nuevos = [m for m in movs if m['hash_mov'] not in existentes]
+    # Evita duplicados dentro del mismo archivo
+    vistos, nuevos_unicos = set(), []
+    for m in nuevos:
+        if m['hash_mov'] in vistos:
+            continue
+        vistos.add(m['hash_mov'])
+        nuevos_unicos.append(m)
+    nuevos = nuevos_unicos
+
+    ya_existian = len(movs) - len(nuevos)
+    if not nuevos:
+        flash(f'ℹ️ Este estado de cuenta ya está subido completamente ({ya_existian} movimientos ya registrados).', 'info')
+        return redirect(url_for('movimientos_cuenta'))
+
+    lote_id = str(uuid.uuid4())
+    insertados = []
+    for m in nuevos:
+        fila = {
+            'lote_id': lote_id, 'banco': banco or None, 'fecha': m['fecha'],
+            'descripcion': m['descripcion'], 'referencia': m['referencia'] or None,
+            'monto': m['monto'], 'tipo': m['tipo'], 'saldo': m['saldo'],
+            'hash_mov': m['hash_mov'], 'estado_conciliacion': 'pendiente',
+            'cargado_por': current_user.nombre
+        }
+        try:
+            res = supabase.table('movimientos_cuenta').insert(fila).execute()
+            if res.data:
+                m['id'] = res.data[0]['id']
+                insertados.append(m)
+        except Exception:
+            pass  # hash duplicado por carrera u otro error: se ignora
+
+    conciliar_nuevos(insertados)
+
+    if ya_existian:
+        flash(f'✅ {len(insertados)} movimientos nuevos agregados · {ya_existian} ya estaban registrados.', 'success')
+    else:
+        flash(f'✅ Estado de cuenta procesado: {len(insertados)} movimientos agregados.', 'success')
+    return redirect(url_for('movimientos_cuenta'))
+
+@app.route('/api/movimiento/<int:id>/justificar', methods=['POST'])
+@login_required
+@admin_required
+def justificar_movimiento(id):
+    data = request.get_json() or {}
+    texto = (data.get('justificacion', '') or '').strip()
+    if not texto:
+        return jsonify({'success': False, 'error': 'Falta la justificación'})
+    supabase.table('movimientos_cuenta').update({
+        'estado_conciliacion': 'justificado', 'justificacion': texto
+    }).eq('id', id).execute()
+    return jsonify({'success': True})
+
+@app.route('/api/movimiento/<int:id>/conciliar', methods=['POST'])
+@login_required
+@admin_required
+def conciliar_manual(id):
+    data = request.get_json() or {}
+    tipo = data.get('tipo')      # 'pago' | 'gasto' | 'cita' | 'devolucion'
+    ref_id = data.get('ref_id')
+    supabase.table('movimientos_cuenta').update({
+        'estado_conciliacion': 'conciliado', 'conciliado_tipo': tipo,
+        'conciliado_id': int(ref_id) if ref_id else None
+    }).eq('id', id).execute()
+    return jsonify({'success': True})
+
+@app.route('/api/movimiento/<int:id>/pendiente', methods=['POST'])
+@login_required
+@admin_required
+def revertir_movimiento(id):
+    supabase.table('movimientos_cuenta').update({
+        'estado_conciliacion': 'pendiente', 'conciliado_tipo': None,
+        'conciliado_id': None, 'justificacion': None
+    }).eq('id', id).execute()
+    return jsonify({'success': True})
+
+@app.route('/api/movimiento/<int:id>/eliminar', methods=['POST'])
+@login_required
+@admin_required
+def eliminar_movimiento(id):
+    supabase.table('movimientos_cuenta').delete().eq('id', id).execute()
+    return jsonify({'success': True})
+
+@app.route('/movimientos-cuenta/lote/<lote_id>/eliminar', methods=['POST'])
+@login_required
+@admin_required
+def eliminar_lote_movimientos(lote_id):
+    supabase.table('movimientos_cuenta').delete().eq('lote_id', lote_id).execute()
+    flash('🗑️ Estado de cuenta eliminado', 'info')
+    return redirect(url_for('movimientos_cuenta'))
 
 
 # ========== INICIALIZACIÓN ==========

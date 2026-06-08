@@ -61,7 +61,8 @@
     <div class="col-md-3">
         <div class="card border-0 shadow-sm text-center p-3" style="border-radius:12px; background:#e8f5e9;">
             <div style="font-size:28px; font-weight:700; color:#2e7d32;">${{ "%.2f"|format(total_ingresos) }}</div>
-            <small class="text-muted">Ingresos del mes</small>
+            <small class="text-muted">Ingresos del mes{% if total_devoluciones and total_devoluciones > 0 %} (neto){% endif %}</small>
+            {% if total_devoluciones and total_devoluciones > 0 %}<small class="d-block text-danger">Bruto ${{ "%.2f"|format(total_ingresos_bruto) }} − devol. ${{ "%.2f"|format(total_devoluciones) }}</small>{% endif %}
         </div>
     </div>
     <div class="col-md-3">

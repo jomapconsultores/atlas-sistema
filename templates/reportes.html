@@ -121,8 +121,8 @@
             <div class="stat-card gradient-teal">
                 <div class="icon-bg">💰</div>
                 <h2>${{ "%.0f"|format(total_ingresos) }}</h2>
-                <div class="label">Ingresos Recaudados</div>
-                <div class="sub">${{ "%.0f"|format(total_ingresos/total_estudiantes) if total_estudiantes>0 else 0 }}/estudiante</div>
+                <div class="label">Ingresos Recaudados{% if total_devoluciones and total_devoluciones > 0 %} (neto){% endif %}</div>
+                {% if total_devoluciones and total_devoluciones > 0 %}<div class="sub">−${{ "%.2f"|format(total_devoluciones) }} en devoluciones</div>{% else %}<div class="sub">${{ "%.0f"|format(total_ingresos/total_estudiantes) if total_estudiantes>0 else 0 }}/estudiante</div>{% endif %}
             </div>
         </div>
         <div class="col-md-3">
