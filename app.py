@@ -134,6 +134,7 @@ def a_oracion(texto):
 
 # ========== CONSTANTES DE PAGOS ==========
 PAGO_DOCENCIA_POR_HORA = 7
+PAGO_DOCENCIA_CANCELADO = 5   # valor FIJO al docente por clase Cancelado-Pagado (no por hora)
 PORCENTAJE_PSICOLOGIA = 0.4018
 COMISION_CLIENTE_EXTERNO = 0.25
 
@@ -723,9 +724,15 @@ def toggle_sesion(id):
             else:
                 valor_total_sesion = round(horas * precio_hora, 2)
 
-            # Pago al docente: $7/h para clases, 40.18% del valor para terapia
+            # Pago al docente:
+            #  - Clases realizadas: $7/h
+            #  - Clases Cancelado-Pagado: valor FIJO de $5 por clase (no por hora)
+            #  - Terapia: 40.18% del valor (igual en realizado/cancelado-pagado)
             if tipo_sesion in ['clase', 'preuniversitario']:
-                pago_docente = round(horas * PAGO_DOCENCIA_POR_HORA, 2)
+                if estado == 'Cancelado-Pagado':
+                    pago_docente = PAGO_DOCENCIA_CANCELADO
+                else:
+                    pago_docente = round(horas * PAGO_DOCENCIA_POR_HORA, 2)
             else:
                 pago_docente = round(valor_total_sesion * PORCENTAJE_PSICOLOGIA, 2)
 
