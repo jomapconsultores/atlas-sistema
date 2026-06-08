@@ -210,6 +210,13 @@ def devoluciones_por_estudiante(estudiante_id):
         return 0.0
     return sum(d.get('monto', 0) or 0 for d in (res.data or []))
 
+# Marca de versión para verificar despliegues desde fuera (público, sin login).
+APP_VERSION = 'v2.1-deploy-check-1'
+
+@app.route('/version')
+def version():
+    return jsonify({'version': APP_VERSION})
+
 # ========== RUTAS PRINCIPALES ==========
 @app.route('/')
 def inicio():
