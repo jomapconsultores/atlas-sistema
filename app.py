@@ -744,43 +744,70 @@ def eliminar_sesion(id):
         return jsonify({'success': False, 'error': str(e)})
 
 def _sincronizar_sesion_en_calendar(id):
-    """Crea o actualiza el evento de Google Calendar de una sesión.
-    Si la sesión está 'Cancelado', el evento se ELIMINA del calendario.
-    Devuelve (evento_id|None, error|None). Cuando se elimina por cancelación,
-    devuelve ('eliminado', None)."""
-    sesion = supabase.table('sesiones').select('*, estudiantes(apellidos, nombres)').eq('id', id).execute()
-    if not sesion.data:
+    """Sincroniza el evento de Google Calendar de una sesión de forma GRUPAL:
+    todas las filas que comparten la misma sesión física (mismo sesion_grupo_id,
+    o mismo profesor+fecha+horario) comparten UN solo evento.
+      - Si TODAS las filas del grupo están 'Cancelado' → elimina el evento.
+      - Si hay al menos una activa → crea/actualiza el evento con los datos
+        actuales (fecha, hora, profesor, estudiantes activos) y guarda el mismo
+        evento_calendar_id en todas las filas del grupo.
+    Devuelve (evento_id|'eliminado'|None, error|None)."""
+    base = supabase.table('sesiones').select('*, estudiantes(apellidos, nombres)').eq('id', id).execute()
+    if not base.data:
         return None, 'Sesión no encontrada'
-    s = sesion.data[0]
-    # Si la sesión está cancelada, borrar el evento del calendario y limpiar el id guardado
-    if (s.get('estado') or '') == 'Cancelado':
-        ev_id = s.get('evento_calendar_id')
+    s = base.data[0]
+    # Hermanos del mismo grupo físico
+    gid = s.get('sesion_grupo_id')
+    try:
+        if gid:
+            grp = supabase.table('sesiones').select('*, estudiantes(apellidos, nombres)').eq('sesion_grupo_id', gid).execute().data or [s]
+        else:
+            grp = supabase.table('sesiones').select('*, estudiantes(apellidos, nombres)').eq(
+                'profesor_terapeuta', s.get('profesor_terapeuta')).eq('fecha', s.get('fecha')).eq(
+                'hora_inicio', s.get('hora_inicio')).eq('hora_fin', s.get('hora_fin')).execute().data or [s]
+    except Exception:
+        grp = [s]
+    sibling_ids = [g['id'] for g in grp]
+    ev_id = next((g.get('evento_calendar_id') for g in grp if g.get('evento_calendar_id')), None)
+    activos = [g for g in grp if (g.get('estado') or '') != 'Cancelado']
+
+    # Toda la clase cancelada → eliminar el evento y limpiar los ids
+    if not activos:
         if ev_id:
             try:
                 eliminar_evento_calendar(ev_id)
             except Exception as e:
                 print(f'⚠️ Error eliminando evento cancelado de Calendar (sesión {id}): {e}')
-            supabase.table('sesiones').update({'evento_calendar_id': None}).eq('id', id).execute()
+        for sid in sibling_ids:
+            supabase.table('sesiones').update({'evento_calendar_id': None}).eq('id', sid).execute()
         return 'eliminado', None
-    if not s.get('fecha') or not s.get('hora_inicio') or not s.get('hora_fin'):
+
+    # Representante: la sesión modificada si sigue activa; si no, la primera activa
+    rep = s if (s.get('estado') or '') != 'Cancelado' else activos[0]
+    if not rep.get('fecha') or not rep.get('hora_inicio') or not rep.get('hora_fin'):
         return None, 'Faltan datos (fecha u horario)'
-    est = s.get('estudiantes') or {}
-    nombre_est = f"{est.get('apellidos', '')} {est.get('nombres', '')}".strip()
-    encargado = (s.get('encargado_apertura') or '').strip() or 'Por definir'
-    asignatura = (s.get('asignatura') or s.get('tema_terapia') or 'Sesión')[:50]
+    nombres = []
+    for g in activos:
+        est = g.get('estudiantes') or {}
+        nom = f"{est.get('apellidos', '')} {est.get('nombres', '')}".strip()
+        if nom and nom not in nombres:
+            nombres.append(nom)
+    encargado = (rep.get('encargado_apertura') or '').strip() or 'Por definir'
+    asignatura = (rep.get('asignatura') or rep.get('tema_terapia') or 'Sesión')[:50]
     evento_id = crear_o_actualizar_evento_calendar({
         'asignatura': asignatura,
-        'profesor': (s.get('profesor_terapeuta') or 'Profesor')[:50],
-        'estudiantes': nombre_est[:100],
-        'fecha': str(s['fecha']),
-        'hora_inicio': (s.get('hora_inicio') or '')[:5],
-        'hora_fin': (s.get('hora_fin') or '')[:5],
+        'profesor': (rep.get('profesor_terapeuta') or 'Profesor')[:50],
+        'estudiantes': ', '.join(nombres)[:200],
+        'fecha': str(rep['fecha']),
+        'hora_inicio': (rep.get('hora_inicio') or '')[:5],
+        'hora_fin': (rep.get('hora_fin') or '')[:5],
         'encargado_apertura': encargado,
-        'valor_total': s.get('valor_total', 0)
-    }, s.get('evento_calendar_id'))
+        'valor_total': sum(g.get('valor_total', 0) or 0 for g in activos)
+    }, ev_id)
     if evento_id:
-        if evento_id != s.get('evento_calendar_id'):
-            supabase.table('sesiones').update({'evento_calendar_id': evento_id}).eq('id', id).execute()
+        for g in grp:
+            if g.get('evento_calendar_id') != evento_id:
+                supabase.table('sesiones').update({'evento_calendar_id': evento_id}).eq('id', g['id']).execute()
         return evento_id, None
     return None, 'No se pudo crear/actualizar el evento en Google Calendar'
 
@@ -883,6 +910,10 @@ def modificar_sesion(id):
         fin = datetime.strptime(f"{fecha} {h_fin}", '%Y-%m-%d %H:%M')
         horas = round((fin - inicio).total_seconds() / 3600, 2)
         supabase.table('sesiones').update({'fecha': fecha, 'hora_inicio': h_ini, 'hora_fin': h_fin, 'horas': horas}).eq('id', id).execute()
+        try:
+            _sincronizar_sesion_en_calendar(id)
+        except Exception as e:
+            print(f'⚠️ Auto-sync calendar (modificar) sesión {id}: {e}')
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
@@ -904,6 +935,10 @@ def cambiar_estudiante_sesion(id):
             else:
                 return jsonify({'success': False, 'error': 'No se pudo crear'})
         supabase.table('sesiones').update({'estudiante_id': int(estudiante_id)}).eq('id', id).execute()
+        try:
+            _sincronizar_sesion_en_calendar(id)
+        except Exception as e:
+            print(f'⚠️ Auto-sync calendar (cambiar-estudiante) sesión {id}: {e}')
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
@@ -915,6 +950,10 @@ def cambiar_profesor_sesion(id):
         data = request.get_json()
         nuevo_profesor = data.get('profesor', '')
         supabase.table('sesiones').update({'profesor_terapeuta': nuevo_profesor}).eq('id', id).execute()
+        try:
+            _sincronizar_sesion_en_calendar(id)
+        except Exception as e:
+            print(f'⚠️ Auto-sync calendar (cambiar-profesor) sesión {id}: {e}')
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
@@ -997,6 +1036,10 @@ def modulo3():
             supabase.table('sesiones').update({
                 'fecha': nueva_fecha, 'hora_inicio': nueva_h_ini, 'hora_fin': nueva_h_fin
             }).eq('id', sesion_id).execute()
+            try:
+                _sincronizar_sesion_en_calendar(sesion_id)
+            except Exception as e:
+                print(f'⚠️ Auto-sync calendar (modulo3 editar_sesion) sesión {sesion_id}: {e}')
             flash('✅ Sesión actualizada', 'success')
         elif accion == 'devolucion':
             try:
