@@ -210,6 +210,70 @@ def devoluciones_por_estudiante(estudiante_id):
         return 0.0
     return sum(d.get('monto', 0) or 0 for d in (res.data or []))
 
+def crear_devolucion(tipo_cliente, fecha, monto, tipo_pago, motivo, pagar_docente,
+                     docente_nombre, monto_docente, registrado_por,
+                     estudiante_id=None, cliente_id=None, cita_id=None):
+    """Registra una devolución: (1) si hay que pagar igual al docente crea un gasto
+    automático vinculado, (2) inserta la devolución (resta ingresos), (3) si es cliente
+    externo con cita, descuenta lo devuelto de la cita. Devuelve el id de la devolución.
+    Reutilizado por el módulo de Devoluciones y por el Módulo 3 (pago de estudiantes)."""
+    try:
+        fecha_obj = datetime.strptime(fecha, '%Y-%m-%d')
+    except Exception:
+        fecha_obj = datetime.today()
+    monto = float(monto or 0)
+    monto_docente = float(monto_docente or 0) if pagar_docente else 0
+
+    # 1) Gasto automático al docente
+    gasto_id = None
+    if pagar_docente and monto_docente > 0:
+        concepto = f"Devolución - pago docente ({docente_nombre or 's/d'})"
+        if motivo:
+            concepto += f" · {motivo[:60]}"
+        gasto_data = {
+            'concepto': concepto, 'monto': monto_docente, 'fecha': fecha,
+            'categoria': 'Devolución - pago docente', 'persona': docente_nombre or '',
+            'reembolso': False, 'registrado_por': registrado_por,
+            'mes': fecha_obj.month, 'anio': fecha_obj.year,
+            'mes_periodo': fecha_obj.month, 'anio_periodo': fecha_obj.year
+        }
+        try:
+            g = supabase.table('gastos').insert(gasto_data).execute()
+            gasto_id = g.data[0]['id'] if g.data else None
+        except Exception:
+            gasto_data.pop('mes_periodo', None)
+            gasto_data.pop('anio_periodo', None)
+            g = supabase.table('gastos').insert(gasto_data).execute()
+            gasto_id = g.data[0]['id'] if g.data else None
+
+    # 2) Insertar la devolución
+    res = supabase.table('devoluciones').insert({
+        'fecha': fecha, 'tipo_cliente': tipo_cliente,
+        'estudiante_id': estudiante_id, 'cliente_id': cliente_id, 'cita_id': cita_id,
+        'monto': monto, 'tipo_pago': tipo_pago, 'motivo': motivo,
+        'pagar_docente': pagar_docente, 'docente_nombre': docente_nombre,
+        'monto_docente': monto_docente, 'gasto_id': gasto_id,
+        'mes_periodo': fecha_obj.month, 'anio_periodo': fecha_obj.year,
+        'registrado_por': registrado_por
+    }).execute()
+
+    # 3) Cliente externo con cita: restar de lo pagado
+    if tipo_cliente == 'externo' and cita_id:
+        cita = supabase.table('citas_psicologia').select('*').eq('id', cita_id).execute()
+        if cita.data:
+            c = cita.data[0]
+            nuevo_pagado = max(0, (c.get('monto_pagado', 0) or 0) - monto)
+            if nuevo_pagado <= 0:
+                nuevo_estado = 'agendada'
+            elif nuevo_pagado >= (c.get('valor', 0) or 0):
+                nuevo_estado = 'pagada'
+            else:
+                nuevo_estado = 'parcial'
+            supabase.table('citas_psicologia').update({
+                'monto_pagado': nuevo_pagado, 'estado': nuevo_estado
+            }).eq('id', cita_id).execute()
+    return res.data[0]['id'] if res.data else None
+
 # ========== RUTAS PRINCIPALES ==========
 @app.route('/')
 def inicio():
@@ -360,6 +424,23 @@ def modulo1():
                 if horas_v < 0.5:
                     flash(f'❌ Sesión {sesion_num}: duración muy corta ({int(horas_v*60)} min). El mínimo es 30 minutos', 'error')
                     return redirect(url_for('modulo1'))
+
+                # 3) El docente/psicólogo no puede tener otra sesión que se cruce en el mismo horario
+                prof_efectivo = nuevo_prof_v.strip() if (profesor_v == 'nuevo' and nuevo_prof_v.strip()) else profesor_v
+                if prof_efectivo and prof_efectivo != 'nuevo':
+                    try:
+                        ocupadas = supabase.table('sesiones').select('hora_inicio,hora_fin,estado').eq(
+                            'profesor_terapeuta', prof_efectivo).eq('fecha', fecha).neq('estado', 'Cancelado').execute().data or []
+                    except Exception:
+                        ocupadas = []
+                    ni, nf = h_ini[:5], h_fin[:5]
+                    for ex in ocupadas:
+                        ei = (ex.get('hora_inicio') or '')[:5]
+                        ef = (ex.get('hora_fin') or '')[:5]
+                        if ei and ef and ei < nf and ef > ni:  # hay cruce de horarios
+                            flash(f'⛔ {prof_efectivo} ya está ocupado el {fecha} de {ei} a {ef}. '
+                                  f'No se puede agendar de {ni} a {nf} (sesión {sesion_num}).', 'error')
+                            return redirect(url_for('modulo1'))
 
             for sesion_num in range(1, num_sesiones + 1):
                 fecha = request.form.get(f'fecha_{sesion_num}')
@@ -917,6 +998,24 @@ def modulo3():
                 'fecha': nueva_fecha, 'hora_inicio': nueva_h_ini, 'hora_fin': nueva_h_fin
             }).eq('id', sesion_id).execute()
             flash('✅ Sesión actualizada', 'success')
+        elif accion == 'devolucion':
+            try:
+                pagar_docente = request.form.get('pagar_docente') == 'true'
+                crear_devolucion(
+                    tipo_cliente='estudiante',
+                    estudiante_id=int(request.form['estudiante_id']),
+                    fecha=request.form.get('fecha') or date.today().isoformat(),
+                    monto=float(request.form.get('monto', 0) or 0),
+                    tipo_pago=request.form.get('tipo_pago', 'efectivo'),
+                    motivo=(request.form.get('motivo', '') or '').strip(),
+                    pagar_docente=pagar_docente,
+                    docente_nombre=(request.form.get('docente_nombre', '') or '').strip() or None,
+                    monto_docente=request.form.get('monto_docente', 0),
+                    registrado_por=current_user.nombre
+                )
+                flash('✅ Devolución registrada (baja el ingreso del estudiante)', 'success')
+            except Exception as e:
+                flash(f'❌ Error al registrar la devolución: {e}', 'error')
         return redirect(url_for('modulo3'))
     
     filtro_fecha = request.args.get('filtro_fecha', str(date.today()))
@@ -1765,7 +1864,16 @@ def gestion_gastos():
     
     mes = int(request.args.get('mes', date.today().month))
     anio = int(request.args.get('anio', date.today().year))
-    gastos = supabase.table('gastos').select('*').eq('mes', mes).eq('anio', anio).order('fecha', desc=True).execute()
+    # Incluye los gastos con FECHA en el mes Y los CONSIDERADOS para el mes (mes_periodo)
+    try:
+        gastos = supabase.table('gastos').select('*').or_(
+            f"and(mes.eq.{mes},anio.eq.{anio}),and(mes_periodo.eq.{mes},anio_periodo.eq.{anio})"
+        ).order('fecha', desc=True).execute()
+    except Exception:
+        gastos = supabase.table('gastos').select('*').eq('mes', mes).eq('anio', anio).order('fecha', desc=True).execute()
+    # Marca los que corresponden a otro mes de fecha pero fueron considerados para este período
+    for g in (gastos.data or []):
+        g['_de_otro_mes'] = bool(g.get('mes') and g.get('mes') != mes and g.get('mes_periodo') == mes)
     total = sum(g.get('monto', 0) or 0 for g in (gastos.data or []))
     
     # Obtener pagos a docentes del mes

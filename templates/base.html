@@ -614,57 +614,63 @@
         <a href="/dashboard" class="{% if p=='/dashboard' %}active{% endif %}"><span class="ico">🏠</span> Inicio</a>
 
         {% if rol in ['admin','socio'] %}
-        <div class="side-section">Académico</div>
+        <div class="side-section">Gestión</div>
 
-        {% set plan_active = p in ['/modulo1','/editar-planificaciones','/editar-planificacion-masiva'] %}
-        <div class="nav-group {% if plan_active %}open{% endif %}">
-            <button type="button" class="nav-group-toggle"><span class="ico">📋</span> Planificación <span class="chev">▶</span></button>
+        {% set acad_active = p in ['/modulo1','/editar-planificaciones','/editar-planificacion-masiva','/modulo2','/modulo4','/modulo6'] %}
+        <div class="nav-group {% if acad_active %}open{% endif %}">
+            <button type="button" class="nav-group-toggle"><span class="ico">📚</span> Académico <span class="chev">▶</span></button>
             <div class="nav-group-items">
                 <a href="/modulo1" class="{% if p=='/modulo1' %}active{% endif %}">Nueva planificación</a>
                 <a href="/editar-planificaciones" class="{% if p=='/editar-planificaciones' %}active{% endif %}">Editar planificaciones</a>
                 <a href="/editar-planificacion-masiva" class="{% if p=='/editar-planificacion-masiva' %}active{% endif %}">Edición masiva</a>
-            </div>
-        </div>
-
-        {% set cal_active = p in ['/modulo2','/modulo4'] %}
-        <div class="nav-group {% if cal_active %}open{% endif %}">
-            <button type="button" class="nav-group-toggle"><span class="ico">📅</span> Calendario <span class="chev">▶</span></button>
-            <div class="nav-group-items">
                 <a href="/modulo2" class="{% if p=='/modulo2' %}active{% endif %}">Calendario diario</a>
                 <a href="/modulo4" class="{% if p=='/modulo4' %}active{% endif %}">Calendario general</a>
+                <a href="/modulo6" class="{% if p=='/modulo6' %}active{% endif %}">Reuniones</a>
             </div>
         </div>
 
-        <a href="/modulo6" class="{% if p=='/modulo6' %}active{% endif %}"><span class="ico">👥</span> Reuniones</a>
+        {% set pers_active = p in ['/estudiantes','/padres','/contactos'] %}
+        <div class="nav-group {% if pers_active %}open{% endif %}">
+            <button type="button" class="nav-group-toggle"><span class="ico">👥</span> Personas <span class="chev">▶</span></button>
+            <div class="nav-group-items">
+                <a href="/estudiantes" class="{% if p=='/estudiantes' %}active{% endif %}">Estudiantes</a>
+                <a href="/padres" class="{% if p=='/padres' %}active{% endif %}">Padres</a>
+                <a href="/contactos" class="{% if p=='/contactos' %}active{% endif %}">Contactos {% if contactos_nuevos and contactos_nuevos>0 %}<span class="side-badge">{{ contactos_nuevos }}</span>{% endif %}</a>
+            </div>
+        </div>
 
-        <div class="side-section">Personas</div>
-        <a href="/estudiantes" class="{% if p=='/estudiantes' %}active{% endif %}"><span class="ico">🎓</span> Estudiantes</a>
-        <a href="/padres" class="{% if p=='/padres' %}active{% endif %}"><span class="ico">👨‍👩‍👧</span> Padres</a>
-        <a href="/contactos" class="{% if p=='/contactos' %}active{% endif %}"><span class="ico">📨</span> Contactos {% if contactos_nuevos and contactos_nuevos>0 %}<span class="side-badge">{{ contactos_nuevos }}</span>{% endif %}</a>
-
-        <div class="side-section">Pagos y finanzas</div>
-        {% set pago_active = p in ['/modulo3','/modulo5'] %}
-        <div class="nav-group {% if pago_active %}open{% endif %}">
-            <button type="button" class="nav-group-toggle"><span class="ico">💰</span> Pagos <span class="chev">▶</span></button>
+        {% set fin_active = p in ['/modulo3','/modulo5','/devoluciones','/reportes','/gastos','/liquidacion','/gestion-anticipos','/movimientos-cuenta'] %}
+        <div class="nav-group {% if fin_active %}open{% endif %}">
+            <button type="button" class="nav-group-toggle"><span class="ico">💰</span> Finanzas <span class="chev">▶</span></button>
             <div class="nav-group-items">
                 <a href="/modulo3" class="{% if p=='/modulo3' %}active{% endif %}">Pagos de estudiantes</a>
                 <a href="/modulo5" class="{% if p=='/modulo5' %}active{% endif %}">Pagos a docentes</a>
+                <a href="/devoluciones" class="{% if p=='/devoluciones' %}active{% endif %}">Devoluciones</a>
+                <a href="/reportes" class="{% if p=='/reportes' %}active{% endif %}">Reportes</a>
+                <a href="/gastos" class="{% if p=='/gastos' %}active{% endif %}">Gastos</a>
+                <a href="/liquidacion" class="{% if p=='/liquidacion' %}active{% endif %}">Liquidación</a>
+                <a href="/gestion-anticipos" class="{% if p=='/gestion-anticipos' %}active{% endif %}">Anticipos {% if solicitudes_pendientes and solicitudes_pendientes>0 %}<span class="side-badge">{{ solicitudes_pendientes }}</span>{% endif %}</a>
+                {% if rol=='admin' %}<a href="/movimientos-cuenta" class="{% if p=='/movimientos-cuenta' %}active{% endif %}">Movimientos en cuenta</a>{% endif %}
             </div>
         </div>
-        <a href="/devoluciones" class="{% if p=='/devoluciones' %}active{% endif %}"><span class="ico">↩️</span> Devoluciones</a>
-        <a href="/reportes" class="{% if p=='/reportes' %}active{% endif %}"><span class="ico">📊</span> Reportes</a>
-        <a href="/gastos" class="{% if p=='/gastos' %}active{% endif %}"><span class="ico">📉</span> Gastos</a>
-        <a href="/liquidacion" class="{% if p=='/liquidacion' %}active{% endif %}"><span class="ico">⚖️</span> Liquidación</a>
-        <a href="/gestion-anticipos" class="{% if p=='/gestion-anticipos' %}active{% endif %}"><span class="ico">🏦</span> Anticipos {% if solicitudes_pendientes and solicitudes_pendientes>0 %}<span class="side-badge">{{ solicitudes_pendientes }}</span>{% endif %}</a>
-        {% if rol=='admin' %}<a href="/movimientos-cuenta" class="{% if p=='/movimientos-cuenta' %}active{% endif %}"><span class="ico">🏦</span> Movimientos en cuenta</a>{% endif %}
 
-        <div class="side-section">Psicología</div>
-        <a href="/psicologia-especial" class="{% if p=='/psicologia-especial' %}active{% endif %}"><span class="ico">🧠</span> Psicología especial</a>
+        {% set psi_active = p in ['/psicologia-especial'] %}
+        <div class="nav-group {% if psi_active %}open{% endif %}">
+            <button type="button" class="nav-group-toggle"><span class="ico">🧠</span> Psicología <span class="chev">▶</span></button>
+            <div class="nav-group-items">
+                <a href="/psicologia-especial" class="{% if p=='/psicologia-especial' %}active{% endif %}">Psicología especial</a>
+            </div>
+        </div>
 
-        <div class="side-section">Administración</div>
-        <a href="/admin/costos" class="{% if p=='/admin/costos' %}active{% endif %}"><span class="ico">⚙️</span> Costos</a>
-        {% if rol=='admin' %}<a href="/usuarios" class="{% if p=='/usuarios' %}active{% endif %}"><span class="ico">👤</span> Usuarios</a>{% endif %}
-        <a href="/reporte-duplicados" class="{% if p=='/reporte-duplicados' %}active{% endif %}"><span class="ico">🧹</span> Reporte duplicados</a>
+        {% set adm_active = p in ['/admin/costos','/usuarios','/reporte-duplicados'] %}
+        <div class="nav-group {% if adm_active %}open{% endif %}">
+            <button type="button" class="nav-group-toggle"><span class="ico">⚙️</span> Administración <span class="chev">▶</span></button>
+            <div class="nav-group-items">
+                <a href="/admin/costos" class="{% if p=='/admin/costos' %}active{% endif %}">Costos</a>
+                {% if rol=='admin' %}<a href="/usuarios" class="{% if p=='/usuarios' %}active{% endif %}">Usuarios</a>{% endif %}
+                <a href="/reporte-duplicados" class="{% if p=='/reporte-duplicados' %}active{% endif %}">Reporte duplicados</a>
+            </div>
+        </div>
 
         {% elif rol=='profesor' %}
         <div class="side-section">Mi trabajo</div>

@@ -231,6 +231,7 @@
                             <tr id="fila-gasto-{{ g['id'] }}" style="transition: all 0.2s;">
                                 <td>
                                     <span class="editable-celda" onclick="editarGastoInline({{ g['id'] }}, 'fecha', '{{ g['fecha'] }}')" style="cursor: pointer;">{{ g['fecha'] }}</span>
+                                    {% if g.get('_de_otro_mes') %}<br><span class="badge bg-info" title="Pagado en otro mes pero considerado para este período">considerado</span>{% endif %}
                                 </td>
                                 <td>
                                     <span class="editable-celda" onclick="editarGastoInline({{ g['id'] }}, 'concepto', '{{ g['concepto']|escape }}')" style="cursor: pointer;">{{ g['concepto'][:30] }}{% if g['concepto']|length > 30 %}...{% endif %}</span>
