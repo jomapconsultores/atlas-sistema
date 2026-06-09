@@ -127,6 +127,28 @@ NIVELES_POR_TIPO = {
     'Bachillerato': ['Primero de bachillerato', 'Segundo de bachillerato', 'Tercero de bachillerato'],
 }
 
+def cargar_asignaturas():
+    """Lista de asignaturas desde la tabla `asignaturas`. Si la tabla no existe
+    o está vacía, usa la lista por defecto (ASIGNATURAS)."""
+    try:
+        r = supabase.table('asignaturas').select('nombre').eq('activo', True).order('nombre').execute()
+        nombres = [a['nombre'] for a in (r.data or []) if a.get('nombre')]
+        return nombres if nombres else ASIGNATURAS
+    except Exception:
+        return ASIGNATURAS
+
+def cargar_profesores():
+    """Lista de nombres de docentes ('Nombres Apellidos') desde la tabla `docentes`.
+    Si la tabla no existe o está vacía, usa la lista por defecto (PROFESORES)."""
+    try:
+        r = supabase.table('docentes').select('nombres,apellidos').eq('activo', True).execute()
+        nombres = [f"{d.get('nombres','')} {d.get('apellidos','')}".strip()
+                   for d in (r.data or [])]
+        nombres = [n for n in nombres if n]
+        return sorted(nombres) if nombres else PROFESORES
+    except Exception:
+        return PROFESORES
+
 def a_oracion(texto):
     if not texto:
         return texto
@@ -530,9 +552,9 @@ def modulo1():
     
     estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
     return render_template('modulo1.html', estudiantes=estudiantes.data or [],
-                         asignaturas=ASIGNATURAS, atencion_psicologica=psicologia,
+                         asignaturas=cargar_asignaturas(), atencion_psicologica=psicologia,
                          precios_clase=precios_clase, precios_matricula=precios_matricula,
-                         precios_pension=precios_pension, profesores=PROFESORES,
+                         precios_pension=precios_pension, profesores=cargar_profesores(),
                          encargados=ENCARGADOS, today=date.today())
 
 # ========== EDITOR DE PLANIFICACIONES ==========
@@ -544,10 +566,10 @@ def editar_planificaciones():
     estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
     return render_template('editar_planificaciones.html', 
                          estudiantes=estudiantes.data or [],
-                         asignaturas=ASIGNATURAS,
+                         asignaturas=cargar_asignaturas(),
                          atencion_psicologica=psicologia,
                          precios_clase=precios_clase,
-                         profesores=PROFESORES,
+                         profesores=cargar_profesores(),
                          encargados=ENCARGADOS,
                          today=date.today().isoformat())
 
@@ -559,10 +581,10 @@ def editar_planificacion_masiva():
     estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
     return render_template('editar_planificacion_masiva.html',
                          estudiantes=estudiantes.data or [],
-                         asignaturas=ASIGNATURAS,
+                         asignaturas=cargar_asignaturas(),
                          atencion_psicologica=psicologia,
                          precios_clase=precios_clase,
-                         profesores=PROFESORES,
+                         profesores=cargar_profesores(),
                          encargados=ENCARGADOS,
                          today=date.today().isoformat())
 
@@ -884,7 +906,7 @@ def modulo2():
     if current_user.rol in ['admin', 'socio']:
         sesiones = supabase.table('sesiones').select('*, estudiantes(*)').eq('fecha', fecha).order('hora_inicio').execute()
         return render_template('modulo2.html', sesiones=sesiones.data or [], fecha=fecha,
-                             estudiantes=estudiantes_lista, profesores=PROFESORES)
+                             estudiantes=estudiantes_lista, profesores=cargar_profesores())
     
     nombre_usuario = current_user.nombre.strip().lower()
     todas = supabase.table('sesiones').select('*, estudiantes(*)').eq('fecha', fecha).order('hora_inicio').execute()
@@ -894,7 +916,7 @@ def modulo2():
         if nombre_usuario in profesor or profesor in nombre_usuario:
             sesiones_filtradas.append(s)
     return render_template('modulo2.html', sesiones=sesiones_filtradas, fecha=fecha,
-                         estudiantes=estudiantes_lista, profesores=PROFESORES)
+                         estudiantes=estudiantes_lista, profesores=cargar_profesores())
 
 @app.route('/api/sesion/<int:id>/modificar', methods=['POST'])
 @login_required
@@ -1110,7 +1132,7 @@ def modulo4():
         reuniones = supabase.table('reuniones').select('*').gte('fecha', str(date.today())).order('fecha').execute()
     estudiantes_lista = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute().data or []
     return render_template('modulo4.html', sesiones=sesiones.data or [], reuniones=reuniones.data if reuniones else [],
-                         estudiantes=estudiantes_lista, profesores=PROFESORES)
+                         estudiantes=estudiantes_lista, profesores=cargar_profesores())
 
 # ========== MÓDULO 5: PAGOS DOCENTES ==========
 @app.route('/modulo5')
@@ -2224,6 +2246,108 @@ def gestion_padres():
     padres = supabase.table('padres_familia').select('*').eq('activo', True).order('apellidos').execute()
     return render_template('padres.html', padres=padres.data or [])
 
+# ========== DOCENTES ==========
+@app.route('/docentes')
+@login_required
+@socio_admin_required
+def gestion_docentes():
+    try:
+        docentes = supabase.table('docentes').select('*').eq('activo', True).order('apellidos').execute()
+        data = docentes.data or []
+    except Exception:
+        data = []
+    return render_template('docentes.html',
+        docentes=data, rol=current_user.rol, asignaturas=cargar_asignaturas())
+
+@app.route('/api/crear_docente_form', methods=['POST'])
+@login_required
+@socio_admin_required
+def crear_docente_form():
+    asigs = request.form.getlist('asignaturas')
+    supabase.table('docentes').insert({
+        'nombres': request.form['nombres'].strip(),
+        'apellidos': request.form['apellidos'].strip(),
+        'asignaturas': ', '.join([a.strip() for a in asigs if a.strip()]),
+        'email': request.form.get('email', '').strip(),
+        'telefono': request.form.get('telefono', '').strip(),
+        'tipo': request.form.get('tipo', 'profesor'),
+        'activo': True
+    }).execute()
+    flash('✅ Docente creado', 'success')
+    return redirect(url_for('gestion_docentes'))
+
+@app.route('/api/docente/<int:id>/editar', methods=['POST'])
+@login_required
+@socio_admin_required
+def api_editar_docente(id):
+    data = request.get_json()
+    campo = data.get('campo')
+    valor = data.get('valor', '') or ''
+    campos_permitidos = ['nombres', 'apellidos', 'asignaturas', 'email', 'telefono', 'tipo']
+    if campo not in campos_permitidos:
+        return jsonify({'success': False, 'error': 'Campo no permitido'})
+    try:
+        supabase.table('docentes').update({campo: valor or None}).eq('id', id).execute()
+        return jsonify({'success': True, 'valor': valor})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/docente/<int:id>/eliminar', methods=['POST'])
+@login_required
+@socio_admin_required
+def eliminar_docente(id):
+    try:
+        supabase.table('docentes').update({'activo': False}).eq('id', id).execute()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+# ========== ASIGNATURAS ==========
+@app.route('/asignaturas')
+@login_required
+@socio_admin_required
+def gestion_asignaturas():
+    try:
+        asigs = supabase.table('asignaturas').select('*').eq('activo', True).order('nombre').execute()
+        data = asigs.data or []
+    except Exception:
+        data = []
+    return render_template('asignaturas.html', asignaturas=data, rol=current_user.rol)
+
+@app.route('/api/crear_asignatura_form', methods=['POST'])
+@login_required
+@socio_admin_required
+def crear_asignatura_form():
+    nombre = request.form['nombre'].strip()
+    if nombre:
+        supabase.table('asignaturas').insert({'nombre': nombre, 'activo': True}).execute()
+        flash('✅ Asignatura creada', 'success')
+    return redirect(url_for('gestion_asignaturas'))
+
+@app.route('/api/asignatura/<int:id>/editar', methods=['POST'])
+@login_required
+@socio_admin_required
+def api_editar_asignatura(id):
+    data = request.get_json()
+    valor = (data.get('valor', '') or '').strip()
+    if not valor:
+        return jsonify({'success': False, 'error': 'El nombre no puede estar vacío'})
+    try:
+        supabase.table('asignaturas').update({'nombre': valor}).eq('id', id).execute()
+        return jsonify({'success': True, 'valor': valor})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/asignatura/<int:id>/eliminar', methods=['POST'])
+@login_required
+@socio_admin_required
+def eliminar_asignatura(id):
+    try:
+        supabase.table('asignaturas').update({'activo': False}).eq('id', id).execute()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
 # ========== USUARIOS ==========
 @app.route('/usuarios', methods=['GET', 'POST'])
 @login_required
@@ -2661,7 +2785,7 @@ def devoluciones():
     return render_template('devoluciones.html',
                            estudiantes=estudiantes_lista, clientes_externos=clientes_ext, citas=citas,
                            devoluciones=devs_periodo, total_devuelto=total_devuelto, total_docente=total_docente,
-                           profesores=PROFESORES, mes=mes, anio=anio, today=date.today().isoformat())
+                           profesores=cargar_profesores(), mes=mes, anio=anio, today=date.today().isoformat())
 
 @app.route('/api/devolucion/<int:id>/eliminar', methods=['POST'])
 @login_required

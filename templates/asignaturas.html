@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Asignaturas - Atlas{% endblock %}
+{% block content %}
+<style>
+.card-premium{border-radius:20px;border:none;box-shadow:0 4px 20px rgba(0,0,0,0.06);background:white;margin-bottom:20px;overflow:hidden;}
+.card-header-grad{padding:14px 20px;color:white;font-weight:700;font-size:15px;}
+.grad-blue{background:linear-gradient(135deg,#1a73e8,#0d47a1);}
+.table-premium thead th{background:#1a1a2e;color:white;font-weight:600;font-size:11px;letter-spacing:0.5px;border:none;padding:10px 12px;text-transform:uppercase;}
+.table-premium tbody td{padding:7px 10px;font-size:13px;border-bottom:1px solid #f0f0f0;vertical-align:middle;}
+.table-premium tbody tr:hover{background:#f8f9ff;}
+.celda-edit{cursor:pointer;border-radius:6px;padding:2px 6px;transition:background 0.15s;}
+.celda-edit:hover{background:#e8f0fe;}
+.inline-input{width:100%;border:1px solid #1a73e8;border-radius:6px;padding:3px 7px;font-size:13px;outline:none;}
+.saving{opacity:0.5;}
+</style>
+
+<div class="page-hero">
+    <h2>📖 Asignaturas</h2>
+    <p>Gestión de asignaturas del centro · {{ asignaturas|length }} registradas.</p>
+</div>
+
+{% if rol in ['admin','socio'] %}
+<div class="card-premium">
+    <div class="card-header-grad grad-blue">➕ Nueva Asignatura</div>
+    <div class="card-body">
+        <form method="POST" action="/api/crear_asignatura_form" class="row g-3">
+            <div class="col-md-9">
+                <label class="form-label fw-semibold small mb-1">Nombre de la asignatura *</label>
+                <input type="text" name="nombre" class="form-control form-control-sm" placeholder="Ej: Cálculo diferencial" required>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary btn-sm w-100" style="height:31px;">✅ Registrar</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<div class="card-premium">
+    <div class="card-header-grad" style="background:linear-gradient(135deg,#263238,#111); display:flex; justify-content:space-between; align-items:center;">
+        <span>📋 Lista de Asignaturas {% if rol in ['admin','socio'] %}<small class="fw-normal opacity-75 ms-2">· Clic en el nombre para editar</small>{% endif %}</span>
+    </div>
+    <div class="card-body pb-0 pt-3 px-3">
+        <div class="input-group input-group-sm mb-2" style="max-width:400px;">
+            <span class="input-group-text border-0 bg-light">🔍</span>
+            <input type="text" id="buscadorAsig" class="form-control border-0 bg-light" placeholder="Buscar asignatura..." oninput="filtrarTabla(this.value)">
+            <button class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('buscadorAsig').value=''; filtrarTabla('');">✕</button>
+        </div>
+        <small class="text-muted" id="contadorAsig">{{ asignaturas|length }} asignaturas</small>
+    </div>
+    <div class="card-body p-0 pt-1">
+        <div class="table-responsive">
+            <table class="table table-premium mb-0" id="tablaAsignaturas">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Asignatura</th>
+                        {% if rol in ['admin','socio'] %}<th class="text-center">Acc.</th>{% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for a in asignaturas %}
+                    <tr id="fila-asig-{{ a.id }}" data-buscar="{{ a.nombre }}">
+                        <td class="text-muted small">{{ loop.index }}</td>
+                        <td>{% if rol in ['admin','socio'] %}
+                            <span class="celda-edit" onclick="editarCelda(this, {{ a.id }})">{{ a.nombre }}</span>
+                            {% else %}{{ a.nombre }}{% endif %}
+                        </td>
+                        {% if rol in ['admin','socio'] %}
+                        <td class="text-center">
+                            <button class="btn btn-outline-danger btn-sm border-0 py-0" onclick="eliminarAsignatura({{ a.id }})" title="Desactivar">🗑️</button>
+                        </td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+function getFila(id){ return document.getElementById('fila-asig-' + id); }
+
+function editarCelda(span, id){
+    const valorActual = span.innerText;
+    const input = document.createElement('input');
+    input.type='text'; input.value=valorActual; input.className='inline-input';
+    span.replaceWith(input); input.focus();
+    const guardar = async () => {
+        const nv = input.value.trim();
+        if(!nv){ const s0=document.createElement('span'); s0.className='celda-edit'; s0.innerText=valorActual; s0.onclick=()=>editarCelda(s0,id); input.replaceWith(s0); return; }
+        const fila=getFila(id); if(fila)fila.classList.add('saving');
+        try {
+            const r = await fetch('/api/asignatura/'+id+'/editar',{
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({valor:nv})
+            });
+            const res = await r.json();
+            const s2=document.createElement('span'); s2.className='celda-edit';
+            s2.innerText = (res.success ? res.valor : valorActual);
+            s2.onclick=()=>editarCelda(s2,id); input.replaceWith(s2);
+            if(fila) fila.dataset.buscar = s2.innerText;
+        } catch(e){
+            const s2=document.createElement('span'); s2.className='celda-edit'; s2.innerText=valorActual;
+            s2.onclick=()=>editarCelda(s2,id); input.replaceWith(s2);
+        } finally { if(fila)fila.classList.remove('saving'); }
+    };
+    input.addEventListener('blur', guardar);
+    input.addEventListener('keydown', e=>{ if(e.key==='Enter')input.blur(); if(e.key==='Escape'){input.value=valorActual;input.blur();} });
+}
+
+function filtrarTabla(q){
+    const lower=q.toLowerCase().trim(); let visible=0;
+    document.querySelectorAll('#tablaAsignaturas tbody tr').forEach(tr=>{
+        const texto=(tr.dataset.buscar||'').toLowerCase();
+        const mostrar=!lower||texto.includes(lower);
+        tr.style.display=mostrar?'':'none'; if(mostrar)visible++;
+    });
+    const c=document.getElementById('contadorAsig');
+    if(c)c.textContent = lower ? `${visible} resultado(s) para "${q}"` : `${visible} asignaturas`;
+}
+
+async function eliminarAsignatura(id){
+    if(!confirm('¿Desactivar esta asignatura?'))return;
+    await fetch('/api/asignatura/'+id+'/eliminar',{method:'POST'});
+    const f=getFila(id); if(f)f.remove();
+}
+</script>
+{% endblock %}

@@ -1,0 +1,249 @@
+{% extends "base.html" %}
+{% block title %}Docentes - Atlas{% endblock %}
+{% block content %}
+<style>
+.card-premium{border-radius:20px;border:none;box-shadow:0 4px 20px rgba(0,0,0,0.06);background:white;margin-bottom:20px;overflow:hidden;}
+.card-header-grad{padding:14px 20px;color:white;font-weight:700;font-size:15px;}
+.grad-blue{background:linear-gradient(135deg,#1a73e8,#0d47a1);}
+.table-premium thead th{background:#1a1a2e;color:white;font-weight:600;font-size:11px;letter-spacing:0.5px;border:none;padding:10px 12px;text-transform:uppercase;}
+.table-premium tbody td{padding:7px 10px;font-size:13px;border-bottom:1px solid #f0f0f0;vertical-align:middle;}
+.table-premium tbody tr:hover{background:#f8f9ff;}
+.celda-edit{cursor:pointer;border-radius:6px;padding:2px 6px;transition:background 0.15s;}
+.celda-edit:hover{background:#e8f0fe;}
+.inline-input{width:100%;border:1px solid #1a73e8;border-radius:6px;padding:3px 7px;font-size:12px;outline:none;}
+.inline-select{width:100%;border:1px solid #1a73e8;border-radius:6px;padding:3px 7px;font-size:12px;background:white;}
+.saving{opacity:0.5;}
+.chip{display:inline-block;background:#e8f0fe;color:#1a73e8;border-radius:12px;padding:1px 9px;font-size:11px;margin:1px 2px;font-weight:600;}
+</style>
+
+<div class="page-hero">
+    <h2>👨‍🏫 Docentes</h2>
+    <p>Gestión de docentes activos · {{ docentes|length }} registrados.</p>
+</div>
+
+{% if rol in ['admin','socio'] %}
+<div class="card-premium">
+    <div class="card-header-grad grad-blue">➕ Nuevo Docente</div>
+    <div class="card-body">
+        <form method="POST" action="/api/crear_docente_form" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label fw-semibold small mb-1">Apellidos *</label>
+                <input type="text" name="apellidos" class="form-control form-control-sm" placeholder="Ej: Reinoso" required>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold small mb-1">Nombres *</label>
+                <input type="text" name="nombres" class="form-control form-control-sm" placeholder="Ej: Carmen" required>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-semibold small mb-1">Tipo</label>
+                <select name="tipo" class="form-select form-select-sm">
+                    <option value="profesor">👨‍🏫 Profesor</option>
+                    <option value="psicologo">🧠 Psicólogo</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-semibold small mb-1">Teléfono</label>
+                <input type="text" name="telefono" class="form-control form-control-sm" placeholder="099...">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-semibold small mb-1">Email</label>
+                <input type="email" name="email" class="form-control form-control-sm" placeholder="correo@...">
+            </div>
+            <div class="col-md-10">
+                <label class="form-label fw-semibold small mb-1">Asignaturas asignadas</label>
+                <select name="asignaturas" class="form-select form-select-sm" multiple size="4">
+                    {% for a in asignaturas %}
+                    <option value="{{ a }}">{{ a }}</option>
+                    {% endfor %}
+                </select>
+                <small class="text-muted">Mantén Ctrl (o Cmd) para seleccionar varias.</small>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary btn-sm w-100" style="height:31px;">✅ Registrar</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<div class="card-premium">
+    <div class="card-header-grad" style="background:linear-gradient(135deg,#263238,#111); display:flex; justify-content:space-between; align-items:center;">
+        <span>📋 Lista de Docentes {% if rol in ['admin','socio'] %}<small class="fw-normal opacity-75 ms-2">· Clic en celda para editar</small>{% endif %}</span>
+    </div>
+    <div class="card-body pb-0 pt-3 px-3">
+        <div class="input-group input-group-sm mb-2" style="max-width:400px;">
+            <span class="input-group-text border-0 bg-light">🔍</span>
+            <input type="text" id="buscadorDoc" class="form-control border-0 bg-light" placeholder="Buscar por nombre, asignatura, email..." oninput="filtrarTabla(this.value)">
+            <button class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('buscadorDoc').value=''; filtrarTabla('');">✕</button>
+        </div>
+        <small class="text-muted" id="contadorDoc">{{ docentes|length }} docentes</small>
+    </div>
+    <div class="card-body p-0 pt-1">
+        <div class="table-responsive">
+            <table class="table table-premium mb-0" id="tablaDocentes">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Apellidos</th>
+                        <th>Nombres</th>
+                        <th>Tipo</th>
+                        <th>Asignaturas asignadas</th>
+                        <th>Teléfono</th>
+                        <th>Email</th>
+                        {% if rol in ['admin','socio'] %}<th class="text-center">Acc.</th>{% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for d in docentes %}
+                    <tr id="fila-doc-{{ d.id }}"
+                        data-buscar="{{ d.apellidos }} {{ d.nombres }} {{ d.get('asignaturas','') }} {{ d.get('email','') }} {{ d.get('telefono','') }} {{ d.get('tipo','') }}">
+                        <td class="text-muted small">{{ loop.index }}</td>
+                        <td>{% if rol in ['admin','socio'] %}
+                            <span class="celda-edit" onclick="editarCelda(this, {{ d.id }}, 'apellidos')">{{ d.apellidos }}</span>
+                            {% else %}{{ d.apellidos }}{% endif %}
+                        </td>
+                        <td>{% if rol in ['admin','socio'] %}
+                            <span class="celda-edit" onclick="editarCelda(this, {{ d.id }}, 'nombres')">{{ d.nombres }}</span>
+                            {% else %}{{ d.nombres }}{% endif %}
+                        </td>
+                        <td>{% if rol in ['admin','socio'] %}
+                            <span class="celda-edit" onclick="editarCeldaTipo(this, {{ d.id }})">
+                                <span class="badge bg-{{ 'info' if d.get('tipo')=='psicologo' else 'primary' }} text-white">{{ d.get('tipo','profesor') }}</span>
+                            </span>
+                            {% else %}{{ d.get('tipo','profesor') }}{% endif %}
+                        </td>
+                        <td style="max-width:320px;">{% if rol in ['admin','socio'] %}
+                            <span class="celda-edit" onclick="editarCeldaAsignaturas(this, {{ d.id }})">{{ d.get('asignaturas','') or '—' }}</span>
+                            {% else %}{{ d.get('asignaturas','') or '—' }}{% endif %}
+                        </td>
+                        <td>{% if rol in ['admin','socio'] %}
+                            <span class="celda-edit" onclick="editarCelda(this, {{ d.id }}, 'telefono')">{{ d.get('telefono','') or '—' }}</span>
+                            {% else %}{{ d.get('telefono','') or '—' }}{% endif %}
+                        </td>
+                        <td>{% if rol in ['admin','socio'] %}
+                            <span class="celda-edit" onclick="editarCelda(this, {{ d.id }}, 'email')">{{ d.get('email','') or '—' }}</span>
+                            {% else %}{{ d.get('email','') or '—' }}{% endif %}
+                        </td>
+                        {% if rol in ['admin','socio'] %}
+                        <td class="text-center">
+                            <button class="btn btn-outline-danger btn-sm border-0 py-0" onclick="eliminarDocente({{ d.id }})" title="Desactivar">🗑️</button>
+                        </td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+const ASIGNATURAS = {{ asignaturas | tojson }};
+
+function getFila(id){ return document.getElementById('fila-doc-' + id); }
+
+// ===== EDICIÓN INLINE TEXTO =====
+function editarCelda(span, id, campo){
+    const valorActual = span.innerText === '—' ? '' : span.innerText;
+    const input = document.createElement('input');
+    input.type = 'text'; input.value = valorActual; input.className = 'inline-input';
+    span.replaceWith(input); input.focus();
+    const guardar = async () => {
+        const nv = input.value.trim();
+        const res = await guardarCampo(id, campo, nv);
+        const s2 = document.createElement('span');
+        s2.className = 'celda-edit'; s2.innerText = res.valor || nv || '—';
+        s2.onclick = () => editarCelda(s2, id, campo);
+        input.replaceWith(s2);
+    };
+    input.addEventListener('blur', guardar);
+    input.addEventListener('keydown', e => { if(e.key==='Enter') input.blur(); if(e.key==='Escape'){input.value=valorActual;input.blur();} });
+}
+
+// ===== EDICIÓN INLINE TIPO =====
+function editarCeldaTipo(span, id){
+    const sel = document.createElement('select'); sel.className = 'inline-select';
+    const actual = span.innerText.trim().toLowerCase();
+    [['profesor','profesor'],['psicologo','psicologo']].forEach(([v,t])=>{
+        const o=document.createElement('option'); o.value=v; o.text=t; if(v===actual)o.selected=true; sel.appendChild(o);
+    });
+    span.replaceWith(sel); sel.focus();
+    let guardado=false;
+    const guardar = async () => {
+        if(guardado)return; guardado=true;
+        const nv=sel.value;
+        await guardarCampo(id,'tipo',nv);
+        const s2=document.createElement('span'); s2.className='celda-edit';
+        s2.innerHTML = `<span class="badge bg-${nv==='psicologo'?'info':'primary'} text-white">${nv}</span>`;
+        s2.onclick = () => editarCeldaTipo(s2,id);
+        sel.replaceWith(s2);
+    };
+    sel.addEventListener('change', guardar);
+    sel.addEventListener('blur', guardar);
+}
+
+// ===== EDICIÓN INLINE ASIGNATURAS (multi-check) =====
+function editarCeldaAsignaturas(span, id){
+    const actuales = (span.innerText === '—' ? '' : span.innerText)
+        .split(',').map(s=>s.trim()).filter(Boolean);
+    const box = document.createElement('div');
+    box.style.cssText = 'border:1px solid #1a73e8;border-radius:8px;padding:6px;background:white;max-height:180px;overflow-y:auto;';
+    ASIGNATURAS.forEach(a => {
+        const lbl = document.createElement('label');
+        lbl.style.cssText='display:block;font-size:12px;cursor:pointer;padding:1px 2px;';
+        const chk = document.createElement('input');
+        chk.type='checkbox'; chk.value=a; chk.style.marginRight='6px';
+        if(actuales.includes(a)) chk.checked = true;
+        lbl.appendChild(chk); lbl.appendChild(document.createTextNode(a));
+        box.appendChild(lbl);
+    });
+    const btn = document.createElement('button');
+    btn.textContent='💾 Guardar'; btn.className='btn btn-primary btn-sm w-100 mt-1';
+    box.appendChild(btn);
+    span.replaceWith(box);
+    btn.addEventListener('click', async () => {
+        const sel = Array.from(box.querySelectorAll('input:checked')).map(c=>c.value);
+        const nv = sel.join(', ');
+        await guardarCampo(id,'asignaturas',nv);
+        const s2=document.createElement('span'); s2.className='celda-edit'; s2.innerText = nv || '—';
+        s2.onclick=()=>editarCeldaAsignaturas(s2,id); box.replaceWith(s2);
+    });
+}
+
+// ===== GUARDAR CAMPO VÍA API =====
+async function guardarCampo(id, campo, valor){
+    const fila = getFila(id); if(fila) fila.classList.add('saving');
+    try {
+        const r = await fetch('/api/docente/'+id+'/editar',{
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({campo,valor})
+        });
+        const res = await r.json();
+        if(!res.success && res.error && res.error.includes('does not exist')){
+            alert('⚠️ Falta crear la tabla/columna en la base de datos.\nEjecuta migration_docentes_asignaturas.sql en Supabase.');
+        }
+        if(fila) fila.dataset.buscar = fila.dataset.buscar + ' ' + valor;
+        return res;
+    } catch(e){ return {success:false, error:e.message}; }
+    finally { if(fila) fila.classList.remove('saving'); }
+}
+
+// ===== BUSCADOR =====
+function filtrarTabla(q){
+    const lower=q.toLowerCase().trim(); let visible=0;
+    document.querySelectorAll('#tablaDocentes tbody tr').forEach(tr=>{
+        const texto=(tr.dataset.buscar||'').toLowerCase();
+        const mostrar=!lower||texto.includes(lower);
+        tr.style.display=mostrar?'':'none'; if(mostrar)visible++;
+    });
+    const c=document.getElementById('contadorDoc');
+    if(c)c.textContent = lower ? `${visible} resultado(s) para "${q}"` : `${visible} docentes`;
+}
+
+async function eliminarDocente(id){
+    if(!confirm('¿Desactivar este docente?'))return;
+    await fetch('/api/docente/'+id+'/eliminar',{method:'POST'});
+    const f=getFila(id); if(f)f.remove();
+}
+</script>
+{% endblock %}
