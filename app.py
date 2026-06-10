@@ -2846,8 +2846,8 @@ def _norm_fecha(v):
     if isinstance(v, (datetime, date)):
         return v.strftime('%Y-%m-%d')
     s = str(v).strip()
-    # quita parte de hora si viene 'YYYY-MM-DD HH:MM:SS'
-    s = s.split(' ')[0]
+    # quita parte de hora si viene 'YYYY-MM-DD HH:MM:SS' o '2026-6-10, 2:23 PM'
+    s = s.split(' ')[0].rstrip(',;')
     for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y', '%d/%m/%y', '%d-%m-%y', '%m/%d/%Y'):
         try:
             return datetime.strptime(s, fmt).strftime('%Y-%m-%d')
@@ -2929,6 +2929,12 @@ def parsear_estado_cuenta(file_bytes, filename):
         except Exception as e:
             return [], f'No se pudo abrir el Excel: {e}'
         ws = wb.active
+        # Algunos bancos exportan el XLSX con la dimensión mal declarada (A1:A1);
+        # en modo read_only openpyxl la cree y lee una sola celda vacía.
+        try:
+            ws.reset_dimensions()
+        except AttributeError:
+            pass
         filas = [[c for c in row] for row in ws.iter_rows(values_only=True)]
         # Buscar fila de cabecera en las primeras 20 filas
         mapa, header_idx = {}, None
