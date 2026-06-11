@@ -813,44 +813,66 @@ def api_editar_sesion(id):
         if not (data.get('encargado_apertura') or '').strip():
             return jsonify({'success': False, 'error': 'Debe indicar el encargado de apertura'})
 
-        valor_total = data.get('valor_total', 0)
-        precio_hora = data.get('precio_hora', 10)
-        es_terapia = data['tipo_sesion'] in ['terapia', 'ambos']
-        
+        valor_total = float(data.get('valor_total', 0) or 0)
+        precio_hora = float(data.get('precio_hora', 0) or 0)
+        tipo_sesion = data['tipo_sesion']
+        es_terapia = tipo_sesion in ['terapia', 'ambos']
+
         if es_terapia:
             if not data.get('tema_terapia') or data.get('tema_terapia', '').strip() == '':
                 return jsonify({'success': False, 'error': 'Debe seleccionar un tipo de atención psicológica (costo)'})
+            # En terapia la tarifa es POR SESIÓN: precio_hora guarda esa tarifa
+            # (igual que el Módulo 1) para que el toggle no la pise después
+            if valor_total:
+                precio_hora = valor_total
         else:
             if not precio_hora or precio_hora == 0:
                 return jsonify({'success': False, 'error': 'Debe seleccionar un precio por hora (costo)'})
-        
+
+        estado_nuevo = data.get('estado', 'Planificado')
         updates = {
             'fecha': data['fecha'],
             'hora_inicio': hora_inicio_str,
             'hora_fin': hora_fin_str,
             'horas': horas,
-            'tipo_sesion': data['tipo_sesion'],
+            'tipo_sesion': tipo_sesion,
             'estudiante_id': data['estudiante_id'],
             'asignatura': data.get('asignatura', ''),
             'tema_terapia': data.get('tema_terapia', ''),
             'profesor_terapeuta': data['profesor_terapeuta'],
             'encargado_apertura': data['encargado_apertura'],
-            'estado': data.get('estado', 'Planificado'),
+            'estado': estado_nuevo,
             'observaciones': data.get('observaciones', ''),
             'valor_total': valor_total,
             'precio_hora': precio_hora,
             'cobro_por_sesion': es_terapia
         }
-        
-        supabase.table('sesiones').update(updates).eq('id', id).execute()
 
-        supabase.table('correcciones_pagos').insert({
-            'pago_id': id,
-            'monto_anterior': 0,
-            'monto_nuevo': valor_total,
-            'cambiado_por': responsable,
-            'motivo': f'EDICION SESION #{id}'
-        }).execute()
+        # Recalcular SIEMPRE cobro y pago según el estado (misma regla que el
+        # toggle del Módulo 2: antes, cambiar el estado desde el editor dejaba
+        # valor_pagar_docente desactualizado o en 0 y el docente cobraba mal)
+        if estado_nuevo in ('Realizado', 'Cancelado-Pagado'):
+            if es_terapia:
+                valor_calc = round(valor_total or precio_hora or 0, 2)  # tarifa por sesión
+            else:
+                valor_calc = round(horas * precio_hora, 2)
+            if tipo_sesion in ('clase', 'preuniversitario'):
+                pago_docente = PAGO_DOCENCIA_CANCELADO if estado_nuevo == 'Cancelado-Pagado' \
+                    else round(horas * PAGO_DOCENCIA_POR_HORA, 2)
+            elif tipo_sesion == 'ambos' and estado_nuevo == 'Realizado':
+                # Regla dividida: docencia (horas × tarifa) + psicología (% del valor)
+                pago_docente = round(horas * PAGO_DOCENCIA_POR_HORA, 2) + round(valor_calc * PORCENTAJE_PSICOLOGIA, 2)
+            else:
+                pago_docente = round(valor_calc * PORCENTAJE_PSICOLOGIA, 2)
+            updates['valor_total'] = valor_calc
+            updates['valor_pagar_docente'] = pago_docente
+            updates['valor_atlas'] = round(valor_calc - pago_docente, 2)
+        elif estado_nuevo == 'Cancelado':
+            updates['valor_total'] = 0
+            updates['valor_pagar_docente'] = 0
+            updates['valor_atlas'] = 0
+
+        supabase.table('sesiones').update(updates).eq('id', id).execute()
 
         # Auto-sincronizar el evento de Google Calendar con los datos editados
         try:
@@ -1224,21 +1246,42 @@ def modulo3():
     all_profesores = sorted(set(s['profesor_terapeuta'] for s in (all_docs_res.data or []) if s.get('profesor_terapeuta')))
 
     estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
+
+    # LOTE: sesiones, pagos y devoluciones de TODOS los estudiantes en 3
+    # consultas, agrupadas en memoria (antes: 3 consultas por CADA estudiante)
+    ses_rows_m3 = supabase.table('sesiones').select('*').in_('estado', ['Realizado', 'Cancelado-Pagado']).execute().data or []
+    pagos_rows_m3 = supabase.table('pagos').select('*').order('fecha_pago', desc=True).execute().data or []
+    try:
+        dev_rows_m3 = supabase.table('devoluciones').select('estudiante_id,monto').execute().data or []
+    except Exception:
+        dev_rows_m3 = []
+    ses_por_est_m3 = {}
+    for s in ses_rows_m3:
+        ses_por_est_m3.setdefault(s.get('estudiante_id'), []).append(s)
+    pagos_por_est_m3 = {}
+    for p in pagos_rows_m3:
+        pagos_por_est_m3.setdefault(p.get('estudiante_id'), []).append(p)
+    dev_por_est_m3 = {}
+    for d in dev_rows_m3:
+        eid = d.get('estudiante_id')
+        if eid:
+            dev_por_est_m3[eid] = dev_por_est_m3.get(eid, 0) + (d.get('monto', 0) or 0)
+
     datos = []
     for e in (estudiantes.data or []):
         nombre_completo = f"{e['apellidos']} {e['nombres']}"
         if filtro_estudiante and filtro_estudiante.lower() not in nombre_completo.lower():
             continue
-        ses = supabase.table('sesiones').select('*').eq('estudiante_id', e['id']).in_('estado', ['Realizado', 'Cancelado-Pagado']).execute()
-        pag = supabase.table('pagos').select('*').eq('estudiante_id', e['id']).order('fecha_pago', desc=True).execute()
-        cobrar = sum(s.get('valor_total', 0) or 0 for s in (ses.data or []) if s.get('estado') in ['Realizado', 'Cancelado-Pagado'])
-        pagado = sum(p.get('monto', 0) or 0 for p in (pag.data or []))
-        devuelto = devoluciones_por_estudiante(e['id'])
+        ses_e = ses_por_est_m3.get(e['id'], [])
+        pag_e = pagos_por_est_m3.get(e['id'], [])
+        cobrar = sum(s.get('valor_total', 0) or 0 for s in ses_e)
+        pagado = sum(p.get('monto', 0) or 0 for p in pag_e)
+        devuelto = dev_por_est_m3.get(e['id'], 0)
         pagado_neto = pagado - devuelto
         if cobrar > 0 or pagado > 0 or devuelto > 0:
             datos.append({'id': e['id'], 'nombre': nombre_completo, 'cobrar': cobrar,
                           'pagado': pagado, 'devuelto': devuelto, 'pagado_neto': pagado_neto,
-                          'saldo': cobrar - pagado_neto, 'pagos': pag.data or [], 'sesiones': ses.data or []})
+                          'saldo': cobrar - pagado_neto, 'pagos': pag_e, 'sesiones': ses_e})
     # Sesiones por estudiante para el modal de devolución (asociar y cancelar)
     sesiones_devolucion = {
         str(d['id']): [
