@@ -3103,7 +3103,7 @@ def conciliar_nuevos(movs):
 
 @app.route('/movimientos-cuenta')
 @login_required
-@admin_required
+@socio_admin_required
 def movimientos_cuenta():
     mes = request.args.get('mes', '')
     anio = request.args.get('anio', '')
@@ -3145,7 +3145,7 @@ def movimientos_cuenta():
 
 @app.route('/movimientos-cuenta/subir', methods=['POST'])
 @login_required
-@admin_required
+@socio_admin_required
 def subir_estado_cuenta():
     archivo = request.files.get('archivo')
     if not archivo or not archivo.filename:
@@ -3225,7 +3225,7 @@ def subir_estado_cuenta():
 
 @app.route('/movimientos-cuenta/conciliar-todo', methods=['POST'])
 @login_required
-@admin_required
+@socio_admin_required
 def conciliar_pendientes():
     """Re-cruza todos los movimientos pendientes con los pagos y gastos registrados."""
     movs = supabase.table('movimientos_cuenta').select('id,fecha,monto,descripcion') \
@@ -3239,7 +3239,7 @@ def conciliar_pendientes():
 
 @app.route('/api/movimiento/<int:id>/candidatos')
 @login_required
-@admin_required
+@socio_admin_required
 def candidatos_movimiento(id):
     """Pagos (créditos) o gastos (débitos) candidatos para enlazar manualmente un movimiento.
     Marca coincidencia de monto, cercanía de fecha y nombre del padre/madre/estudiante."""
@@ -3286,7 +3286,7 @@ def candidatos_movimiento(id):
 
 @app.route('/api/estudiantes/lista')
 @login_required
-@admin_required
+@socio_admin_required
 def estudiantes_lista_conciliacion():
     """Estudiantes (apellidos + nombres) para el selector del enlace manual."""
     r = supabase.table('estudiantes').select('id,nombres,apellidos').order('apellidos').execute()
@@ -3297,7 +3297,7 @@ def estudiantes_lista_conciliacion():
 
 @app.route('/api/estudiante/<int:id>/historial-pagos')
 @login_required
-@admin_required
+@socio_admin_required
 def historial_pagos_estudiante(id):
     """Historial para el enlace manual: pagos del estudiante (fecha, monto, tipo,
     concepto) con las asignaturas de sus sesiones cercanas a cada pago (±30 días;
@@ -3339,7 +3339,7 @@ def historial_pagos_estudiante(id):
 
 @app.route('/api/movimiento/<int:id>/justificar', methods=['POST'])
 @login_required
-@admin_required
+@socio_admin_required
 def justificar_movimiento(id):
     data = request.get_json() or {}
     texto = (data.get('justificacion', '') or '').strip()
@@ -3352,7 +3352,7 @@ def justificar_movimiento(id):
 
 @app.route('/api/movimiento/<int:id>/conciliar', methods=['POST'])
 @login_required
-@admin_required
+@socio_admin_required
 def conciliar_manual(id):
     data = request.get_json() or {}
     tipo = data.get('tipo')      # 'pago' | 'gasto' | 'cita' | 'devolucion'
@@ -3367,7 +3367,7 @@ def conciliar_manual(id):
 
 @app.route('/api/movimiento/<int:id>/pendiente', methods=['POST'])
 @login_required
-@admin_required
+@socio_admin_required
 def revertir_movimiento(id):
     supabase.table('movimientos_cuenta').update({
         'estado_conciliacion': 'pendiente', 'conciliado_tipo': None,
@@ -3377,14 +3377,14 @@ def revertir_movimiento(id):
 
 @app.route('/api/movimiento/<int:id>/eliminar', methods=['POST'])
 @login_required
-@admin_required
+@socio_admin_required
 def eliminar_movimiento(id):
     supabase.table('movimientos_cuenta').delete().eq('id', id).execute()
     return jsonify({'success': True})
 
 @app.route('/movimientos-cuenta/lote/<lote_id>/eliminar', methods=['POST'])
 @login_required
-@admin_required
+@socio_admin_required
 def eliminar_lote_movimientos(lote_id):
     supabase.table('movimientos_cuenta').delete().eq('lote_id', lote_id).execute()
     flash('🗑️ Estado de cuenta eliminado', 'info')

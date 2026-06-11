@@ -652,7 +652,7 @@
                 <a href="/gastos" class="{% if p=='/gastos' %}active{% endif %}">Gastos</a>
                 <a href="/liquidacion" class="{% if p=='/liquidacion' %}active{% endif %}">Liquidación</a>
                 <a href="/gestion-anticipos" class="{% if p=='/gestion-anticipos' %}active{% endif %}">Anticipos {% if solicitudes_pendientes and solicitudes_pendientes>0 %}<span class="side-badge">{{ solicitudes_pendientes }}</span>{% endif %}</a>
-                {% if rol=='admin' %}<a href="/movimientos-cuenta" class="{% if p=='/movimientos-cuenta' %}active{% endif %}">Movimientos en cuenta</a>{% endif %}
+                {% if rol in ['admin','socio'] %}<a href="/movimientos-cuenta" class="{% if p=='/movimientos-cuenta' %}active{% endif %}">Movimientos en cuenta</a>{% endif %}
             </div>
         </div>
 
