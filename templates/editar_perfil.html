@@ -19,6 +19,62 @@
             <div class="mb-3"><label class="form-label fw-bold" style="font-size:12px;">NUEVA CONTRASEÑA (dejar vacío para no cambiar)</label><input type="password" name="password" class="form-control form-control-premium" placeholder="••••••••"></div>
             <button type="submit" class="btn btn-primary btn-premium w-100">💾 Guardar Cambios</button>
         </form>
+
+        <hr class="my-4">
+        <h6 class="fw-bold">🔐 Huella digital / Face ID</h6>
+        <p class="text-muted" style="font-size:12px;">Registra este dispositivo para entrar al sistema con tu huella o tu rostro (sin escribir la contraseña). Puedes registrar varios dispositivos.</p>
+        <div id="pk-lista" class="mb-2"><small class="text-muted">Cargando dispositivos…</small></div>
+        <button type="button" class="btn btn-outline-primary btn-premium w-100" onclick="registrarHuella()">➕ Registrar este dispositivo</button>
     </div>
 </div>
+
+<script>
+function b64uToBuf(s){s=s.replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';const bin=atob(s);const b=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)b[i]=bin.charCodeAt(i);return b.buffer}
+function bufToB64u(buf){const b=new Uint8Array(buf);let s='';for(const x of b)s+=String.fromCharCode(x);return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
+
+async function cargarDispositivos(){
+    const cont=document.getElementById('pk-lista');
+    try{
+        const r=await fetch('/api/passkey/mis-dispositivos');
+        const d=await r.json();
+        if(d.sin_tabla){cont.innerHTML='<small class="text-warning">⚠ El administrador debe ejecutar migration_passkeys.sql en Supabase para activar esta función.</small>';return}
+        if(!d.data.length){cont.innerHTML='<small class="text-muted">Sin dispositivos registrados todavía.</small>';return}
+        cont.innerHTML=d.data.map(p=>'<div class="d-flex justify-content-between align-items-center border rounded p-2 mb-1">'+
+            '<small>📱 '+(p.nombre||'Dispositivo')+' · '+String(p.created_at||'').slice(0,10)+'</small>'+
+            '<button class="btn btn-sm btn-outline-danger py-0" onclick="eliminarDispositivo('+p.id+')">✕</button></div>').join('');
+    }catch(e){cont.innerHTML='<small class="text-muted">No se pudo cargar la lista.</small>'}
+}
+
+async function registrarHuella(){
+    if(!window.PublicKeyCredential){alert('Este navegador no soporta huella/Face ID');return}
+    try{
+        const r=await fetch('/api/passkey/registro/opciones',{method:'POST'});
+        const d=await r.json();
+        if(d.success===false){alert(d.error);return}
+        const pub={...d,challenge:b64uToBuf(d.challenge),
+            user:{...d.user,id:b64uToBuf(d.user.id)},
+            excludeCredentials:(d.excludeCredentials||[]).map(c=>({...c,id:b64uToBuf(c.id)}))};
+        const cred=await navigator.credentials.create({publicKey:pub});
+        const cuerpo={id:cred.id,rawId:bufToB64u(cred.rawId),type:cred.type,
+            response:{clientDataJSON:bufToB64u(cred.response.clientDataJSON),
+                      attestationObject:bufToB64u(cred.response.attestationObject)},
+            clientExtensionResults:cred.getClientExtensionResults()};
+        const nombre=encodeURIComponent((navigator.userAgentData&&navigator.userAgentData.platform)||navigator.platform||'Dispositivo');
+        const v=await fetch('/api/passkey/registro/verificar?dispositivo='+nombre,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(cuerpo)});
+        const dv=await v.json();
+        if(dv.success){alert('✅ Dispositivo registrado: ya puedes entrar con tu huella o rostro.');cargarDispositivos()}
+        else{alert(dv.error||'No se pudo registrar')}
+    }catch(e){
+        if(e.name!=='NotAllowedError')alert('No se pudo registrar: '+e.message);
+    }
+}
+
+async function eliminarDispositivo(id){
+    if(!confirm('¿Quitar este dispositivo? Ya no podrá entrar con huella/rostro.'))return;
+    await fetch('/api/passkey/'+id+'/eliminar',{method:'POST'});
+    cargarDispositivos();
+}
+
+cargarDispositivos();
+</script>
 {% endblock %}

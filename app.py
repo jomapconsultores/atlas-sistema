@@ -2064,13 +2064,25 @@ def reportes():
     for p in pagos_mes_rows:
         pagos_por_est.setdefault(p.get('estudiante_id'), []).append(p)
 
-    for e in (estudiantes.data or []):
-        ses_data = ses_por_est.get(e['id'], [])
-        pag_data = pagos_por_est.get(e['id'], [])
-        
+    # Estudiantes con actividad este mes (incluye desactivados: su dinero del
+    # mes cuenta igual que en Liquidación, que suma TODOS los pagos del mes;
+    # antes Reportes solo recorría estudiantes activos y los ingresos diferían)
+    nombres_por_est = {e['id']: f"{e['apellidos']} {e['nombres']}".strip() for e in (estudiantes.data or [])}
+    ids_mes = (set(ses_por_est) | set(pagos_por_est))
+    ids_mes.discard(None)
+    _faltan = [i for i in ids_mes if i not in nombres_por_est]
+    for _i in range(0, len(_faltan), 100):
+        _r = supabase.table('estudiantes').select('id,nombres,apellidos').in_('id', _faltan[_i:_i + 100]).execute()
+        for _e in (_r.data or []):
+            nombres_por_est[_e['id']] = f"{_e.get('apellidos','')} {_e.get('nombres','')}".strip()
+
+    for eid in sorted(ids_mes, key=lambda i: nombres_por_est.get(i, '')):
+        nombre_est_full = nombres_por_est.get(eid, f'Estudiante {eid}')
+        ses_data = ses_por_est.get(eid, [])
+        pag_data = pagos_por_est.get(eid, [])
+
         ses_realizadas = [s for s in ses_data if s['estado'] == 'Realizado']
-        ses_cancelado_pagado = [s for s in ses_data if s['estado'] == 'Cancelado-Pagado']
-        
+
         cobrar = sum(s.get('valor_total', 0) or 0 for s in ses_data)
         pagado = sum(p.get('monto', 0) or 0 for p in pag_data)
         
@@ -2146,7 +2158,7 @@ def reportes():
         
         if cobrar > 0 or pagado > 0 or horas_real > 0:
             datos_estudiantes.append({
-                'id': e['id'], 'estudiante': f"{e['apellidos']} {e['nombres']}",
+                'id': eid, 'estudiante': nombre_est_full,
                 'horas_plan': 0, 'horas_real': horas_real, 'horas_canc': 0,
                 'cobrar': cobrar, 'pagado': pagado, 'saldo': cobrar - pagado
             })
@@ -2156,7 +2168,7 @@ def reportes():
             ph = ses_data[0].get('precio_hora', 0) or 0 if ses_data else 0
             tasa = f'${ph:.2f}/h' if tipo0 in ['clase','preuniversitario'] else f'{PORCENTAJE_PSICOLOGIA*100:.1f}%'
             datos_ingresos.append({
-                'estudiante': f"{e['apellidos']} {e['nombres']}",
+                'estudiante': nombre_est_full,
                 'profesor': profe,
                 'horas': horas_real,
                 'tasa': tasa,
@@ -2294,10 +2306,21 @@ def gestion_gastos():
         ).order('fecha', desc=True).execute()
     except Exception:
         gastos = supabase.table('gastos').select('*').eq('mes', mes).eq('anio', anio).order('fecha', desc=True).execute()
-    # Marca los que corresponden a otro mes de fecha pero fueron considerados para este período
+    # El período REAL de un gasto es su mes_periodo (si falta, su fecha). El total
+    # solo suma los que PERTENECEN a este período: así cuadra con Reportes y
+    # Liquidación (que filtran por mes_periodo) y un gasto no se cuenta dos veces.
+    total = 0
     for g in (gastos.data or []):
+        mp = g.get('mes_periodo') or g.get('mes')
+        ap = g.get('anio_periodo') or g.get('anio')
+        g['_en_periodo'] = (mp == mes and ap == anio)
+        # fecha de otro mes pero CONSIDERADO para este período (sí cuenta aquí)
         g['_de_otro_mes'] = bool(g.get('mes') and g.get('mes') != mes and g.get('mes_periodo') == mes)
-    total = sum(g.get('monto', 0) or 0 for g in (gastos.data or []))
+        # fecha de este mes pero considerado para OTRO período (no cuenta aquí)
+        g['_para_otro_periodo'] = not g['_en_periodo']
+        if g['_en_periodo']:
+            total += g.get('monto', 0) or 0
+    total = round(total, 2)
     
     # Obtener pagos a docentes del mes
     _, ultimo_dia = monthrange(anio, mes)
@@ -2310,39 +2333,27 @@ def gestion_gastos():
     total_pago_docentes_mes = 0
     
     for s in dedup_sesiones_docente(sesiones_mes.data or []):
-        tipo = s.get('tipo_sesion', 'clase')
-        horas = s.get('horas', 0) or 0
-        valor = s.get('valor_total', 0) or 0
         prof = s.get('profesor_terapeuta', 'Desconocido')
-        estado = s.get('estado', '')
-
         if prof not in pagos_docentes_detalle:
             pagos_docentes_detalle[prof] = {'pago_docencia': 0, 'pago_psicologia': 0, 'total_pagar': 0, 'sesiones': 0, 'fecha_pago': None, 'pagado': False}
-        
+
         pagos_docentes_detalle[prof]['sesiones'] += 1
         total_sesiones_docentes += 1
-        
-        if estado == 'Cancelado-Pagado':
-            pago = s.get('valor_pagar_docente', 0) or 0
-            if tipo in ['clase', 'preuniversitario']:
-                pagos_docentes_detalle[prof]['pago_docencia'] += pago
-                total_docencia_mes += pago
-            else:
-                pagos_docentes_detalle[prof]['pago_psicologia'] += pago
-                total_psicologia_mes += pago
-            pagos_docentes_detalle[prof]['total_pagar'] += pago
-            total_pago_docentes_mes += pago
-        else:
-            if tipo in ['clase', 'preuniversitario']:
-                pago = horas * PAGO_DOCENCIA_POR_HORA
-                pagos_docentes_detalle[prof]['pago_docencia'] += pago
-                total_docencia_mes += pago
-            else:
-                pago = valor * PORCENTAJE_PSICOLOGIA
-                pagos_docentes_detalle[prof]['pago_psicologia'] += pago
-                total_psicologia_mes += pago
-            pagos_docentes_detalle[prof]['total_pagar'] += pago
-            total_pago_docentes_mes += pago
+
+        # Regla ÚNICA (igual que Módulo 5, Reportes y Liquidación): 'ambos'
+        # paga docencia (horas × $7) + psicología (% del valor); antes este
+        # panel omitía la parte de docencia en 'ambos' y descuadraba
+        pago_doc, pago_psi = pago_sesion_docente(s)
+        pagos_docentes_detalle[prof]['pago_docencia'] += pago_doc
+        pagos_docentes_detalle[prof]['pago_psicologia'] += pago_psi
+        pagos_docentes_detalle[prof]['total_pagar'] += pago_doc + pago_psi
+        total_docencia_mes += pago_doc
+        total_psicologia_mes += pago_psi
+        total_pago_docentes_mes += pago_doc + pago_psi
+
+    total_docencia_mes = round(total_docencia_mes, 2)
+    total_psicologia_mes = round(total_psicologia_mes, 2)
+    total_pago_docentes_mes = round(total_pago_docentes_mes, 2)
     
     # Cargar fechas de pago guardadas
     fechas = supabase.table('fechas_pago_docentes').select('*').eq('mes', mes).eq('anio', anio).execute()
@@ -2352,9 +2363,11 @@ def gestion_gastos():
             pagos_docentes_detalle[nombre]['fecha_pago'] = f.get('fecha_pago')
             pagos_docentes_detalle[nombre]['pagado'] = f.get('pagado', False)
     
-    # Reembolsos pendientes (todos los períodos, no pagados)
+    # Reembolsos pendientes (todos los períodos, no pagados). Se usa OR is.null
+    # porque neq('reembolso_pagado', True) excluía las filas con el campo NULL.
     try:
-        reembolsos_pend = supabase.table('gastos').select('*').eq('reembolso', True).neq('reembolso_pagado', True).order('fecha', desc=True).execute()
+        reembolsos_pend = supabase.table('gastos').select('*').eq('reembolso', True) \
+            .or_('reembolso_pagado.is.null,reembolso_pagado.eq.false').order('fecha', desc=True).execute()
     except Exception:
         reembolsos_pend = supabase.table('gastos').select('*').eq('reembolso', True).order('fecha', desc=True).execute()
 

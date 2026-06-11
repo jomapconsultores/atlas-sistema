@@ -65,6 +65,12 @@
                         <i class="bi bi-box-arrow-in-right me-2"></i> Ingresar
                     </button>
                 </form>
+                <button type="button" class="btn btn-registro w-100 mt-3" onclick="loginConHuella()">
+                    🔐 Entrar con huella / Face ID
+                </button>
+                <small class="text-muted d-block text-center mt-1" style="font-size:11px;">
+                    Escribe tu email arriba y usa la huella o el rostro de tu dispositivo.
+                </small>
             </div>
         </div>
         <div class="text-center mt-3">
@@ -74,4 +80,35 @@
         </div>
     </div>
 </div>
+
+<script>
+function b64uToBuf(s){s=s.replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';const bin=atob(s);const b=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)b[i]=bin.charCodeAt(i);return b.buffer}
+function bufToB64u(buf){const b=new Uint8Array(buf);let s='';for(const x of b)s+=String.fromCharCode(x);return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
+
+async function loginConHuella(){
+    const email=document.querySelector('input[name=email]').value.trim();
+    if(!email){alert('Escribe tu email primero');return}
+    if(!window.PublicKeyCredential){alert('Este navegador no soporta huella/Face ID. Usa tu contraseña.');return}
+    try{
+        const r=await fetch('/api/passkey/login/opciones',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})});
+        const d=await r.json();
+        if(d.success===false){alert(d.error);return}
+        const pub={...d,challenge:b64uToBuf(d.challenge),
+            allowCredentials:(d.allowCredentials||[]).map(c=>({...c,id:b64uToBuf(c.id)}))};
+        const cred=await navigator.credentials.get({publicKey:pub});
+        const cuerpo={id:cred.id,rawId:bufToB64u(cred.rawId),type:cred.type,
+            response:{clientDataJSON:bufToB64u(cred.response.clientDataJSON),
+                      authenticatorData:bufToB64u(cred.response.authenticatorData),
+                      signature:bufToB64u(cred.response.signature),
+                      userHandle:cred.response.userHandle?bufToB64u(cred.response.userHandle):null},
+            clientExtensionResults:cred.getClientExtensionResults()};
+        const v=await fetch('/api/passkey/login/verificar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(cuerpo)});
+        const dv=await v.json();
+        if(dv.success){location.href=dv.redirect||'/dashboard'}
+        else{alert(dv.error||'No se pudo verificar la identidad')}
+    }catch(e){
+        if(e.name!=='NotAllowedError')alert('Biometría no disponible: '+e.message);
+    }
+}
+</script>
 {% endblock %}
