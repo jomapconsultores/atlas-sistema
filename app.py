@@ -91,13 +91,17 @@ def socio_admin_required(f):
         return f(*args, **kwargs)
     return decorated
 
-# Inyecta contadores (anticipos pendientes y contactos nuevos) en TODAS las plantillas (badges del menú lateral)
+# Inyecta contadores (anticipos pendientes y contactos nuevos) en TODAS las plantillas (badges del menú lateral).
+# Con caché de 30 s: antes eran 2 consultas a la BD en CADA página que se abría.
+_GLOBALES_CACHE = {'t': 0.0, 'datos': {'solicitudes_pendientes': 0, 'contactos_nuevos': 0}}
+
 @app.context_processor
 def inyectar_globales():
-    pendientes = 0
-    contactos_nuevos = 0
+    import time
     try:
-        if current_user.is_authenticated and getattr(current_user, 'rol', None) in ['admin', 'socio']:
+        if not (current_user.is_authenticated and getattr(current_user, 'rol', None) in ['admin', 'socio']):
+            return {'solicitudes_pendientes': 0, 'contactos_nuevos': 0}
+        if time.time() - _GLOBALES_CACHE['t'] > 30:
             solicitudes = supabase.table('anticipos_solicitudes').select('id').eq('estado', 'pendiente').execute()
             pendientes = len(solicitudes.data or [])
             try:
@@ -105,9 +109,11 @@ def inyectar_globales():
                 contactos_nuevos = len(cont.data or [])
             except Exception:
                 contactos_nuevos = 0
+            _GLOBALES_CACHE['datos'] = {'solicitudes_pendientes': pendientes, 'contactos_nuevos': contactos_nuevos}
+            _GLOBALES_CACHE['t'] = time.time()
+        return dict(_GLOBALES_CACHE['datos'])
     except Exception:
-        pendientes = 0
-    return {'solicitudes_pendientes': pendientes, 'contactos_nuevos': contactos_nuevos}
+        return {'solicitudes_pendientes': 0, 'contactos_nuevos': 0}
 
 # Evita que el navegador cachee las páginas HTML (causa de "no veo los cambios" tras desplegar).
 # Los recursos estáticos (logo, etc.) NO se tocan y siguen cacheando normalmente.
@@ -259,18 +265,39 @@ def cargar_costos():
     except:
         return ATENCION_PSICOLOGICA, PRECIOS_CLASE, PRECIOS_MATRICULA, PRECIOS_PENSION
 
+# ========== PAGINACIÓN SUPABASE ==========
+def _fetch_all(builder, page_size=1000):
+    """Trae TODAS las filas de una consulta paginando con .range().
+    Supabase/PostgREST devuelve máximo 1000 filas por petición: sin esto,
+    cualquier total calculado en Python se truncaría en silencio al crecer
+    las tablas. Devuelve una lista (no el objeto respuesta)."""
+    filas = []
+    offset = 0
+    while True:
+        r = builder.range(offset, offset + page_size - 1).execute()
+        lote = r.data or []
+        filas.extend(lote)
+        if len(lote) < page_size:
+            return filas
+        offset += page_size
+
 # ========== DEVOLUCIONES (helpers) ==========
-def devoluciones_periodo(anio, mes):
+def devoluciones_periodo(anio, mes, solo_estudiantes=True):
     """Suma de devoluciones de dinero a clientes en el período indicado.
-    Se usa para RESTAR de los ingresos en Reportes y Liquidación.
+    Se usa para RESTAR de los ingresos en Reportes y Liquidación. Por defecto
+    SOLO devoluciones a estudiantes: los ingresos de esas pantallas salen de la
+    tabla `pagos` (estudiantes); una devolución a cliente externo ya se resta
+    del monto_pagado de su cita y restarla aquí la descontaría dos veces.
     Filtra por mes_periodo/anio_periodo (como gastos); si esos campos
     faltan, cae a la fecha de la devolución."""
     try:
-        res = supabase.table('devoluciones').select('*').execute()
+        res = _fetch_all(supabase.table('devoluciones').select('*'))
     except Exception:
         return 0.0
     total = 0.0
-    for d in (res.data or []):
+    for d in res:
+        if solo_estudiantes and d.get('tipo_cliente') != 'estudiante':
+            continue
         mp = d.get('mes_periodo')
         ap = d.get('anio_periodo')
         if mp and ap:
@@ -305,6 +332,8 @@ def crear_devolucion(tipo_cliente, fecha, monto, tipo_pago, motivo, pagar_docent
     except Exception:
         fecha_obj = datetime.today()
     monto = float(monto or 0)
+    if monto <= 0:
+        raise ValueError('El monto a devolver debe ser mayor a 0')
     monto_docente = float(monto_docente or 0) if pagar_docente else 0
 
     # 1) Gasto automático al docente
@@ -329,16 +358,23 @@ def crear_devolucion(tipo_cliente, fecha, monto, tipo_pago, motivo, pagar_docent
             g = supabase.table('gastos').insert(gasto_data).execute()
             gasto_id = g.data[0]['id'] if g.data else None
 
-    # 2) Insertar la devolución
-    res = supabase.table('devoluciones').insert({
+    # 2) Insertar la devolución (sesion_id guarda qué sesión se canceló, para
+    # poder restaurarla si la devolución se elimina; columna opcional)
+    fila_dev = {
         'fecha': fecha, 'tipo_cliente': tipo_cliente,
         'estudiante_id': estudiante_id, 'cliente_id': cliente_id, 'cita_id': cita_id,
         'monto': monto, 'tipo_pago': tipo_pago, 'motivo': motivo,
         'pagar_docente': pagar_docente, 'docente_nombre': docente_nombre,
         'monto_docente': monto_docente, 'gasto_id': gasto_id,
         'mes_periodo': fecha_obj.month, 'anio_periodo': fecha_obj.year,
-        'registrado_por': registrado_por
-    }).execute()
+        'registrado_por': registrado_por,
+        'sesion_id': int(sesion_id) if sesion_id else None
+    }
+    try:
+        res = supabase.table('devoluciones').insert(fila_dev).execute()
+    except Exception:
+        fila_dev.pop('sesion_id', None)  # por si la columna no existe aún
+        res = supabase.table('devoluciones').insert(fila_dev).execute()
 
     # 3) Cliente externo con cita: restar de lo pagado
     if tipo_cliente == 'externo' and cita_id:
@@ -1785,12 +1821,24 @@ def reportes():
     gastos_por_categoria = {}
     total_gastos = 0
     
+    # LOTE: una consulta de sesiones y una de pagos para TODO el mes, agrupadas
+    # en memoria por estudiante (antes: 2 consultas a la BD por CADA estudiante)
+    _, dia_fin_mes = monthrange(anio, mes)
+    rango_ini, rango_fin = f"{anio}-{mes:02d}-01", f"{anio}-{mes:02d}-{dia_fin_mes}"
+    ses_mes_rows = supabase.table('sesiones').select('*').in_('estado', ['Realizado', 'Cancelado-Pagado']) \
+        .gte('fecha', rango_ini).lte('fecha', rango_fin).execute().data or []
+    pagos_mes_rows = supabase.table('pagos').select('*') \
+        .gte('fecha_pago', rango_ini).lte('fecha_pago', rango_fin).execute().data or []
+    ses_por_est = {}
+    for s in ses_mes_rows:
+        ses_por_est.setdefault(s.get('estudiante_id'), []).append(s)
+    pagos_por_est = {}
+    for p in pagos_mes_rows:
+        pagos_por_est.setdefault(p.get('estudiante_id'), []).append(p)
+
     for e in (estudiantes.data or []):
-        ses = supabase.table('sesiones').select('*').eq('estudiante_id', e['id']).in_('estado', ['Realizado', 'Cancelado-Pagado']).execute()
-        pag = supabase.table('pagos').select('*').eq('estudiante_id', e['id']).order('fecha_pago', desc=True).execute()
-        
-        ses_data = [s for s in (ses.data or []) if s.get('fecha', '') and s['fecha'][:7] == f"{anio}-{mes:02d}"]
-        pag_data = [p for p in (pag.data or []) if p.get('fecha_pago', '') and p['fecha_pago'][:7] == f"{anio}-{mes:02d}"]
+        ses_data = ses_por_est.get(e['id'], [])
+        pag_data = pagos_por_est.get(e['id'], [])
         
         ses_realizadas = [s for s in ses_data if s['estado'] == 'Realizado']
         ses_cancelado_pagado = [s for s in ses_data if s['estado'] == 'Cancelado-Pagado']
@@ -1925,8 +1973,7 @@ def reportes():
             estudiantes_mujeres += 1
         
         nombre_est = f"{e['apellidos']} {e['nombres']}"
-        ses_est = supabase.table('sesiones').select('*').eq('estudiante_id', e['id']).in_('estado', ['Realizado', 'Cancelado-Pagado']).execute()
-        ses_est_data = [s for s in (ses_est.data or []) if s.get('fecha', '') and s['fecha'][:7] == f"{anio}-{mes:02d}"]
+        ses_est_data = ses_por_est.get(e['id'], [])  # ya consultado en lote arriba
         horas_est = sum(s.get('horas', 0) or 0 for s in ses_est_data)
         cobrar_est = sum(s.get('valor_total', 0) or 0 for s in ses_est_data)
         horas_por_estudiante[nombre_est] = horas_est
@@ -1936,8 +1983,7 @@ def reportes():
     asignaturas_estudiantes = {}
     for e in (estudiantes.data or []):
         nombre_est = f"{e['apellidos']} {e['nombres']}"
-        ses_est = supabase.table('sesiones').select('*').eq('estudiante_id', e['id']).in_('estado', ['Realizado', 'Cancelado-Pagado']).execute()
-        ses_est_data = [s for s in (ses_est.data or []) if s.get('fecha', '') and s['fecha'][:7] == f"{anio}-{mes:02d}"]
+        ses_est_data = ses_por_est.get(e['id'], [])  # ya consultado en lote arriba
         for s in ses_est_data:
             asig = s.get('asignatura') or s.get('tema_terapia') or 'Sin registro'
             if asig not in asignaturas_valores:
@@ -2746,26 +2792,12 @@ def devoluciones():
         accion = request.form.get('accion', 'registrar')
         if accion == 'registrar':
             tipo_cliente = request.form.get('tipo_cliente', 'estudiante')
-            fecha = request.form.get('fecha') or date.today().isoformat()
-            try:
-                fecha_obj = datetime.strptime(fecha, '%Y-%m-%d')
-            except Exception:
-                fecha_obj = datetime.today()
-            monto = float(request.form.get('monto', 0) or 0)
-            tipo_pago = request.form.get('tipo_pago', 'efectivo')
-            motivo = (request.form.get('motivo', '') or '').strip()
             pagar_docente = request.form.get('pagar_docente') == 'true'
-            docente_nombre = (request.form.get('docente_nombre', '') or '').strip() or None
-            monto_docente = float(request.form.get('monto_docente', 0) or 0) if pagar_docente else 0
-
-            if monto <= 0:
-                flash('❌ El monto a devolver debe ser mayor a 0', 'error')
-                return redirect(url_for('devoluciones'))
+            sesion_dev = (request.form.get('sesion_id') or '').strip()
 
             estudiante_id = None
             cliente_id = None
             cita_id = None
-            nombre_cliente = ''
             if tipo_cliente == 'estudiante':
                 estudiante_id = int(request.form['estudiante_id']) if request.form.get('estudiante_id') else None
                 if not estudiante_id:
@@ -2775,56 +2807,31 @@ def devoluciones():
                 cliente_id = int(request.form['cliente_id']) if request.form.get('cliente_id') else None
                 cita_id = int(request.form['cita_id']) if request.form.get('cita_id') else None
 
-            # 1) Gasto automático vinculado si hay que pagar al docente igual
-            gasto_id = None
-            if pagar_docente and monto_docente > 0:
-                concepto = f"Devolución - pago docente ({docente_nombre or 's/d'})"
-                if motivo:
-                    concepto += f" · {motivo[:60]}"
-                gasto_data = {
-                    'concepto': concepto, 'monto': monto_docente, 'fecha': fecha,
-                    'categoria': 'Devolución - pago docente', 'persona': docente_nombre or '',
-                    'reembolso': False, 'registrado_por': current_user.nombre,
-                    'mes': fecha_obj.month, 'anio': fecha_obj.year,
-                    'mes_periodo': fecha_obj.month, 'anio_periodo': fecha_obj.year
-                }
-                try:
-                    g = supabase.table('gastos').insert(gasto_data).execute()
-                    gasto_id = g.data[0]['id'] if g.data else None
-                except Exception:
-                    gasto_data.pop('mes_periodo', None)
-                    gasto_data.pop('anio_periodo', None)
-                    g = supabase.table('gastos').insert(gasto_data).execute()
-                    gasto_id = g.data[0]['id'] if g.data else None
-
-            # 2) Registrar la devolución
-            supabase.table('devoluciones').insert({
-                'fecha': fecha, 'tipo_cliente': tipo_cliente,
-                'estudiante_id': estudiante_id, 'cliente_id': cliente_id, 'cita_id': cita_id,
-                'monto': monto, 'tipo_pago': tipo_pago, 'motivo': motivo,
-                'pagar_docente': pagar_docente, 'docente_nombre': docente_nombre,
-                'monto_docente': monto_docente, 'gasto_id': gasto_id,
-                'mes_periodo': fecha_obj.month, 'anio_periodo': fecha_obj.year,
-                'registrado_por': current_user.nombre
-            }).execute()
-
-            # 3) Si es cliente externo con cita, restar de lo pagado de la cita
-            if tipo_cliente == 'externo' and cita_id:
-                cita = supabase.table('citas_psicologia').select('*').eq('id', cita_id).execute()
-                if cita.data:
-                    c = cita.data[0]
-                    nuevo_pagado = round(max(0, (c.get('monto_pagado', 0) or 0) - monto), 2)
-                    if nuevo_pagado <= 0:
-                        nuevo_estado = 'agendada'
-                    elif nuevo_pagado >= (c.get('valor', 0) or 0):
-                        nuevo_estado = 'pagada'
-                    else:
-                        nuevo_estado = 'parcial'
-                    supabase.table('citas_psicologia').update({
-                        'monto_pagado': nuevo_pagado, 'estado': nuevo_estado
-                    }).eq('id', cita_id).execute()
-
-            flash('✅ Devolución registrada', 'success')
+            # Misma lógica que el Módulo 3: gasto al docente + devolución +
+            # cita externa + cancelar la sesión asociada (evita el doble pago
+            # al docente y que la sesión devuelta se siga cobrando)
+            try:
+                crear_devolucion(
+                    tipo_cliente=tipo_cliente,
+                    fecha=request.form.get('fecha') or date.today().isoformat(),
+                    monto=float(request.form.get('monto', 0) or 0),
+                    tipo_pago=request.form.get('tipo_pago', 'efectivo'),
+                    motivo=(request.form.get('motivo', '') or '').strip(),
+                    pagar_docente=pagar_docente,
+                    docente_nombre=(request.form.get('docente_nombre', '') or '').strip() or None,
+                    monto_docente=request.form.get('monto_docente', 0),
+                    registrado_por=current_user.nombre,
+                    estudiante_id=estudiante_id, cliente_id=cliente_id, cita_id=cita_id,
+                    sesion_id=int(sesion_dev) if sesion_dev.isdigit() else None
+                )
+                msg = '✅ Devolución registrada'
+                if sesion_dev.isdigit():
+                    msg += ' · la sesión asociada quedó Cancelada (no se cobra ni duplica el pago al docente)'
+                elif pagar_docente and tipo_cliente == 'estudiante':
+                    msg += ' · ⚠ no asociaste la sesión: si queda en Realizado, el pago al docente se contaría dos veces'
+                flash(msg, 'success')
+            except Exception as e:
+                flash(f'❌ Error al registrar la devolución: {e}', 'error')
         return redirect(url_for('devoluciones'))
 
     # GET
@@ -2894,6 +2901,13 @@ def eliminar_devolucion(id):
             supabase.table('citas_psicologia').update({
                 'monto_pagado': nuevo_pagado, 'estado': nuevo_estado
             }).eq('id', d['cita_id']).execute()
+    # Restaurar la sesión que la devolución canceló (vuelve a cobrarse y a
+    # pagarse al docente por sesión, ya que el gasto vinculado se eliminó)
+    if d.get('sesion_id'):
+        try:
+            supabase.table('sesiones').update({'estado': 'Realizado'}).eq('id', d['sesion_id']).execute()
+        except Exception:
+            pass
     supabase.table('devoluciones').delete().eq('id', id).execute()
     return jsonify({'success': True})
 

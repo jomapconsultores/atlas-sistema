@@ -55,10 +55,15 @@
                 </div>
                 <div class="col-md-5" id="bloqueEstudiante">
                     <label class="form-label">Estudiante</label>
-                    <select name="estudiante_id" class="form-select">
+                    <select name="estudiante_id" id="selEstudiante" class="form-select" onchange="cargarSesionesEstudiante()">
                         <option value="">— Selecciona —</option>
                         {% for e in estudiantes %}<option value="{{ e.id }}">{{ e.nombre }}</option>{% endfor %}
                     </select>
+                    <label class="form-label mt-2">Sesión devuelta (recomendado)</label>
+                    <select name="sesion_id" id="selSesion" class="form-select">
+                        <option value="">— Sin sesión asociada —</option>
+                    </select>
+                    <small class="text-muted">Al asociar la sesión, queda Cancelada: no se cobra al estudiante ni se paga dos veces al docente.</small>
                 </div>
                 <div class="col-md-5 d-none" id="bloqueExterno">
                     <label class="form-label">Cliente externo</label>
@@ -169,6 +174,21 @@ function toggleTipo() {
     var t = document.getElementById('tipoCliente').value;
     document.getElementById('bloqueEstudiante').classList.toggle('d-none', t !== 'estudiante');
     document.getElementById('bloqueExterno').classList.toggle('d-none', t !== 'externo');
+}
+function cargarSesionesEstudiante() {
+    var eid = document.getElementById('selEstudiante').value;
+    var sel = document.getElementById('selSesion');
+    sel.innerHTML = '<option value="">— Sin sesión asociada —</option>';
+    if (!eid) return;
+    fetch('/api/estudiante/' + eid + '/sesiones').then(r => r.json()).then(function(lista) {
+        (lista || []).forEach(function(s) {
+            var opt = document.createElement('option');
+            opt.value = s.id;
+            opt.textContent = s.fecha + ' · ' + (s.asignatura || s.tema_terapia || s.tipo_sesion || 'Sesión')
+                + ' · $' + Number(s.valor_total || 0).toFixed(2);
+            sel.appendChild(opt);
+        });
+    });
 }
 function toggleDocente() {
     var on = document.getElementById('pagarDocente').checked;
