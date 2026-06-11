@@ -987,19 +987,24 @@ def toggle_sesion(id):
 
             # Valor que paga el estudiante
             if sd.get('cobro_por_sesion') or tipo_sesion in ['terapia', 'ambos']:
-                valor_total_sesion = precio_hora  # tarifa por sesión
+                # Tarifa POR SESIÓN: usa el valor ya registrado en la sesión
+                # (puede haberse pactado distinto en el editor); si no hay,
+                # cae a precio_hora (donde el Módulo 1 guarda la tarifa)
+                valor_total_sesion = round(sd.get('valor_total') or precio_hora, 2)
             else:
                 valor_total_sesion = round(horas * precio_hora, 2)
 
-            # Pago al docente:
-            #  - Clases realizadas: $7/h
-            #  - Clases Cancelado-Pagado: valor FIJO de $5 por clase (no por hora)
-            #  - Terapia: 40.18% del valor (igual en realizado/cancelado-pagado)
+            # Pago al docente (regla única, igual que pago_sesion_docente):
+            #  - Clases realizadas: $7/h · Cancelado-Pagado: $5 FIJO por clase
+            #  - Terapia: 40.18% del valor
+            #  - Ambos realizado: docencia (horas × $7) + psicología (% del valor)
             if tipo_sesion in ['clase', 'preuniversitario']:
                 if estado == 'Cancelado-Pagado':
                     pago_docente = PAGO_DOCENCIA_CANCELADO
                 else:
                     pago_docente = round(horas * PAGO_DOCENCIA_POR_HORA, 2)
+            elif tipo_sesion == 'ambos' and estado == 'Realizado':
+                pago_docente = round(horas * PAGO_DOCENCIA_POR_HORA, 2) + round(valor_total_sesion * PORCENTAJE_PSICOLOGIA, 2)
             else:
                 pago_docente = round(valor_total_sesion * PORCENTAJE_PSICOLOGIA, 2)
 
