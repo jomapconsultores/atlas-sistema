@@ -3377,14 +3377,14 @@ def revertir_movimiento(id):
 
 @app.route('/api/movimiento/<int:id>/eliminar', methods=['POST'])
 @login_required
-@socio_admin_required
+@admin_required  # eliminar movimientos: SOLO administrador
 def eliminar_movimiento(id):
     supabase.table('movimientos_cuenta').delete().eq('id', id).execute()
     return jsonify({'success': True})
 
 @app.route('/movimientos-cuenta/lote/<lote_id>/eliminar', methods=['POST'])
 @login_required
-@socio_admin_required
+@admin_required  # eliminar el estado de cuenta completo: SOLO administrador
 def eliminar_lote_movimientos(lote_id):
     supabase.table('movimientos_cuenta').delete().eq('lote_id', lote_id).execute()
     flash('🗑️ Estado de cuenta eliminado', 'info')
