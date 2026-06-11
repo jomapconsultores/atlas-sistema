@@ -5,7 +5,7 @@
 {% set meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'] %}
 <div class="page-hero">
     <h2>🏦 Movimientos en cuenta</h2>
-    <p>Sube el estado de cuenta del banco (Excel o PDF) y se cruza con los pagos y gastos registrados. Lo que no cuadra se resalta para revisar o justificar.</p>
+    <p>Sube el estado de cuenta del banco (Excel o PDF) y se cruza automáticamente con los pagos registrados confirmando monto, fecha y nombre del padre/madre. Lo que no cuadra queda <strong>por cuadrar</strong> y puedes enlazarlo manualmente. Solo se contemplan movimientos desde <strong>mayo</strong>; los repetidos se ignoran.</p>
 </div>
 
 {% if not openpyxl_ok or not pdf_ok %}
@@ -53,6 +53,11 @@
     <button class="btn btn-secondary">Filtrar</button>
 </form>
 
+<form method="post" action="/movimientos-cuenta/conciliar-todo" class="mb-3">
+    <button class="btn btn-success">🔄 Cruzar pendientes con pagos</button>
+    <small class="text-muted ms-2">Vuelve a intentar el cruce automático (monto + fecha + nombre del padre/madre) de todos los movimientos por cuadrar.</small>
+</form>
+
 <div class="row g-3 mb-4">
     <div class="col-md-4">
         <div class="stat-card" style="background: linear-gradient(135deg,#065f46,#059669);">
@@ -94,7 +99,7 @@
                                 <br><small class="text-muted">📝 {{ m.justificacion }}</small>
                             {% endif %}
                             {% if est=='conciliado' and m.conciliado_tipo %}
-                                <br><small class="text-success">✓ {{ m.conciliado_tipo }} #{{ m.conciliado_id }}</small>
+                                <br><small class="text-success">✓ {{ m.conciliado_tipo }} #{{ m.conciliado_id }}{% if m.conciliado_detalle %} · {{ m.conciliado_detalle }}{% endif %}</small>
                             {% endif %}
                         </td>
                         <td><small>{{ m.referencia or '' }}</small></td>
@@ -104,12 +109,12 @@
                         <td class="text-center">
                             {% if est=='conciliado' %}<span class="badge bg-success">Conciliado</span>
                             {% elif est=='justificado' %}<span class="badge bg-info">Justificado</span>
-                            {% else %}<span class="badge bg-warning">⚠️ Pendiente</span>{% endif %}
+                            {% else %}<span class="badge bg-warning">⚠️ Por cuadrar</span>{% endif %}
                         </td>
                         <td class="text-end">
                             {% if est=='pendiente' %}
                                 <button class="btn btn-sm btn-outline-info" onclick="justificar({{ m.id }})">Justificar</button>
-                                <button class="btn btn-sm btn-outline-success" onclick="conciliar({{ m.id }})">Conciliar</button>
+                                <button class="btn btn-sm btn-outline-success" onclick="abrirEnlace({{ m.id }})">🔗 Enlazar</button>
                             {% else %}
                                 <button class="btn btn-sm btn-outline-secondary" onclick="revertir({{ m.id }})">↺</button>
                             {% endif %}
@@ -125,6 +130,37 @@
     </div>
 </div>
 
+<!-- Modal: enlazar movimiento con un pago/gasto -->
+<div class="modal fade" id="modalEnlace" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-success">
+                <h5 class="modal-title">🔗 Enlazar movimiento</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="enlaceMov" class="alert alert-secondary py-2"></div>
+                <input type="text" id="enlaceBuscar" class="form-control mb-2" placeholder="Buscar por nombre, fecha o monto..." oninput="filtrarCandidatos()">
+                <div id="enlaceLista" class="list-group"></div>
+
+                <!-- Escoger estudiante y ver su historial (pago + asignatura) -->
+                <div id="enlaceEstudianteZona" style="display:none;">
+                    <hr>
+                    <label class="form-label fw-bold">🎓 ¿No aparece el pago? Escoge el estudiante y revisa su historial:</label>
+                    <select id="enlaceEstudiante" class="form-select mb-2" onchange="cargarHistorialEstudiante()">
+                        <option value="">— Elegir estudiante… —</option>
+                    </select>
+                    <div id="enlaceHistorial"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-success" id="enlaceConfirmar" onclick="confirmarEnlace()" disabled>Enlazar seleccionado</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 function justificar(id) {
     var txt = prompt('Justificación de este movimiento (por qué no cuadra o cómo se explica):');
@@ -134,14 +170,119 @@ function justificar(id) {
         body: JSON.stringify({justificacion: txt})
     }).then(r => r.json()).then(d => { if (d.success) location.reload(); else alert('Error: ' + (d.error||'')); });
 }
-function conciliar(id) {
-    var tipo = prompt('Tipo de registro con el que cuadra: pago / gasto / cita / devolucion', 'pago');
-    if (!tipo) return;
-    var ref = prompt('ID del registro (opcional, déjalo vacío si no lo tienes):', '');
-    fetch('/api/movimiento/' + id + '/conciliar', {
+
+var enlaceMovId = null, enlaceSel = null, enlaceCandidatos = [], estudiantesCargados = false;
+
+function abrirEnlace(id) {
+    enlaceMovId = id; enlaceSel = null;
+    document.getElementById('enlaceConfirmar').disabled = true;
+    document.getElementById('enlaceBuscar').value = '';
+    document.getElementById('enlaceLista').innerHTML = '<div class="text-center text-muted py-3">Buscando candidatos...</div>';
+    document.getElementById('enlaceEstudianteZona').style.display = 'none';
+    document.getElementById('enlaceHistorial').innerHTML = '';
+    document.getElementById('enlaceEstudiante').value = '';
+    new bootstrap.Modal(document.getElementById('modalEnlace')).show();
+    fetch('/api/movimiento/' + id + '/candidatos').then(r => r.json()).then(d => {
+        if (!d.success) { alert('Error: ' + (d.error||'')); return; }
+        var m = d.movimiento;
+        document.getElementById('enlaceMov').innerHTML =
+            '<strong>' + m.fecha + '</strong> · $' + Number(m.monto).toFixed(2) + ' · ' + (m.descripcion || 'Sin descripción');
+        enlaceCandidatos = d.candidatos;
+        pintarCandidatos(enlaceCandidatos);
+        if (Number(m.monto) > 0) {  // créditos: se pueden enlazar a pagos de estudiantes
+            document.getElementById('enlaceEstudianteZona').style.display = '';
+            cargarEstudiantes();
+        }
+    });
+}
+
+function cargarEstudiantes() {
+    if (estudiantesCargados) return;
+    fetch('/api/estudiantes/lista').then(r => r.json()).then(d => {
+        if (!d.success) return;
+        var sel = document.getElementById('enlaceEstudiante');
+        d.estudiantes.forEach(function(e) {
+            var op = document.createElement('option');
+            op.value = e.id; op.textContent = e.nombre;
+            sel.appendChild(op);
+        });
+        estudiantesCargados = true;
+    });
+}
+
+function cargarHistorialEstudiante() {
+    var id = document.getElementById('enlaceEstudiante').value;
+    var cont = document.getElementById('enlaceHistorial');
+    if (!id) { cont.innerHTML = ''; return; }
+    cont.innerHTML = '<div class="text-center text-muted py-2">Cargando historial...</div>';
+    fetch('/api/estudiante/' + id + '/historial-pagos').then(r => r.json()).then(d => {
+        if (!d.success) { cont.innerHTML = '<div class="text-danger">' + (d.error||'Error') + '</div>'; return; }
+        var head = '<div class="alert alert-light py-2 mb-2"><strong>' + d.estudiante.nombre + '</strong>' +
+            (d.estudiante.padres ? ' · 👤 ' + d.estudiante.padres : '') +
+            (d.asignaturas.length ? '<br><small class="text-muted">📘 Asignaturas: ' + d.asignaturas.join(', ') + '</small>' : '') + '</div>';
+        if (!d.pagos.length) {
+            cont.innerHTML = head + '<div class="text-center text-muted py-2">Este estudiante no tiene pagos registrados. Registra primero el pago o usa "Justificar".</div>';
+            return;
+        }
+        cont.innerHTML = head + '<div class="list-group">' + d.pagos.map(function(p) {
+            var asig = (p.asignaturas || []).map(function(a) { return '<span class="badge bg-light text-dark border ms-1">📘 ' + a + '</span>'; }).join('');
+            var usado = p.ya_usado ? '<span class="badge bg-secondary ms-1">ya enlazado</span>' : '';
+            return '<button type="button" class="list-group-item list-group-item-action' + (p.ya_usado ? ' disabled' : '') + '" ' +
+                'onclick="seleccionarCandidato(this, \'pago\', ' + p.id + ')">' +
+                '<div class="d-flex justify-content-between"><div>' +
+                '<strong>' + p.fecha + '</strong> · ' + (p.tipo_pago || 'pago') +
+                (p.concepto ? '<br><small class="text-muted">' + p.concepto + '</small>' : '') +
+                '</div><div class="text-end"><strong>$' + Number(p.monto || 0).toFixed(2) + '</strong></div></div>' +
+                '<div>' + asig + usado + '</div></button>';
+        }).join('') + '</div>';
+    });
+}
+
+function pintarCandidatos(lista) {
+    var cont = document.getElementById('enlaceLista');
+    if (!lista.length) {
+        cont.innerHTML = '<div class="text-center text-muted py-3">No hay pagos/gastos cercanos para enlazar. Registra primero el pago o usa "Justificar".</div>';
+        return;
+    }
+    cont.innerHTML = lista.map(function(c) {
+        var badges = '';
+        if (c.monto_igual) badges += '<span class="badge bg-success ms-1">monto exacto</span>';
+        if (c.nombre_coincide) badges += '<span class="badge bg-primary ms-1">nombre coincide</span>';
+        if (c.dias !== null && c.dias <= 5) badges += '<span class="badge bg-info ms-1">' + (c.dias === 0 ? 'mismo día' : '±' + c.dias + ' días') + '</span>';
+        if (c.ya_usado) badges += '<span class="badge bg-secondary ms-1">ya enlazado</span>';
+        return '<button type="button" class="list-group-item list-group-item-action' + (c.ya_usado ? ' disabled' : '') + '" ' +
+            'onclick="seleccionarCandidato(this, \'' + c.tipo + '\', ' + c.id + ')">' +
+            '<div class="d-flex justify-content-between"><div>' +
+            '<strong>' + c.detalle + '</strong>' + (c.extra ? '<br><small class="text-muted">👤 ' + c.extra + '</small>' : '') +
+            '</div><div class="text-end"><strong>$' + Number(c.monto || 0).toFixed(2) + '</strong><br><small>' + c.fecha + '</small></div></div>' +
+            '<div>' + badges + '</div></button>';
+    }).join('');
+}
+
+function filtrarCandidatos() {
+    var q = document.getElementById('enlaceBuscar').value.toLowerCase();
+    pintarCandidatos(enlaceCandidatos.filter(function(c) {
+        return !q || (c.detalle + ' ' + (c.extra||'') + ' ' + c.fecha + ' ' + c.monto).toLowerCase().indexOf(q) >= 0;
+    }));
+    enlaceSel = null;
+    document.getElementById('enlaceConfirmar').disabled = true;
+}
+
+function seleccionarCandidato(el, tipo, id) {
+    document.querySelectorAll('#modalEnlace .list-group-item.active').forEach(function(x) { x.classList.remove('active'); });
+    el.classList.add('active');
+    enlaceSel = {tipo: tipo, ref_id: id};
+    document.getElementById('enlaceConfirmar').disabled = false;
+}
+
+function confirmarEnlace() {
+    if (!enlaceMovId || !enlaceSel) return;
+    fetch('/api/movimiento/' + enlaceMovId + '/conciliar', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({tipo: tipo.trim(), ref_id: ref})
-    }).then(r => r.json()).then(d => { if (d.success) location.reload(); else alert('Error'); });
+        body: JSON.stringify(enlaceSel)
+    }).then(r => r.json()).then(d => {
+        if (d.success) location.reload(); else alert('Error: ' + (d.error || 'No se pudo enlazar'));
+    });
 }
 function revertir(id) {
     fetch('/api/movimiento/' + id + '/pendiente', {method: 'POST'})
