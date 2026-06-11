@@ -3382,8 +3382,17 @@ def _dias_entre(fecha_a, fecha_b):
 
 def _pagos_ya_conciliados():
     """IDs de pagos ya enlazados a algún movimiento (no se enlazan dos veces)."""
-    r = supabase.table('movimientos_cuenta').select('conciliado_id').eq('conciliado_tipo', 'pago').eq('estado_conciliacion', 'conciliado').execute()
-    return {x['conciliado_id'] for x in (r.data or []) if x.get('conciliado_id')}
+    filas = _fetch_all(supabase.table('movimientos_cuenta').select('conciliado_id')
+                       .eq('conciliado_tipo', 'pago').eq('estado_conciliacion', 'conciliado'))
+    return {x['conciliado_id'] for x in filas if x.get('conciliado_id')}
+
+def _gastos_ya_conciliados():
+    """IDs de gastos ya enlazados a algún movimiento. Igual que con los pagos:
+    un gasto respalda UN solo débito; sin esto, dos débitos del mismo monto en
+    subidas distintas se conciliaban contra el mismo gasto."""
+    filas = _fetch_all(supabase.table('movimientos_cuenta').select('conciliado_id')
+                       .eq('conciliado_tipo', 'gasto').eq('estado_conciliacion', 'conciliado'))
+    return {x['conciliado_id'] for x in filas if x.get('conciliado_id')}
 
 def _cargar_pagos_rango(fmin, fmax):
     """Pagos del rango con el nombre del estudiante y de sus padres (para cruzar con la descripción)."""
@@ -3429,7 +3438,8 @@ def conciliar_nuevos(movs):
     usados_pago = _pagos_ya_conciliados()
     pagos = [p for p in pagos if p['id'] not in usados_pago]
     gastos = supabase.table('gastos').select('id,monto,fecha').gte('fecha', fmin).lte('fecha', fmax).execute().data or []
-    usados_gasto = set()
+    usados_gasto = _gastos_ya_conciliados()
+    gastos = [g for g in gastos if g['id'] not in usados_gasto]
     conciliados = 0
     for m in movs:
         tipo, ref_id = None, None
@@ -3504,15 +3514,21 @@ def _ordenar_por_cadena_saldos(lista):
 @login_required
 @socio_admin_required
 def movimientos_cuenta():
-    mes = request.args.get('mes', '')
-    anio = request.args.get('anio', '')
+    # Validación de parámetros (un ?mes=14 o ?anio=abc daba error 500)
+    try:
+        mes = int(request.args.get('mes')) if request.args.get('mes') else ''
+        anio = int(request.args.get('anio')) if request.args.get('anio') else ''
+        if mes != '' and not 1 <= mes <= 12:
+            mes = ''
+    except (TypeError, ValueError):
+        mes, anio = '', ''
     fecha_desde = request.args.get('fecha_desde', '')
     fecha_hasta = request.args.get('fecha_hasta', '')
     # Orden: fecha desc; dentro de la misma fecha, id asc (el banco lista de lo
     # más reciente a lo más antiguo, así que el id menor es el más nuevo)
     q = supabase.table('movimientos_cuenta').select('*').gte('fecha', FECHA_MIN_ESTADO_CUENTA) \
         .order('fecha', desc=True).order('id', desc=False)
-    movs_all = q.execute().data or []
+    movs_all = _fetch_all(q)
     movs = movs_all
     # Período: por fechas específicas (prioridad) o por mes/año
     _MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio',
@@ -3528,9 +3544,15 @@ def movimientos_cuenta():
     else:
         periodo_label = 'Todo el período cargado'
     total_conc = sum(m.get('monto', 0) or 0 for m in movs if m.get('estado_conciliacion') == 'conciliado')
-    total_pend = sum(m.get('monto', 0) or 0 for m in movs if m.get('estado_conciliacion') == 'pendiente')
     total_just = sum(m.get('monto', 0) or 0 for m in movs if m.get('estado_conciliacion') == 'justificado')
     n_pend = sum(1 for m in movs if m.get('estado_conciliacion') == 'pendiente')
+    # Pendiente DESGLOSADO por signo: un crédito de +$100 y un débito de
+    # −$100 pendientes no deben mostrarse como "$0 por cuadrar"
+    pend_cred = sum(m.get('monto', 0) or 0 for m in movs
+                    if m.get('estado_conciliacion') == 'pendiente' and (m.get('monto') or 0) > 0)
+    pend_deb = sum(abs(m.get('monto', 0) or 0) for m in movs
+                   if m.get('estado_conciliacion') == 'pendiente' and (m.get('monto') or 0) < 0)
+    total_pend = pend_cred + pend_deb  # magnitud total por cuadrar (sin netear)
     total_cred = sum(m.get('monto', 0) or 0 for m in movs if (m.get('monto') or 0) > 0)
     total_deb = sum(abs(m.get('monto', 0) or 0) for m in movs if (m.get('monto') or 0) < 0)
 
@@ -3604,6 +3626,7 @@ def movimientos_cuenta():
             m['conciliado_detalle'] = f"{est_nombres.get(p.get('estudiante_id'), 'Estudiante')} · {str(p.get('fecha_pago') or '')[:10]}"
     return render_template('movimientos_cuenta.html',
                            movimientos=movs, total_conciliado=total_conc, total_pendiente=total_pend,
+                           pend_creditos=pend_cred, pend_debitos=pend_deb,
                            n_pendientes=n_pend, mes=mes, anio=anio,
                            fecha_desde=fecha_desde, fecha_hasta=fecha_hasta, periodo_label=periodo_label,
                            total_creditos=total_cred, total_debitos=total_deb,
@@ -3740,6 +3763,7 @@ def candidatos_movimiento(id):
             })
     else:
         gastos = supabase.table('gastos').select('*').gte('fecha', fmin).lte('fecha', fmax).execute().data or []
+        usados_g = _gastos_ya_conciliados()
         for g in gastos:
             dias = _dias_entre(g.get('fecha'), mov['fecha'])
             candidatos.append({
@@ -3747,7 +3771,7 @@ def candidatos_movimiento(id):
                 'monto': g.get('monto'), 'detalle': g.get('concepto') or 'Gasto',
                 'extra': g.get('persona') or g.get('categoria') or '',
                 'monto_igual': abs((g.get('monto') or 0) - objetivo) < 0.01,
-                'dias': dias, 'nombre_coincide': False, 'ya_usado': False
+                'dias': dias, 'nombre_coincide': False, 'ya_usado': g['id'] in usados_g
             })
     # Mejores primero: monto igual, luego nombre, luego cercanía de fecha
     candidatos.sort(key=lambda c: (not c['monto_igual'], not c['nombre_coincide'], c['dias'] if c['dias'] is not None else 999))
@@ -3826,13 +3850,20 @@ def justificar_movimiento(id):
 @socio_admin_required
 def conciliar_manual(id):
     data = request.get_json() or {}
-    tipo = data.get('tipo')      # 'pago' | 'gasto' | 'cita' | 'devolucion'
-    ref_id = data.get('ref_id')
-    if tipo == 'pago' and ref_id and int(ref_id) in _pagos_ya_conciliados():
+    tipo = data.get('tipo')
+    if tipo not in ('pago', 'gasto', 'cita', 'devolucion'):
+        return jsonify({'success': False, 'error': 'Tipo de registro no válido'})
+    try:
+        ref_id = int(data.get('ref_id')) if data.get('ref_id') else None
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': 'ID de registro no válido'})
+    if tipo == 'pago' and ref_id and ref_id in _pagos_ya_conciliados():
         return jsonify({'success': False, 'error': 'Ese pago ya está enlazado a otro movimiento.'})
+    if tipo == 'gasto' and ref_id and ref_id in _gastos_ya_conciliados():
+        return jsonify({'success': False, 'error': 'Ese gasto ya está enlazado a otro movimiento.'})
     supabase.table('movimientos_cuenta').update({
         'estado_conciliacion': 'conciliado', 'conciliado_tipo': tipo,
-        'conciliado_id': int(ref_id) if ref_id else None
+        'conciliado_id': ref_id
     }).eq('id', id).execute()
     return jsonify({'success': True})
 

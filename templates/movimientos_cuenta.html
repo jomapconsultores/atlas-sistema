@@ -101,7 +101,12 @@
                         </td>
                         <td class="fw-bold" style="color:#059669;">${{ "%.2f"|format(total_conciliado or 0) }}</td>
                         <td class="fw-bold" style="color:#0ea5e9;">${{ "%.2f"|format(total_justificado or 0) }}</td>
-                        <td class="fw-bold" style="color:#d97706;">${{ "%.2f"|format(total_pendiente or 0) }}</td>
+                        <td class="fw-bold" style="color:#d97706;">
+                            ${{ "%.2f"|format(total_pendiente or 0) }}
+                            {% if (pend_creditos or 0) > 0 and (pend_debitos or 0) > 0 %}
+                            <br><small class="fw-normal">(+${{ "%.2f"|format(pend_creditos) }} créditos / −${{ "%.2f"|format(pend_debitos) }} débitos)</small>
+                            {% endif %}
+                        </td>
                         <td class="fw-bold">{{ n_pendientes }}</td>
                     </tr>
                 </tbody>
@@ -118,7 +123,7 @@
             </div>
             {% endif %}
         {% endif %}
-        <small class="text-muted d-block px-3 py-2">El saldo inicial es el saldo del banco antes del primer movimiento del período elegido; el saldo final, el del último movimiento. Se ajustan al filtro de mes o de fechas específicas. Conciliado + Justificado + Pendiente = total de movimientos del período.</small>
+        <small class="text-muted d-block px-3 py-2">El saldo inicial es el saldo del banco antes del primer movimiento del período elegido; el saldo final, el del último movimiento. Se ajustan al filtro de mes o de fechas específicas. El pendiente suma créditos y débitos por cuadrar (en magnitud, sin netearse entre sí).</small>
     </div>
 </div>
 
