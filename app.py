@@ -310,7 +310,7 @@ def crear_devolucion(tipo_cliente, fecha, monto, tipo_pago, motivo, pagar_docent
         cita = supabase.table('citas_psicologia').select('*').eq('id', cita_id).execute()
         if cita.data:
             c = cita.data[0]
-            nuevo_pagado = max(0, (c.get('monto_pagado', 0) or 0) - monto)
+            nuevo_pagado = round(max(0, (c.get('monto_pagado', 0) or 0) - monto), 2)
             if nuevo_pagado <= 0:
                 nuevo_estado = 'agendada'
             elif nuevo_pagado >= (c.get('valor', 0) or 0):
@@ -1306,8 +1306,11 @@ def modulo5():
     # Solo los anticipos de los docentes presentes en el listado (respeta el
     # filtro por profesor); únicamente estado 'aprobado' (los 'descontado' ya
     # se restaron en un pago anterior y no vuelven a descontarse)
-    total_anticipos = sum(anticipos_por_docente.get(p, 0) for p in consolidado)
-    total_neto = total_adeudado - total_anticipos
+    total_anticipos = round(sum(anticipos_por_docente.get(p, 0) for p in consolidado), 2)
+    total_adeudado = round(total_adeudado, 2)
+    total_docencia = round(total_docencia, 2)
+    total_psicologia = round(total_psicologia, 2)
+    total_neto = round(total_adeudado - total_anticipos, 2)
     
     return render_template('modulo5.html',
                          pagos=pagos,
@@ -1494,12 +1497,13 @@ def mis_anticipos():
         if s.get('fecha', '')[:7] == f"{anio_actual}-{mes_actual:02d}":
             # Regla única de pago (incluye 'ambos' dividido: clases + % terapia)
             total_pagar_mes += sum(pago_sesion_docente(s))
-    anticipos_aprobados = sum(a.get('monto', 0) for a in (anticipos.data or []) if a.get('estado') == 'aprobado')
+    anticipos_aprobados = round(sum(a.get('monto', 0) or 0 for a in (anticipos.data or []) if a.get('estado') == 'aprobado'), 2)
+    total_pagar_mes = round(total_pagar_mes, 2)
     return render_template('mis_anticipos.html',
                          anticipos=anticipos.data or [],
                          total_pagar_mes=total_pagar_mes,
                          anticipos_aprobados=anticipos_aprobados,
-                         disponible=total_pagar_mes - anticipos_aprobados)
+                         disponible=round(total_pagar_mes - anticipos_aprobados, 2))
 
 @app.route('/solicitar-anticipo', methods=['POST'])
 @login_required
@@ -1626,13 +1630,13 @@ def crear_cliente_externo():
 @socio_admin_required
 def crear_cita_psicologia():
     data = request.get_json()
-    valor_cita = data.get('valor', 0)
-    comision_centro = valor_cita * COMISION_CLIENTE_EXTERNO
+    valor_cita = round(float(data.get('valor', 0) or 0), 2)
+    comision_centro = round(valor_cita * COMISION_CLIENTE_EXTERNO, 2)
     result = supabase.table('citas_psicologia').insert({
         'cliente_id': data['cliente_id'], 'psicologo_id': data['psicologo_id'],
         'psicologo_nombre': data['psicologo_nombre'], 'fecha': data['fecha'],
         'hora_inicio': data['hora_inicio'], 'hora_fin': data['hora_fin'], 'valor': valor_cita,
-        'monto_pagado': 0, 'comision_centro': comision_centro, 'pago_psicologo': valor_cita - comision_centro,
+        'monto_pagado': 0, 'comision_centro': comision_centro, 'pago_psicologo': round(valor_cita - comision_centro, 2),
         'estado': 'agendada', 'usuario_id': current_user.id
     }).execute()
     return jsonify({'success': True, 'id': result.data[0]['id'] if result.data else None})
@@ -1646,8 +1650,8 @@ def registrar_pago_cita(id):
     if not cita.data:
         return jsonify({'success': False, 'error': 'Cita no encontrada'})
     c = cita.data[0]
-    nuevo_pagado = (c.get('monto_pagado', 0) or 0) + data.get('monto', 0)
-    nuevo_estado = 'pagada' if nuevo_pagado >= c.get('valor', 0) else 'parcial'
+    nuevo_pagado = round((c.get('monto_pagado', 0) or 0) + float(data.get('monto', 0) or 0), 2)
+    nuevo_estado = 'pagada' if nuevo_pagado >= (c.get('valor', 0) or 0) else 'parcial'
     supabase.table('citas_psicologia').update({'monto_pagado': nuevo_pagado, 'estado': nuevo_estado}).eq('id', id).execute()
     return jsonify({'success': True, 'nuevo_estado': nuevo_estado, 'pagado': nuevo_pagado})
 
@@ -1690,13 +1694,13 @@ def crear_mi_cita():
     if current_user.rol != 'psicologo':
         return jsonify({'success': False, 'error': 'Solo psicólogos pueden agendar citas'})
     data = request.get_json()
-    valor_cita = data.get('valor', 0)
-    comision_centro = valor_cita * COMISION_CLIENTE_EXTERNO
+    valor_cita = round(float(data.get('valor', 0) or 0), 2)
+    comision_centro = round(valor_cita * COMISION_CLIENTE_EXTERNO, 2)
     result = supabase.table('citas_psicologia').insert({
         'cliente_id': data['cliente_id'], 'psicologo_id': current_user.id,
         'psicologo_nombre': current_user.nombre, 'fecha': data['fecha'],
         'hora_inicio': data['hora_inicio'], 'hora_fin': data['hora_fin'], 'valor': valor_cita,
-        'monto_pagado': 0, 'comision_centro': comision_centro, 'pago_psicologo': valor_cita - comision_centro,
+        'monto_pagado': 0, 'comision_centro': comision_centro, 'pago_psicologo': round(valor_cita - comision_centro, 2),
         'estado': 'agendada', 'usuario_id': current_user.id
     }).execute()
     return jsonify({'success': True, 'id': result.data[0]['id'] if result.data else None})
@@ -1768,10 +1772,11 @@ def reportes():
         
         cobrar_total_est = cobrar_clases_est + cobrar_psico_est
         if cobrar_total_est > 0:
+            # Reparto proporcional con suma EXACTA: la parte de clases se
+            # redondea y psicología absorbe el resto (clases + psico = pagado)
             proporcion_clases = cobrar_clases_est / cobrar_total_est
-            proporcion_psico = cobrar_psico_est / cobrar_total_est
             ejecutado_clases_est = round(pagado * proporcion_clases, 2)
-            ejecutado_psico_est = round(pagado * proporcion_psico, 2)
+            ejecutado_psico_est = round(pagado - ejecutado_clases_est, 2)
         else:
             ejecutado_clases_est = 0
             ejecutado_psico_est = 0
@@ -1838,8 +1843,8 @@ def reportes():
                 'saldo': cobrar - pagado,
             })
     
-    total_devoluciones = devoluciones_periodo(anio, mes)
-    total_ingresos = total_facturado - total_devoluciones
+    total_devoluciones = round(devoluciones_periodo(anio, mes), 2)
+    total_ingresos = round(total_facturado - total_devoluciones, 2)
 
     try:
         gastos_mes = supabase.table('gastos').select('*').eq('mes_periodo', mes).eq('anio_periodo', anio).execute()
@@ -1850,8 +1855,12 @@ def reportes():
         cat = g.get('categoria', 'Sin categoría')
         gastos_por_categoria[cat] = gastos_por_categoria.get(cat, 0) + (g.get('monto', 0) or 0)
     
-    balance = total_ingresos - total_gastos - total_pago_docentes
-    
+    total_gastos = round(total_gastos, 2)
+    total_pago_docentes = round(total_pago_docentes, 2)
+    total_docencia = round(total_docencia, 2)
+    total_psicologia = round(total_psicologia, 2)
+    balance = round(total_ingresos - total_gastos - total_pago_docentes, 2)
+
     correcciones = supabase.table('correcciones_pagos').select('*').order('fecha_correccion', desc=True).limit(30).execute()
     observaciones = supabase.table('sesiones').select('*, estudiantes(apellidos, nombres)').not_.is_('observaciones', 'null').order('fecha', desc=True).limit(30).execute()
     _, ultimo_dia = monthrange(anio, mes)
@@ -1895,7 +1904,7 @@ def reportes():
     for asig in asignaturas_valores:
         asignaturas_valores[asig]['estudiantes'] = len(asignaturas_estudiantes.get(asig, set()))
     
-    total_pago_docentes_general = total_docencia + total_psicologia
+    total_pago_docentes_general = round(total_docencia + total_psicologia, 2)
 
     return render_template('reportes.html',
                          datos_estudiantes=datos_estudiantes, total_estudiantes=len(datos_estudiantes),
@@ -2152,17 +2161,27 @@ def liquidacion():
         pago_por_docente[prof] = pago_por_docente.get(prof, 0) + pago
         total_pago_docentes += pago
 
-    balance = saldo_cuenta - total_gastos - total_pago_docentes
-    parte_por_socio = balance / 3
+    total_gastos = round(total_gastos, 2)
+    total_ingresos = round(total_ingresos, 2)
+    total_ingresos_bruto = round(total_ingresos_bruto, 2)
+    total_pago_docentes = round(total_pago_docentes, 2)
+    balance = round(saldo_cuenta - total_gastos - total_pago_docentes, 2)
+
+    # Reparto en partes iguales según la lista de SOCIOS, con centavos exactos:
+    # las primeras partes se redondean y la ÚLTIMA absorbe la diferencia, de
+    # modo que la suma de las alícuotas sea exactamente el balance.
+    n_socios = len(SOCIOS) or 1
+    parte_base = round(balance / n_socios, 2)
 
     distribucion_socios = []
-    for socio in SOCIOS:
-        pago_docente_socio = pago_por_docente.get(socio, 0)
-        reembolso_socio = reembolsos_por_socio.get(socio, 0)
-        neto = parte_por_socio + pago_docente_socio + reembolso_socio
+    for i, socio in enumerate(SOCIOS):
+        parte_socio = parte_base if i < n_socios - 1 else round(balance - parte_base * (n_socios - 1), 2)
+        pago_docente_socio = round(pago_por_docente.get(socio, 0), 2)
+        reembolso_socio = round(reembolsos_por_socio.get(socio, 0), 2)
+        neto = round(parte_socio + pago_docente_socio + reembolso_socio, 2)
         distribucion_socios.append({
             'nombre': socio,
-            'parte_alicuota': parte_por_socio,
+            'parte_alicuota': parte_socio,
             'pago_docente': pago_docente_socio,
             'reembolso': reembolso_socio,
             'neto': neto
@@ -2485,7 +2504,8 @@ def mi_reporte():
                 'estado': s['estado']
             })
     
-    neto_a_recibir = total_a_pagar - anticipos_aprobados
+    total_a_pagar = round(total_a_pagar, 2)
+    neto_a_recibir = round(total_a_pagar - anticipos_aprobados, 2)
     return render_template('mi_reporte.html',
                          datos=datos, total_horas=total_horas,
                          total_a_pagar=total_a_pagar,
@@ -2746,7 +2766,7 @@ def devoluciones():
                 cita = supabase.table('citas_psicologia').select('*').eq('id', cita_id).execute()
                 if cita.data:
                     c = cita.data[0]
-                    nuevo_pagado = max(0, (c.get('monto_pagado', 0) or 0) - monto)
+                    nuevo_pagado = round(max(0, (c.get('monto_pagado', 0) or 0) - monto), 2)
                     if nuevo_pagado <= 0:
                         nuevo_estado = 'agendada'
                     elif nuevo_pagado >= (c.get('valor', 0) or 0):
@@ -2822,7 +2842,7 @@ def eliminar_devolucion(id):
         cita = supabase.table('citas_psicologia').select('*').eq('id', d['cita_id']).execute()
         if cita.data:
             c = cita.data[0]
-            nuevo_pagado = (c.get('monto_pagado', 0) or 0) + (d.get('monto', 0) or 0)
+            nuevo_pagado = round((c.get('monto_pagado', 0) or 0) + (d.get('monto', 0) or 0), 2)
             nuevo_estado = 'pagada' if nuevo_pagado >= (c.get('valor', 0) or 0) else 'parcial'
             supabase.table('citas_psicologia').update({
                 'monto_pagado': nuevo_pagado, 'estado': nuevo_estado
