@@ -1,5 +1,5 @@
 import os
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash
 from config import Config
@@ -26,6 +26,19 @@ try:
     import pdfplumber
 except Exception:
     pdfplumber = None
+# Passkeys (huella / Face ID). Opcional para no romper el arranque local.
+try:
+    from webauthn import (generate_registration_options, options_to_json,
+                          verify_registration_response, generate_authentication_options,
+                          verify_authentication_response)
+    from webauthn.helpers import base64url_to_bytes, bytes_to_base64url
+    from webauthn.helpers.structs import (AuthenticatorSelectionCriteria,
+                                          UserVerificationRequirement,
+                                          PublicKeyCredentialDescriptor,
+                                          ResidentKeyRequirement)
+    WEBAUTHN_OK = True
+except Exception:
+    WEBAUTHN_OK = False
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -1161,8 +1174,12 @@ def modulo3():
     if request.method == 'POST':
         accion = request.form.get('accion', 'pagar')
         if accion == 'pagar':
+            monto_pago = float(request.form['monto'])
+            if monto_pago <= 0:
+                flash('❌ El monto del pago debe ser mayor a 0', 'error')
+                return redirect(url_for('modulo3'))
             supabase.table('pagos').insert({
-                'fecha_pago': request.form['fecha_pago'], 'monto': float(request.form['monto']),
+                'fecha_pago': request.form['fecha_pago'], 'monto': monto_pago,
                 'tipo_pago': request.form.get('tipo_pago', 'efectivo'),
                 'concepto': request.form.get('concepto', ''),
                 'estudiante_id': int(request.form['estudiante_id']), 'usuario_id': int(current_user.id)
@@ -1173,6 +1190,9 @@ def modulo3():
             nuevo_monto = float(request.form['nuevo_monto'])
             cambiado_por = request.form.get('cambiado_por', current_user.nombre)
             motivo = request.form['motivo']
+            # Monto REAL antes de la corrección (auditoría: antes se guardaba 0)
+            prev = supabase.table('pagos').select('monto').eq('id', pago_id).execute()
+            monto_anterior = (prev.data[0].get('monto') if prev.data else 0) or 0
             updates = {'monto': nuevo_monto}
             if request.form.get('fecha_pago'):
                 updates['fecha_pago'] = request.form['fecha_pago']
@@ -1181,12 +1201,24 @@ def modulo3():
             updates['concepto'] = request.form.get('concepto', '')
             supabase.table('pagos').update(updates).eq('id', pago_id).execute()
             supabase.table('correcciones_pagos').insert({
-                'pago_id': pago_id, 'monto_anterior': 0, 'monto_nuevo': nuevo_monto,
+                'pago_id': pago_id, 'monto_anterior': monto_anterior, 'monto_nuevo': nuevo_monto,
                 'cambiado_por': cambiado_por, 'motivo': motivo
             }).execute()
             flash('✅ Pago editado correctamente', 'success')
         elif accion == 'eliminar_pago':
             pago_id = int(request.form['pago_id'])
+            # Deja rastro de la eliminación en el historial de correcciones
+            prev = supabase.table('pagos').select('monto,estudiante_id,fecha_pago').eq('id', pago_id).execute()
+            if prev.data:
+                p0 = prev.data[0]
+                try:
+                    supabase.table('correcciones_pagos').insert({
+                        'pago_id': pago_id, 'monto_anterior': p0.get('monto') or 0, 'monto_nuevo': 0,
+                        'cambiado_por': current_user.nombre,
+                        'motivo': f"PAGO ELIMINADO (estudiante {p0.get('estudiante_id')}, fecha {p0.get('fecha_pago')})"
+                    }).execute()
+                except Exception:
+                    pass
             supabase.table('pagos').delete().eq('id', pago_id).execute()
             flash('🗑️ Pago eliminado', 'info')
         elif accion == 'editar_sesion':
