@@ -1,6 +1,7 @@
 import os
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+from werkzeug.security import generate_password_hash
 from config import Config
 from models import check_password, Usuario
 from supabase_client import supabase
@@ -33,6 +34,40 @@ app.secret_key = Config.SECRET_KEY
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
+
+
+# ── Endurecimiento: cabeceras de seguridad en todas las respuestas ──
+@app.after_request
+def _security_headers(resp):
+    resp.headers['X-Content-Type-Options'] = 'nosniff'
+    resp.headers['X-Frame-Options'] = 'DENY'
+    resp.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    resp.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    resp.headers['Permissions-Policy'] = 'geolocation=(), microphone=(), camera=()'
+    return resp
+
+
+# ── Endurecimiento: límite de intentos de login por IP (anti fuerza bruta) ──
+_INTENTOS_LOGIN = {}
+LOGIN_MAX_INTENTOS = 8
+LOGIN_VENTANA_SEG = 300  # 8 intentos fallidos cada 5 minutos
+
+
+def _ip_cliente():
+    xff = request.headers.get('X-Forwarded-For', '')
+    return (xff.split(',')[0].strip() if xff else request.remote_addr) or 'desconocida'
+
+
+def _login_bloqueado(ip):
+    import time
+    ahora = time.time()
+    _INTENTOS_LOGIN[ip] = [t for t in _INTENTOS_LOGIN.get(ip, []) if ahora - t < LOGIN_VENTANA_SEG]
+    return len(_INTENTOS_LOGIN[ip]) >= LOGIN_MAX_INTENTOS
+
+
+def _registrar_intento_fallido(ip):
+    import time
+    _INTENTOS_LOGIN.setdefault(ip, []).append(time.time())
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -363,14 +398,20 @@ def registro():
             email = request.form['email']
             nombre = request.form['nombre']
             rol = request.form['rol']
+            # Los roles privilegiados solo los asigna el administrador
+            if rol in ('admin', 'socio'):
+                rol = 'profesor'
             password = request.form['password']
+            if len(password) < 8:
+                flash('❌ La contraseña debe tener al menos 8 caracteres', 'error')
+                return redirect(url_for('registro'))
             existente = supabase.table('usuarios').select('*').eq('email', email).execute()
             if existente.data:
                 flash('❌ Este email ya está registrado', 'error')
                 return redirect(url_for('registro'))
             result = supabase.table('usuarios').insert({
                 'nombre': nombre, 'email': email,
-                'password_hash': password, 'rol': rol, 'activo': False
+                'password_hash': generate_password_hash(password), 'rol': rol, 'activo': False
             }).execute()
             if result.data:
                 flash('✅ Solicitud enviada. Espera aprobación del administrador.', 'success')
@@ -383,10 +424,15 @@ def registro():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
+        ip = _ip_cliente()
+        if _login_bloqueado(ip):
+            flash('⛔ Demasiados intentos fallidos. Espera 5 minutos e inténtalo de nuevo.', 'error')
+            return render_template('login.html')
         result = supabase.table('usuarios').select('*').eq('email', request.form['email']).execute()
         if result.data and result.data[0].get('activo') and check_password(result.data[0]['password_hash'], request.form['password']):
             login_user(Usuario.get_by_id(result.data[0]['id']))
             return redirect(url_for('dashboard'))
+        _registrar_intento_fallido(ip)
         flash('❌ Credenciales incorrectas o cuenta pendiente de aprobación', 'error')
     return render_template('login.html')
 
@@ -2405,14 +2451,15 @@ def gestion_usuarios():
         elif accion == 'crear':
             supabase.table('usuarios').insert({
                 'nombre': request.form['nombre'], 'email': request.form['email'],
-                'password_hash': request.form['password'], 'rol': request.form['rol'], 'activo': True
+                'password_hash': generate_password_hash(request.form['password']),
+                'rol': request.form['rol'], 'activo': True
             }).execute()
             flash('✅ Usuario creado', 'success')
         elif accion == 'editar':
             edit_id = request.form.get('edit_id')
             updates = {'nombre': request.form['nombre'], 'email': request.form['email'], 'rol': request.form['rol']}
             if request.form.get('password'):
-                updates['password_hash'] = request.form['password']
+                updates['password_hash'] = generate_password_hash(request.form['password'])
             supabase.table('usuarios').update(updates).eq('id', int(edit_id)).execute()
             flash('✅ Usuario actualizado', 'success')
         return redirect(url_for('gestion_usuarios'))
@@ -2520,7 +2567,7 @@ def editar_perfil():
     if request.method == 'POST':
         updates = {'nombre': request.form['nombre'], 'email': request.form['email']}
         if request.form.get('password'):
-            updates['password_hash'] = request.form['password']
+            updates['password_hash'] = generate_password_hash(request.form['password'])
         supabase.table('usuarios').update(updates).eq('id', current_user.id).execute()
         if current_user.rol in ['profesor', 'psicologo']:
             supabase.table('sesiones').update({'profesor_terapeuta': request.form['nombre']}).eq('profesor_terapeuta', current_user.nombre).execute()

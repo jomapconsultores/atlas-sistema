@@ -35,9 +35,10 @@ class Usuario:
         return str(self.id)
 
 def check_password(password_hash, password):
-    if password_hash == password:
-        return True
+    """Verifica SOLO contra hash seguro (werkzeug/pbkdf2). La comparación con
+    texto plano se eliminó: todas las contraseñas almacenadas fueron migradas
+    a hash y las nuevas se guardan hasheadas."""
     try:
-        return check_password_hash(password_hash, password)
-    except:
+        return check_password_hash(password_hash or '', password or '')
+    except Exception:
         return False
