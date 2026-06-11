@@ -1434,10 +1434,10 @@ def modulo3():
 
     # LOTE: sesiones, pagos y devoluciones de TODOS los estudiantes en 3
     # consultas, agrupadas en memoria (antes: 3 consultas por CADA estudiante)
-    ses_rows_m3 = supabase.table('sesiones').select('*').in_('estado', ['Realizado', 'Cancelado-Pagado']).execute().data or []
-    pagos_rows_m3 = supabase.table('pagos').select('*').order('fecha_pago', desc=True).execute().data or []
+    ses_rows_m3 = _fetch_all(supabase.table('sesiones').select('*').in_('estado', ['Realizado', 'Cancelado-Pagado']))
+    pagos_rows_m3 = _fetch_all(supabase.table('pagos').select('*').order('fecha_pago', desc=True))
     try:
-        dev_rows_m3 = supabase.table('devoluciones').select('estudiante_id,monto').execute().data or []
+        dev_rows_m3 = _fetch_all(supabase.table('devoluciones').select('estudiante_id,monto'))
     except Exception:
         dev_rows_m3 = []
     ses_por_est_m3 = {}
@@ -1522,9 +1522,8 @@ def modulo5():
     if fecha_hasta:
         query = query.lte('fecha', fecha_hasta)
     
-    sesiones = query.order('fecha', desc=True).execute()
-    sesiones_data = sesiones.data or []
-    
+    sesiones_data = _fetch_all(query.order('fecha', desc=True))
+
     if filtro_profesor and filtro_profesor != '' and current_user.rol in ['admin', 'socio']:
         sesiones_filtradas = []
         for s in sesiones_data:
@@ -1798,19 +1797,24 @@ def mis_anticipos():
     if current_user.rol not in ['profesor', 'psicologo', 'admin', 'socio']:
         flash('❌ Acceso restringido', 'error')
         return redirect(url_for('dashboard'))
-    anticipos = supabase.table('anticipos_solicitudes').select('*').eq('usuario_id', current_user.id).order('fecha_solicitud', desc=True).execute()
+    anticipos_data = _fetch_all(supabase.table('anticipos_solicitudes').select('*').eq('usuario_id', current_user.id).order('fecha_solicitud', desc=True))
     mes_actual = date.today().month
     anio_actual = date.today().year
-    sesiones = supabase.table('sesiones').select('*').in_('estado', ['Realizado', 'Cancelado-Pagado']).eq('profesor_terapeuta', current_user.nombre).execute()
+    # Filtra el mes en la consulta (antes traía toda la historia sin orden y la
+    # filtraba en Python: con >1000 filas el mes actual podía quedar truncado)
+    _, _ud = monthrange(anio_actual, mes_actual)
+    sesiones_data = _fetch_all(supabase.table('sesiones').select('*').in_('estado', ['Realizado', 'Cancelado-Pagado'])
+                               .eq('profesor_terapeuta', current_user.nombre)
+                               .gte('fecha', f"{anio_actual}-{mes_actual:02d}-01")
+                               .lte('fecha', f"{anio_actual}-{mes_actual:02d}-{_ud:02d}"))
     total_pagar_mes = 0
-    for s in dedup_sesiones_docente(sesiones.data or []):
-        if s.get('fecha', '')[:7] == f"{anio_actual}-{mes_actual:02d}":
-            # Regla única de pago (incluye 'ambos' dividido: clases + % terapia)
-            total_pagar_mes += sum(pago_sesion_docente(s))
-    anticipos_aprobados = round(sum(a.get('monto', 0) or 0 for a in (anticipos.data or []) if a.get('estado') == 'aprobado'), 2)
+    for s in dedup_sesiones_docente(sesiones_data):
+        # Regla única de pago (incluye 'ambos' dividido: clases + % terapia)
+        total_pagar_mes += sum(pago_sesion_docente(s))
+    anticipos_aprobados = round(sum(a.get('monto', 0) or 0 for a in anticipos_data if a.get('estado') == 'aprobado'), 2)
     total_pagar_mes = round(total_pagar_mes, 2)
     return render_template('mis_anticipos.html',
-                         anticipos=anticipos.data or [],
+                         anticipos=anticipos_data,
                          total_pagar_mes=total_pagar_mes,
                          anticipos_aprobados=anticipos_aprobados,
                          disponible=round(total_pagar_mes - anticipos_aprobados, 2))
@@ -2053,10 +2057,10 @@ def reportes():
     # en memoria por estudiante (antes: 2 consultas a la BD por CADA estudiante)
     _, dia_fin_mes = monthrange(anio, mes)
     rango_ini, rango_fin = f"{anio}-{mes:02d}-01", f"{anio}-{mes:02d}-{dia_fin_mes}"
-    ses_mes_rows = supabase.table('sesiones').select('*').in_('estado', ['Realizado', 'Cancelado-Pagado']) \
-        .gte('fecha', rango_ini).lte('fecha', rango_fin).execute().data or []
-    pagos_mes_rows = supabase.table('pagos').select('*') \
-        .gte('fecha_pago', rango_ini).lte('fecha_pago', rango_fin).execute().data or []
+    ses_mes_rows = _fetch_all(supabase.table('sesiones').select('*').in_('estado', ['Realizado', 'Cancelado-Pagado'])
+        .gte('fecha', rango_ini).lte('fecha', rango_fin))
+    pagos_mes_rows = _fetch_all(supabase.table('pagos').select('*')
+        .gte('fecha_pago', rango_ini).lte('fecha_pago', rango_fin))
     ses_por_est = {}
     for s in ses_mes_rows:
         ses_por_est.setdefault(s.get('estudiante_id'), []).append(s)
@@ -2324,15 +2328,15 @@ def gestion_gastos():
     
     # Obtener pagos a docentes del mes
     _, ultimo_dia = monthrange(anio, mes)
-    sesiones_mes = supabase.table('sesiones').select('*').in_('estado', ['Realizado', 'Cancelado-Pagado']).gte('fecha', f"{anio}-{mes:02d}-01").lte('fecha', f"{anio}-{mes:02d}-{ultimo_dia}").execute()
-    
+    sesiones_mes = _fetch_all(supabase.table('sesiones').select('*').in_('estado', ['Realizado', 'Cancelado-Pagado']).gte('fecha', f"{anio}-{mes:02d}-01").lte('fecha', f"{anio}-{mes:02d}-{ultimo_dia}"))
+
     pagos_docentes_detalle = {}
     total_sesiones_docentes = 0
     total_docencia_mes = 0
     total_psicologia_mes = 0
     total_pago_docentes_mes = 0
     
-    for s in dedup_sesiones_docente(sesiones_mes.data or []):
+    for s in dedup_sesiones_docente(sesiones_mes):
         prof = s.get('profesor_terapeuta', 'Desconocido')
         if prof not in pagos_docentes_detalle:
             pagos_docentes_detalle[prof] = {'pago_docencia': 0, 'pago_psicologia': 0, 'total_pagar': 0, 'sesiones': 0, 'fecha_pago': None, 'pagado': False}
@@ -2479,17 +2483,17 @@ def liquidacion():
         gastos_reembolso_pend = type('obj', (object,), {'data': []})()
 
     # Ingresos del período (netos de devoluciones)
-    pagos_mes = supabase.table('pagos').select('*').gte('fecha_pago', f"{anio}-{mes:02d}-01").lte('fecha_pago', f"{anio}-{mes:02d}-{ultimo_dia}").execute()
-    total_ingresos_bruto = sum(p.get('monto', 0) or 0 for p in (pagos_mes.data or []))
+    pagos_mes = _fetch_all(supabase.table('pagos').select('*').gte('fecha_pago', f"{anio}-{mes:02d}-01").lte('fecha_pago', f"{anio}-{mes:02d}-{ultimo_dia}"))
+    total_ingresos_bruto = sum(p.get('monto', 0) or 0 for p in pagos_mes)
     total_devoluciones = devoluciones_periodo(anio, mes)
     total_ingresos = total_ingresos_bruto - total_devoluciones
 
     # Pago a docentes del período
-    sesiones_mes = supabase.table('sesiones').select('*').in_('estado', ['Realizado', 'Cancelado-Pagado']).gte('fecha', f"{anio}-{mes:02d}-01").lte('fecha', f"{anio}-{mes:02d}-{ultimo_dia}").execute()
+    sesiones_mes = _fetch_all(supabase.table('sesiones').select('*').in_('estado', ['Realizado', 'Cancelado-Pagado']).gte('fecha', f"{anio}-{mes:02d}-01").lte('fecha', f"{anio}-{mes:02d}-{ultimo_dia}"))
 
     pago_por_docente = {}
     total_pago_docentes = 0
-    for s in dedup_sesiones_docente(sesiones_mes.data or []):
+    for s in dedup_sesiones_docente(sesiones_mes):
         prof = s.get('profesor_terapeuta', 'Desconocido')
         # Regla única de pago (incluye 'ambos' dividido: clases + % terapia)
         pago = sum(pago_sesion_docente(s))
@@ -2784,11 +2788,11 @@ def mi_reporte():
     anticipos_aprobados = 0
     nombre_usuario = current_user.nombre.strip().lower()
     palabras_usuario = nombre_usuario.split()
-    sesiones = supabase.table('sesiones').select('*, estudiantes(*)').in_('estado', ['Realizado', 'Cancelado-Pagado']).order('fecha', desc=True).execute()
+    sesiones_data = _fetch_all(supabase.table('sesiones').select('*, estudiantes(*)').in_('estado', ['Realizado', 'Cancelado-Pagado']).order('fecha', desc=True))
 
     # Mapa grupo_id → lista de estudiantes para clases grupales
     _ests_por_grupo_mr = {}
-    for _s in (sesiones.data or []):
+    for _s in sesiones_data:
         _gid = str(_s.get('sesion_grupo_id') or '|'.join([
             str(_s.get('profesor_terapeuta','')), str(_s.get('fecha','')),
             str(_s.get('hora_inicio','')), str(_s.get('hora_fin',''))]))
@@ -2810,7 +2814,7 @@ def mi_reporte():
     # El pago al DOCENTE se deduplica (una vez por sesión física); el COBRO al
     # ESTUDIANTE no se deduplica (cada estudiante paga su propia fila), si no
     # desaparecían sus sesiones grupales y el total quedaba mal.
-    fuente = dedup_sesiones_docente(sesiones.data or []) if es_docente else (sesiones.data or [])
+    fuente = dedup_sesiones_docente(sesiones_data) if es_docente else sesiones_data
 
     for s in fuente:
         if mes != 0 and s.get('fecha', '') and s['fecha'][:7] != f"{anio}-{mes:02d}":
