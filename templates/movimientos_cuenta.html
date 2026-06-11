@@ -85,6 +85,7 @@
                         <th>Saldo final</th>
                         <th>Variación</th>
                         <th>Conciliado</th>
+                        <th>Justificado</th>
                         <th>Pendiente (sin cuadrar)</th>
                         <th>Movs. por revisar</th>
                     </tr>
@@ -99,13 +100,25 @@
                             {% if saldo_inicial is not none and saldo_final is not none %}${{ "%.2f"|format(saldo_final - saldo_inicial) }}{% else %}—{% endif %}
                         </td>
                         <td class="fw-bold" style="color:#059669;">${{ "%.2f"|format(total_conciliado or 0) }}</td>
+                        <td class="fw-bold" style="color:#0ea5e9;">${{ "%.2f"|format(total_justificado or 0) }}</td>
                         <td class="fw-bold" style="color:#d97706;">${{ "%.2f"|format(total_pendiente or 0) }}</td>
                         <td class="fw-bold">{{ n_pendientes }}</td>
                     </tr>
                 </tbody>
             </table>
         </div>
-        <small class="text-muted d-block px-3 py-2">El saldo inicial es el saldo del banco antes del primer movimiento del período elegido; el saldo final, el del último movimiento. Se ajustan al filtro de mes o de fechas específicas.</small>
+        {% if cuadre_ok is not none %}
+            {% if cuadre_ok %}
+            <div class="alert alert-success py-2 px-3 m-2 mb-0">
+                ✔ <strong>Cuadre verificado:</strong> saldo inicial (${{ "%.2f"|format(saldo_inicial) }}) + créditos (${{ "%.2f"|format(total_creditos or 0) }}) − débitos (${{ "%.2f"|format(total_debitos or 0) }}) = saldo final (${{ "%.2f"|format(saldo_final) }}).
+            </div>
+            {% else %}
+            <div class="alert alert-danger py-2 px-3 m-2 mb-0">
+                ⚠ <strong>El período NO cuadra:</strong> inicial + créditos − débitos = ${{ "%.2f"|format((saldo_inicial or 0) + (total_creditos or 0) - (total_debitos or 0)) }}, pero el saldo final del banco es ${{ "%.2f"|format(saldo_final) }}. Probablemente faltan movimientos: vuelve a subir el estado de cuenta completo del período.
+            </div>
+            {% endif %}
+        {% endif %}
+        <small class="text-muted d-block px-3 py-2">El saldo inicial es el saldo del banco antes del primer movimiento del período elegido; el saldo final, el del último movimiento. Se ajustan al filtro de mes o de fechas específicas. Conciliado + Justificado + Pendiente = total de movimientos del período.</small>
     </div>
 </div>
 

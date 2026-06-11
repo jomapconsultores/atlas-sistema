@@ -90,6 +90,8 @@
                                 <span class="badge bg-warning">⏳ Pendiente</span>
                             {% elif a.estado == 'aprobado' %}
                                 <span class="badge bg-success">✅ Aprobado</span>
+                            {% elif a.estado == 'descontado' %}
+                                <span class="badge bg-secondary">💸 Descontado</span>
                             {% else %}
                                 <span class="badge bg-danger">❌ Rechazado</span>
                             {% endif %}
@@ -98,6 +100,8 @@
                             {% if a.estado == 'aprobado' %}
                                 Aprobado por: {{ a.aprobado_por }}<br>
                                 <small>{{ a.fecha_aprobacion }}</small>
+                            {% elif a.estado == 'descontado' %}
+                                <small class="text-muted">Ya restado de un pago{% if a.fecha_descuento %} · {{ a.fecha_descuento }}{% endif %}</small>
                             {% elif a.estado == 'rechazado' %}
                                 <small class="text-danger">{{ a.motivo_rechazo[:50] }}</small>
                             {% else %}

@@ -180,6 +180,29 @@ def dedup_sesiones_docente(sesiones):
             result.append(s)
     return result
 
+
+def pago_sesion_docente(s):
+    """Desglose del pago al docente por una sesión: (pago_docencia, pago_psicologia).
+    Regla única para Módulo 5, Reportes, Liquidación y Mi Reporte:
+    - clase/preuniversitario: horas × PAGO_DOCENCIA_POR_HORA
+    - terapia: valor_total × PORCENTAJE_PSICOLOGIA
+    - ambos: DIVIDIDO — la parte de clases es clases (horas × tarifa) y la
+      parte de terapia es terapia (% del valor) [regla de gerencia 06/2026]
+    - Cancelado-Pagado: el valor fijo registrado (valor_pagar_docente),
+      a docencia si es clase y a psicología si es terapia/ambos."""
+    tipo = s.get('tipo_sesion', 'clase')
+    horas = s.get('horas', 0) or 0
+    valor = s.get('valor_total', 0) or 0
+    if s.get('estado') == 'Cancelado-Pagado':
+        fijo = round(s.get('valor_pagar_docente', 0) or 0, 2)
+        return (fijo, 0) if tipo in ('clase', 'preuniversitario') else (0, fijo)
+    if tipo in ('clase', 'preuniversitario'):
+        return (round(horas * PAGO_DOCENCIA_POR_HORA, 2), 0)
+    if tipo == 'ambos':
+        return (round(horas * PAGO_DOCENCIA_POR_HORA, 2),
+                round(valor * PORCENTAJE_PSICOLOGIA, 2))
+    return (0, round(valor * PORCENTAJE_PSICOLOGIA, 2))
+
 # ========== CARGAR COSTOS DESDE SUPABASE ==========
 def cargar_costos():
     try:
@@ -235,10 +258,12 @@ def devoluciones_por_estudiante(estudiante_id):
 
 def crear_devolucion(tipo_cliente, fecha, monto, tipo_pago, motivo, pagar_docente,
                      docente_nombre, monto_docente, registrado_por,
-                     estudiante_id=None, cliente_id=None, cita_id=None):
+                     estudiante_id=None, cliente_id=None, cita_id=None, sesion_id=None):
     """Registra una devolución: (1) si hay que pagar igual al docente crea un gasto
     automático vinculado, (2) inserta la devolución (resta ingresos), (3) si es cliente
-    externo con cita, descuenta lo devuelto de la cita. Devuelve el id de la devolución.
+    externo con cita, descuenta lo devuelto de la cita, (4) si se indica la sesión
+    devuelta, se marca 'Cancelado' para que no se cobre al estudiante NI se duplique
+    el pago al docente (el gasto del paso 1 es su único pago). Devuelve el id.
     Reutilizado por el módulo de Devoluciones y por el Módulo 3 (pago de estudiantes)."""
     try:
         fecha_obj = datetime.strptime(fecha, '%Y-%m-%d')
@@ -295,6 +320,13 @@ def crear_devolucion(tipo_cliente, fecha, monto, tipo_pago, motivo, pagar_docent
             supabase.table('citas_psicologia').update({
                 'monto_pagado': nuevo_pagado, 'estado': nuevo_estado
             }).eq('id', cita_id).execute()
+
+    # 4) Sesión asociada: queda 'Cancelado' (no se cobra, no paga docente por sesión)
+    if sesion_id:
+        try:
+            supabase.table('sesiones').update({'estado': 'Cancelado'}).eq('id', int(sesion_id)).execute()
+        except Exception:
+            pass
     return res.data[0]['id'] if res.data else None
 
 # ========== RUTAS PRINCIPALES ==========
@@ -1067,6 +1099,7 @@ def modulo3():
         elif accion == 'devolucion':
             try:
                 pagar_docente = request.form.get('pagar_docente') == 'true'
+                sesion_dev = (request.form.get('sesion_id') or '').strip()
                 crear_devolucion(
                     tipo_cliente='estudiante',
                     estudiante_id=int(request.form['estudiante_id']),
@@ -1077,9 +1110,15 @@ def modulo3():
                     pagar_docente=pagar_docente,
                     docente_nombre=(request.form.get('docente_nombre', '') or '').strip() or None,
                     monto_docente=request.form.get('monto_docente', 0),
-                    registrado_por=current_user.nombre
+                    registrado_por=current_user.nombre,
+                    sesion_id=int(sesion_dev) if sesion_dev.isdigit() else None
                 )
-                flash('✅ Devolución registrada (baja el ingreso del estudiante)', 'success')
+                msg = '✅ Devolución registrada (baja el ingreso del estudiante)'
+                if sesion_dev.isdigit():
+                    msg += ' · la sesión asociada quedó Cancelada (no se cobra ni duplica el pago al docente)'
+                elif pagar_docente:
+                    msg += ' · ⚠ no asociaste la sesión: verifica que no quede en Realizado, o el pago al docente se contaría dos veces'
+                flash(msg, 'success')
             except Exception as e:
                 flash(f'❌ Error al registrar la devolución: {e}', 'error')
         return redirect(url_for('modulo3'))
@@ -1118,10 +1157,19 @@ def modulo3():
             datos.append({'id': e['id'], 'nombre': nombre_completo, 'cobrar': cobrar,
                           'pagado': pagado, 'devuelto': devuelto, 'pagado_neto': pagado_neto,
                           'saldo': cobrar - pagado_neto, 'pagos': pag.data or [], 'sesiones': ses.data or []})
+    # Sesiones por estudiante para el modal de devolución (asociar y cancelar)
+    sesiones_devolucion = {
+        str(d['id']): [
+            {'id': s['id'], 'fecha': s.get('fecha') or '',
+             'detalle': s.get('asignatura') or s.get('tema_terapia') or s.get('tipo_sesion') or 'Sesión',
+             'estado': s.get('estado') or '', 'valor': s.get('valor_total') or 0}
+            for s in d.get('sesiones', [])
+        ] for d in datos
+    }
     return render_template('modulo3.html', estudiantes=datos, today=date.today(),
                            sesiones_dia=sesiones_dia, filtro_fecha=filtro_fecha,
                            filtro_estudiante=filtro_estudiante, filtro_docente=filtro_docente,
-                           all_profesores=all_profesores)
+                           all_profesores=all_profesores, sesiones_devolucion=sesiones_devolucion)
 
 # ========== MÓDULO 4: CALENDARIO PÚBLICO ==========
 @app.route('/modulo4')
@@ -1220,32 +1268,12 @@ def modulo5():
         profesores_lista.add(profesor)
         estado = s.get('estado', '')
         
-        if estado == 'Cancelado-Pagado':
-            valor_pagar_docente = s.get('valor_pagar_docente', 0) or 0
-            valor_atlas = s.get('valor_atlas', 0) or 0
-            
-            if tipo in ['clase', 'preuniversitario']:
-                pago_docente = valor_pagar_docente
-                pago_psicologia = 0
-                total_docencia += pago_docente
-            else:
-                pago_docente = 0
-                pago_psicologia = valor_pagar_docente
-                total_psicologia += pago_psicologia
-            
-            total_pagar = pago_docente + pago_psicologia
-        else:
-            if tipo in ['clase', 'preuniversitario']:
-                pago_docente = horas * PAGO_DOCENCIA_POR_HORA
-                pago_psicologia = 0
-                total_docencia += pago_docente
-            else:
-                pago_docente = 0
-                pago_psicologia = valor * PORCENTAJE_PSICOLOGIA
-                total_psicologia += pago_psicologia
-            
-            total_pagar = pago_docente + pago_psicologia
-        
+        # Regla única de pago (incluye 'ambos' dividido: clases + % terapia)
+        pago_docente, pago_psicologia = pago_sesion_docente(s)
+        total_docencia += pago_docente
+        total_psicologia += pago_psicologia
+        total_pagar = pago_docente + pago_psicologia
+
         total_adeudado += total_pagar
         
         est = s.get('estudiantes', {})
@@ -1275,7 +1303,10 @@ def modulo5():
         consolidado[profesor]['total_pagar'] += total_pagar
         consolidado[profesor]['anticipo'] = anticipos_por_docente.get(profesor, 0)
     
-    total_anticipos = sum(anticipos_por_docente.values())
+    # Solo los anticipos de los docentes presentes en el listado (respeta el
+    # filtro por profesor); únicamente estado 'aprobado' (los 'descontado' ya
+    # se restaron en un pago anterior y no vuelven a descontarse)
+    total_anticipos = sum(anticipos_por_docente.get(p, 0) for p in consolidado)
     total_neto = total_adeudado - total_anticipos
     
     return render_template('modulo5.html',
@@ -1461,13 +1492,8 @@ def mis_anticipos():
     total_pagar_mes = 0
     for s in dedup_sesiones_docente(sesiones.data or []):
         if s.get('fecha', '')[:7] == f"{anio_actual}-{mes_actual:02d}":
-            tipo = s.get('tipo_sesion', 'clase')
-            if s.get('estado') == 'Cancelado-Pagado':
-                total_pagar_mes += s.get('valor_pagar_docente', 0) or 0
-            elif tipo in ['clase', 'preuniversitario']:
-                total_pagar_mes += (s.get('horas', 0) or 0) * PAGO_DOCENCIA_POR_HORA
-            else:
-                total_pagar_mes += (s.get('valor_total', 0) or 0) * PORCENTAJE_PSICOLOGIA
+            # Regla única de pago (incluye 'ambos' dividido: clases + % terapia)
+            total_pagar_mes += sum(pago_sesion_docente(s))
     anticipos_aprobados = sum(a.get('monto', 0) for a in (anticipos.data or []) if a.get('estado') == 'aprobado')
     return render_template('mis_anticipos.html',
                          anticipos=anticipos.data or [],
@@ -1513,6 +1539,22 @@ def aprobar_anticipo(id):
 def rechazar_anticipo(id):
     supabase.table('anticipos_solicitudes').update({'estado': 'rechazado', 'motivo_rechazo': request.form.get('motivo_rechazo', 'Sin motivo')}).eq('id', id).execute()
     flash('❌ Anticipo rechazado', 'info')
+    return redirect(url_for('gestion_anticipos'))
+
+@app.route('/descontar-anticipo/<int:id>', methods=['POST'])
+@login_required
+@socio_admin_required
+def descontar_anticipo(id):
+    """Marca un anticipo aprobado como DESCONTADO (ya restado de un pago al
+    docente). Así deja de restarse en los períodos siguientes: el Módulo 5 y
+    'Mis anticipos' solo descuentan los anticipos en estado 'aprobado'."""
+    datos = {'estado': 'descontado', 'fecha_descuento': date.today().isoformat()}
+    try:
+        supabase.table('anticipos_solicitudes').update(datos).eq('id', id).eq('estado', 'aprobado').execute()
+    except Exception:
+        datos.pop('fecha_descuento', None)  # por si la columna no existe aún
+        supabase.table('anticipos_solicitudes').update(datos).eq('id', id).eq('estado', 'aprobado').execute()
+    flash('💸 Anticipo marcado como descontado: ya no se restará en los próximos períodos', 'success')
     return redirect(url_for('gestion_anticipos'))
 
 # ========== CONTACTOS (solicitudes desde la landing) ==========
@@ -1752,26 +1794,12 @@ def reportes():
             horas = s.get('horas', 0) or 0
 
             if s['estado'] == 'Cancelado-Pagado':
-                pago_docente = s.get('valor_pagar_docente', 0) or 0
-                valor_atlas = s.get('valor_atlas', 0) or 0
-                total_atlas += valor_atlas
-                if tipo in ['terapia', 'ambos']:
-                    pago_psicologia = pago_docente
-                    pago_docente = 0
-                    total_psicologia += pago_psicologia
-                else:
-                    pago_psicologia = 0
-                    total_docencia += pago_docente
-            else:
-                if tipo in ['clase', 'preuniversitario']:
-                    pago_docente = horas * 7
-                    pago_psicologia = 0
-                    total_docencia += pago_docente
-                else:
-                    pago_docente = 0
-                    pago_psicologia = valor * PORCENTAJE_PSICOLOGIA
-                    total_psicologia += pago_psicologia
-            
+                total_atlas += s.get('valor_atlas', 0) or 0
+            # Regla única de pago (incluye 'ambos' dividido: clases + % terapia)
+            pago_docente, pago_psicologia = pago_sesion_docente(s)
+            total_docencia += pago_docente
+            total_psicologia += pago_psicologia
+
             total_pagar = pago_docente + pago_psicologia
             total_pago_docentes += total_pagar
             if prof not in pagos_por_docente:
@@ -2119,16 +2147,8 @@ def liquidacion():
     total_pago_docentes = 0
     for s in dedup_sesiones_docente(sesiones_mes.data or []):
         prof = s.get('profesor_terapeuta', 'Desconocido')
-        tipo = s.get('tipo_sesion', 'clase')
-        horas = s.get('horas', 0) or 0
-        valor = s.get('valor_total', 0) or 0
-        estado = s.get('estado', '')
-        if estado == 'Cancelado-Pagado':
-            pago = s.get('valor_pagar_docente', 0) or 0
-        elif tipo in ['clase', 'preuniversitario']:
-            pago = horas * PAGO_DOCENCIA_POR_HORA
-        else:
-            pago = valor * PORCENTAJE_PSICOLOGIA
+        # Regla única de pago (incluye 'ambos' dividido: clases + % terapia)
+        pago = sum(pago_sesion_docente(s))
         pago_por_docente[prof] = pago_por_docente.get(prof, 0) + pago
         total_pago_docentes += pago
 
@@ -2444,13 +2464,8 @@ def mi_reporte():
             valor = s.get('valor_total', 0) or 0
             tipo = s.get('tipo_sesion', 'clase')
             
-            if s.get('estado') == 'Cancelado-Pagado':
-                mi_pago = s.get('valor_pagar_docente', 0) or 0
-            elif tipo in ['clase', 'preuniversitario']:
-                mi_pago = horas * 7
-            else:
-                mi_pago = valor * PORCENTAJE_PSICOLOGIA
-                
+            # Regla única de pago (incluye 'ambos' dividido: clases + % terapia)
+            mi_pago = sum(pago_sesion_docente(s))
             total_a_pagar += mi_pago
             total_horas += horas
             _gid_mr = str(s.get('sesion_grupo_id') or '|'.join([
@@ -3176,6 +3191,7 @@ def movimientos_cuenta():
         periodo_label = 'Todo el período cargado'
     total_conc = sum(m.get('monto', 0) or 0 for m in movs if m.get('estado_conciliacion') == 'conciliado')
     total_pend = sum(m.get('monto', 0) or 0 for m in movs if m.get('estado_conciliacion') == 'pendiente')
+    total_just = sum(m.get('monto', 0) or 0 for m in movs if m.get('estado_conciliacion') == 'justificado')
     n_pend = sum(1 for m in movs if m.get('estado_conciliacion') == 'pendiente')
     total_cred = sum(m.get('monto', 0) or 0 for m in movs if (m.get('monto') or 0) > 0)
     total_deb = sum(abs(m.get('monto', 0) or 0) for m in movs if (m.get('monto') or 0) < 0)
@@ -3206,6 +3222,11 @@ def movimientos_cuenta():
             saldo_final = con_saldo[0].get('saldo')
             viejo = con_saldo[-1]
             saldo_inicial = round((viejo.get('saldo') or 0) - (viejo.get('monto') or 0), 2)
+
+    # Verificación del cuadre: saldo inicial + créditos − débitos = saldo final
+    cuadre_ok = None
+    if saldo_inicial is not None and saldo_final is not None:
+        cuadre_ok = abs((saldo_inicial + total_cred - total_deb) - saldo_final) < 0.02
 
     # Lotes subidos (estados de cuenta) — gestión solo para el administrador
     lotes_map = {}
@@ -3248,6 +3269,7 @@ def movimientos_cuenta():
                            n_pendientes=n_pend, mes=mes, anio=anio,
                            fecha_desde=fecha_desde, fecha_hasta=fecha_hasta, periodo_label=periodo_label,
                            total_creditos=total_cred, total_debitos=total_deb,
+                           total_justificado=total_just, cuadre_ok=cuadre_ok,
                            saldo_inicial=saldo_inicial, saldo_final=saldo_final, lotes=lotes,
                            openpyxl_ok=openpyxl is not None, pdf_ok=pdfplumber is not None,
                            today=date.today().isoformat())
