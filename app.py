@@ -2857,19 +2857,23 @@ def _norm_fecha(v):
     return None
 
 def hash_movimiento(m):
-    """md5 estable de los campos clave para deduplicar el estado de cuenta.
-    Incluye el SALDO: dos movimientos del mismo día con igual monto y
-    descripción (p.ej. dos transferencias idénticas) tienen saldo distinto,
-    así que ambos se registran en lugar de descartar el segundo como repetido."""
+    """md5 estable para deduplicar el estado de cuenta: fecha + monto + SALDO,
+    la 'posición' única del movimiento en la cuenta. La descripción NO se usa
+    cuando hay saldo, porque el banco la abrevia distinto entre exportaciones
+    ('TRANSFERENCIA DIRECTA...' vs 'TRANSF. DIRECTA...') y el mismo movimiento
+    se duplicaba; el saldo además distingue dos movimientos idénticos del
+    mismo día. Sin saldo (PDF) se usa la descripción como antes."""
     saldo = m.get('saldo')
-    base = '|'.join([
+    partes = [
         str(m.get('fecha') or ''),
         f"{float(m.get('monto') or 0):.2f}",
-        (m.get('descripcion') or '').strip().lower()[:80],
         (m.get('referencia') or '').strip().lower(),
-        f"{float(saldo):.2f}" if saldo is not None else ''
-    ])
-    return hashlib.md5(base.encode('utf-8')).hexdigest()
+    ]
+    if saldo is not None:
+        partes.append(f"{float(saldo):.2f}")
+    else:
+        partes.append((m.get('descripcion') or '').strip().lower()[:80])
+    return hashlib.md5('|'.join(partes).encode('utf-8')).hexdigest()
 
 # Palabras clave para mapear columnas del estado de cuenta
 _COL_KEYS = {
@@ -3109,31 +3113,38 @@ def conciliar_nuevos(movs):
 def _ordenar_por_cadena_saldos(lista):
     """Reordena los movimientos cronológicamente (más reciente primero) usando
     la cadena de saldos del banco: el saldo previo de cada movimiento
-    (saldo − monto) es el saldo del movimiento anterior. Si la cadena no se
-    puede reconstruir completa (saldos faltantes o huecos), devuelve la lista
-    tal cual (orden fecha desc / id)."""
+    (saldo − monto) es el saldo del movimiento anterior. Soporta saldos que se
+    repiten (la cuenta vuelve al mismo valor) recorriendo la cadena como un
+    camino euleriano. Si la cadena está incompleta (faltan movimientos o no
+    hay saldos), devuelve la lista tal cual (orden fecha desc / id)."""
+    from collections import Counter as _C, defaultdict as _dd
     con = [m for m in lista if m.get('saldo') is not None]
     if not con or len(con) != len(lista):
         return lista
-    por_previo = {}
-    for m in con:
-        k = round((m.get('saldo') or 0) - (m.get('monto') or 0), 2)
-        if k in por_previo:
-            return lista  # dos movimientos con el mismo saldo previo: ambiguo
-        por_previo[k] = m
-    saldos = {round(m.get('saldo') or 0, 2) for m in con}
-    inicios = [k for k in por_previo if k not in saldos]
+    saldos = _C(round(m.get('saldo') or 0, 2) for m in con)
+    previos = _C(round((m.get('saldo') or 0) - (m.get('monto') or 0), 2) for m in con)
+    inicios = list((previos - saldos).elements())
     if len(inicios) != 1:
         return lista
-    orden = []
-    s = inicios[0]
-    while s in por_previo:
-        m = por_previo.pop(s)
-        orden.append(m)
-        s = round(m.get('saldo') or 0, 2)
-    if por_previo:
-        return lista  # quedaron movimientos fuera de la cadena
-    return list(reversed(orden))
+    grafo = _dd(list)  # saldo previo → movimientos que parten de ese saldo
+    for m in con:
+        grafo[round((m.get('saldo') or 0) - (m.get('monto') or 0), 2)].append(m)
+    # Hierholzer: recorre todos los movimientos siguiendo la cadena de saldos;
+    # el camino queda armado del más reciente al más antiguo.
+    pila = [(inicios[0], None)]
+    camino = []
+    while pila:
+        nodo, mov = pila[-1]
+        if grafo[nodo]:
+            m = grafo[nodo].pop()
+            pila.append((round(m.get('saldo') or 0, 2), m))
+        else:
+            pila.pop()
+            if mov is not None:
+                camino.append(mov)
+    if len(camino) != len(con):
+        return lista  # cadena rota: faltan movimientos intermedios
+    return camino
 
 
 @app.route('/movimientos-cuenta')

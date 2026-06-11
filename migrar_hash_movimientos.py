@@ -9,14 +9,16 @@ from supabase_client import supabase
 
 def hash_movimiento(m):
     saldo = m.get('saldo')
-    base = '|'.join([
+    partes = [
         str(m.get('fecha') or ''),
         f"{float(m.get('monto') or 0):.2f}",
-        (m.get('descripcion') or '').strip().lower()[:80],
         (m.get('referencia') or '').strip().lower(),
-        f"{float(saldo):.2f}" if saldo is not None else ''
-    ])
-    return hashlib.md5(base.encode('utf-8')).hexdigest()
+    ]
+    if saldo is not None:
+        partes.append(f"{float(saldo):.2f}")
+    else:
+        partes.append((m.get('descripcion') or '').strip().lower()[:80])
+    return hashlib.md5('|'.join(partes).encode('utf-8')).hexdigest()
 
 
 def main():
