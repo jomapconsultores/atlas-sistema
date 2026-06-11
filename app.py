@@ -3106,6 +3106,36 @@ def conciliar_nuevos(movs):
             conciliados += 1
     return conciliados
 
+def _ordenar_por_cadena_saldos(lista):
+    """Reordena los movimientos cronológicamente (más reciente primero) usando
+    la cadena de saldos del banco: el saldo previo de cada movimiento
+    (saldo − monto) es el saldo del movimiento anterior. Si la cadena no se
+    puede reconstruir completa (saldos faltantes o huecos), devuelve la lista
+    tal cual (orden fecha desc / id)."""
+    con = [m for m in lista if m.get('saldo') is not None]
+    if not con or len(con) != len(lista):
+        return lista
+    por_previo = {}
+    for m in con:
+        k = round((m.get('saldo') or 0) - (m.get('monto') or 0), 2)
+        if k in por_previo:
+            return lista  # dos movimientos con el mismo saldo previo: ambiguo
+        por_previo[k] = m
+    saldos = {round(m.get('saldo') or 0, 2) for m in con}
+    inicios = [k for k in por_previo if k not in saldos]
+    if len(inicios) != 1:
+        return lista
+    orden = []
+    s = inicios[0]
+    while s in por_previo:
+        m = por_previo.pop(s)
+        orden.append(m)
+        s = round(m.get('saldo') or 0, 2)
+    if por_previo:
+        return lista  # quedaron movimientos fuera de la cadena
+    return list(reversed(orden))
+
+
 @app.route('/movimientos-cuenta')
 @login_required
 @socio_admin_required
@@ -3139,15 +3169,32 @@ def movimientos_cuenta():
     total_cred = sum(m.get('monto', 0) or 0 for m in movs if (m.get('monto') or 0) > 0)
     total_deb = sum(abs(m.get('monto', 0) or 0) for m in movs if (m.get('monto') or 0) < 0)
 
-    # Saldo inicial y final del período mostrado (saldo que reporta el banco):
-    # final = saldo del movimiento más reciente; inicial = saldo del más
-    # antiguo menos su monto (saldo antes de ese movimiento)
+    # Orden cronológico real: el id no sirve entre subidas distintas (una subida
+    # posterior inserta movimientos más nuevos con id mayor). La cadena de
+    # saldos del banco sí: el saldo previo de cada movimiento (saldo − monto)
+    # es el saldo del movimiento anterior.
+    movs = _ordenar_por_cadena_saldos(movs)
+
+    # Saldo inicial y final del período mostrado, por la cadena de saldos:
+    # final = el saldo que ningún otro movimiento usa como saldo previo;
+    # inicial = el saldo previo que no es saldo de ningún movimiento.
+    # Es independiente del orden de las filas y de los ids.
+    from collections import Counter as _Counter
     con_saldo = [m for m in movs if m.get('saldo') is not None]
-    saldo_final = con_saldo[0].get('saldo') if con_saldo else None
-    saldo_inicial = None
+    saldo_inicial = saldo_final = None
     if con_saldo:
-        viejo = con_saldo[-1]
-        saldo_inicial = round((viejo.get('saldo') or 0) - (viejo.get('monto') or 0), 2)
+        saldos = _Counter(round(m.get('saldo') or 0, 2) for m in con_saldo)
+        previos = _Counter(round((m.get('saldo') or 0) - (m.get('monto') or 0), 2) for m in con_saldo)
+        fines = list((saldos - previos).elements())
+        inicios = list((previos - saldos).elements())
+        if len(fines) == 1 and len(inicios) == 1:
+            saldo_final, saldo_inicial = fines[0], inicios[0]
+        else:
+            # Cadena incompleta (falta algún movimiento intermedio): se usa el
+            # más reciente / más antiguo del listado como aproximación
+            saldo_final = con_saldo[0].get('saldo')
+            viejo = con_saldo[-1]
+            saldo_inicial = round((viejo.get('saldo') or 0) - (viejo.get('monto') or 0), 2)
 
     # Lotes subidos (estados de cuenta) — gestión solo para el administrador
     lotes_map = {}
