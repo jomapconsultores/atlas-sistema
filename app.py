@@ -3107,17 +3107,32 @@ def conciliar_nuevos(movs):
 def movimientos_cuenta():
     mes = request.args.get('mes', '')
     anio = request.args.get('anio', '')
+    fecha_desde = request.args.get('fecha_desde', '')
+    fecha_hasta = request.args.get('fecha_hasta', '')
     # Orden: fecha desc; dentro de la misma fecha, id asc (el banco lista de lo
     # más reciente a lo más antiguo, así que el id menor es el más nuevo)
     q = supabase.table('movimientos_cuenta').select('*').gte('fecha', FECHA_MIN_ESTADO_CUENTA) \
         .order('fecha', desc=True).order('id', desc=False)
     movs_all = q.execute().data or []
     movs = movs_all
-    if mes and anio:
+    # Período: por fechas específicas (prioridad) o por mes/año
+    _MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio',
+              'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+    if fecha_desde or fecha_hasta:
+        movs = [m for m in movs
+                if (not fecha_desde or (m.get('fecha', '') or '') >= fecha_desde)
+                and (not fecha_hasta or (m.get('fecha', '') or '') <= fecha_hasta)]
+        periodo_label = f"{fecha_desde or 'inicio'} → {fecha_hasta or 'última fecha'}"
+    elif mes and anio:
         movs = [m for m in movs if (m.get('fecha', '') or '')[:7] == f"{int(anio)}-{int(mes):02d}"]
+        periodo_label = f"{_MESES[int(mes) - 1]} {anio}"
+    else:
+        periodo_label = 'Todo el período cargado'
     total_conc = sum(m.get('monto', 0) or 0 for m in movs if m.get('estado_conciliacion') == 'conciliado')
     total_pend = sum(m.get('monto', 0) or 0 for m in movs if m.get('estado_conciliacion') == 'pendiente')
     n_pend = sum(1 for m in movs if m.get('estado_conciliacion') == 'pendiente')
+    total_cred = sum(m.get('monto', 0) or 0 for m in movs if (m.get('monto') or 0) > 0)
+    total_deb = sum(abs(m.get('monto', 0) or 0) for m in movs if (m.get('monto') or 0) < 0)
 
     # Saldo inicial y final del período mostrado (saldo que reporta el banco):
     # final = saldo del movimiento más reciente; inicial = saldo del más
@@ -3168,6 +3183,8 @@ def movimientos_cuenta():
     return render_template('movimientos_cuenta.html',
                            movimientos=movs, total_conciliado=total_conc, total_pendiente=total_pend,
                            n_pendientes=n_pend, mes=mes, anio=anio,
+                           fecha_desde=fecha_desde, fecha_hasta=fecha_hasta, periodo_label=periodo_label,
+                           total_creditos=total_cred, total_debitos=total_deb,
                            saldo_inicial=saldo_inicial, saldo_final=saldo_final, lotes=lotes,
                            openpyxl_ok=openpyxl is not None, pdf_ok=pdfplumber is not None,
                            today=date.today().isoformat())

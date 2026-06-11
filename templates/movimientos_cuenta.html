@@ -37,7 +37,7 @@
     </div>
 </div>
 
-<!-- Filtro + resumen -->
+<!-- Filtro por mes o por fechas específicas -->
 <form method="get" class="d-flex gap-2 align-items-end mb-3 flex-wrap">
     <div>
         <label class="form-label">Mes</label>
@@ -50,7 +50,20 @@
         <label class="form-label">Año</label>
         <input type="number" name="anio" class="form-control" value="{{ anio }}" style="width:110px;" placeholder="{{ today[:4] }}">
     </div>
+    <div class="vr d-none d-md-block"></div>
+    <div>
+        <label class="form-label">…o desde fecha</label>
+        <input type="date" name="fecha_desde" class="form-control" value="{{ fecha_desde }}">
+    </div>
+    <div>
+        <label class="form-label">hasta</label>
+        <input type="date" name="fecha_hasta" class="form-control" value="{{ fecha_hasta }}">
+    </div>
     <button class="btn btn-secondary">Filtrar</button>
+    {% if mes or anio or fecha_desde or fecha_hasta %}
+    <a href="/movimientos-cuenta" class="btn btn-outline-secondary">✕ Quitar filtro</a>
+    {% endif %}
+    <small class="text-muted ms-1">Si indicas fechas específicas, tienen prioridad sobre mes/año.</small>
 </form>
 
 <form method="post" action="/movimientos-cuenta/conciliar-todo" class="mb-3">
@@ -58,33 +71,41 @@
     <small class="text-muted ms-2">Vuelve a intentar el cruce automático (monto + fecha + nombre del padre/madre) de todos los movimientos por cuadrar.</small>
 </form>
 
-<div class="row g-3 mb-4">
-    <div class="col-6 col-md">
-        <div class="stat-card" style="background: linear-gradient(135deg,#1e3a8a,#2563eb);">
-            <small>Saldo inicial {% if mes and anio %}del mes{% else %}del período{% endif %}</small>
-            <h3>{% if saldo_inicial is not none %}${{ "%.2f"|format(saldo_inicial) }}{% else %}—{% endif %}</h3>
+<!-- Resumen del período: tabla especial de datos -->
+<div class="card mb-4">
+    <div class="card-header bg-primary">📊 Resumen del período — {{ periodo_label }}</div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-bordered text-center align-middle mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Saldo inicial</th>
+                        <th>(+) Créditos del período</th>
+                        <th>(−) Débitos del período</th>
+                        <th>Saldo final</th>
+                        <th>Variación</th>
+                        <th>Conciliado</th>
+                        <th>Pendiente (sin cuadrar)</th>
+                        <th>Movs. por revisar</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr style="font-size:1.05rem;">
+                        <td class="fw-bold text-primary">{% if saldo_inicial is not none %}${{ "%.2f"|format(saldo_inicial) }}{% else %}—{% endif %}</td>
+                        <td class="text-success">${{ "%.2f"|format(total_creditos or 0) }}</td>
+                        <td class="text-danger">${{ "%.2f"|format(total_debitos or 0) }}</td>
+                        <td class="fw-bold text-primary">{% if saldo_final is not none %}${{ "%.2f"|format(saldo_final) }}{% else %}—{% endif %}</td>
+                        <td class="fw-bold {% if saldo_inicial is not none and saldo_final is not none and saldo_final - saldo_inicial < 0 %}text-danger{% else %}text-success{% endif %}">
+                            {% if saldo_inicial is not none and saldo_final is not none %}${{ "%.2f"|format(saldo_final - saldo_inicial) }}{% else %}—{% endif %}
+                        </td>
+                        <td class="fw-bold" style="color:#059669;">${{ "%.2f"|format(total_conciliado or 0) }}</td>
+                        <td class="fw-bold" style="color:#d97706;">${{ "%.2f"|format(total_pendiente or 0) }}</td>
+                        <td class="fw-bold">{{ n_pendientes }}</td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
-    </div>
-    <div class="col-6 col-md">
-        <div class="stat-card" style="background: linear-gradient(135deg,#3730a3,#6366f1);">
-            <small>Saldo final {% if mes and anio %}del mes{% else %}del período{% endif %}</small>
-            <h3>{% if saldo_final is not none %}${{ "%.2f"|format(saldo_final) }}{% else %}—{% endif %}</h3>
-        </div>
-    </div>
-    <div class="col-6 col-md">
-        <div class="stat-card" style="background: linear-gradient(135deg,#065f46,#059669);">
-            <small>Conciliado</small><h3>${{ "%.2f"|format(total_conciliado or 0) }}</h3>
-        </div>
-    </div>
-    <div class="col-6 col-md">
-        <div class="stat-card" style="background: linear-gradient(135deg,#92400e,#d97706);">
-            <small>Pendiente (sin cuadrar)</small><h3>${{ "%.2f"|format(total_pendiente or 0) }}</h3>
-        </div>
-    </div>
-    <div class="col-6 col-md">
-        <div class="stat-card" style="background: linear-gradient(135deg,#1e293b,#475569);">
-            <small>Movimientos por revisar</small><h3>{{ n_pendientes }}</h3>
-        </div>
+        <small class="text-muted d-block px-3 py-2">El saldo inicial es el saldo del banco antes del primer movimiento del período elegido; el saldo final, el del último movimiento. Se ajustan al filtro de mes o de fechas específicas.</small>
     </div>
 </div>
 
