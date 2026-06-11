@@ -245,6 +245,13 @@
 </div>
 
 <script>
+// Escapa texto que viene del archivo del banco o de la BD antes de meterlo en
+// innerHTML (evita XSS almacenado desde una descripción/concepto manipulado)
+function esc(v) {
+    return String(v == null ? '' : v)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
 function justificar(id) {
     var txt = prompt('Justificación de este movimiento (por qué no cuadra o cómo se explica):');
     if (!txt) return;
@@ -269,7 +276,7 @@ function abrirEnlace(id) {
         if (!d.success) { alert('Error: ' + (d.error||'')); return; }
         var m = d.movimiento;
         document.getElementById('enlaceMov').innerHTML =
-            '<strong>' + m.fecha + '</strong> · $' + Number(m.monto).toFixed(2) + ' · ' + (m.descripcion || 'Sin descripción');
+            '<strong>' + esc(m.fecha) + '</strong> · $' + Number(m.monto).toFixed(2) + ' · ' + esc(m.descripcion || 'Sin descripción');
         enlaceCandidatos = d.candidatos;
         pintarCandidatos(enlaceCandidatos);
         if (Number(m.monto) > 0) {  // créditos: se pueden enlazar a pagos de estudiantes
@@ -300,21 +307,21 @@ function cargarHistorialEstudiante() {
     cont.innerHTML = '<div class="text-center text-muted py-2">Cargando historial...</div>';
     fetch('/api/estudiante/' + id + '/historial-pagos').then(r => r.json()).then(d => {
         if (!d.success) { cont.innerHTML = '<div class="text-danger">' + (d.error||'Error') + '</div>'; return; }
-        var head = '<div class="alert alert-light py-2 mb-2"><strong>' + d.estudiante.nombre + '</strong>' +
-            (d.estudiante.padres ? ' · 👤 ' + d.estudiante.padres : '') +
-            (d.asignaturas.length ? '<br><small class="text-muted">📘 Asignaturas: ' + d.asignaturas.join(', ') + '</small>' : '') + '</div>';
+        var head = '<div class="alert alert-light py-2 mb-2"><strong>' + esc(d.estudiante.nombre) + '</strong>' +
+            (d.estudiante.padres ? ' · 👤 ' + esc(d.estudiante.padres) : '') +
+            (d.asignaturas.length ? '<br><small class="text-muted">📘 Asignaturas: ' + esc(d.asignaturas.join(', ')) + '</small>' : '') + '</div>';
         if (!d.pagos.length) {
             cont.innerHTML = head + '<div class="text-center text-muted py-2">Este estudiante no tiene pagos registrados. Registra primero el pago o usa "Justificar".</div>';
             return;
         }
         cont.innerHTML = head + '<div class="list-group">' + d.pagos.map(function(p) {
-            var asig = (p.asignaturas || []).map(function(a) { return '<span class="badge bg-light text-dark border ms-1">📘 ' + a + '</span>'; }).join('');
+            var asig = (p.asignaturas || []).map(function(a) { return '<span class="badge bg-light text-dark border ms-1">📘 ' + esc(a) + '</span>'; }).join('');
             var usado = p.ya_usado ? '<span class="badge bg-secondary ms-1">ya enlazado</span>' : '';
             return '<button type="button" class="list-group-item list-group-item-action' + (p.ya_usado ? ' disabled' : '') + '" ' +
                 'onclick="seleccionarCandidato(this, \'pago\', ' + p.id + ')">' +
                 '<div class="d-flex justify-content-between"><div>' +
-                '<strong>' + p.fecha + '</strong> · ' + (p.tipo_pago || 'pago') +
-                (p.concepto ? '<br><small class="text-muted">' + p.concepto + '</small>' : '') +
+                '<strong>' + esc(p.fecha) + '</strong> · ' + esc(p.tipo_pago || 'pago') +
+                (p.concepto ? '<br><small class="text-muted">' + esc(p.concepto) + '</small>' : '') +
                 '</div><div class="text-end"><strong>$' + Number(p.monto || 0).toFixed(2) + '</strong></div></div>' +
                 '<div>' + asig + usado + '</div></button>';
         }).join('') + '</div>';
@@ -336,8 +343,8 @@ function pintarCandidatos(lista) {
         return '<button type="button" class="list-group-item list-group-item-action' + (c.ya_usado ? ' disabled' : '') + '" ' +
             'onclick="seleccionarCandidato(this, \'' + c.tipo + '\', ' + c.id + ')">' +
             '<div class="d-flex justify-content-between"><div>' +
-            '<strong>' + c.detalle + '</strong>' + (c.extra ? '<br><small class="text-muted">👤 ' + c.extra + '</small>' : '') +
-            '</div><div class="text-end"><strong>$' + Number(c.monto || 0).toFixed(2) + '</strong><br><small>' + c.fecha + '</small></div></div>' +
+            '<strong>' + esc(c.detalle) + '</strong>' + (c.extra ? '<br><small class="text-muted">👤 ' + esc(c.extra) + '</small>' : '') +
+            '</div><div class="text-end"><strong>$' + Number(c.monto || 0).toFixed(2) + '</strong><br><small>' + esc(c.fecha) + '</small></div></div>' +
             '<div>' + badges + '</div></button>';
     }).join('');
 }

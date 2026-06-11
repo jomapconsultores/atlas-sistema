@@ -1499,7 +1499,11 @@ def modulo4():
 def modulo5():
     if current_user.rol in ['profesor', 'psicologo']:
         return redirect(url_for('mi_reporte'))
-    
+    # Estudiantes/padres no ven la nómina de todos los docentes
+    if current_user.rol not in ['admin', 'socio']:
+        flash('❌ Acceso restringido', 'error')
+        return redirect(url_for('dashboard'))
+
     mes = request.args.get('mes', '')
     anio = request.args.get('anio', '')
     fecha_desde = request.args.get('fecha_desde', '')
@@ -2278,6 +2282,7 @@ def reportes():
 # ========== GASTOS ==========
 @app.route('/gastos', methods=['GET', 'POST'])
 @login_required
+@socio_admin_required
 def gestion_gastos():
     if request.method == 'POST':
         fecha = request.form['fecha']
@@ -2387,6 +2392,7 @@ def gestion_gastos():
 
 @app.route('/api/gasto/<int:id>/eliminar', methods=['POST'])
 @login_required
+@socio_admin_required
 def eliminar_gasto(id):
     supabase.table('gastos').delete().eq('id', id).execute()
     return jsonify({'success': True})
@@ -2931,9 +2937,13 @@ def agregar_observacion(id):
 # ========== API EDICIÓN RÁPIDA DE GASTOS ==========
 @app.route('/api/gasto/<int:id>/editar', methods=['POST'])
 @login_required
+@socio_admin_required
 def api_editar_gasto(id):
     data = request.get_json()
     campo = data.get('campo')
+    # Solo columnas editables (evita escribir campos arbitrarios en la fila)
+    if data.get('campo') not in ('concepto', 'monto', 'categoria', 'persona', 'fecha', 'reembolsado_a'):
+        return jsonify({'success': False, 'error': 'Campo no permitido'})
     valor = data.get('valor')
     try:
         if campo == 'monto':
@@ -2946,6 +2956,7 @@ def api_editar_gasto(id):
 # ========== API FECHA PAGO DOCENTES ==========
 @app.route('/api/pago-docente/fecha', methods=['POST'])
 @login_required
+@socio_admin_required
 def api_fecha_pago_docente():
     data = request.get_json()
     docente = data.get('docente')
@@ -2968,6 +2979,7 @@ def api_fecha_pago_docente():
 
 @app.route('/api/pago-docente/toggle', methods=['POST'])
 @login_required
+@socio_admin_required
 def api_toggle_pago_docente():
     data = request.get_json()
     docente = data.get('docente')
