@@ -490,6 +490,154 @@ def logout():
     logout_user()
     return redirect(url_for('inicio'))
 
+# ========== PASSKEYS: huella digital / reconocimiento facial (WebAuthn) ==========
+# El usuario registra su dispositivo desde "Mi Perfil" (con sesion iniciada) y
+# desde entonces puede entrar con la huella o el rostro de su celular/laptop.
+# La clave privada NUNCA sale del dispositivo; el servidor solo guarda la publica.
+
+def _pk_rp_id():
+    return request.host.split(':')[0]
+
+
+def _pk_origen():
+    return f"{request.scheme}://{request.host}"
+
+
+def _pk_tabla_lista():
+    """True si la tabla usuario_passkeys existe (migration_passkeys.sql)."""
+    try:
+        supabase.table('usuario_passkeys').select('id').limit(1).execute()
+        return True
+    except Exception:
+        return False
+
+
+@app.route('/api/passkey/registro/opciones', methods=['POST'])
+@login_required
+def passkey_registro_opciones():
+    if not WEBAUTHN_OK:
+        return jsonify({'success': False, 'error': 'Falta la libreria webauthn en el servidor (redeploy pendiente)'})
+    if not _pk_tabla_lista():
+        return jsonify({'success': False, 'error': 'Falta ejecutar migration_passkeys.sql en Supabase'})
+    existentes = supabase.table('usuario_passkeys').select('credential_id').eq('usuario_id', current_user.id).execute().data or []
+    opciones = generate_registration_options(
+        rp_id=_pk_rp_id(), rp_name='Atlas Centro de Estudios',
+        user_id=str(current_user.id).encode(),
+        user_name=current_user.email or str(current_user.id),
+        user_display_name=current_user.nombre or current_user.email or 'Usuario',
+        exclude_credentials=[PublicKeyCredentialDescriptor(id=base64url_to_bytes(c['credential_id'])) for c in existentes],
+        authenticator_selection=AuthenticatorSelectionCriteria(
+            user_verification=UserVerificationRequirement.REQUIRED,
+            resident_key=ResidentKeyRequirement.PREFERRED),
+    )
+    session['pk_reg_challenge'] = bytes_to_base64url(opciones.challenge)
+    return app.response_class(options_to_json(opciones), mimetype='application/json')
+
+
+@app.route('/api/passkey/registro/verificar', methods=['POST'])
+@login_required
+def passkey_registro_verificar():
+    if not WEBAUTHN_OK:
+        return jsonify({'success': False, 'error': 'Falta la libreria webauthn en el servidor'})
+    reto = session.pop('pk_reg_challenge', None)
+    if not reto:
+        return jsonify({'success': False, 'error': 'El reto expiro: intenta de nuevo'})
+    try:
+        ver = verify_registration_response(
+            credential=request.get_data(as_text=True),
+            expected_challenge=base64url_to_bytes(reto),
+            expected_rp_id=_pk_rp_id(), expected_origin=_pk_origen())
+        supabase.table('usuario_passkeys').insert({
+            'usuario_id': current_user.id,
+            'credential_id': bytes_to_base64url(ver.credential_id),
+            'public_key': bytes_to_base64url(ver.credential_public_key),
+            'sign_count': ver.sign_count,
+            'nombre': (request.args.get('dispositivo') or 'Dispositivo')[:60],
+        }).execute()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'No se pudo registrar: {e}'})
+
+
+@app.route('/api/passkey/login/opciones', methods=['POST'])
+def passkey_login_opciones():
+    if not WEBAUTHN_OK:
+        return jsonify({'success': False, 'error': 'Biometria no disponible en el servidor'})
+    if _login_bloqueado(_ip_cliente()):
+        return jsonify({'success': False, 'error': 'Demasiados intentos. Espera 5 minutos.'})
+    email = ((request.get_json(silent=True) or {}).get('email') or '').strip()
+    if not email:
+        return jsonify({'success': False, 'error': 'Escribe tu email primero'})
+    u = supabase.table('usuarios').select('id,activo').eq('email', email).execute().data
+    creds = []
+    if u and u[0].get('activo') and _pk_tabla_lista():
+        creds = supabase.table('usuario_passkeys').select('credential_id').eq('usuario_id', u[0]['id']).execute().data or []
+    if not creds:
+        _registrar_intento_fallido(_ip_cliente())
+        return jsonify({'success': False, 'error': 'Este email no tiene huella/rostro registrado. Entra con tu contrasena y registra el dispositivo en Mi Perfil.'})
+    opciones = generate_authentication_options(
+        rp_id=_pk_rp_id(),
+        allow_credentials=[PublicKeyCredentialDescriptor(id=base64url_to_bytes(c['credential_id'])) for c in creds],
+        user_verification=UserVerificationRequirement.REQUIRED)
+    session['pk_auth_challenge'] = bytes_to_base64url(opciones.challenge)
+    session['pk_auth_uid'] = u[0]['id']
+    return app.response_class(options_to_json(opciones), mimetype='application/json')
+
+
+@app.route('/api/passkey/login/verificar', methods=['POST'])
+def passkey_login_verificar():
+    if not WEBAUTHN_OK:
+        return jsonify({'success': False, 'error': 'Biometria no disponible en el servidor'})
+    reto = session.pop('pk_auth_challenge', None)
+    uid = session.pop('pk_auth_uid', None)
+    if not reto or not uid:
+        return jsonify({'success': False, 'error': 'El reto expiro: intenta de nuevo'})
+    import json as _json
+    cuerpo = request.get_data(as_text=True)
+    try:
+        cred_id = (_json.loads(cuerpo) or {}).get('id', '')
+    except Exception:
+        cred_id = ''
+    fila = supabase.table('usuario_passkeys').select('*').eq('usuario_id', uid).eq('credential_id', cred_id).execute().data
+    if not fila:
+        _registrar_intento_fallido(_ip_cliente())
+        return jsonify({'success': False, 'error': 'Credencial no reconocida'})
+    f = fila[0]
+    try:
+        ver = verify_authentication_response(
+            credential=cuerpo,
+            expected_challenge=base64url_to_bytes(reto),
+            expected_rp_id=_pk_rp_id(), expected_origin=_pk_origen(),
+            credential_public_key=base64url_to_bytes(f['public_key']),
+            credential_current_sign_count=f.get('sign_count') or 0,
+            require_user_verification=True)
+        supabase.table('usuario_passkeys').update({'sign_count': ver.new_sign_count}).eq('id', f['id']).execute()
+        user = Usuario.get_by_id(int(uid))
+        if not user or not user.activo:
+            return jsonify({'success': False, 'error': 'Cuenta inactiva'})
+        login_user(user)
+        return jsonify({'success': True, 'redirect': url_for('dashboard')})
+    except Exception:
+        _registrar_intento_fallido(_ip_cliente())
+        return jsonify({'success': False, 'error': 'Verificacion biometrica fallida'})
+
+
+@app.route('/api/passkey/mis-dispositivos')
+@login_required
+def passkey_mis_dispositivos():
+    if not _pk_tabla_lista():
+        return jsonify({'success': True, 'data': [], 'sin_tabla': True})
+    r = supabase.table('usuario_passkeys').select('id,nombre,created_at').eq('usuario_id', current_user.id).execute()
+    return jsonify({'success': True, 'data': r.data or []})
+
+
+@app.route('/api/passkey/<int:pid>/eliminar', methods=['POST'])
+@login_required
+def passkey_eliminar(pid):
+    supabase.table('usuario_passkeys').delete().eq('id', pid).eq('usuario_id', current_user.id).execute()
+    return jsonify({'success': True})
+
+
 @app.route('/dashboard')
 @login_required
 def dashboard():
@@ -3006,10 +3154,21 @@ def _norm_num(v):
     neg = s.startswith('(') and s.endswith(')')
     s = s.replace('$', '').replace('USD', '').replace('(', '').replace(')', '').replace(' ', '')
     if ',' in s and '.' in s:
-        # 1.234,56 -> miles '.', decimal ','
-        s = s.replace('.', '').replace(',', '.')
+        # El separador que aparece ÚLTIMO es el decimal:
+        # 1.234,56 (europeo) y 1,234.56 (US) se interpretan bien los dos
+        if s.rfind(',') > s.rfind('.'):
+            s = s.replace('.', '').replace(',', '.')
+        else:
+            s = s.replace(',', '')
     elif ',' in s:
-        s = s.replace(',', '.')
+        if s.count(',') > 1:
+            s = s.replace(',', '')  # 1,234,567 → miles US
+        else:
+            ent, _, dec = s.partition(',')
+            # ',ddd' exacto = agrupador de miles (1,234); el dinero usa 2 decimales
+            s = s.replace(',', '') if len(dec) == 3 else s.replace(',', '.')
+    elif s.count('.') > 1:
+        s = s.replace('.', '')  # 1.234.567 → miles europeo
     try:
         n = float(s)
     except ValueError:
@@ -3034,11 +3193,26 @@ def _norm_fecha(v):
 
 def hash_movimiento(m):
     """md5 estable para deduplicar el estado de cuenta: fecha + monto + SALDO,
-    la 'posición' única del movimiento en la cuenta. La descripción NO se usa
-    cuando hay saldo, porque el banco la abrevia distinto entre exportaciones
-    ('TRANSFERENCIA DIRECTA...' vs 'TRANSF. DIRECTA...') y el mismo movimiento
-    se duplicaba; el saldo además distingue dos movimientos idénticos del
-    mismo día. Sin saldo (PDF) se usa la descripción como antes."""
+    la 'posición' única del movimiento en la cuenta. Cuando hay saldo NO se usa
+    ni la descripción (el banco la abrevia distinto entre exportaciones) NI la
+    referencia (el PDF no la trae y el Excel sí: con ella, el mismo extracto
+    subido en ambos formatos se duplicaba entero). Sin saldo (PDF simple) se
+    usa la descripción."""
+    saldo = m.get('saldo')
+    partes = [
+        str(m.get('fecha') or ''),
+        f"{float(m.get('monto') or 0):.2f}",
+    ]
+    if saldo is not None:
+        partes.append(f"{float(saldo):.2f}")
+    else:
+        partes.append((m.get('referencia') or '').strip().lower())
+        partes.append((m.get('descripcion') or '').strip().lower()[:80])
+    return hashlib.md5('|'.join(partes).encode('utf-8')).hexdigest()
+
+def hash_movimiento_legacy(m):
+    """Hash de versiones anteriores (incluía la referencia junto al saldo).
+    Solo se usa para NO re-insertar movimientos guardados con el hash viejo."""
     saldo = m.get('saldo')
     partes = [
         str(m.get('fecha') or ''),
@@ -3087,7 +3261,10 @@ def _fila_a_movimiento(row, mapa):
         return None
     descripcion = str(cell('descripcion') or '').strip()
     referencia = str(cell('referencia') or '').strip()
-    saldo = _norm_num(cell('saldo')) if mapa.get('saldo') is not None else None
+    # Saldo: solo si la CELDA tiene valor (una celda vacía NO es saldo $0.00;
+    # convertirla a 0 envenenaba el hash, la cadena de saldos y el cuadre)
+    saldo_cell = cell('saldo') if mapa.get('saldo') is not None else None
+    saldo = _norm_num(saldo_cell) if (saldo_cell is not None and str(saldo_cell).strip() != '') else None
     # Monto: prioriza débito/crédito separados; si no, columna única
     monto = 0.0
     if mapa.get('credito') is not None or mapa.get('debito') is not None:
@@ -3459,10 +3636,12 @@ def subir_estado_cuenta():
         flash(f'⚠️ Todos los movimientos del archivo son anteriores a mayo ({len(antes_de_mayo)} descartados). Solo se contemplan estados de cuenta desde mayo.', 'warning')
         return redirect(url_for('movimientos_cuenta'))
 
-    # Calcular hash y deduplicar contra lo ya guardado
+    # Calcular hash y deduplicar contra lo ya guardado. Se chequea también el
+    # hash de versiones anteriores para no duplicar movimientos viejos.
     for m in movs:
         m['hash_mov'] = hash_movimiento(m)
-    hashes = list({m['hash_mov'] for m in movs})
+        m['hash_legacy'] = hash_movimiento_legacy(m)
+    hashes = list({m['hash_mov'] for m in movs} | {m['hash_legacy'] for m in movs})
     existentes = set()
     for i in range(0, len(hashes), 100):
         chunk = hashes[i:i + 100]
@@ -3472,7 +3651,7 @@ def subir_estado_cuenta():
         except Exception:
             pass
 
-    nuevos = [m for m in movs if m['hash_mov'] not in existentes]
+    nuevos = [m for m in movs if m['hash_mov'] not in existentes and m['hash_legacy'] not in existentes]
     # Evita duplicados dentro del mismo archivo
     vistos, nuevos_unicos = set(), []
     for m in nuevos:
