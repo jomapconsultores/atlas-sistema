@@ -97,14 +97,18 @@
             <tbody>
                 <tr><td>Saldo cuenta de ahorros</td><td class="text-end fw-bold">${{ "%.2f"|format(saldo_cuenta) }}</td></tr>
                 <tr class="text-danger"><td>(-) Total gastos del período</td><td class="text-end">-${{ "%.2f"|format(total_gastos) }}</td></tr>
-                <tr class="text-warning"><td>(-) Total pago docentes</td><td class="text-end">-${{ "%.2f"|format(total_pago_docentes) }}</td></tr>
+                <tr class="text-warning"><td>(-) Pago a docentes (bruto)</td><td class="text-end">-${{ "%.2f"|format(total_pago_docentes) }}</td></tr>
+                {% if total_anticipos and total_anticipos > 0 %}
+                <tr style="color:#0277bd;"><td>(+) Anticipos ya entregados a docentes</td><td class="text-end">+${{ "%.2f"|format(total_anticipos) }}</td></tr>
+                <tr class="text-muted"><td><small>= Pago a docentes neto pendiente</small></td><td class="text-end"><small>-${{ "%.2f"|format(total_pago_docentes_neto) }}</small></td></tr>
+                {% endif %}
                 <tr class="fw-bold border-top" style="font-size:16px;">
-                    <td>Balance a distribuir (÷ 3)</td>
+                    <td>Balance a distribuir (÷ {{ n_socios }})</td>
                     <td class="text-end {{ 'text-success' if balance>=0 else 'text-danger' }}">${{ "%.2f"|format(balance) }}</td>
                 </tr>
                 <tr class="text-muted">
                     <td>Parte alícuota por socio</td>
-                    <td class="text-end">${{ "%.2f"|format(balance/3) }}</td>
+                    <td class="text-end">${{ "%.2f"|format(balance / n_socios) }}</td>
                 </tr>
             </tbody>
         </table>
@@ -148,7 +152,7 @@
                 <tr>
                     <td class="ps-3">TOTAL</td>
                     <td class="text-end">${{ "%.2f"|format(balance) }}</td>
-                    <td class="text-end text-primary">${{ "%.2f"|format(total_pago_docentes) }}</td>
+                    <td class="text-end text-primary">${{ "%.2f"|format(distribucion_socios|sum(attribute='pago_docente')) }}</td>
                     <td class="text-end text-warning">${{ "%.2f"|format(distribucion_socios|sum(attribute='reembolso')) }}</td>
                     <td class="text-end">${{ "%.2f"|format(distribucion_socios|sum(attribute='neto')) }}</td>
                 </tr>

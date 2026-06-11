@@ -2466,7 +2466,9 @@ def liquidacion():
     for g in (gastos_periodo.data or []):
         cat = g.get('categoria', 'Sin categoría')
         gastos_por_cat[cat] = gastos_por_cat.get(cat, 0) + (g.get('monto', 0) or 0)
-        if g.get('reembolso') and g.get('reembolsado_a'):
+        # Solo reembolsos AÚN no pagados: si ya se pagó por el botón "Pagado"
+        # de /gastos, no debe volver a sumarse al "Total a recibir" del socio
+        if g.get('reembolso') and g.get('reembolsado_a') and not g.get('reembolso_pagado'):
             benef = g['reembolsado_a']
             reembolsos_por_socio[benef] = reembolsos_por_socio.get(benef, 0) + (g.get('monto', 0) or 0)
 
@@ -2494,11 +2496,26 @@ def liquidacion():
         pago_por_docente[prof] = pago_por_docente.get(prof, 0) + pago
         total_pago_docentes += pago
 
+    # Anticipos APROBADOS = adelantos ya entregados al docente: reducen el pago
+    # neto que aún debe salir de la cuenta (mismo criterio que el Módulo 5).
+    # Sin esto, un adelanto ya desembolsado se restaba dos veces del balance.
+    try:
+        anticipos_rows = supabase.table('anticipos_solicitudes').select('usuario_nombre,monto').eq('estado', 'aprobado').execute().data or []
+    except Exception:
+        anticipos_rows = []
+    anticipos_por_docente = {}
+    for a in anticipos_rows:
+        nom = a.get('usuario_nombre', '')
+        anticipos_por_docente[nom] = anticipos_por_docente.get(nom, 0) + (a.get('monto', 0) or 0)
+    # Solo se descuentan los anticipos de docentes con pago este período
+    total_anticipos = round(sum(anticipos_por_docente.get(p, 0) for p in pago_por_docente), 2)
+
     total_gastos = round(total_gastos, 2)
     total_ingresos = round(total_ingresos, 2)
     total_ingresos_bruto = round(total_ingresos_bruto, 2)
     total_pago_docentes = round(total_pago_docentes, 2)
-    balance = round(saldo_cuenta - total_gastos - total_pago_docentes, 2)
+    total_pago_docentes_neto = round(total_pago_docentes - total_anticipos, 2)
+    balance = round(saldo_cuenta - total_gastos - total_pago_docentes_neto, 2)
 
     # Reparto en partes iguales según la lista de SOCIOS, con centavos exactos:
     # las primeras partes se redondean y la ÚLTIMA absorbe la diferencia, de
@@ -2509,7 +2526,8 @@ def liquidacion():
     distribucion_socios = []
     for i, socio in enumerate(SOCIOS):
         parte_socio = parte_base if i < n_socios - 1 else round(balance - parte_base * (n_socios - 1), 2)
-        pago_docente_socio = round(pago_por_docente.get(socio, 0), 2)
+        # Pago al socio-docente NETO de su propio anticipo aprobado
+        pago_docente_socio = round(pago_por_docente.get(socio, 0) - anticipos_por_docente.get(socio, 0), 2)
         reembolso_socio = round(reembolsos_por_socio.get(socio, 0), 2)
         neto = round(parte_socio + pago_docente_socio + reembolso_socio, 2)
         distribucion_socios.append({
@@ -2528,7 +2546,8 @@ def liquidacion():
         gastos_reembolso_pend=gastos_reembolso_pend.data or [],
         total_ingresos=total_ingresos, total_ingresos_bruto=total_ingresos_bruto,
         total_devoluciones=total_devoluciones, total_pago_docentes=total_pago_docentes,
-        pago_por_docente=pago_por_docente, balance=balance,
+        total_anticipos=total_anticipos, total_pago_docentes_neto=total_pago_docentes_neto,
+        pago_por_docente=pago_por_docente, balance=balance, n_socios=n_socios,
         distribucion_socios=distribucion_socios)
 
 # ========== ESTUDIANTES ==========
