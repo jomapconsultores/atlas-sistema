@@ -2857,12 +2857,17 @@ def _norm_fecha(v):
     return None
 
 def hash_movimiento(m):
-    """md5 estable de los campos clave para deduplicar el estado de cuenta."""
+    """md5 estable de los campos clave para deduplicar el estado de cuenta.
+    Incluye el SALDO: dos movimientos del mismo día con igual monto y
+    descripción (p.ej. dos transferencias idénticas) tienen saldo distinto,
+    así que ambos se registran en lugar de descartar el segundo como repetido."""
+    saldo = m.get('saldo')
     base = '|'.join([
         str(m.get('fecha') or ''),
         f"{float(m.get('monto') or 0):.2f}",
         (m.get('descripcion') or '').strip().lower()[:80],
-        (m.get('referencia') or '').strip().lower()
+        (m.get('referencia') or '').strip().lower(),
+        f"{float(saldo):.2f}" if saldo is not None else ''
     ])
     return hashlib.md5(base.encode('utf-8')).hexdigest()
 
