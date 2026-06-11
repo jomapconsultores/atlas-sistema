@@ -59,17 +59,29 @@
 </form>
 
 <div class="row g-3 mb-4">
-    <div class="col-md-4">
+    <div class="col-6 col-md">
+        <div class="stat-card" style="background: linear-gradient(135deg,#1e3a8a,#2563eb);">
+            <small>Saldo inicial {% if mes and anio %}del mes{% else %}del período{% endif %}</small>
+            <h3>{% if saldo_inicial is not none %}${{ "%.2f"|format(saldo_inicial) }}{% else %}—{% endif %}</h3>
+        </div>
+    </div>
+    <div class="col-6 col-md">
+        <div class="stat-card" style="background: linear-gradient(135deg,#3730a3,#6366f1);">
+            <small>Saldo final {% if mes and anio %}del mes{% else %}del período{% endif %}</small>
+            <h3>{% if saldo_final is not none %}${{ "%.2f"|format(saldo_final) }}{% else %}—{% endif %}</h3>
+        </div>
+    </div>
+    <div class="col-6 col-md">
         <div class="stat-card" style="background: linear-gradient(135deg,#065f46,#059669);">
             <small>Conciliado</small><h3>${{ "%.2f"|format(total_conciliado or 0) }}</h3>
         </div>
     </div>
-    <div class="col-md-4">
+    <div class="col-6 col-md">
         <div class="stat-card" style="background: linear-gradient(135deg,#92400e,#d97706);">
             <small>Pendiente (sin cuadrar)</small><h3>${{ "%.2f"|format(total_pendiente or 0) }}</h3>
         </div>
     </div>
-    <div class="col-md-4">
+    <div class="col-6 col-md">
         <div class="stat-card" style="background: linear-gradient(135deg,#1e293b,#475569);">
             <small>Movimientos por revisar</small><h3>{{ n_pendientes }}</h3>
         </div>
@@ -131,6 +143,36 @@
         </div>
     </div>
 </div>
+
+{% if current_user.rol == 'admin' and lotes %}
+<!-- Estados de cuenta subidos (lotes) — gestión SOLO administrador -->
+<div class="card mt-4">
+    <div class="card-header bg-secondary">🗂️ Estados de cuenta subidos (solo administrador)</div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm mb-0">
+                <thead><tr><th>Banco</th><th>Rango de fechas</th><th class="text-center">Movimientos</th><th>Cargado por</th><th class="text-end"></th></tr></thead>
+                <tbody>
+                    {% for l in lotes %}
+                    <tr>
+                        <td>{{ l.banco }}</td>
+                        <td>{{ l.fmin }} → {{ l.fmax }}</td>
+                        <td class="text-center">{{ l.n }}</td>
+                        <td>{{ l.cargado_por }}</td>
+                        <td class="text-end">
+                            <form method="post" action="/movimientos-cuenta/lote/{{ l.lote_id }}/eliminar" class="d-inline"
+                                  onsubmit="return confirm('¿Eliminar este estado de cuenta completo ({{ l.n }} movimientos)? Esta acción no se puede deshacer.');">
+                                <button class="btn btn-sm btn-outline-danger">🗑️ Eliminar lote</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <!-- Modal: enlazar movimiento con un pago/gasto -->
 <div class="modal fade" id="modalEnlace" tabindex="-1">

@@ -3107,13 +3107,41 @@ def conciliar_nuevos(movs):
 def movimientos_cuenta():
     mes = request.args.get('mes', '')
     anio = request.args.get('anio', '')
-    q = supabase.table('movimientos_cuenta').select('*').gte('fecha', FECHA_MIN_ESTADO_CUENTA).order('fecha', desc=True)
-    movs = q.execute().data or []
+    # Orden: fecha desc; dentro de la misma fecha, id asc (el banco lista de lo
+    # más reciente a lo más antiguo, así que el id menor es el más nuevo)
+    q = supabase.table('movimientos_cuenta').select('*').gte('fecha', FECHA_MIN_ESTADO_CUENTA) \
+        .order('fecha', desc=True).order('id', desc=False)
+    movs_all = q.execute().data or []
+    movs = movs_all
     if mes and anio:
         movs = [m for m in movs if (m.get('fecha', '') or '')[:7] == f"{int(anio)}-{int(mes):02d}"]
     total_conc = sum(m.get('monto', 0) or 0 for m in movs if m.get('estado_conciliacion') == 'conciliado')
     total_pend = sum(m.get('monto', 0) or 0 for m in movs if m.get('estado_conciliacion') == 'pendiente')
     n_pend = sum(1 for m in movs if m.get('estado_conciliacion') == 'pendiente')
+
+    # Saldo inicial y final del período mostrado (saldo que reporta el banco):
+    # final = saldo del movimiento más reciente; inicial = saldo del más
+    # antiguo menos su monto (saldo antes de ese movimiento)
+    con_saldo = [m for m in movs if m.get('saldo') is not None]
+    saldo_final = con_saldo[0].get('saldo') if con_saldo else None
+    saldo_inicial = None
+    if con_saldo:
+        viejo = con_saldo[-1]
+        saldo_inicial = round((viejo.get('saldo') or 0) - (viejo.get('monto') or 0), 2)
+
+    # Lotes subidos (estados de cuenta) — gestión solo para el administrador
+    lotes_map = {}
+    for m in movs_all:
+        lid = m.get('lote_id')
+        if not lid:
+            continue
+        l = lotes_map.setdefault(lid, {'lote_id': lid, 'banco': m.get('banco') or '—', 'n': 0,
+                                       'fmin': m['fecha'], 'fmax': m['fecha'],
+                                       'cargado_por': m.get('cargado_por') or ''})
+        l['n'] += 1
+        l['fmin'] = min(l['fmin'], m['fecha'])
+        l['fmax'] = max(l['fmax'], m['fecha'])
+    lotes = sorted(lotes_map.values(), key=lambda x: x['fmax'], reverse=True)
     # Detalle de los pagos enlazados (para mostrar estudiante y fecha en lugar de solo el ID)
     pago_ids = list({m['conciliado_id'] for m in movs if m.get('conciliado_tipo') == 'pago' and m.get('conciliado_id')})
     pagos_det = {}
@@ -3140,6 +3168,7 @@ def movimientos_cuenta():
     return render_template('movimientos_cuenta.html',
                            movimientos=movs, total_conciliado=total_conc, total_pendiente=total_pend,
                            n_pendientes=n_pend, mes=mes, anio=anio,
+                           saldo_inicial=saldo_inicial, saldo_final=saldo_final, lotes=lotes,
                            openpyxl_ok=openpyxl is not None, pdf_ok=pdfplumber is not None,
                            today=date.today().isoformat())
 
