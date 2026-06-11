@@ -90,8 +90,8 @@
     </div>
     <div class="col-md-4">
         <div class="card bg-info text-white text-center p-3">
-            <h4>${{ "%.2f"|format(total_a_pagar) }}</h4>
-            <small>💰 Total Facturado</small>
+            <h4>${{ "%.2f"|format(total_facturado) }}</h4>
+            <small>💰 Total Facturado (lo que se cobra)</small>
         </div>
     </div>
 </div>
@@ -142,24 +142,16 @@
                         <td>{{ d.asignatura }}</td>
                         <td class="text-center">{{ d.horas }}</td>
                         <td class="text-end fw-bold text-success">
-                            {% if current_user.rol in ['profesor', 'psicologo'] %}
-                                {% if d.tipo in ['clase', 'preuniversitario'] %}
-                                    ${{ "%.2f"|format(d.horas * 7) }}
-                                {% else %}
-                                    ${{ "%.2f"|format(d.valor * 0.4018) }}
-                                {% endif %}
-                            {% else %}
-                                ${{ "%.2f"|format(d.valor) }}
-                            {% endif %}
+                            {% if es_docente %}${{ "%.2f"|format(d.mi_pago) }}{% else %}${{ "%.2f"|format(d.valor) }}{% endif %}
                         </td>
-                        <td><span class="badge bg-success">Realizado</span></td>
+                        <td><span class="badge bg-{{ 'info' if d.estado=='Cancelado-Pagado' else 'success' }}">{{ d.estado }}</span></td>
                     </tr>
                     {% endfor %}
                 </tbody>
                 <tfoot class="table-dark">
                     <tr>
                         <td colspan="5"><strong>TOTAL</strong></td>
-                        <td class="text-end"><strong>${{ "%.2f"|format(total_a_pagar) }}</strong></td>
+                        <td class="text-end"><strong>${{ "%.2f"|format(total_a_pagar if es_docente else total_facturado) }}</strong></td>
                         <td></td>
                     </tr>
                 </tfoot>
@@ -208,15 +200,11 @@
 <script>
 const ingresosPorMes = {};
 {% for d in datos %}
-    const mes = '{{ d.fecha[:7] }}';
-    let miPago = 0;
-    {% if d.tipo in ['clase', 'preuniversitario'] %}
-        miPago = {{ d.horas }} * 7;
-    {% else %}
-        miPago = {{ d.valor }} * 0.4018;
-    {% endif %}
-    if (!ingresosPorMes[mes]) ingresosPorMes[mes] = 0;
-    ingresosPorMes[mes] += miPago;
+{
+    const _mes = '{{ d.fecha[:7] }}';
+    if (!ingresosPorMes[_mes]) ingresosPorMes[_mes] = 0;
+    ingresosPorMes[_mes] += {{ d.mi_pago }};
+}
 {% endfor %}
 
 new Chart(document.getElementById('chartMiReporte'), {

@@ -2804,15 +2804,23 @@ def mi_reporte():
     for a in (anticipos.data or []):
         anticipos_aprobados += a.get('monto', 0)
 
-    for s in dedup_sesiones_docente(sesiones.data or []):
+    es_docente = current_user.rol in ['profesor', 'psicologo']
+    total_facturado = 0  # solo para estudiante/padre: lo que se le cobra
+
+    # El pago al DOCENTE se deduplica (una vez por sesión física); el COBRO al
+    # ESTUDIANTE no se deduplica (cada estudiante paga su propia fila), si no
+    # desaparecían sus sesiones grupales y el total quedaba mal.
+    fuente = dedup_sesiones_docente(sesiones.data or []) if es_docente else (sesiones.data or [])
+
+    for s in fuente:
         if mes != 0 and s.get('fecha', '') and s['fecha'][:7] != f"{anio}-{mes:02d}":
             continue
         profesor = (s.get('profesor_terapeuta') or '').strip().lower()
         est = s.get('estudiantes', {})
         nombre_est = f"{est.get('apellidos', '')} {est.get('nombres', '')}".strip().lower()
         incluir = False
-        
-        if current_user.rol in ['profesor', 'psicologo']:
+
+        if es_docente:
             if nombre_usuario in profesor or profesor in nombre_usuario:
                 incluir = True
             else:
@@ -2830,16 +2838,19 @@ def mi_reporte():
                     if len(p) >= 3 and (p in apellidos_est or p in nombres_est):
                         incluir = True
                         break
-        
+
         if incluir:
             horas = s.get('horas', 0) or 0
             valor = s.get('valor_total', 0) or 0
             tipo = s.get('tipo_sesion', 'clase')
-            
-            # Regla única de pago (incluye 'ambos' dividido: clases + % terapia)
+
+            # Pago al docente (regla única); para el estudiante lo relevante es 'valor'
             mi_pago = sum(pago_sesion_docente(s))
-            total_a_pagar += mi_pago
             total_horas += horas
+            if es_docente:
+                total_a_pagar += mi_pago
+            else:
+                total_facturado += valor
             _gid_mr = str(s.get('sesion_grupo_id') or '|'.join([
                 str(s.get('profesor_terapeuta','')), str(s.get('fecha','')),
                 str(s.get('hora_inicio','')), str(s.get('hora_fin',''))]))
@@ -2856,12 +2867,16 @@ def mi_reporte():
                 'mi_pago': mi_pago,
                 'estado': s['estado']
             })
-    
+
     total_a_pagar = round(total_a_pagar, 2)
+    total_facturado = round(total_facturado, 2)
+    anticipos_aprobados = round(anticipos_aprobados, 2)
     neto_a_recibir = round(total_a_pagar - anticipos_aprobados, 2)
     return render_template('mi_reporte.html',
                          datos=datos, total_horas=total_horas,
                          total_a_pagar=total_a_pagar,
+                         total_facturado=total_facturado,
+                         es_docente=es_docente,
                          anticipos_aprobados=anticipos_aprobados,
                          neto_a_recibir=neto_a_recibir,
                          mes=mes, anio=anio)
