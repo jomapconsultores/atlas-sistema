@@ -273,7 +273,7 @@ footer .f-right{font-size:12px;color:var(--muted);text-align:right}
 <!-- ═══ NAVBAR ═══════════════════════════════════════════ -->
 <nav class="nav" id="mainNav">
     <a href="/" class="nav-brand">
-        <img src="/static/img/logo_atlas_ai.png" alt="Atlas" class="nav-logo" loading="eager">
+        <img src="/static/img/logo_atlas_redondo.png" alt="Atlas" class="nav-logo" loading="eager">
         <div>
             <div class="nav-name">Atlas</div>
             <div class="nav-sub">Centro de Estudios</div>
@@ -752,10 +752,25 @@ footer .f-right{font-size:12px;color:var(--muted);text-align:right}
     </div>
 </section>
 
+<!-- ═══ QR CODE ════════════════════════════════════════════ -->
+<section style="position:relative;z-index:1;padding:48px clamp(20px,6vw,80px);text-align:center;border-top:1px solid var(--border)">
+    <div style="max-width:360px;margin:0 auto">
+        <div style="font-size:11px;font-weight:800;color:var(--blue2);text-transform:uppercase;letter-spacing:2.5px;margin-bottom:10px">Contáctanos al instante</div>
+        <p style="font-size:14px;color:var(--muted);margin-bottom:24px">Escanea el código QR con tu celular y escríbenos directamente por WhatsApp</p>
+        <div style="display:inline-block;background:#fff;border-radius:20px;padding:16px;box-shadow:0 12px 40px rgba(0,0,0,.4)">
+            <canvas id="atlas-qr" style="display:block;border-radius:8px"></canvas>
+        </div>
+        <div style="margin-top:16px;display:flex;align-items:center;justify-content:center;gap:8px">
+            <div style="width:10px;height:10px;border-radius:50%;background:#25d366"></div>
+            <span style="font-size:13.5px;font-weight:700;color:rgba(255,255,255,.85)">099 094 8817</span>
+        </div>
+    </div>
+</section>
+
 <!-- ═══ FOOTER ═════════════════════════════════════════════ -->
 <footer>
     <div class="f-brand">
-        <img src="/static/img/logo_atlas_ai.png" alt="Atlas" class="f-logo" loading="lazy">
+        <img src="/static/img/logo_atlas_redondo.png" alt="Atlas" class="f-logo" loading="lazy">
         <div>
             <div class="f-name">ATLAS Centro de Estudios</div>
             <div class="f-copy">Rodrigo de Triana y Av. Loja · Cuenca, Ecuador · 099 094 8817</div>
@@ -779,10 +794,15 @@ footer .f-right{font-size:12px;color:var(--muted);text-align:right}
     💬 WhatsApp
 </a>
 
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 <script>
 const nav = document.getElementById('mainNav');
 window.addEventListener('scroll', () => nav.classList.toggle('scrolled', scrollY > 40), {passive:true});
-console.log('Atlas Landing v2.2 — Full redesign');
+
+QRCode.toCanvas(document.getElementById('atlas-qr'), 'https://wa.me/593990948817', {
+    width: 200, margin: 1,
+    color: { dark: '#0a1628', light: '#ffffff' }
+});
 </script>
 </body>
 </html>
