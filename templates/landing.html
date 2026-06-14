@@ -3,676 +3,784 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Atlas — Sistema de Gestión Académica</title>
-    <meta name="description" content="Plataforma profesional de gestión académica para Atlas Centro de Estudios. Planificación, calendario, finanzas y reportes en un solo lugar.">
+    <title>ATLAS Centro de Estudios — Nivelación · Pre-Universitario · Psicología</title>
+    <meta name="description" content="ATLAS Centro de Estudios en Cuenca. Nivelación académica personalizada, preparación preuniversitaria, psicología clínica y cursos especiales. 099 094 8817">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        :root {
-            --navy: #050d1a;
-            --navy2: #0a1628;
-            --navy3: #0e2240;
-            --gold: #f0c040;
-            --gold2: #fbbf24;
-            --blue: #3b82f6;
-            --blue2: #60a5fa;
-            --white: #ffffff;
-            --muted: rgba(255,255,255,0.58);
-            --border: rgba(255,255,255,0.08);
-            --card-bg: rgba(255,255,255,0.04);
-            --card-border: rgba(255,255,255,0.09);
-        }
-        html { scroll-behavior: smooth; font-size: 16px; }
-        body {
-            font-family: 'Inter', sans-serif;
-            background: var(--navy);
-            color: var(--white);
-            overflow-x: hidden;
-            line-height: 1.6;
-        }
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+    --navy:#050d1a;--navy2:#0a1628;--navy3:#0e2240;
+    --gold:#f0c040;--gold2:#fbbf24;--gold3:#f59e0b;
+    --blue:#3b82f6;--blue2:#60a5fa;--blue3:#1d4ed8;
+    --purple:#8b5cf6;--purple2:#a78bfa;
+    --green:#10b981;--green2:#34d399;
+    --white:#fff;--muted:rgba(255,255,255,.6);
+    --border:rgba(255,255,255,.09);--card:rgba(255,255,255,.04);
+}
+html{scroll-behavior:smooth;font-size:16px}
+body{font-family:'Inter',sans-serif;background:var(--navy);color:var(--white);overflow-x:hidden;line-height:1.6}
 
-        /* ── ANIMATED BACKGROUND ─────────────────────── */
-        .bg-animate {
-            position: fixed; inset: 0; z-index: 0; overflow: hidden;
-            background: radial-gradient(ellipse at 20% 20%, #1a2a5e 0%, transparent 55%),
-                        radial-gradient(ellipse at 80% 80%, #0f2a4a 0%, transparent 55%),
-                        linear-gradient(160deg, #050d1a 0%, #0a1628 50%, #050d1a 100%);
-        }
-        .orb {
-            position: absolute; border-radius: 50%; filter: blur(80px); opacity: 0.18;
-            animation: drift 14s ease-in-out infinite alternate;
-        }
-        .orb-1 { width: 500px; height: 500px; background: #3b82f6; top: -100px; left: -100px; animation-duration: 18s; }
-        .orb-2 { width: 400px; height: 400px; background: #f0c040; bottom: -80px; right: -80px; animation-duration: 22s; animation-delay: -7s; }
-        .orb-3 { width: 280px; height: 280px; background: #8b5cf6; top: 40%; right: 15%; animation-duration: 16s; animation-delay: -4s; }
-        @keyframes drift {
-            from { transform: translate(0, 0) scale(1); }
-            to   { transform: translate(40px, 30px) scale(1.1); }
-        }
+/* ── BG ORBS ── */
+.bg-orbs{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;
+    background:radial-gradient(ellipse at 15% 15%,#1a2a5e 0%,transparent 55%),
+               radial-gradient(ellipse at 85% 85%,#0f2a4a 0%,transparent 55%),
+               linear-gradient(160deg,#050d1a 0%,#0a1628 50%,#050d1a 100%)}
+.orb{position:absolute;border-radius:50%;filter:blur(80px);opacity:.15;animation:drift 16s ease-in-out infinite alternate}
+.orb1{width:500px;height:500px;background:#3b82f6;top:-80px;left:-80px;animation-duration:18s}
+.orb2{width:350px;height:350px;background:#f0c040;bottom:-60px;right:-60px;animation-duration:22s;animation-delay:-8s}
+.orb3{width:250px;height:250px;background:#8b5cf6;top:45%;right:12%;animation-duration:15s;animation-delay:-4s}
+@keyframes drift{from{transform:translate(0,0) scale(1)}to{transform:translate(35px,25px) scale(1.12)}}
 
-        /* ── NAVBAR ──────────────────────────────────── */
-        .nav {
-            position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-            padding: 0 clamp(20px, 5vw, 64px);
-            height: 72px; display: flex; align-items: center; justify-content: space-between;
-            background: rgba(5,13,26,0); transition: background .3s;
-            border-bottom: 1px solid transparent;
-        }
-        .nav.scrolled { background: rgba(5,13,26,0.92); backdrop-filter: blur(14px); border-bottom-color: var(--border); }
-        .nav-brand { display: flex; align-items: center; gap: 13px; text-decoration: none; }
-        .nav-logo { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 2.5px rgba(240,192,64,0.5); }
-        .nav-brand-text .name { font-size: 20px; font-weight: 800; color: var(--gold); letter-spacing: -0.3px; line-height: 1; }
-        .nav-brand-text .sub  { font-size: 9.5px; color: rgba(255,255,255,0.45); letter-spacing: 2px; text-transform: uppercase; font-weight: 500; }
-        .nav-cta {
-            background: linear-gradient(135deg, #1d4ed8, #3b82f6);
-            color: #fff; font-size: 13.5px; font-weight: 700;
-            padding: 10px 22px; border-radius: 10px; text-decoration: none;
-            border: 1.5px solid rgba(255,255,255,0.15);
-            transition: all .2s; letter-spacing: 0.2px;
-        }
-        .nav-cta:hover { transform: translateY(-1px); box-shadow: 0 6px 22px rgba(59,130,246,0.4); }
+/* ── NAVBAR ── */
+.nav{position:fixed;top:0;left:0;right:0;z-index:200;
+    padding:0 clamp(16px,5vw,60px);height:68px;
+    display:flex;align-items:center;justify-content:space-between;
+    transition:background .3s,border .3s}
+.nav.scrolled{background:rgba(5,13,26,.93);backdrop-filter:blur(16px);border-bottom:1px solid var(--border)}
+.nav-brand{display:flex;align-items:center;gap:12px;text-decoration:none}
+.nav-logo{width:42px;height:42px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 2px rgba(240,192,64,.5)}
+.nav-name{font-size:19px;font-weight:800;color:var(--gold);letter-spacing:-.3px;line-height:1}
+.nav-sub{font-size:9px;color:rgba(255,255,255,.4);letter-spacing:2px;text-transform:uppercase;font-weight:500}
+.nav-links{display:flex;align-items:center;gap:28px}
+.nav-links a{color:rgba(255,255,255,.7);text-decoration:none;font-size:13.5px;font-weight:500;transition:color .2s}
+.nav-links a:hover{color:#fff}
+.nav-cta{background:linear-gradient(135deg,#f0c040,#f59e0b);color:#0a0f1e;
+    font-size:13px;font-weight:800;padding:9px 20px;border-radius:10px;
+    text-decoration:none;transition:all .2s;white-space:nowrap}
+.nav-cta:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(240,192,64,.4)}
+@media(max-width:700px){.nav-links{display:none}}
 
-        /* ── HERO ────────────────────────────────────── */
-        .hero {
-            position: relative; z-index: 1;
-            min-height: 100vh; display: flex; align-items: center;
-            padding: clamp(100px, 14vw, 160px) clamp(20px, 7vw, 100px) clamp(60px, 8vw, 100px);
-        }
-        .hero-inner {
-            max-width: 1200px; margin: 0 auto; width: 100%;
-            display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center;
-        }
-        .hero-badge {
-            display: inline-flex; align-items: center; gap: 8px;
-            background: rgba(240,192,64,0.1); border: 1px solid rgba(240,192,64,0.3);
-            color: var(--gold); font-size: 12px; font-weight: 700;
-            padding: 7px 14px; border-radius: 100px; margin-bottom: 22px;
-            letter-spacing: 0.5px; text-transform: uppercase;
-        }
-        .hero-badge::before { content: '●'; font-size: 8px; animation: pulse 2s infinite; }
-        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
-        .hero h1 {
-            font-size: clamp(40px, 5.5vw, 72px); font-weight: 900;
-            line-height: 1.05; letter-spacing: -2px; margin-bottom: 22px;
-        }
-        .hero h1 .gold { color: var(--gold); }
-        .hero-desc {
-            font-size: clamp(15px, 1.5vw, 18px); color: var(--muted);
-            max-width: 480px; margin-bottom: 40px; line-height: 1.7; font-weight: 400;
-        }
-        .hero-actions { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
-        .btn-primary-hero {
-            background: linear-gradient(135deg, var(--gold2), var(--gold));
-            color: #0a0f1e; font-size: 15px; font-weight: 800;
-            padding: 15px 32px; border-radius: 13px; text-decoration: none;
-            display: inline-flex; align-items: center; gap: 9px;
-            transition: all .25s; letter-spacing: -0.2px;
-        }
-        .btn-primary-hero:hover { transform: translateY(-2px); box-shadow: 0 12px 36px rgba(240,192,64,0.35); }
-        .btn-secondary-hero {
-            color: rgba(255,255,255,0.75); font-size: 14px; font-weight: 600;
-            padding: 14px 22px; border-radius: 13px; text-decoration: none;
-            border: 1.5px solid var(--border); transition: all .2s;
-        }
-        .btn-secondary-hero:hover { border-color: rgba(255,255,255,0.3); color: #fff; background: rgba(255,255,255,0.05); }
+/* ── HERO ── */
+.hero{position:relative;z-index:1;min-height:100vh;display:flex;align-items:center;overflow:hidden}
+.hero-photo{position:absolute;inset:0;
+    background:url('/static/img/hero_estudiante.png') center 20%/cover no-repeat;
+    filter:brightness(.38) saturate(.9)}
+.hero-overlay{position:absolute;inset:0;
+    background:linear-gradient(110deg,rgba(5,13,26,.92) 0%,rgba(5,13,26,.65) 55%,rgba(5,13,26,.3) 100%)}
+.hero-inner{position:relative;z-index:2;
+    max-width:1200px;margin:0 auto;width:100%;
+    padding:clamp(110px,14vw,160px) clamp(20px,6vw,80px) clamp(60px,8vw,100px)}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;
+    background:rgba(240,192,64,.12);border:1px solid rgba(240,192,64,.35);
+    color:var(--gold);font-size:11.5px;font-weight:700;
+    padding:6px 14px;border-radius:100px;margin-bottom:20px;
+    letter-spacing:.8px;text-transform:uppercase}
+.hero-badge span{width:7px;height:7px;border-radius:50%;background:var(--gold);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.hero h1{font-size:clamp(38px,6vw,78px);font-weight:900;line-height:1.02;
+    letter-spacing:-2.5px;margin-bottom:18px;max-width:700px}
+.hero h1 .gold{color:var(--gold)}
+.hero h1 .blue{color:var(--blue2)}
+.hero-desc{font-size:clamp(15px,1.6vw,18px);color:rgba(255,255,255,.78);
+    max-width:520px;margin-bottom:36px;line-height:1.72;font-weight:400}
+.hero-actions{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:48px}
+.btn-gold{background:linear-gradient(135deg,var(--gold2),var(--gold));
+    color:#0a0f1e;font-size:15px;font-weight:800;
+    padding:14px 30px;border-radius:13px;text-decoration:none;
+    display:inline-flex;align-items:center;gap:9px;transition:all .25s}
+.btn-gold:hover{transform:translateY(-2px);box-shadow:0 12px 32px rgba(240,192,64,.4)}
+.btn-outline{color:rgba(255,255,255,.8);font-size:14px;font-weight:600;
+    padding:13px 22px;border-radius:13px;text-decoration:none;
+    border:1.5px solid rgba(255,255,255,.2);transition:all .2s}
+.btn-outline:hover{border-color:rgba(255,255,255,.5);color:#fff;background:rgba(255,255,255,.06)}
+.hero-contact{display:flex;flex-wrap:wrap;gap:20px}
+.hc{display:flex;align-items:center;gap:9px;font-size:13.5px;color:rgba(255,255,255,.7)}
+.hc-icon{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.hc strong{color:#fff;font-weight:700}
 
-        /* Hero visual — dashboard mockup */
-        .hero-visual { position: relative; }
-        .mockup-card {
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 20px; padding: 22px;
-            backdrop-filter: blur(20px);
-            box-shadow: 0 32px 80px rgba(0,0,0,0.5);
-            animation: float 6s ease-in-out infinite;
-        }
-        @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-14px)} }
-        .mockup-header { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
-        .mockup-dot { width: 11px; height: 11px; border-radius: 50%; }
-        .mockup-title { font-size: 12.5px; font-weight: 700; color: rgba(255,255,255,0.7); margin-left: 4px; }
-        .mockup-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
-        .mockup-stat {
-            background: rgba(255,255,255,0.06); border-radius: 10px; padding: 12px;
-            text-align: center;
-        }
-        .mockup-stat .val { font-size: 20px; font-weight: 800; }
-        .mockup-stat .lbl { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
-        .mockup-rows { display: flex; flex-direction: column; gap: 8px; }
-        .mockup-row {
-            background: rgba(255,255,255,0.04); border-radius: 8px; padding: 10px 13px;
-            display: flex; align-items: center; gap: 10px; font-size: 12px;
-        }
-        .mockup-row .ico { width: 26px; height: 26px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; }
-        .mockup-row .info { flex: 1; }
-        .mockup-row .info .ttl { font-weight: 600; font-size: 12px; }
-        .mockup-row .info .sub { font-size: 10.5px; color: var(--muted); }
-        .mockup-row .pill { font-size: 10px; font-weight: 700; padding: 3px 9px; border-radius: 20px; }
-        .pill-green { background: rgba(16,185,129,0.2); color: #34d399; }
-        .pill-blue  { background: rgba(59,130,246,0.2); color: #60a5fa; }
-        .pill-gold  { background: rgba(240,192,64,0.2);  color: var(--gold); }
-        /* Floating badges */
-        .badge-float {
-            position: absolute; background: rgba(5,13,26,0.88); backdrop-filter: blur(16px);
-            border: 1px solid rgba(255,255,255,0.12); border-radius: 14px; padding: 12px 16px;
-            display: flex; align-items: center; gap: 10px; box-shadow: 0 12px 36px rgba(0,0,0,0.35);
-            animation: float 7s ease-in-out infinite;
-        }
-        .badge-float.b1 { top: -28px; right: -24px; animation-delay: -2s; }
-        .badge-float.b2 { bottom: -24px; left: -24px; animation-delay: -4s; }
-        .badge-float .ico-big { font-size: 22px; }
-        .badge-float .text-sm { font-size: 11.5px; font-weight: 700; white-space: nowrap; }
-        .badge-float .text-xs { font-size: 10px; color: var(--muted); }
+/* ── STATS ── */
+.stats-bar{position:relative;z-index:1;
+    background:rgba(255,255,255,.03);
+    border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+    padding:26px clamp(20px,6vw,80px)}
+.stats-inner{max-width:1200px;margin:0 auto;
+    display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.stat{text-align:center}
+.stat .n{font-size:clamp(30px,4vw,48px);font-weight:900;color:var(--gold);letter-spacing:-1px;line-height:1}
+.stat .d{font-size:12px;color:var(--muted);font-weight:500;margin-top:4px}
+@media(max-width:700px){.stats-inner{grid-template-columns:repeat(2,1fr)}}
 
-        /* ── STATS BAR ───────────────────────────────── */
-        .stats-bar {
-            position: relative; z-index: 1;
-            background: rgba(255,255,255,0.035); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
-            padding: 28px clamp(20px, 7vw, 100px);
-        }
-        .stats-inner {
-            max-width: 1200px; margin: 0 auto;
-            display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;
-        }
-        .stat-item { text-align: center; }
-        .stat-item .num { font-size: clamp(28px, 3.5vw, 44px); font-weight: 900; color: var(--gold); letter-spacing: -1px; }
-        .stat-item .desc { font-size: 12.5px; color: var(--muted); font-weight: 500; margin-top: 3px; }
+/* ── GENERIC SECTION ── */
+.sec{position:relative;z-index:1;padding:clamp(64px,9vw,100px) clamp(20px,6vw,80px)}
+.sec-inner{max-width:1200px;margin:0 auto}
+.sec-label{font-size:11px;font-weight:800;color:var(--blue2);
+    text-transform:uppercase;letter-spacing:2.5px;margin-bottom:10px}
+.sec-title{font-size:clamp(28px,3.8vw,46px);font-weight:900;
+    letter-spacing:-1.5px;line-height:1.1;margin-bottom:12px}
+.sec-sub{font-size:15.5px;color:var(--muted);max-width:560px;line-height:1.68}
+.sec-head{margin-bottom:48px}
+.divider{max-width:1200px;margin:0 auto;height:1px;
+    background:linear-gradient(to right,transparent,var(--border),transparent)}
 
-        /* ── FEATURES ────────────────────────────────── */
-        .section {
-            position: relative; z-index: 1;
-            padding: clamp(70px, 10vw, 110px) clamp(20px, 7vw, 100px);
-        }
-        .section-label {
-            font-size: 11.5px; font-weight: 800; color: var(--blue2);
-            text-transform: uppercase; letter-spacing: 2px; margin-bottom: 14px;
-        }
-        .section-title {
-            font-size: clamp(30px, 3.5vw, 48px); font-weight: 800;
-            letter-spacing: -1.5px; line-height: 1.12; margin-bottom: 14px;
-        }
-        .section-subtitle { font-size: 16px; color: var(--muted); max-width: 520px; line-height: 1.65; }
-        .section-head { margin-bottom: 52px; }
+/* ── PILARES ── */
+.pilares{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:22px}
+.pilar{background:var(--card);border:1px solid var(--border);border-radius:22px;
+    padding:30px 26px;transition:all .28s;cursor:pointer;text-decoration:none;color:inherit}
+.pilar:hover{transform:translateY(-6px);box-shadow:0 24px 60px rgba(0,0,0,.4)}
+.pilar-icon{width:60px;height:60px;border-radius:16px;
+    display:flex;align-items:center;justify-content:center;font-size:26px;margin-bottom:18px}
+.pilar-title{font-size:20px;font-weight:800;margin-bottom:8px}
+.pilar-desc{font-size:13.5px;color:var(--muted);line-height:1.65;margin-bottom:16px}
+.pilar-tags{display:flex;flex-wrap:wrap;gap:6px}
+.tag{font-size:11px;font-weight:600;padding:4px 10px;border-radius:100px;
+    background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);
+    color:rgba(255,255,255,.75)}
+.tag.gold{background:rgba(240,192,64,.1);border-color:rgba(240,192,64,.3);color:var(--gold)}
+.tag.blue{background:rgba(59,130,246,.1);border-color:rgba(59,130,246,.3);color:var(--blue2)}
+.tag.purple{background:rgba(139,92,246,.1);border-color:rgba(139,92,246,.3);color:var(--purple2)}
+.tag.green{background:rgba(16,185,129,.1);border-color:rgba(16,185,129,.3);color:var(--green2)}
 
-        .features-grid {
-            max-width: 1200px; margin: 0 auto;
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 22px;
-        }
-        .feature-card {
-            background: var(--card-bg); border: 1px solid var(--card-border);
-            border-radius: 20px; padding: 30px 26px;
-            transition: all .28s cubic-bezier(.4,0,.2,1);
-            cursor: default;
-        }
-        .feature-card:hover {
-            background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.18);
-            transform: translateY(-5px); box-shadow: 0 20px 60px rgba(0,0,0,0.35);
-        }
-        .feat-icon {
-            width: 54px; height: 54px; border-radius: 14px;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 24px; margin-bottom: 18px;
-        }
-        .feat-title { font-size: 16.5px; font-weight: 700; margin-bottom: 8px; }
-        .feat-desc  { font-size: 13.5px; color: var(--muted); line-height: 1.65; }
-        .icon-blue-bg   { background: rgba(59,130,246,0.15); }
-        .icon-green-bg  { background: rgba(16,185,129,0.15); }
-        .icon-gold-bg   { background: rgba(240,192,64,0.15); }
-        .icon-purple-bg { background: rgba(139,92,246,0.15); }
-        .icon-red-bg    { background: rgba(239,68,68,0.15); }
-        .icon-teal-bg   { background: rgba(20,184,166,0.15); }
+/* ── NIVELACIÓN ── */
+.nivel-sec{background:linear-gradient(180deg,rgba(10,22,40,.6) 0%,transparent 100%)}
+.subjects-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:36px}
+.subj-card{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:22px 20px;transition:all .25s}
+.subj-card:hover{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.18);transform:translateY(-3px)}
+.subj-icon{font-size:28px;margin-bottom:12px}
+.subj-name{font-size:15px;font-weight:700;margin-bottom:8px}
+.subj-list{list-style:none;display:flex;flex-direction:column;gap:5px}
+.subj-list li{font-size:12px;color:var(--muted);display:flex;align-items:flex-start;gap:6px}
+.subj-list li::before{content:'→';color:var(--blue2);font-size:11px;margin-top:1px;flex-shrink:0}
 
-        /* ── ROLES ───────────────────────────────────── */
-        .roles-grid {
-            max-width: 1200px; margin: 0 auto;
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 22px;
-        }
-        .role-card {
-            background: var(--card-bg); border: 1px solid var(--card-border);
-            border-radius: 22px; padding: 32px 28px;
-            transition: all .28s;
-        }
-        .role-card:hover { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.18); transform: translateY(-4px); box-shadow: 0 18px 50px rgba(0,0,0,0.3); }
-        .role-header { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
-        .role-avatar {
-            width: 52px; height: 52px; border-radius: 50%;
-            display: flex; align-items: center; justify-content: center; font-size: 22px;
-        }
-        .role-name { font-size: 17px; font-weight: 800; }
-        .role-tag  { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; font-weight: 600; margin-top: 2px; }
-        .role-perks { list-style: none; display: flex; flex-direction: column; gap: 9px; }
-        .role-perks li { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: rgba(255,255,255,0.8); }
-        .role-perks li::before { content: '✓'; color: var(--gold); font-weight: 800; font-size: 14px; flex-shrink: 0; }
-        .ra-admin   { background: rgba(240,192,64,0.15); }
-        .ra-doc     { background: rgba(59,130,246,0.15); }
-        .ra-est     { background: rgba(16,185,129,0.15); }
+/* ── PRE-U ── */
+.preu-sec{background:rgba(30,58,138,.08)}
+.preu-cols{display:grid;grid-template-columns:1fr 1fr;gap:50px;align-items:start}
+.preu-subjects{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.preu-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:18px}
+.preu-card-icon{font-size:22px;margin-bottom:10px}
+.preu-card-name{font-size:14px;font-weight:700;margin-bottom:6px}
+.preu-card-desc{font-size:12px;color:var(--muted);line-height:1.55}
+.process-steps{display:flex;flex-direction:column;gap:14px}
+.step{display:flex;align-items:flex-start;gap:14px}
+.step-num{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--gold2),var(--gold3));
+    color:#0a0f1e;font-size:13px;font-weight:800;
+    display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.step-text .step-title{font-size:14px;font-weight:700;margin-bottom:3px}
+.step-text .step-desc{font-size:12.5px;color:var(--muted);line-height:1.5}
+.quote-block{background:rgba(240,192,64,.06);border-left:3px solid var(--gold);
+    border-radius:0 14px 14px 0;padding:16px 20px;margin-top:24px}
+.quote-block p{font-size:13.5px;color:rgba(255,255,255,.8);font-style:italic;line-height:1.65}
+@media(max-width:860px){.preu-cols{grid-template-columns:1fr}.preu-subjects{grid-template-columns:1fr}}
 
-        /* ── CTA SECTION ─────────────────────────────── */
-        .cta-section {
-            position: relative; z-index: 1;
-            padding: clamp(70px, 10vw, 110px) clamp(20px, 7vw, 100px);
-            text-align: center;
-        }
-        .cta-box {
-            max-width: 700px; margin: 0 auto;
-            background: linear-gradient(135deg, rgba(30,58,95,0.7), rgba(30,64,175,0.4));
-            border: 1px solid rgba(59,130,246,0.3);
-            border-radius: 28px; padding: clamp(40px, 7vw, 70px) clamp(28px, 6vw, 60px);
-            backdrop-filter: blur(20px);
-        }
-        .cta-box h2 { font-size: clamp(28px, 3.5vw, 44px); font-weight: 900; letter-spacing: -1px; margin-bottom: 14px; }
-        .cta-box p  { font-size: 15.5px; color: var(--muted); margin-bottom: 34px; line-height: 1.7; }
+/* ── PSICOLOGÍA ── */
+.psico-sec{background:linear-gradient(180deg,rgba(88,28,135,.07) 0%,rgba(5,13,26,0) 100%)}
+.psico-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px}
+.psico-card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:26px 22px;transition:all .28s}
+.psico-card:hover{background:rgba(139,92,246,.08);border-color:rgba(139,92,246,.3);transform:translateY(-4px)}
+.psico-icon{font-size:26px;margin-bottom:14px}
+.psico-title{font-size:16px;font-weight:700;margin-bottom:8px}
+.psico-desc{font-size:13px;color:var(--muted);line-height:1.65}
+.psico-list{list-style:none;margin-top:10px;display:flex;flex-direction:column;gap:5px}
+.psico-list li{font-size:12.5px;color:rgba(255,255,255,.75);display:flex;align-items:flex-start;gap:7px}
+.psico-list li::before{content:'✦';color:var(--purple2);font-size:10px;margin-top:2px;flex-shrink:0}
+.psico-areas{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:36px}
+.area-chip{background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.25);
+    border-radius:14px;padding:14px 16px;text-align:center}
+.area-chip .emoji{font-size:22px;margin-bottom:6px}
+.area-chip .name{font-size:13px;font-weight:600;color:var(--purple2)}
+@media(max-width:600px){.psico-areas{grid-template-columns:repeat(2,1fr)}}
 
-        /* ── FOOTER ──────────────────────────────────── */
-        footer {
-            position: relative; z-index: 1;
-            border-top: 1px solid var(--border);
-            padding: 32px clamp(20px, 7vw, 100px);
-            display: flex; align-items: center; justify-content: space-between;
-            flex-wrap: wrap; gap: 14px;
-        }
-        footer .f-brand { display: flex; align-items: center; gap: 10px; }
-        footer .f-name  { font-weight: 700; font-size: 15px; color: var(--gold); }
-        footer .f-copy  { font-size: 12.5px; color: var(--muted); }
-        footer .f-right { font-size: 12.5px; color: var(--muted); text-align: right; }
+/* ── CURSOS ESPECIALES ── */
+.cursos-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px}
+.curso-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;transition:all .25s;position:relative;overflow:hidden}
+.curso-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+.curso-card.orange::before{background:linear-gradient(90deg,#f97316,#fb923c)}
+.curso-card.cyan::before{background:linear-gradient(90deg,#06b6d4,#22d3ee)}
+.curso-card.green::before{background:linear-gradient(90deg,#10b981,#34d399)}
+.curso-card.blue::before{background:linear-gradient(90deg,#3b82f6,#60a5fa)}
+.curso-card.purple::before{background:linear-gradient(90deg,#8b5cf6,#a78bfa)}
+.curso-card.pink::before{background:linear-gradient(90deg,#ec4899,#f472b6)}
+.curso-card:hover{transform:translateY(-3px);border-color:rgba(255,255,255,.2)}
+.curso-icon{font-size:24px;margin-bottom:10px}
+.curso-name{font-size:14.5px;font-weight:700;margin-bottom:6px}
+.curso-desc{font-size:12px;color:var(--muted);line-height:1.55}
+.cert-badge{display:inline-flex;align-items:center;gap:5px;
+    background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);
+    color:var(--green2);font-size:11px;font-weight:700;
+    padding:5px 12px;border-radius:100px;margin-top:28px}
 
-        /* ── RESPONSIVE ──────────────────────────────── */
-        @media (max-width: 900px) {
-            .hero-inner { grid-template-columns: 1fr; gap: 48px; }
-            .hero-visual { display: none; }
-            .stats-inner { grid-template-columns: repeat(2, 1fr); }
-        }
-        @media (max-width: 600px) {
-            .hero h1 { letter-spacing: -1px; }
-            .stats-inner { grid-template-columns: repeat(2, 1fr); gap: 12px; }
-            .nav-brand-text .sub { display: none; }
-            footer { flex-direction: column; text-align: center; }
-            footer .f-right { text-align: center; }
-        }
+/* ── PRECIOS ── */
+.pricing-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:22px;max-width:700px}
+.price-card{background:var(--card);border:1px solid var(--border);border-radius:24px;padding:36px 30px;text-align:center;position:relative;transition:all .3s}
+.price-card.featured{background:linear-gradient(135deg,rgba(59,130,246,.12),rgba(30,58,138,.18));border-color:rgba(59,130,246,.4)}
+.price-card:hover{transform:translateY(-6px);box-shadow:0 24px 60px rgba(0,0,0,.35)}
+.price-icon{font-size:36px;margin-bottom:14px}
+.price-name{font-size:17px;font-weight:700;margin-bottom:6px}
+.price-amount{font-size:48px;font-weight:900;color:var(--gold);letter-spacing:-2px;line-height:1;margin:16px 0 4px}
+.price-unit{font-size:13px;color:var(--muted);margin-bottom:18px}
+.price-desc{font-size:13.5px;color:rgba(255,255,255,.75);line-height:1.65}
+.price-badge{position:absolute;top:-12px;left:50%;transform:translateX(-50%);
+    background:linear-gradient(135deg,var(--blue3),var(--blue));
+    color:#fff;font-size:11px;font-weight:800;
+    padding:5px 16px;border-radius:100px;white-space:nowrap}
 
-        /* ── SERVICES ────────────────────────────────── */
-        .services-section {
-            position: relative; z-index: 1;
-            padding: clamp(70px, 10vw, 110px) clamp(20px, 7vw, 100px);
-            background: rgba(255,255,255,0.015);
-            border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
-        }
-        .services-inner { max-width: 1200px; margin: 0 auto; }
-        .services-layout {
-            display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: start;
-        }
-        .services-visual {
-            position: relative; border-radius: 22px; overflow: hidden;
-            box-shadow: 0 32px 80px rgba(0,0,0,0.55);
-        }
-        .services-visual img { width: 100%; height: auto; display: block; }
-        .service-category { margin-bottom: 28px; }
-        .service-cat-title {
-            font-size: 11px; font-weight: 800; color: var(--blue2);
-            text-transform: uppercase; letter-spacing: 2.5px; margin-bottom: 10px;
-        }
-        .service-pills { display: flex; flex-wrap: wrap; gap: 8px; }
-        .service-pill {
-            background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 100px; padding: 6px 14px;
-            font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.85);
-            transition: all .2s;
-        }
-        .service-pill:hover { background: rgba(59,130,246,0.15); border-color: rgba(59,130,246,0.4); color: #fff; }
-        .service-pill.gold { border-color: rgba(240,192,64,0.35); color: var(--gold); background: rgba(240,192,64,0.07); }
-        .service-pill.purple { border-color: rgba(139,92,246,0.35); color: #c4b5fd; background: rgba(139,92,246,0.07); }
-        @media (max-width: 900px) {
-            .services-layout { grid-template-columns: 1fr; }
-            .services-visual { max-width: 400px; margin: 0 auto; }
-        }
+/* ── CONTACTO ── */
+.contacto-box{background:linear-gradient(135deg,rgba(30,58,95,.6),rgba(30,64,175,.3));
+    border:1px solid rgba(59,130,246,.25);border-radius:28px;
+    padding:clamp(36px,6vw,64px);max-width:900px;margin:0 auto}
+.contacto-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:28px;margin-top:36px}
+.contacto-item{display:flex;align-items:flex-start;gap:14px}
+.ci-icon{width:48px;height:48px;border-radius:14px;
+    display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.ci-label{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);font-weight:600;margin-bottom:4px}
+.ci-value{font-size:15px;font-weight:700;color:#fff}
+.ci-value a{color:#fff;text-decoration:none}
+.ci-value a:hover{color:var(--gold)}
+.whatsapp-btn{display:inline-flex;align-items:center;gap:10px;
+    background:linear-gradient(135deg,#25d366,#128c7e);
+    color:#fff;font-size:15px;font-weight:800;
+    padding:14px 30px;border-radius:14px;text-decoration:none;
+    margin-top:32px;transition:all .25s}
+.whatsapp-btn:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(37,211,102,.35)}
 
-        /* ── LOGO HERO ───────────────────────────────── */
-        .logo-display {
-            display: flex; align-items: center; gap: 18px; margin-bottom: 28px;
-        }
-        .logo-display img.main-logo {
-            height: 64px; width: auto; border-radius: 14px;
-            filter: drop-shadow(0 4px 20px rgba(240,192,64,0.35));
-        }
+/* ── CTA BAND ── */
+.cta-band{position:relative;z-index:1;
+    padding:clamp(56px,8vw,90px) clamp(20px,6vw,80px);
+    text-align:center}
+.cta-inner{max-width:680px;margin:0 auto}
+.cta-inner h2{font-size:clamp(28px,4vw,46px);font-weight:900;letter-spacing:-1.5px;margin-bottom:14px}
+.cta-inner p{font-size:16px;color:var(--muted);margin-bottom:32px;line-height:1.7}
 
-        /* ── SEPARATOR ───────────────────────────────── */
-        .divider {
-            max-width: 1200px; margin: 0 auto;
-            height: 1px; background: linear-gradient(to right, transparent, var(--border), transparent);
-        }
+/* ── FOOTER ── */
+footer{position:relative;z-index:1;border-top:1px solid var(--border);
+    padding:28px clamp(20px,6vw,80px);
+    display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px}
+.f-brand{display:flex;align-items:center;gap:10px}
+.f-logo{width:34px;height:34px;border-radius:50%;object-fit:cover}
+.f-name{font-weight:800;font-size:15px;color:var(--gold)}
+.f-copy{font-size:12px;color:var(--muted);margin-top:2px}
+footer .f-right{font-size:12px;color:var(--muted);text-align:right}
+@media(max-width:600px){footer{flex-direction:column;text-align:center}footer .f-right{text-align:center}}
+
+/* ── MISC ── */
+.gradient-text-gold{background:linear-gradient(135deg,var(--gold2),#fff07a);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.gradient-text-blue{background:linear-gradient(135deg,var(--blue2),#93c5fd);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.highlight-bar{display:inline-block;background:linear-gradient(135deg,rgba(240,192,64,.18),rgba(240,192,64,.06));
+    border-left:4px solid var(--gold);border-radius:0 10px 10px 0;
+    padding:12px 18px;margin-top:20px;font-size:14px;color:rgba(255,255,255,.85);line-height:1.6}
     </style>
 </head>
 <body>
-<div class="bg-animate">
-    <div class="orb orb-1"></div>
-    <div class="orb orb-2"></div>
-    <div class="orb orb-3"></div>
+<div class="bg-orbs">
+    <div class="orb orb1"></div>
+    <div class="orb orb2"></div>
+    <div class="orb orb3"></div>
 </div>
 
-<!-- ── NAVBAR ──────────────────────────────────────── -->
+<!-- ═══ NAVBAR ═══════════════════════════════════════════ -->
 <nav class="nav" id="mainNav">
     <a href="/" class="nav-brand">
-        <img src="/static/img/logo_atlas_ai.png" alt="Atlas" class="nav-logo" loading="lazy">
-        <div class="nav-brand-text">
-            <div class="name">Atlas</div>
-            <div class="sub">Centro de Estudios</div>
+        <img src="/static/img/logo_atlas_ai.png" alt="Atlas" class="nav-logo" loading="eager">
+        <div>
+            <div class="nav-name">Atlas</div>
+            <div class="nav-sub">Centro de Estudios</div>
         </div>
     </a>
-    <a href="/login" class="nav-cta">Iniciar sesión →</a>
+    <div class="nav-links">
+        <a href="#nivelacion">Nivelación</a>
+        <a href="#preuniversitario">Pre-Universitario</a>
+        <a href="#psicologia">Psicología</a>
+        <a href="#contacto">Contacto</a>
+    </div>
+    <a href="/login" class="nav-cta">Portal →</a>
 </nav>
 
-<!-- ── HERO ────────────────────────────────────────── -->
+<!-- ═══ HERO ══════════════════════════════════════════════ -->
 <section class="hero">
+    <div class="hero-photo"></div>
+    <div class="hero-overlay"></div>
     <div class="hero-inner">
-        <div class="hero-content">
-            <div class="logo-display">
-                <img src="/static/img/logo_atlas_ai.png" alt="Atlas Centro de Estudios" class="main-logo" loading="eager">
-            </div>
-            <div class="hero-badge">Sistema activo</div>
-            <h1>Tu centro de estudios,<br><span class="gold">sin complicaciones</span></h1>
-            <p class="hero-desc">
-                Atlas Centro de Estudios ofrece clases particulares, preparación pre-universitaria
-                y atención psicológica — todo gestionado en una sola plataforma profesional.
-            </p>
-            <div class="hero-actions">
-                <a href="/login" class="btn-primary-hero">
-                    <span>🔑</span> Acceder al sistema
-                </a>
-                <a href="#servicios" class="btn-secondary-hero">Nuestros servicios</a>
-            </div>
+        <div class="hero-badge">
+            <span></span>ATLAS Centro de Estudios · Cuenca, Ecuador
         </div>
-
-        <div class="hero-visual">
-            <div style="position:relative;">
-                <div class="mockup-card">
-                    <div class="mockup-header">
-                        <div class="mockup-dot" style="background:#ef4444;"></div>
-                        <div class="mockup-dot" style="background:#f59e0b;"></div>
-                        <div class="mockup-dot" style="background:#10b981;"></div>
-                        <span class="mockup-title">Panel Atlas — Junio 2026</span>
-                    </div>
-                    <div class="mockup-stats">
-                        <div class="mockup-stat">
-                            <div class="val" style="color:#f0c040;">24</div>
-                            <div class="lbl">Sesiones hoy</div>
-                        </div>
-                        <div class="mockup-stat">
-                            <div class="val" style="color:#60a5fa;">8</div>
-                            <div class="lbl">Docentes</div>
-                        </div>
-                        <div class="mockup-stat">
-                            <div class="val" style="color:#34d399;">$3.2k</div>
-                            <div class="lbl">Mes actual</div>
-                        </div>
-                    </div>
-                    <div class="mockup-rows">
-                        <div class="mockup-row">
-                            <div class="ico" style="background:rgba(59,130,246,0.15);">📚</div>
-                            <div class="info">
-                                <div class="ttl">Matemáticas — García J.</div>
-                                <div class="sub">09:00 – 10:30 · Hoy</div>
-                            </div>
-                            <div class="pill pill-green">Realizado</div>
-                        </div>
-                        <div class="mockup-row">
-                            <div class="ico" style="background:rgba(139,92,246,0.15);">🧠</div>
-                            <div class="info">
-                                <div class="ttl">Terapia — Rodríguez M.</div>
-                                <div class="sub">11:00 – 12:00 · Hoy</div>
-                            </div>
-                            <div class="pill pill-blue">Planificado</div>
-                        </div>
-                        <div class="mockup-row">
-                            <div class="ico" style="background:rgba(240,192,64,0.15);">🎓</div>
-                            <div class="info">
-                                <div class="ttl">Pre Universitario — Nieves A.</div>
-                                <div class="sub">14:00 – 16:00 · Hoy</div>
-                            </div>
-                            <div class="pill pill-gold">En curso</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Floating badges -->
-                <div class="badge-float b1">
-                    <div class="ico-big">📊</div>
-                    <div>
-                        <div class="text-sm">Reporte listo</div>
-                        <div class="text-xs">Junio 2026</div>
-                    </div>
-                </div>
-                <div class="badge-float b2">
-                    <div class="ico-big">✅</div>
-                    <div>
-                        <div class="text-sm">6 sesiones planificadas</div>
-                        <div class="text-xs">para mañana</div>
-                    </div>
-                </div>
+        <h1>Tu éxito académico<br>comienza <span class="gold">aquí</span></h1>
+        <p class="hero-desc">
+            Nivelación personalizada, preparación preuniversitaria y atención psicológica profesional —
+            todo en un solo lugar, con docentes comprometidos con tu desarrollo.
+        </p>
+        <div class="hero-actions">
+            <a href="#servicios" class="btn-gold">🎓 Ver servicios</a>
+            <a href="#contacto" class="btn-outline">📞 Contáctanos</a>
+        </div>
+        <div class="hero-contact">
+            <div class="hc">
+                <div class="hc-icon" style="background:rgba(37,211,102,.15);">📱</div>
+                <div><div style="font-size:11px;color:var(--muted);">Llámanos o WhatsApp</div><strong>099 094 8817</strong></div>
+            </div>
+            <div class="hc">
+                <div class="hc-icon" style="background:rgba(59,130,246,.15);">📍</div>
+                <div><div style="font-size:11px;color:var(--muted);">Ubicación</div><strong>Rodrigo de Triana y Av. Loja</strong></div>
+            </div>
+            <div class="hc">
+                <div class="hc-icon" style="background:rgba(240,192,64,.15);">✉️</div>
+                <div><div style="font-size:11px;color:var(--muted);">Correo</div><strong>atlas.cenest@gmail.com</strong></div>
             </div>
         </div>
     </div>
 </section>
 
-<!-- ── STATS ────────────────────────────────────────── -->
+<!-- ═══ STATS ══════════════════════════════════════════════ -->
 <div class="stats-bar">
     <div class="stats-inner">
-        <div class="stat-item">
-            <div class="num">500+</div>
-            <div class="desc">Sesiones al mes</div>
-        </div>
-        <div class="stat-item">
-            <div class="num">8</div>
-            <div class="desc">Docentes activos</div>
-        </div>
-        <div class="stat-item">
-            <div class="num">100%</div>
-            <div class="desc">Control financiero</div>
-        </div>
-        <div class="stat-item">
-            <div class="num">24/7</div>
-            <div class="desc">Disponible en la nube</div>
-        </div>
+        <div class="stat"><div class="n">500+</div><div class="d">Sesiones al mes</div></div>
+        <div class="stat"><div class="n">3</div><div class="d">Pilares de formación</div></div>
+        <div class="stat"><div class="n">100%</div><div class="d">Personalizado</div></div>
+        <div class="stat"><div class="n">+5</div><div class="d">Áreas de estudio</div></div>
     </div>
 </div>
 
-<!-- ── SERVICES ──────────────────────────────────────── -->
-<section class="services-section" id="servicios">
-    <div class="services-inner">
-        <div class="section-head" style="margin-bottom:40px;">
-            <div class="section-label">Nuestros Servicios</div>
-            <h2 class="section-title">Educación y bienestar<br>en un solo lugar</h2>
-            <p class="section-subtitle">Desde refuerzo escolar hasta atención psicológica especializada — apoyamos el desarrollo integral de cada estudiante.</p>
+<!-- ═══ PILARES ════════════════════════════════════════════ -->
+<section class="sec" id="servicios">
+    <div class="sec-inner">
+        <div class="sec-head">
+            <div class="sec-label">Nuestros Servicios</div>
+            <h2 class="sec-title">Tres pilares de <span class="gradient-text-gold">excelencia</span></h2>
+            <p class="sec-sub">Desde refuerzo escolar hasta atención psicológica especializada — apoyamos el desarrollo integral de cada persona.</p>
         </div>
-        <div class="services-layout">
-            <div class="services-content">
-                <div class="service-category">
-                    <div class="service-cat-title">Clases Particulares</div>
-                    <div class="service-pills">
-                        <span class="service-pill">Matemáticas</span>
-                        <span class="service-pill">Física</span>
-                        <span class="service-pill">Química</span>
-                        <span class="service-pill">Inglés</span>
-                        <span class="service-pill">Contabilidad</span>
-                        <span class="service-pill">Estadística</span>
-                        <span class="service-pill">Informática</span>
-                        <span class="service-pill">Lengua y Literatura</span>
-                        <span class="service-pill">Historia</span>
-                        <span class="service-pill">Biología</span>
-                    </div>
+        <div class="pilares">
+            <a href="#nivelacion" class="pilar" style="border-color:rgba(59,130,246,.2)">
+                <div class="pilar-icon" style="background:rgba(59,130,246,.15)">📚</div>
+                <div class="pilar-title">Nivelación Académica</div>
+                <div class="pilar-desc">Fortalece las bases del conocimiento en Matemáticas, Ciencias, Lenguaje y más — desde bachillerato hasta universidad.</div>
+                <div class="pilar-tags">
+                    <span class="tag blue">Matemáticas</span>
+                    <span class="tag blue">Física</span>
+                    <span class="tag blue">Química</span>
+                    <span class="tag blue">Inglés</span>
+                    <span class="tag blue">+más</span>
                 </div>
-                <div class="service-category">
-                    <div class="service-cat-title">Preparación Pre-Universitaria</div>
-                    <div class="service-pills">
-                        <span class="service-pill gold">Pre SENESCYT</span>
-                        <span class="service-pill gold">Examen de Admisión</span>
-                        <span class="service-pill gold">Razonamiento Lógico</span>
-                        <span class="service-pill gold">Razonamiento Verbal</span>
-                        <span class="service-pill gold">Aptitud Numérica</span>
-                    </div>
+            </a>
+            <a href="#preuniversitario" class="pilar" style="border-color:rgba(240,192,64,.2)">
+                <div class="pilar-icon" style="background:rgba(240,192,64,.15)">🎓</div>
+                <div class="pilar-title">Preparación Pre-Universitaria</div>
+                <div class="pilar-desc">Asegura el cupo en la universidad de tus sueños. Simulacros, plan personalizado y dominio de las 4 áreas del examen SENESCYT.</div>
+                <div class="pilar-tags">
+                    <span class="tag gold">SENESCYT</span>
+                    <span class="tag gold">Razonamiento</span>
+                    <span class="tag gold">Ciencias</span>
+                    <span class="tag gold">Lenguaje</span>
                 </div>
-                <div class="service-category">
-                    <div class="service-cat-title">Atención Psicológica</div>
-                    <div class="service-pills">
-                        <span class="service-pill purple">Evaluación Psicológica</span>
-                        <span class="service-pill purple">Terapia Individual</span>
-                        <span class="service-pill purple">Terapia Familiar</span>
-                        <span class="service-pill purple">Orientación Vocacional</span>
-                        <span class="service-pill purple">Paquetes de sesiones</span>
-                    </div>
+            </a>
+            <a href="#psicologia" class="pilar" style="border-color:rgba(139,92,246,.2)">
+                <div class="pilar-icon" style="background:rgba(139,92,246,.15)">🧠</div>
+                <div class="pilar-title">Psicología Clínica</div>
+                <div class="pilar-desc">Servicios profesionales de salud mental: evaluación, psicoterapia individual y talleres psicoeducativos con enfoque cognitivo-conductual.</div>
+                <div class="pilar-tags">
+                    <span class="tag purple">Evaluación</span>
+                    <span class="tag purple">Terapia</span>
+                    <span class="tag purple">Ansiedad</span>
+                    <span class="tag purple">Talleres</span>
                 </div>
-                <div style="margin-top:28px; padding:18px 20px; background:rgba(240,192,64,0.07); border:1px solid rgba(240,192,64,0.2); border-radius:14px;">
-                    <div style="font-size:13px; color:rgba(255,255,255,0.8); line-height:1.7;">
-                        <strong style="color:var(--gold);">Clases personalizadas</strong> adaptadas al ritmo y nivel de cada estudiante — presencial o virtual, con seguimiento continuo y reportes para padres.
-                    </div>
-                </div>
-            </div>
-            <div class="services-visual">
-                <img src="/static/img/roll_up_atlas.png" alt="Atlas Centro de Estudios — Servicios" loading="lazy">
-            </div>
+            </a>
         </div>
     </div>
 </section>
 
-<!-- ── FEATURES ─────────────────────────────────────── -->
-<section class="section" id="features">
-    <div style="max-width:1200px; margin:0 auto;">
-        <div class="section-head">
-            <div class="section-label">Funcionalidades</div>
-            <h2 class="section-title">Todo lo que tu centro necesita</h2>
-            <p class="section-subtitle">Desde la planificación hasta el pago de docentes — un solo sistema, sin hojas de cálculo.</p>
-        </div>
-        <div class="features-grid">
-            <div class="feature-card">
-                <div class="feat-icon icon-blue-bg">📋</div>
-                <div class="feat-title">Planificación inteligente</div>
-                <div class="feat-desc">Agenda clases y terapias individuales o en rango continuo de días — con validación automática de horarios y conflictos.</div>
-            </div>
-            <div class="feature-card">
-                <div class="feat-icon icon-green-bg">📅</div>
-                <div class="feat-title">Calendario en tiempo real</div>
-                <div class="feat-desc">Vista diaria y mensual de todas las sesiones. Cambia estados, reschedule y sincroniza con Google Calendar con un clic.</div>
-            </div>
-            <div class="feature-card">
-                <div class="feat-icon icon-gold-bg">💰</div>
-                <div class="feat-title">Pagos y finanzas</div>
-                <div class="feat-desc">Registra cobros de estudiantes, calcula pagos a docentes y psicólogos, controla gastos y genera liquidaciones mensuales.</div>
-            </div>
-            <div class="feature-card">
-                <div class="feat-icon icon-purple-bg">📊</div>
-                <div class="feat-title">Reportes y análisis</div>
-                <div class="feat-desc">Informes por período, por docente o por estudiante. Exporta en Excel o CSV para análisis externo.</div>
-            </div>
-            <div class="feature-card">
-                <div class="feat-icon icon-teal-bg">🧠</div>
-                <div class="feat-title">Psicología especializada</div>
-                <div class="feat-desc">Módulo dedicado para atención psicológica con paquetes de terapia, seguimiento de clientes y facturación por sesión.</div>
-            </div>
-            <div class="feature-card">
-                <div class="feat-icon icon-red-bg">🔐</div>
-                <div class="feat-title">Seguridad por roles</div>
-                <div class="feat-desc">Cada usuario ve solo su información. Admins, socios, docentes, psicólogos, estudiantes y padres tienen vistas independientes.</div>
-            </div>
-        </div>
-    </div>
-</section>
+<div style="padding:0 clamp(20px,6vw,80px)"><div class="divider"></div></div>
 
-<div style="padding:0 clamp(20px,7vw,100px);"><div class="divider"></div></div>
-
-<!-- ── ROLES ─────────────────────────────────────────── -->
-<section class="section">
-    <div style="max-width:1200px; margin:0 auto;">
-        <div class="section-head">
-            <div class="section-label">Acceso por perfil</div>
-            <h2 class="section-title">Para cada persona, su vista</h2>
-            <p class="section-subtitle">Sin información innecesaria. Cada rol accede exactamente a lo que le corresponde.</p>
+<!-- ═══ NIVELACIÓN ═════════════════════════════════════════ -->
+<section class="sec nivel-sec" id="nivelacion">
+    <div class="sec-inner">
+        <div class="sec-head">
+            <div class="sec-label">Programa #1</div>
+            <h2 class="sec-title">Nivelación <span class="gradient-text-blue">Académica</span></h2>
+            <p class="sec-sub">Programa integral diseñado para fortalecer las bases fundamentales del conocimiento. Comprensión profunda y progresiva de cada área.</p>
+            <div class="highlight-bar">
+                💡 Clases individuales <strong style="color:var(--gold)">$15/hora</strong> · Grupos 2–10 estudiantes <strong style="color:var(--blue2)">$12/hora por estudiante</strong>
+            </div>
         </div>
-        <div class="roles-grid">
-            <div class="role-card">
-                <div class="role-header">
-                    <div class="role-avatar ra-admin">⚙️</div>
-                    <div>
-                        <div class="role-name">Administración</div>
-                        <div class="role-tag">Admin / Socio</div>
-                    </div>
-                </div>
-                <ul class="role-perks">
-                    <li>Control total de sesiones y calendarios</li>
-                    <li>Gestión de estudiantes, docentes y padres</li>
-                    <li>Reportes financieros completos</li>
-                    <li>Liquidación y pagos a docentes</li>
-                    <li>Configuración de costos y usuarios</li>
+        <div class="subjects-grid">
+            <div class="subj-card">
+                <div class="subj-icon">🔢</div>
+                <div class="subj-name" style="color:var(--blue2)">Matemáticas</div>
+                <ul class="subj-list">
+                    <li>Aritmética básica y operaciones</li>
+                    <li>Álgebra: ecuaciones y polinomios</li>
+                    <li>Funciones, gráficas y trigonometría</li>
+                    <li>Geometría plana y espacial</li>
+                    <li>Probabilidad y estadística</li>
+                    <li>Límites, derivadas e integrales</li>
                 </ul>
             </div>
-            <div class="role-card">
-                <div class="role-header">
-                    <div class="role-avatar ra-doc">🎓</div>
-                    <div>
-                        <div class="role-name">Docentes y Psicólogos</div>
-                        <div class="role-tag">Profesor / Psicólogo</div>
-                    </div>
-                </div>
-                <ul class="role-perks">
-                    <li>Vista de sus propias clases y sesiones</li>
-                    <li>Reporte personal de horas y pagos</li>
-                    <li>Solicitud de anticipos de pago</li>
-                    <li>Gestión de clientes propios (psicólogos)</li>
-                    <li>Registro de gastos profesionales</li>
+            <div class="subj-card">
+                <div class="subj-icon">🔬</div>
+                <div class="subj-name" style="color:var(--green2)">Ciencias Naturales</div>
+                <ul class="subj-list">
+                    <li>Biología: células y genética</li>
+                    <li>Física: cinemática y energía</li>
+                    <li>Química: estructura atómica</li>
+                    <li>Evolución y biodiversidad</li>
+                    <li>Termodinámica, óptica y ondas</li>
                 </ul>
             </div>
-            <div class="role-card">
-                <div class="role-header">
-                    <div class="role-avatar ra-est">👨‍🎓</div>
-                    <div>
-                        <div class="role-name">Estudiantes y Padres</div>
-                        <div class="role-tag">Estudiante / Padre</div>
-                    </div>
-                </div>
-                <ul class="role-perks">
-                    <li>Calendario de sus propias clases</li>
-                    <li>Estado de cuenta y pagos realizados</li>
-                    <li>Reporte de sesiones y progreso</li>
-                    <li>Vista protegida sin acceso a otros datos</li>
-                    <li>Acceso desde celular o computadora</li>
+            <div class="subj-card">
+                <div class="subj-icon">📖</div>
+                <div class="subj-name" style="color:var(--gold)">Lenguaje</div>
+                <ul class="subj-list">
+                    <li>Comprensión lectora y literatura</li>
+                    <li>Tipos de texto y estructura</li>
+                    <li>Redacción profesional y ortografía</li>
+                    <li>Argumentación escrita</li>
+                    <li>Gramática y normas lingüísticas</li>
                 </ul>
+            </div>
+            <div class="subj-card">
+                <div class="subj-icon">🌍</div>
+                <div class="subj-name" style="color:var(--purple2)">Ciencias Sociales</div>
+                <ul class="subj-list">
+                    <li>Historia universal y nacional</li>
+                    <li>Geografía física y política</li>
+                    <li>Ciudadanía y democracia</li>
+                    <li>Economía básica y sistemas sociales</li>
+                </ul>
+            </div>
+            <div class="subj-card">
+                <div class="subj-icon">🧬</div>
+                <div class="subj-name" style="color:#f472b6">Genética Universitaria</div>
+                <ul class="subj-list">
+                    <li>ADN, ARN y síntesis de proteínas</li>
+                    <li>Herencia mendeliana y no mendeliana</li>
+                    <li>Biotecnología y técnicas modernas</li>
+                    <li>Mutaciones, variabilidad y genómica</li>
+                </ul>
+            </div>
+            <div class="subj-card" style="border-color:rgba(240,192,64,.2);background:rgba(240,192,64,.03)">
+                <div class="subj-icon">💡</div>
+                <div class="subj-name" style="color:var(--gold)">¿Necesitas otra materia?</div>
+                <p style="font-size:13px;color:var(--muted);line-height:1.6;margin-top:8px">Consulta disponibilidad de otras asignaturas. Atención personalizada adaptada a tu plan de estudios.</p>
+                <a href="#contacto" style="display:inline-block;margin-top:14px;font-size:12.5px;font-weight:700;color:var(--gold);text-decoration:none">Consultar →</a>
             </div>
         </div>
     </div>
 </section>
 
-<!-- ── CTA ───────────────────────────────────────────── -->
-<section class="cta-section">
-    <div class="cta-box">
-        <h2>¿Listo para acceder?</h2>
-        <p>Ingresa con tu cuenta institucional. Si necesitas ayuda o una cuenta nueva, contacta al administrador del sistema.</p>
-        <a href="/login" class="btn-primary-hero" style="display:inline-flex;">
-            <span>🔑</span> Iniciar sesión ahora
-        </a>
+<div style="padding:0 clamp(20px,6vw,80px)"><div class="divider"></div></div>
+
+<!-- ═══ PRE-UNIVERSITARIO ══════════════════════════════════ -->
+<section class="sec" id="preuniversitario" style="background:rgba(30,58,138,.06)">
+    <div class="sec-inner">
+        <div class="sec-head">
+            <div class="sec-label">Programa #2</div>
+            <h2 class="sec-title">Preparación <span class="gradient-text-gold">Pre-Universitaria</span></h2>
+            <p class="sec-sub">Preparamos a los estudiantes para los exámenes de admisión universitaria con un enfoque integral: conocimiento + pensamiento crítico + manejo del estrés.</p>
+        </div>
+        <div class="preu-cols">
+            <div>
+                <div style="font-size:13px;font-weight:700;color:var(--blue2);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:18px">Áreas del programa</div>
+                <div class="preu-subjects">
+                    <div class="preu-card">
+                        <div class="preu-card-icon">📐</div>
+                        <div class="preu-card-name">Matemáticas Aplicadas</div>
+                        <div class="preu-card-desc">Razonamiento lógico, álgebra, funciones, geometría analítica, trigonometría y estadística.</div>
+                    </div>
+                    <div class="preu-card">
+                        <div class="preu-card-icon">⚗️</div>
+                        <div class="preu-card-name">Ciencias Naturales</div>
+                        <div class="preu-card-desc">Biología celular, genética, ecología, física del movimiento, química de reacciones y estequiometría.</div>
+                    </div>
+                    <div class="preu-card">
+                        <div class="preu-card-icon">🌐</div>
+                        <div class="preu-card-name">Ciencias Sociales</div>
+                        <div class="preu-card-desc">Historia, geopolítica, economía, filosofía y desarrollo del pensamiento crítico.</div>
+                    </div>
+                    <div class="preu-card">
+                        <div class="preu-card-icon">📝</div>
+                        <div class="preu-card-name">Lenguaje Crítico</div>
+                        <div class="preu-card-desc">Lectura crítica avanzada, análisis textual, inferencias, argumentación y técnicas de redacción.</div>
+                    </div>
+                </div>
+                <div class="quote-block">
+                    <p>"La preparación preuniversitaria no solo se trata de aprobar exámenes, sino de desarrollar habilidades de pensamiento crítico que te acompañarán durante toda tu carrera."</p>
+                </div>
+            </div>
+            <div>
+                <div style="font-size:13px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:18px">Nuestro proceso</div>
+                <div class="process-steps">
+                    <div class="step">
+                        <div class="step-num">01</div>
+                        <div class="step-text">
+                            <div class="step-title">Evaluación Diagnóstica</div>
+                            <div class="step-desc">Identificamos fortalezas y áreas de mejora para diseñar tu plan.</div>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-num">02</div>
+                        <div class="step-text">
+                            <div class="step-title">Plan Personalizado</div>
+                            <div class="step-desc">Diseñamos estrategias adaptadas al nivel y ritmo de cada estudiante.</div>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-num">03</div>
+                        <div class="step-text">
+                            <div class="step-title">Práctica Intensiva</div>
+                            <div class="step-desc">Simulacros y ejercicios tipo examen SENESCYT con retroalimentación inmediata.</div>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-num">04</div>
+                        <div class="step-text">
+                            <div class="step-title">Evaluación Continua</div>
+                            <div class="step-desc">Monitoreo del progreso y ajustes al plan según resultados.</div>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-num">05</div>
+                        <div class="step-text">
+                            <div class="step-title">Preparación Final</div>
+                            <div class="step-desc">Técnicas de manejo del estrés y estrategias para el día del examen.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </section>
 
-<!-- ── FOOTER ────────────────────────────────────────── -->
+<div style="padding:0 clamp(20px,6vw,80px)"><div class="divider"></div></div>
+
+<!-- ═══ PSICOLOGÍA ═════════════════════════════════════════ -->
+<section class="sec psico-sec" id="psicologia">
+    <div class="sec-inner">
+        <div class="sec-head">
+            <div class="sec-label">Programa #3</div>
+            <h2 class="sec-title">Psicología <span style="color:var(--purple2)">Clínica</span></h2>
+            <p class="sec-sub">Servicios profesionales de salud mental con métodos científicamente validados. Atención en adultos y adolescentes, con confidencialidad y empatía.</p>
+        </div>
+        <div class="psico-grid">
+            <div class="psico-card">
+                <div class="psico-icon">📋</div>
+                <div class="psico-title">Evaluación Psicológica Integral</div>
+                <div class="psico-desc">Evaluación completa del estado emocional, conductual y cognitivo mediante técnicas especializadas en adultos y adolescentes.</div>
+                <ul class="psico-list">
+                    <li>Pruebas psicométricas estandarizadas</li>
+                    <li>Informes clínicos y psicoeducativos</li>
+                    <li>Orientación diagnóstica basada en evidencia</li>
+                </ul>
+            </div>
+            <div class="psico-card">
+                <div class="psico-icon">💬</div>
+                <div class="psico-title">Psicoterapia Especializada</div>
+                <div class="psico-desc">Atención personalizada en un espacio seguro y confidencial, con enfoque Cognitivo-Conductual basado en evidencia científica.</div>
+                <ul class="psico-list">
+                    <li>Terapia individual para adultos y adolescentes</li>
+                    <li>Intervenciones con resultados comprobados</li>
+                    <li>Acompañamiento en procesos vitales complejos</li>
+                </ul>
+            </div>
+            <div class="psico-card">
+                <div class="psico-icon">🎯</div>
+                <div class="psico-title">Orientación y Psicoeducación</div>
+                <div class="psico-desc">Guía profesional para tomar decisiones informadas sobre tu salud mental y bienestar, con apoyo familiar incluido.</div>
+                <ul class="psico-list">
+                    <li>Orientación individual personalizada</li>
+                    <li>Psicoeducación para familias</li>
+                    <li>Apoyo especializado a cuidadores</li>
+                </ul>
+            </div>
+            <div class="psico-card">
+                <div class="psico-icon">🌿</div>
+                <div class="psico-title">Desarrollo de Habilidades</div>
+                <div class="psico-desc">Entrenamiento práctico en competencias emocionales esenciales para tu bienestar y calidad de vida.</div>
+                <ul class="psico-list">
+                    <li>Gestión emocional efectiva</li>
+                    <li>Estrategias de afrontamiento</li>
+                    <li>Autocuidado y equilibrio mental</li>
+                </ul>
+            </div>
+            <div class="psico-card">
+                <div class="psico-icon">🏛️</div>
+                <div class="psico-title">Talleres Psicoeducativos</div>
+                <div class="psico-desc">Charlas y talleres grupales para promover la salud mental con enfoque científico y herramientas prácticas.</div>
+                <ul class="psico-list">
+                    <li>Salud Mental y Bienestar</li>
+                    <li>Manejo del Estrés y Ansiedad</li>
+                    <li>Neurociencias Aplicadas</li>
+                </ul>
+            </div>
+            <div class="psico-card" style="border-color:rgba(139,92,246,.2);background:rgba(139,92,246,.05)">
+                <div class="psico-icon">💜</div>
+                <div class="psico-title">¿Listo para el primer paso?</div>
+                <div class="psico-desc" style="margin-bottom:16px">Tu salud mental es una prioridad. Te acompaño con profesionalismo y empatía en tu camino hacia el bienestar emocional.</div>
+                <a href="#contacto" class="btn-outline" style="font-size:13px;padding:10px 18px;border-color:rgba(139,92,246,.4);color:var(--purple2)">Agendar consulta →</a>
+            </div>
+        </div>
+        <div class="psico-areas">
+            <div class="area-chip"><div class="emoji">😰</div><div class="name">Ansiedad y Estrés</div></div>
+            <div class="area-chip"><div class="emoji">💙</div><div class="name">Depresión</div></div>
+            <div class="area-chip"><div class="emoji">🧘</div><div class="name">Regulación Emocional</div></div>
+            <div class="area-chip"><div class="emoji">🔄</div><div class="name">Cambios Vitales</div></div>
+            <div class="area-chip"><div class="emoji">👨‍👩‍👧</div><div class="name">Psicoeducación Familiar</div></div>
+            <div class="area-chip"><div class="emoji">🌱</div><div class="name">Desarrollo Personal</div></div>
+        </div>
+    </div>
+</section>
+
+<div style="padding:0 clamp(20px,6vw,80px)"><div class="divider"></div></div>
+
+<!-- ═══ CURSOS ESPECIALES ══════════════════════════════════ -->
+<section class="sec" id="cursos">
+    <div class="sec-inner">
+        <div class="sec-head">
+            <div class="sec-label">Complementario</div>
+            <h2 class="sec-title">Cursos <span class="gradient-text-blue">Especiales</span></h2>
+            <p class="sec-sub">Desarrollamos competencias prácticas para el mundo profesional moderno. Todos los cursos incluyen certificación al completar el programa.</p>
+        </div>
+        <div class="cursos-grid">
+            <div class="curso-card orange">
+                <div class="curso-icon">📊</div>
+                <div class="curso-name">Contabilidad</div>
+                <div class="curso-desc">Principios contables, activos, pasivos, estados financieros, registro y cierre contable profesional.</div>
+            </div>
+            <div class="curso-card cyan">
+                <div class="curso-icon">🧾</div>
+                <div class="curso-name">Tributación</div>
+                <div class="curso-desc">IVA, impuesto a la renta, declaraciones, formularios, régimen RIMPE y obligaciones del contribuyente.</div>
+            </div>
+            <div class="curso-card green">
+                <div class="curso-icon">🚀</div>
+                <div class="curso-name">Emprendimiento</div>
+                <div class="curso-desc">Modelo Canvas, marketing estratégico, finanzas básicas y plan de negocios para ideas innovadoras.</div>
+            </div>
+            <div class="curso-card blue">
+                <div class="curso-icon">📄</div>
+                <div class="curso-name">Microsoft Word</div>
+                <div class="curso-desc">Desde formato básico hasta documentos corporativos profesionales con estilos, tablas e imágenes.</div>
+            </div>
+            <div class="curso-card green" style="border-color:rgba(16,185,129,.15)">
+                <div class="curso-icon">📈</div>
+                <div class="curso-name">Microsoft Excel</div>
+                <div class="curso-desc">Fórmulas avanzadas, tablas dinámicas, gráficos profesionales y automatización básica de datos.</div>
+            </div>
+            <div class="curso-card purple">
+                <div class="curso-icon">🖥️</div>
+                <div class="curso-name">Microsoft PowerPoint</div>
+                <div class="curso-desc">Diseño profesional de presentaciones, animaciones efectivas y comunicación visual impactante.</div>
+            </div>
+            <div class="curso-card pink">
+                <div class="curso-icon">🔬</div>
+                <div class="curso-name">Investigación Académica</div>
+                <div class="curso-desc">Marco teórico, metodología científica, análisis de datos y redacción de informes académicos.</div>
+            </div>
+            <div class="curso-card orange" style="border-color:rgba(249,115,22,.15)">
+                <div class="curso-icon">⏱️</div>
+                <div class="curso-name">Metodología de Estudio</div>
+                <div class="curso-desc">Técnicas efectivas de aprendizaje, organización del tiempo y optimización del rendimiento académico.</div>
+            </div>
+            <div class="curso-card cyan" style="border-color:rgba(6,182,212,.15)">
+                <div class="curso-icon">📅</div>
+                <div class="curso-name">Organización Personal</div>
+                <div class="curso-desc">Gestión del tiempo, agenda académica, priorización de tareas y balance vida-estudio.</div>
+            </div>
+        </div>
+        <div class="cert-badge">✅ Todos los cursos incluyen certificación al completar el programa</div>
+    </div>
+</section>
+
+<div style="padding:0 clamp(20px,6vw,80px)"><div class="divider"></div></div>
+
+<!-- ═══ PRECIOS ════════════════════════════════════════════ -->
+<section class="sec" id="precios">
+    <div class="sec-inner">
+        <div class="sec-head">
+            <div class="sec-label">Inversión en tu Educación</div>
+            <h2 class="sec-title">Precios <span class="gradient-text-gold">transparentes</span></h2>
+            <p class="sec-sub">Opciones diseñadas para maximizar el aprendizaje, adaptadas a cada necesidad y presupuesto.</p>
+        </div>
+        <div class="pricing-grid">
+            <div class="price-card">
+                <div class="price-icon">👤</div>
+                <div class="price-name">Clase Individual</div>
+                <div class="price-amount">$15</div>
+                <div class="price-unit">por hora · atención 1 a 1</div>
+                <div class="price-desc">Atención 100% personalizada. El docente se enfoca exclusivamente en tu ritmo, dudas y objetivos específicos.</div>
+            </div>
+            <div class="price-card featured">
+                <div class="price-badge">Más elegido</div>
+                <div class="price-icon">👥</div>
+                <div class="price-name">Clase Grupal</div>
+                <div class="price-amount">$12</div>
+                <div class="price-unit">por hora · por estudiante · grupos 2–10</div>
+                <div class="price-desc">Grupos reducidos (máximo 10 estudiantes) para garantizar atención personalizada y aprendizaje colaborativo efectivo.</div>
+            </div>
+        </div>
+        <p style="margin-top:24px;font-size:13px;color:var(--muted)">* Los precios de psicología y cursos especiales se informan al contactarnos. Disponemos de paquetes de sesiones con descuento.</p>
+    </div>
+</section>
+
+<!-- ═══ CONTACTO ═══════════════════════════════════════════ -->
+<section class="cta-band" id="contacto">
+    <div class="contacto-box">
+        <div style="text-align:center">
+            <div class="sec-label" style="text-align:center">Estamos listos para ti</div>
+            <h2 style="font-size:clamp(26px,4vw,42px);font-weight:900;letter-spacing:-1.5px;margin-bottom:12px">
+                ¿Cómo podemos<br><span class="gradient-text-gold">ayudarte hoy?</span>
+            </h2>
+            <p style="font-size:15px;color:var(--muted);max-width:480px;margin:0 auto;line-height:1.7">
+                Escríbenos o llámanos — con gusto orientamos a estudiantes y padres para encontrar el programa ideal.
+            </p>
+            <a href="https://wa.me/593990948817" target="_blank" rel="noopener" class="whatsapp-btn">
+                💬 Escribir por WhatsApp
+            </a>
+        </div>
+        <div class="contacto-grid">
+            <div class="contacto-item">
+                <div class="ci-icon" style="background:rgba(37,211,102,.12)">📱</div>
+                <div>
+                    <div class="ci-label">Teléfono / WhatsApp</div>
+                    <div class="ci-value"><a href="tel:+593990948817">099 094 8817</a></div>
+                </div>
+            </div>
+            <div class="contacto-item">
+                <div class="ci-icon" style="background:rgba(240,192,64,.12)">✉️</div>
+                <div>
+                    <div class="ci-label">Correo Electrónico</div>
+                    <div class="ci-value"><a href="mailto:atlas.cenest@gmail.com">atlas.cenest@gmail.com</a></div>
+                </div>
+            </div>
+            <div class="contacto-item">
+                <div class="ci-icon" style="background:rgba(59,130,246,.12)">📍</div>
+                <div>
+                    <div class="ci-label">Dirección</div>
+                    <div class="ci-value">Rodrigo de Triana y Av. Loja · Cuenca, Ecuador</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══ FOOTER ═════════════════════════════════════════════ -->
 <footer>
     <div class="f-brand">
-        <img src="/static/img/logo_atlas_ai.png" alt="Atlas" style="width:34px; height:34px; border-radius:50%; object-fit:cover;" loading="lazy">
+        <img src="/static/img/logo_atlas_ai.png" alt="Atlas" class="f-logo" loading="lazy">
         <div>
-            <div class="f-name">Atlas</div>
-            <div class="f-copy">Centro de Estudios · Cuenca, Ecuador</div>
+            <div class="f-name">ATLAS Centro de Estudios</div>
+            <div class="f-copy">Rodrigo de Triana y Av. Loja · Cuenca, Ecuador · 099 094 8817</div>
         </div>
     </div>
     <div class="f-right">
-        Sistema desarrollado por <strong style="color:rgba(255,255,255,0.8);">Marco Antonio Posligua S.M.</strong><br>
-        Atlas v2.0 · {{ year }}
+        Sistema interno desarrollado por <strong style="color:rgba(255,255,255,.8)">Marco Antonio Posligua S.M.</strong><br>
+        Atlas v2.1 · {{ year }}
     </div>
 </footer>
 
+<a href="/login" style="position:fixed;bottom:22px;right:22px;z-index:500;
+    background:rgba(5,13,26,.88);border:1px solid rgba(255,255,255,.12);
+    backdrop-filter:blur(14px);color:rgba(255,255,255,.7);font-size:12px;font-weight:600;
+    padding:10px 16px;border-radius:12px;text-decoration:none;
+    display:flex;align-items:center;gap:7px;transition:all .2s"
+    onmouseover="this.style.borderColor='rgba(240,192,64,.4)';this.style.color='#fff'"
+    onmouseout="this.style.borderColor='rgba(255,255,255,.12)';this.style.color='rgba(255,255,255,.7)'">
+    🔑 Portal interno
+</a>
+
 <script>
-// Navbar transparente → sólida al hacer scroll
 const nav = document.getElementById('mainNav');
-window.addEventListener('scroll', () => {
-    nav.classList.toggle('scrolled', window.scrollY > 40);
-}, { passive: true });
-console.log('Atlas Landing v2.1 — Servicios + Logos');
+window.addEventListener('scroll', () => nav.classList.toggle('scrolled', scrollY > 40), {passive:true});
+console.log('Atlas Landing v2.2 — Full redesign');
 </script>
 </body>
 </html>
