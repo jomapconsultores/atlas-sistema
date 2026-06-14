@@ -759,13 +759,13 @@ footer .f-right{font-size:12px;color:var(--muted);text-align:right}
         <p style="font-size:14px;color:var(--muted);margin-bottom:24px">Escanea el código QR con tu celular y escríbenos directamente por WhatsApp</p>
         <!-- QR recortado del roll-up: 2268×5784px
              A 300px ancho → escala 0.13228 → alto total 765px
-             QR+SCAN ME: ~71% a ~88% → y_ini=543px y_fin=673px -->
+             QR ocupa ~69% a ~88% → y_ini≈527px, mostrar desde -505px con 170px de altura -->
         <a href="https://wa.me/593990948817" target="_blank" rel="noopener"
            title="Abrir WhatsApp"
            style="display:inline-block;border-radius:18px;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.5);text-decoration:none">
             <div style="
-                width:300px; height:140px;
-                background: url('/static/img/roll_up_atlas.png') center -540px / 300px auto no-repeat;
+                width:300px; height:170px;
+                background: url('/static/img/roll_up_atlas.png') center -505px / 300px auto no-repeat;
             "></div>
         </a>
         <div style="margin-top:16px;display:flex;align-items:center;justify-content:center;gap:8px">
@@ -792,8 +792,8 @@ footer .f-right{font-size:12px;color:var(--muted);text-align:right}
 
 <!-- ═══ LOGO REDONDO — ESQUINA SUPERIOR DERECHA ══════════ -->
 <a href="/" style="
-    position:fixed; top:76px; right:16px; z-index:150;
-    width:80px; height:80px; border-radius:50%;
+    position:fixed; top:72px; right:14px; z-index:150;
+    width:104px; height:104px; border-radius:50%;
     overflow:hidden; display:block;
     box-shadow:0 4px 24px rgba(0,0,0,.55), 0 0 0 3px rgba(240,192,64,.5);
     transition:transform .2s;
