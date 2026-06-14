@@ -43,6 +43,14 @@ except Exception:
 app = Flask(__name__)
 app.config.from_object(Config)
 app.secret_key = Config.SECRET_KEY
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 31536000  # 1 año de caché para estáticos
+
+# Compresión gzip de todas las respuestas (HTML, JSON, CSS, JS)
+try:
+    from flask_compress import Compress
+    Compress(app)
+except ImportError:
+    pass
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -182,27 +190,42 @@ NIVELES_POR_TIPO = {
     'Bachillerato': ['Primero de bachillerato', 'Segundo de bachillerato', 'Tercero de bachillerato'],
 }
 
+_CACHE_TTL = 300  # 5 minutos para datos semi-estáticos
+_ASIG_CACHE:  dict = {'t': 0.0, 'data': None}
+_PROF_CACHE:  dict = {'t': 0.0, 'data': None}
+_COSTOS_CACHE: dict = {'t': 0.0, 'data': None}
+
 def cargar_asignaturas():
-    """Lista de asignaturas desde la tabla `asignaturas`. Si la tabla no existe
-    o está vacía, usa la lista por defecto (ASIGNATURAS)."""
+    """Lista de asignaturas con caché de 5 min para no consultar en cada página."""
+    import time
+    if _ASIG_CACHE['data'] and time.time() - _ASIG_CACHE['t'] < _CACHE_TTL:
+        return _ASIG_CACHE['data']
     try:
         r = supabase.table('asignaturas').select('nombre').eq('activo', True).order('nombre').execute()
         nombres = [a['nombre'] for a in (r.data or []) if a.get('nombre')]
-        return nombres if nombres else ASIGNATURAS
+        result = nombres if nombres else ASIGNATURAS
     except Exception:
-        return ASIGNATURAS
+        result = ASIGNATURAS
+    _ASIG_CACHE['data'] = result
+    _ASIG_CACHE['t'] = time.time()
+    return result
 
 def cargar_profesores():
-    """Lista de nombres de docentes ('Nombres Apellidos') desde la tabla `docentes`.
-    Si la tabla no existe o está vacía, usa la lista por defecto (PROFESORES)."""
+    """Lista de docentes con caché de 5 min."""
+    import time
+    if _PROF_CACHE['data'] and time.time() - _PROF_CACHE['t'] < _CACHE_TTL:
+        return _PROF_CACHE['data']
     try:
         r = supabase.table('docentes').select('nombres,apellidos').eq('activo', True).execute()
         nombres = [f"{d.get('nombres','')} {d.get('apellidos','')}".strip()
                    for d in (r.data or [])]
         nombres = [n for n in nombres if n]
-        return sorted(nombres) if nombres else PROFESORES
+        result = sorted(nombres) if nombres else PROFESORES
     except Exception:
-        return PROFESORES
+        result = PROFESORES
+    _PROF_CACHE['data'] = result
+    _PROF_CACHE['t'] = time.time()
+    return result
 
 def a_oracion(texto):
     if not texto:
@@ -259,8 +282,12 @@ def pago_sesion_docente(s):
 
 # ========== CARGAR COSTOS DESDE SUPABASE ==========
 def cargar_costos():
+    """Costos de configuración con caché de 5 min."""
+    import time
+    if _COSTOS_CACHE['data'] and time.time() - _COSTOS_CACHE['t'] < _CACHE_TTL:
+        return _COSTOS_CACHE['data']
     try:
-        costos = supabase.table('costos_config').select('*').eq('activo', True).execute()
+        costos = supabase.table('costos_config').select('tipo,concepto,precio').eq('activo', True).execute()
         psicologia = []
         precios_clase = []
         precios_matricula = []
@@ -274,9 +301,12 @@ def cargar_costos():
                 precios_matricula.append(float(c['precio']))
             elif c['tipo'] == 'pension':
                 precios_pension.append(float(c['precio']))
-        return psicologia, precios_clase or [10], precios_matricula or [0, 18, 20], precios_pension or [99, 100, 110]
-    except:
-        return ATENCION_PSICOLOGICA, PRECIOS_CLASE, PRECIOS_MATRICULA, PRECIOS_PENSION
+        result = (psicologia, precios_clase or [10], precios_matricula or [0, 18, 20], precios_pension or [99, 100, 110])
+    except Exception:
+        result = (ATENCION_PSICOLOGICA, PRECIOS_CLASE, PRECIOS_MATRICULA, PRECIOS_PENSION)
+    _COSTOS_CACHE['data'] = result
+    _COSTOS_CACHE['t'] = time.time()
+    return result
 
 # ========== PAGINACIÓN SUPABASE ==========
 def _fetch_all(builder, page_size=1000):
@@ -296,29 +326,25 @@ def _fetch_all(builder, page_size=1000):
 
 # ========== DEVOLUCIONES (helpers) ==========
 def devoluciones_periodo(anio, mes, solo_estudiantes=True):
-    """Suma de devoluciones de dinero a clientes en el período indicado.
-    Se usa para RESTAR de los ingresos en Reportes y Liquidación. Por defecto
-    SOLO devoluciones a estudiantes: los ingresos de esas pantallas salen de la
-    tabla `pagos` (estudiantes); una devolución a cliente externo ya se resta
-    del monto_pagado de su cita y restarla aquí la descontaría dos veces.
-    Filtra por mes_periodo/anio_periodo (como gastos); si esos campos
-    faltan, cae a la fecha de la devolución."""
+    """Suma de devoluciones del período. Filtra tipo_cliente en BD para
+    reducir tráfico; aplica mes_periodo/anio_periodo o fecha en Python."""
     try:
-        res = _fetch_all(supabase.table('devoluciones').select('*'))
+        q = supabase.table('devoluciones').select('monto,tipo_cliente,mes_periodo,anio_periodo,fecha')
+        if solo_estudiantes:
+            q = q.eq('tipo_cliente', 'estudiante')
+        res = _fetch_all(q)
     except Exception:
         return 0.0
+    prefijo = f"{anio}-{mes:02d}"
     total = 0.0
     for d in res:
-        if solo_estudiantes and d.get('tipo_cliente') != 'estudiante':
-            continue
         mp = d.get('mes_periodo')
         ap = d.get('anio_periodo')
         if mp and ap:
             if int(mp) == int(mes) and int(ap) == int(anio):
                 total += d.get('monto', 0) or 0
         else:
-            f = d.get('fecha', '') or ''
-            if f[:7] == f"{anio}-{mes:02d}":
+            if (d.get('fecha', '') or '')[:7] == prefijo:
                 total += d.get('monto', 0) or 0
     return total
 
@@ -643,7 +669,7 @@ def passkey_eliminar(pid):
 def dashboard():
     solicitudes_pendientes = 0
     if current_user.rol in ['admin', 'socio']:
-        solicitudes = supabase.table('anticipos_solicitudes').select('*').eq('estado', 'pendiente').execute()
+        solicitudes = supabase.table('anticipos_solicitudes').select('id').eq('estado', 'pendiente').execute()
         solicitudes_pendientes = len(solicitudes.data or [])
     return render_template('dashboard.html', rol=current_user.rol, solicitudes_pendientes=solicitudes_pendientes)
 
