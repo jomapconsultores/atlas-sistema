@@ -291,6 +291,51 @@
             footer .f-right { text-align: center; }
         }
 
+        /* ── SERVICES ────────────────────────────────── */
+        .services-section {
+            position: relative; z-index: 1;
+            padding: clamp(70px, 10vw, 110px) clamp(20px, 7vw, 100px);
+            background: rgba(255,255,255,0.015);
+            border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+        }
+        .services-inner { max-width: 1200px; margin: 0 auto; }
+        .services-layout {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: start;
+        }
+        .services-visual {
+            position: relative; border-radius: 22px; overflow: hidden;
+            box-shadow: 0 32px 80px rgba(0,0,0,0.55);
+        }
+        .services-visual img { width: 100%; height: auto; display: block; }
+        .service-category { margin-bottom: 28px; }
+        .service-cat-title {
+            font-size: 11px; font-weight: 800; color: var(--blue2);
+            text-transform: uppercase; letter-spacing: 2.5px; margin-bottom: 10px;
+        }
+        .service-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+        .service-pill {
+            background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 100px; padding: 6px 14px;
+            font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.85);
+            transition: all .2s;
+        }
+        .service-pill:hover { background: rgba(59,130,246,0.15); border-color: rgba(59,130,246,0.4); color: #fff; }
+        .service-pill.gold { border-color: rgba(240,192,64,0.35); color: var(--gold); background: rgba(240,192,64,0.07); }
+        .service-pill.purple { border-color: rgba(139,92,246,0.35); color: #c4b5fd; background: rgba(139,92,246,0.07); }
+        @media (max-width: 900px) {
+            .services-layout { grid-template-columns: 1fr; }
+            .services-visual { max-width: 400px; margin: 0 auto; }
+        }
+
+        /* ── LOGO HERO ───────────────────────────────── */
+        .logo-display {
+            display: flex; align-items: center; gap: 18px; margin-bottom: 28px;
+        }
+        .logo-display img.main-logo {
+            height: 64px; width: auto; border-radius: 14px;
+            filter: drop-shadow(0 4px 20px rgba(240,192,64,0.35));
+        }
+
         /* ── SEPARATOR ───────────────────────────────── */
         .divider {
             max-width: 1200px; margin: 0 auto;
@@ -308,7 +353,7 @@
 <!-- ── NAVBAR ──────────────────────────────────────── -->
 <nav class="nav" id="mainNav">
     <a href="/" class="nav-brand">
-        <img src="/static/img/logo_atlas.png" alt="Atlas" class="nav-logo" loading="lazy">
+        <img src="/static/img/logo_atlas_ai.png" alt="Atlas" class="nav-logo" loading="lazy">
         <div class="nav-brand-text">
             <div class="name">Atlas</div>
             <div class="sub">Centro de Estudios</div>
@@ -321,17 +366,20 @@
 <section class="hero">
     <div class="hero-inner">
         <div class="hero-content">
+            <div class="logo-display">
+                <img src="/static/img/logo_atlas_ai.png" alt="Atlas Centro de Estudios" class="main-logo" loading="eager">
+            </div>
             <div class="hero-badge">Sistema activo</div>
-            <h1>Gestión <span class="gold">académica</span><br>inteligente</h1>
+            <h1>Tu centro de estudios,<br><span class="gold">sin complicaciones</span></h1>
             <p class="hero-desc">
-                La plataforma que centraliza planificación, calendario, finanzas y reportes
-                de Atlas Centro de Estudios — en un solo lugar, desde cualquier dispositivo.
+                Atlas Centro de Estudios ofrece clases particulares, preparación pre-universitaria
+                y atención psicológica — todo gestionado en una sola plataforma profesional.
             </p>
             <div class="hero-actions">
                 <a href="/login" class="btn-primary-hero">
                     <span>🔑</span> Acceder al sistema
                 </a>
-                <a href="#features" class="btn-secondary-hero">Ver funciones</a>
+                <a href="#servicios" class="btn-secondary-hero">Nuestros servicios</a>
             </div>
         </div>
 
@@ -427,6 +475,64 @@
         </div>
     </div>
 </div>
+
+<!-- ── SERVICES ──────────────────────────────────────── -->
+<section class="services-section" id="servicios">
+    <div class="services-inner">
+        <div class="section-head" style="margin-bottom:40px;">
+            <div class="section-label">Nuestros Servicios</div>
+            <h2 class="section-title">Educación y bienestar<br>en un solo lugar</h2>
+            <p class="section-subtitle">Desde refuerzo escolar hasta atención psicológica especializada — apoyamos el desarrollo integral de cada estudiante.</p>
+        </div>
+        <div class="services-layout">
+            <div class="services-content">
+                <div class="service-category">
+                    <div class="service-cat-title">Clases Particulares</div>
+                    <div class="service-pills">
+                        <span class="service-pill">Matemáticas</span>
+                        <span class="service-pill">Física</span>
+                        <span class="service-pill">Química</span>
+                        <span class="service-pill">Inglés</span>
+                        <span class="service-pill">Contabilidad</span>
+                        <span class="service-pill">Estadística</span>
+                        <span class="service-pill">Informática</span>
+                        <span class="service-pill">Lengua y Literatura</span>
+                        <span class="service-pill">Historia</span>
+                        <span class="service-pill">Biología</span>
+                    </div>
+                </div>
+                <div class="service-category">
+                    <div class="service-cat-title">Preparación Pre-Universitaria</div>
+                    <div class="service-pills">
+                        <span class="service-pill gold">Pre SENESCYT</span>
+                        <span class="service-pill gold">Examen de Admisión</span>
+                        <span class="service-pill gold">Razonamiento Lógico</span>
+                        <span class="service-pill gold">Razonamiento Verbal</span>
+                        <span class="service-pill gold">Aptitud Numérica</span>
+                    </div>
+                </div>
+                <div class="service-category">
+                    <div class="service-cat-title">Atención Psicológica</div>
+                    <div class="service-pills">
+                        <span class="service-pill purple">Evaluación Psicológica</span>
+                        <span class="service-pill purple">Terapia Individual</span>
+                        <span class="service-pill purple">Terapia Familiar</span>
+                        <span class="service-pill purple">Orientación Vocacional</span>
+                        <span class="service-pill purple">Paquetes de sesiones</span>
+                    </div>
+                </div>
+                <div style="margin-top:28px; padding:18px 20px; background:rgba(240,192,64,0.07); border:1px solid rgba(240,192,64,0.2); border-radius:14px;">
+                    <div style="font-size:13px; color:rgba(255,255,255,0.8); line-height:1.7;">
+                        <strong style="color:var(--gold);">Clases personalizadas</strong> adaptadas al ritmo y nivel de cada estudiante — presencial o virtual, con seguimiento continuo y reportes para padres.
+                    </div>
+                </div>
+            </div>
+            <div class="services-visual">
+                <img src="/static/img/roll_up_atlas.png" alt="Atlas Centro de Estudios — Servicios" loading="lazy">
+            </div>
+        </div>
+    </div>
+</section>
 
 <!-- ── FEATURES ─────────────────────────────────────── -->
 <section class="section" id="features">
@@ -548,7 +654,7 @@
 <!-- ── FOOTER ────────────────────────────────────────── -->
 <footer>
     <div class="f-brand">
-        <img src="/static/img/logo_atlas.png" alt="Atlas" style="width:34px; height:34px; border-radius:50%; object-fit:cover;" loading="lazy">
+        <img src="/static/img/logo_atlas_ai.png" alt="Atlas" style="width:34px; height:34px; border-radius:50%; object-fit:cover;" loading="lazy">
         <div>
             <div class="f-name">Atlas</div>
             <div class="f-copy">Centro de Estudios · Cuenca, Ecuador</div>

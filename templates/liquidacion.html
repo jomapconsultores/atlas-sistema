@@ -38,9 +38,28 @@
         {% if liq_guardada %}<span class="badge bg-light text-success ms-2" style="font-size:12px;">✅ Guardado</span>{% endif %}
     </div>
     <div class="card-body">
+        {% if saldo_banco is not none %}
+        <div class="alert alert-info border-0 mb-3 py-2 px-3 d-flex align-items-center gap-3" style="border-radius:10px; background:linear-gradient(135deg,#e3f2fd,#bbdefb); border-left:4px solid #1565c0 !important;">
+            <div>
+                <div class="fw-bold" style="font-size:22px; color:#0d47a1;">${{ "%.2f"|format(saldo_banco) }}</div>
+                <div style="font-size:12px; color:#1565c0;">Saldo real en cuenta bancaria</div>
+            </div>
+            <div class="ms-2" style="font-size:12px; color:#555;">
+                Último movimiento registrado:<br>
+                <strong>{{ fecha_saldo_banco }}</strong>
+            </div>
+            <div class="ms-auto" style="font-size:11px; color:#777; max-width:200px; line-height:1.4;">
+                Este es el saldo del banco según movimientos de cuenta cargados. Úsalo como referencia para el campo de abajo.
+            </div>
+        </div>
+        {% endif %}
         <form method="POST" action="{{ url_for('liquidacion', mes=mes, anio=anio) }}" class="row g-3 align-items-end">
             <div class="col-md-4">
-                <label class="form-label fw-bold">Saldo actual ($)</label>
+                <label class="form-label fw-bold">Saldo actual ($)
+                    {% if saldo_banco is not none %}
+                    <span class="badge bg-info text-dark ms-1" style="font-size:10px; vertical-align:middle;" title="Saldo bancario según movimientos de cuenta">${{ "%.2f"|format(saldo_banco) }} banco</span>
+                    {% endif %}
+                </label>
                 <div class="input-group">
                     <span class="input-group-text border-0 bg-light">$</span>
                     <input type="number" name="saldo_cuenta" class="form-control border-0 shadow-sm" step="0.01" value="{{ '%.2f'|format(saldo_cuenta) }}" placeholder="0.00">

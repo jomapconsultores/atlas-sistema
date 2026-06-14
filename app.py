@@ -2474,6 +2474,20 @@ def liquidacion():
     saldo_cuenta = float(liq_record['saldo_cuenta']) if liq_record else 0.0
     _, ultimo_dia = monthrange(anio, mes)
 
+    # Saldo real del banco: movimiento más reciente con campo saldo != null
+    saldo_banco = None
+    fecha_saldo_banco = None
+    try:
+        mv_r = supabase.table('movimientos_cuenta').select('saldo,fecha') \
+            .not_.is_('saldo', 'null') \
+            .order('fecha', desc=True).order('id', desc=True) \
+            .limit(1).execute()
+        if mv_r.data:
+            saldo_banco = float(mv_r.data[0].get('saldo') or 0)
+            fecha_saldo_banco = str(mv_r.data[0].get('fecha') or '')[:10]
+    except Exception:
+        pass
+
     # Gastos del período
     try:
         gastos_periodo = supabase.table('gastos').select('*').eq('mes_periodo', mes).eq('anio_periodo', anio).order('fecha', desc=True).execute()
@@ -2560,6 +2574,7 @@ def liquidacion():
 
     return render_template('liquidacion.html',
         mes=mes, anio=anio, saldo_cuenta=saldo_cuenta,
+        saldo_banco=saldo_banco, fecha_saldo_banco=fecha_saldo_banco,
         liq_guardada=liq_record is not None,
         gastos=gastos_periodo.data or [], total_gastos=total_gastos, gastos_por_cat=gastos_por_cat,
         reembolsos_por_socio=reembolsos_por_socio,
