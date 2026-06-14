@@ -186,11 +186,17 @@
                 </div>
 
                 <!-- ── Toggle modo ── -->
-                <div class="btn-group mb-3" role="group">
-                    <input type="radio" class="btn-check" name="modo_sesiones" id="modoIndividual" value="individual" checked onchange="cambiarModo('individual')">
-                    <label class="btn btn-outline-primary" for="modoIndividual">📝 Sesiones individuales</label>
-                    <input type="radio" class="btn-check" name="modo_sesiones" id="modoContinua" value="continua" onchange="cambiarModo('continua')">
-                    <label class="btn btn-outline-success" for="modoContinua">🗓️ Rango continuo</label>
+                <div style="display:inline-flex; border:2px solid #e2e8f0; border-radius:10px; overflow:hidden; margin-bottom:18px;">
+                    <button type="button" id="btnModoIndividual"
+                            onclick="cambiarModo('individual')"
+                            style="padding:9px 20px; border:none; font-weight:700; font-size:13px; cursor:pointer; background:linear-gradient(135deg,#1e3a5f,#1e40af); color:#fff; transition:all .2s;">
+                        📝 Sesiones individuales
+                    </button>
+                    <button type="button" id="btnModoContinua"
+                            onclick="cambiarModo('continua')"
+                            style="padding:9px 20px; border:none; font-weight:700; font-size:13px; cursor:pointer; background:#f8fafc; color:#64748b; transition:all .2s;">
+                        🗓️ Rango continuo
+                    </button>
                 </div>
 
                 <!-- ── Panel: sesiones individuales ── -->
@@ -454,6 +460,14 @@ const DIAS_LABEL = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 function cambiarModo(modo) {
     document.getElementById('panelIndividual').style.display = (modo === 'individual') ? 'block' : 'none';
     document.getElementById('panelRango').style.display = (modo === 'continua') ? 'block' : 'none';
+
+    const btnInd = document.getElementById('btnModoIndividual');
+    const btnCon = document.getElementById('btnModoContinua');
+    const activeStyle = 'background:linear-gradient(135deg,#1e3a5f,#1e40af);color:#fff;';
+    const inactiveStyle = 'background:#f8fafc;color:#64748b;';
+    if (btnInd) btnInd.style.cssText = 'padding:9px 20px;border:none;font-weight:700;font-size:13px;cursor:pointer;transition:all .2s;' + (modo === 'individual' ? activeStyle : inactiveStyle);
+    if (btnCon) btnCon.style.cssText = 'padding:9px 20px;border:none;font-weight:700;font-size:13px;cursor:pointer;transition:all .2s;' + (modo === 'continua' ? activeStyle : inactiveStyle);
+
     if (modo === 'continua') initRangoPanel();
     actualizarEstado();
 }
