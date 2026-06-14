@@ -757,9 +757,13 @@ footer .f-right{font-size:12px;color:var(--muted);text-align:right}
     <div style="max-width:360px;margin:0 auto">
         <div style="font-size:11px;font-weight:800;color:var(--blue2);text-transform:uppercase;letter-spacing:2.5px;margin-bottom:10px">Contáctanos al instante</div>
         <p style="font-size:14px;color:var(--muted);margin-bottom:24px">Escanea el código QR con tu celular y escríbenos directamente por WhatsApp</p>
-        <div style="display:inline-block;background:#fff;border-radius:20px;padding:16px;box-shadow:0 12px 40px rgba(0,0,0,.4)">
-            <canvas id="atlas-qr" style="display:block;border-radius:8px"></canvas>
-        </div>
+        <!-- QR recortado del roll-up: 2268×5784px → QR en ~73%-88% de alto -->
+        <a href="https://wa.me/593990948817" target="_blank" rel="noopener" style="display:inline-block;border-radius:18px;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.5);text-decoration:none">
+            <div style="
+                width:216px;height:120px;
+                background:url('/static/img/roll_up_atlas.png') center -364px / 216px auto no-repeat;
+            "></div>
+        </a>
         <div style="margin-top:16px;display:flex;align-items:center;justify-content:center;gap:8px">
             <div style="width:10px;height:10px;border-radius:50%;background:#25d366"></div>
             <span style="font-size:13.5px;font-weight:700;color:rgba(255,255,255,.85)">099 094 8817</span>
@@ -782,6 +786,21 @@ footer .f-right{font-size:12px;color:var(--muted);text-align:right}
     </div>
 </footer>
 
+<!-- ═══ PANEL LATERAL ROLL-UP (solo escritorio ancho) ═════ -->
+<div id="rollupPanel" style="
+    position:fixed; right:0; top:50%; transform:translateY(-50%);
+    z-index:90; width:168px;
+    border-radius:14px 0 0 14px; overflow:hidden;
+    box-shadow:-6px 0 32px rgba(0,0,0,.55);
+    display:none;
+">
+    <img src="/static/img/roll_up_atlas.png" alt="Atlas Centro de Estudios"
+         style="width:100%;height:auto;display:block;" loading="lazy">
+</div>
+<style>
+@media(min-width:1340px){ #rollupPanel{ display:block; } }
+</style>
+
 <a href="https://wa.me/593990948817" target="_blank" rel="noopener" style="position:fixed;bottom:22px;right:22px;z-index:500;
     background:linear-gradient(135deg,#25d366,#128c7e);
     color:#fff;font-size:14px;font-weight:800;
@@ -794,15 +813,9 @@ footer .f-right{font-size:12px;color:var(--muted);text-align:right}
     💬 WhatsApp
 </a>
 
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 <script>
 const nav = document.getElementById('mainNav');
 window.addEventListener('scroll', () => nav.classList.toggle('scrolled', scrollY > 40), {passive:true});
-
-QRCode.toCanvas(document.getElementById('atlas-qr'), 'https://wa.me/593990948817', {
-    width: 200, margin: 1,
-    color: { dark: '#0a1628', light: '#ffffff' }
-});
 </script>
 </body>
 </html>
