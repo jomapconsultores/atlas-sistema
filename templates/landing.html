@@ -757,11 +757,15 @@ footer .f-right{font-size:12px;color:var(--muted);text-align:right}
     <div style="max-width:360px;margin:0 auto">
         <div style="font-size:11px;font-weight:800;color:var(--blue2);text-transform:uppercase;letter-spacing:2.5px;margin-bottom:10px">Contáctanos al instante</div>
         <p style="font-size:14px;color:var(--muted);margin-bottom:24px">Escanea el código QR con tu celular y escríbenos directamente por WhatsApp</p>
-        <!-- QR recortado del roll-up: 2268×5784px → QR en ~73%-88% de alto -->
-        <a href="https://wa.me/593990948817" target="_blank" rel="noopener" style="display:inline-block;border-radius:18px;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.5);text-decoration:none">
+        <!-- QR recortado del roll-up: 2268×5784px
+             A 300px ancho → escala 0.13228 → alto total 765px
+             QR+SCAN ME: ~71% a ~88% → y_ini=543px y_fin=673px -->
+        <a href="https://wa.me/593990948817" target="_blank" rel="noopener"
+           title="Abrir WhatsApp"
+           style="display:inline-block;border-radius:18px;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.5);text-decoration:none">
             <div style="
-                width:216px;height:120px;
-                background:url('/static/img/roll_up_atlas.png') center -364px / 216px auto no-repeat;
+                width:300px; height:140px;
+                background: url('/static/img/roll_up_atlas.png') center -540px / 300px auto no-repeat;
             "></div>
         </a>
         <div style="margin-top:16px;display:flex;align-items:center;justify-content:center;gap:8px">
@@ -785,6 +789,18 @@ footer .f-right{font-size:12px;color:var(--muted);text-align:right}
         Atlas v2.1 · {{ year }}
     </div>
 </footer>
+
+<!-- ═══ LOGO REDONDO — ESQUINA SUPERIOR DERECHA ══════════ -->
+<a href="/" style="
+    position:fixed; top:76px; right:16px; z-index:150;
+    width:80px; height:80px; border-radius:50%;
+    overflow:hidden; display:block;
+    box-shadow:0 4px 24px rgba(0,0,0,.55), 0 0 0 3px rgba(240,192,64,.5);
+    transition:transform .2s;
+" onmouseover="this.style.transform='scale(1.08)'" onmouseout="this.style.transform='scale(1)'">
+    <img src="/static/img/logo_atlas_redondo.png" alt="Atlas"
+         style="width:100%;height:100%;object-fit:cover;display:block;" fetchpriority="high">
+</a>
 
 <!-- ═══ PANEL LATERAL ROLL-UP (solo escritorio ancho) ═════ -->
 <div id="rollupPanel" style="
