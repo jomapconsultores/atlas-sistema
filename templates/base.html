@@ -3,10 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0f172a">
     <title>{% block title %}Atlas{% endblock %}</title>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
             --atlas-navy: #0f172a;
@@ -579,6 +583,41 @@
             .sidebar-toggle { display: inline-flex; }
             body.has-sidebar .main-container { margin-left: 0; }
             body.has-sidebar footer { margin-left: 0; }
+        }
+
+        /* ── MEJORAS MOBILE ──────────────────────────── */
+        @media (max-width: 768px) {
+            :root { --nav-h: 66px; }
+            body.has-sidebar .main-container { margin-top: calc(var(--nav-h) + 16px); padding: 0 14px; }
+            .main-container { padding: 0 14px; }
+            .card-body { padding: 16px !important; }
+            .card-header { padding: 13px 16px !important; font-size: 13.5px !important; }
+            .btn:not(.btn-sm):not(.btn-lg) { padding: 10px 16px !important; }
+            .table thead th { font-size: 10px !important; padding: 10px 10px !important; }
+            .table tbody td { padding: 9px 10px !important; font-size: 12.5px; }
+            .page-hero { padding: 18px 18px; }
+            .page-hero h2 { font-size: 1.25rem; }
+            .stat-card { padding: 18px !important; }
+            .stat-card h2, .stat-card h3 { font-size: 1.6rem; }
+            /* Nav actions más compactos */
+            .nav-buttons { gap: 6px; margin-bottom: 16px; }
+            .nav-buttons .btn { font-size: 12px !important; padding: 8px 13px !important; }
+            /* Formularios táctiles */
+            .form-control, .form-select { font-size: 15px !important; padding: 12px 13px !important; }
+            /* Tabla horizontal scroll */
+            .table-responsive { -webkit-overflow-scrolling: touch; }
+        }
+        @media (max-width: 480px) {
+            .app-sidebar { width: 100%; max-width: 320px; }
+            h3 { font-size: 1.4rem !important; }
+        }
+
+        /* ── TOUCH / TAP FEEDBACK ────────────────────── */
+        @media (hover: none) {
+            .btn:hover { transform: none !important; box-shadow: var(--shadow-sm) !important; }
+            .btn:active { transform: scale(0.97) !important; }
+            .module-card:hover { transform: none; box-shadow: 0 2px 12px rgba(0,0,0,0.04) !important; }
+            .module-card:active { transform: scale(0.98); }
         }
     </style>
 </head>

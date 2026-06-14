@@ -418,7 +418,7 @@ def crear_devolucion(tipo_cliente, fecha, monto, tipo_pago, motivo, pagar_docent
 def inicio():
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
-    return render_template('inicio.html')
+    return render_template('landing.html', year=date.today().year)
 
 @app.route('/contacto', methods=['POST'])
 def contacto():
@@ -867,6 +867,7 @@ def editar_planificacion_masiva():
 # ========== API PARA EDITAR ==========
 @app.route('/api/sesiones/todas')
 @login_required
+@socio_admin_required
 def api_sesiones_todas():
     sesiones = supabase.table('sesiones').select('*, estudiantes(apellidos, nombres)').order('fecha', desc=True).execute()
     resultado = []
@@ -893,6 +894,7 @@ def api_sesiones_todas():
 
 @app.route('/api/sesiones/para-sincronizar')
 @login_required
+@socio_admin_required
 def api_sesiones_para_sincronizar():
     """Devuelve las sesiones en estado 'Realizado' listas para sincronizar con Google Calendar.
     Acepta filtros opcionales ?mes=&anio= para limitar a un mes concreto."""
@@ -939,6 +941,12 @@ def api_sesion_unica(id):
     if not s.data:
         return jsonify({'error': 'No encontrada'}), 404
     sesion = s.data[0]
+    # Usuarios no-admin solo pueden ver sesiones donde son el profesor/terapeuta
+    if current_user.rol not in ('admin', 'socio'):
+        nombre = current_user.nombre.strip().lower()
+        profesor = (sesion.get('profesor_terapeuta') or '').strip().lower()
+        if nombre not in profesor and profesor not in nombre:
+            return jsonify({'error': 'Sin permiso'}), 403
     if sesion.get('hora_inicio'):
         sesion['hora_inicio'] = sesion['hora_inicio'][:5]
     if sesion.get('hora_fin'):
@@ -947,6 +955,7 @@ def api_sesion_unica(id):
 
 @app.route('/api/sesion/<int:id>/editar', methods=['POST'])
 @login_required
+@socio_admin_required
 def api_editar_sesion(id):
     try:
         data = request.get_json()
@@ -1047,6 +1056,7 @@ def api_editar_sesion(id):
 
 @app.route('/api/sesion/<int:id>/eliminar', methods=['POST'])
 @login_required
+@socio_admin_required
 def eliminar_sesion(id):
     try:
         # Borrar primero el evento del Google Calendar (si existe) antes de eliminar la fila
