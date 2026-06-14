@@ -58,13 +58,6 @@
 
     .precio-individual label { color: var(--atlas-accent2); }
     label.small { font-size:11px; font-weight:700; color: var(--atlas-muted); text-transform:uppercase; letter-spacing:.4px; margin-bottom:3px; }
-
-    /* ── Rango continuo ──────────────────────────── */
-    .rango-panel { background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 10px; padding: 18px 20px; margin-bottom: 16px; }
-    .rango-panel .small { color: #166534; }
-    .rango-resumen { font-size:13px; font-weight:700; color:#166534; }
-    .dia-check label { font-weight:800; font-size:13px; cursor:pointer; padding: 6px 12px; border-radius:8px; border: 1.5px solid #d1d5db; background:#fff; transition: all .15s; user-select:none; }
-    .dia-check input:checked + label { background:#166534; color:#fff; border-color:#166534; }
 </style>
 
 <!-- ── Cabecera ─────────────────────────────────────── -->
@@ -181,82 +174,17 @@
                     <div class="step-num">3</div>
                     <div>
                         <p class="step-title">Sesiones y horarios</p>
-                        <p class="step-sub">Programa sesiones individuales o planifica un rango de días a la misma hora (capacitaciones, talleres, etc.).</p>
+                        <p class="step-sub">Fecha, hora de inicio y fin. La duración se calcula y valida automáticamente.</p>
                     </div>
                 </div>
-
-                <!-- ── Toggle modo ── -->
-                <div style="display:inline-flex; border:2px solid #e2e8f0; border-radius:10px; overflow:hidden; margin-bottom:18px;">
-                    <button type="button" id="btnModoIndividual"
-                            onclick="cambiarModo('individual')"
-                            style="padding:9px 20px; border:none; font-weight:700; font-size:13px; cursor:pointer; background:linear-gradient(135deg,#1e3a5f,#1e40af); color:#fff; transition:all .2s;">
-                        📝 Sesiones individuales
-                    </button>
-                    <button type="button" id="btnModoContinua"
-                            onclick="cambiarModo('continua')"
-                            style="padding:9px 20px; border:none; font-weight:700; font-size:13px; cursor:pointer; background:#f8fafc; color:#64748b; transition:all .2s;">
-                        🗓️ Rango continuo
-                    </button>
+                <div class="mb-3" style="max-width:320px;">
+                    <label class="form-label">Número de Sesiones *</label>
+                    <select name="num_sesiones" id="numSesiones" class="form-select" onchange="mostrarFechas()">
+                        {% for i in range(1, 11) %}
+                        <option value="{{ i }}">{{ i }} sesión(es)</option>
+                        {% endfor %}
+                    </select>
                 </div>
-
-                <!-- ── Panel: sesiones individuales ── -->
-                <div id="panelIndividual">
-                    <div class="mb-3" style="max-width:320px;">
-                        <label class="form-label">Número de Sesiones *</label>
-                        <select name="num_sesiones" id="numSesiones" class="form-select" onchange="mostrarFechas()">
-                            {% for i in range(1, 61) %}
-                            <option value="{{ i }}">{{ i }} sesión(es)</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                </div>
-
-                <!-- ── Panel: rango continuo ── -->
-                <div id="panelRango" class="rango-panel" style="display:none;">
-                    <p class="mb-3" style="font-size:13px; color:#166534; font-weight:600;">
-                        Ingresa el rango de fechas y la hora fija. El sistema generará una sesión por cada día seleccionado.
-                    </p>
-                    <div class="row g-2 mb-2">
-                        <div class="col-6 col-md-3">
-                            <label class="small">Fecha inicio *</label>
-                            <input type="date" id="rangoFechaIni" class="form-control" value="{{ today }}">
-                        </div>
-                        <div class="col-6 col-md-3">
-                            <label class="small">Fecha fin *</label>
-                            <input type="date" id="rangoFechaFin" class="form-control" value="{{ today }}">
-                        </div>
-                        <div class="col-6 col-md-3">
-                            <label class="small">Hora inicio *</label>
-                            <input type="time" id="rangoHoraIni" class="form-control">
-                        </div>
-                        <div class="col-6 col-md-3">
-                            <label class="small">Hora fin *</label>
-                            <input type="time" id="rangoHoraFin" class="form-control">
-                        </div>
-                    </div>
-                    <div class="row g-2 mb-3">
-                        <div class="col-md-6">
-                            <label class="small">Profesor / Facilitador *</label>
-                            <select id="rangoProfesor" class="form-select" onchange="toggleRangoProf(this.value)"></select>
-                            <input type="text" id="rangoNuevoProfesor" class="form-control mt-1" placeholder="Nombre completo del nuevo profesor" style="display:none;">
-                        </div>
-                        <div class="col-md-6">
-                            <label class="small">Encargado de apertura *</label>
-                            <select id="rangoEncargado" class="form-select"></select>
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="small d-block mb-2">Días de la semana *</label>
-                        <div id="diasSemana" class="d-flex gap-2 flex-wrap"></div>
-                    </div>
-                    <div class="d-flex align-items-center gap-3 flex-wrap">
-                        <button type="button" class="btn btn-success" onclick="generarSesionesRango()">
-                            🗓️ Generar sesiones del rango
-                        </button>
-                        <span id="rangoResumen" class="rango-resumen"></span>
-                    </div>
-                </div>
-
                 <div id="contenedorFechas"></div>
             </div>
 
@@ -452,123 +380,6 @@ function mostrarFechas() {
 function toggleNuevoProf(num, val) {
     document.getElementById('nuevoProfInput_' + num).style.display = (val === 'nuevo') ? 'block' : 'none';
     actualizarEstado();
-}
-
-// ===== MODO RANGO CONTINUO =====
-const DIAS_LABEL = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
-
-function cambiarModo(modo) {
-    document.getElementById('panelIndividual').style.display = (modo === 'individual') ? 'block' : 'none';
-    document.getElementById('panelRango').style.display = (modo === 'continua') ? 'block' : 'none';
-
-    const btnInd = document.getElementById('btnModoIndividual');
-    const btnCon = document.getElementById('btnModoContinua');
-    const activeStyle = 'background:linear-gradient(135deg,#1e3a5f,#1e40af);color:#fff;';
-    const inactiveStyle = 'background:#f8fafc;color:#64748b;';
-    if (btnInd) btnInd.style.cssText = 'padding:9px 20px;border:none;font-weight:700;font-size:13px;cursor:pointer;transition:all .2s;' + (modo === 'individual' ? activeStyle : inactiveStyle);
-    if (btnCon) btnCon.style.cssText = 'padding:9px 20px;border:none;font-weight:700;font-size:13px;cursor:pointer;transition:all .2s;' + (modo === 'continua' ? activeStyle : inactiveStyle);
-
-    if (modo === 'continua') initRangoPanel();
-    actualizarEstado();
-}
-
-function initRangoPanel() {
-    const selProf = document.getElementById('rangoProfesor');
-    if (!selProf.options.length) {
-        selProf.innerHTML = PROFESORES.map(p => `<option value="${p}">${p}</option>`).join('') +
-            '<option value="nuevo">➕ Nuevo profesor</option>';
-    }
-    const selEnc = document.getElementById('rangoEncargado');
-    if (selEnc.options.length <= 1) {
-        selEnc.innerHTML = '<option value="">Seleccionar...</option>' +
-            ENCARGADOS.map(e => `<option value="${e}">${e}</option>`).join('');
-    }
-    const diasDiv = document.getElementById('diasSemana');
-    if (!diasDiv.children.length) {
-        diasDiv.innerHTML = DIAS_LABEL.map((d, i) => `
-            <div class="dia-check">
-                <input type="checkbox" id="dia_${i}" value="${i}" ${i >= 1 && i <= 5 ? 'checked' : ''}>
-                <label for="dia_${i}">${d}</label>
-            </div>`).join('');
-    }
-}
-
-function toggleRangoProf(val) {
-    document.getElementById('rangoNuevoProfesor').style.display = (val === 'nuevo') ? 'block' : 'none';
-}
-
-function generarSesionesRango() {
-    const fechaIni = document.getElementById('rangoFechaIni').value;
-    const fechaFin = document.getElementById('rangoFechaFin').value;
-    const horaIni = document.getElementById('rangoHoraIni').value;
-    const horaFin = document.getElementById('rangoHoraFin').value;
-    const profVal = document.getElementById('rangoProfesor').value;
-    const nuevoProf = document.getElementById('rangoNuevoProfesor').value.trim();
-    const encargado = document.getElementById('rangoEncargado').value;
-
-    if (!fechaIni || !fechaFin) { alert('❌ Selecciona las fechas de inicio y fin del rango'); return; }
-    if (new Date(fechaFin + 'T12:00:00') < new Date(fechaIni + 'T12:00:00')) {
-        alert('❌ La fecha de fin debe ser igual o posterior a la de inicio'); return;
-    }
-    if (!horaIni || !horaFin) { alert('❌ Selecciona la hora de inicio y fin'); return; }
-    const [hi, mi] = horaIni.split(':').map(Number);
-    const [hf, mf] = horaFin.split(':').map(Number);
-    const totalMin = (hf * 60 + mf) - (hi * 60 + mi);
-    if (totalMin <= 0) { alert('❌ La hora de fin debe ser posterior a la de inicio'); return; }
-    if (totalMin < 30) { alert('❌ La duración mínima es 30 minutos'); return; }
-    if (profVal === 'nuevo' && !nuevoProf) { alert('❌ Escribe el nombre del nuevo profesor'); return; }
-    if (!encargado) { alert('❌ Selecciona el encargado de apertura'); return; }
-
-    const diasChecked = [...document.querySelectorAll('#diasSemana input:checked')].map(cb => parseInt(cb.value));
-    if (diasChecked.length === 0) { alert('❌ Selecciona al menos un día de la semana'); return; }
-
-    const fechas = [];
-    const cur = new Date(fechaIni + 'T12:00:00');
-    const fin = new Date(fechaFin + 'T12:00:00');
-    while (cur <= fin) {
-        if (diasChecked.includes(cur.getDay())) {
-            const y = cur.getFullYear();
-            const m = String(cur.getMonth() + 1).padStart(2, '0');
-            const d = String(cur.getDate()).padStart(2, '0');
-            fechas.push(`${y}-${m}-${d}`);
-        }
-        cur.setDate(cur.getDate() + 1);
-    }
-
-    if (fechas.length === 0) {
-        alert('❌ No hay fechas en el rango que coincidan con los días seleccionados'); return;
-    }
-    if (fechas.length > 60) {
-        alert(`❌ El rango genera ${fechas.length} sesiones (máximo 60). Reduce el período.`); return;
-    }
-
-    // Actualizar selector oculto y renderizar tarjetas
-    const numSel = document.getElementById('numSesiones');
-    numSel.value = fechas.length;
-    mostrarFechas();
-
-    // Rellenar cada tarjeta generada
-    fechas.forEach((fecha, idx) => {
-        const i = idx + 1;
-        const fi = $(`[name="fecha_${i}"]`); if (fi) fi.value = fecha;
-        const hii = $(`[name="hora_inicio_${i}"]`); if (hii) hii.value = horaIni;
-        const hfi = $(`[name="hora_fin_${i}"]`); if (hfi) hfi.value = horaFin;
-        const ps = $(`[name="profesor_${i}"]`);
-        if (ps) {
-            ps.value = profVal;
-            if (profVal === 'nuevo') {
-                const ni = document.getElementById(`nuevoProfInput_${i}`);
-                if (ni) { ni.style.display = 'block'; ni.value = nuevoProf; }
-            }
-        }
-        const es = $(`[name="encargado_${i}"]`); if (es) es.value = encargado;
-    });
-
-    const hTot = (totalMin / 60).toFixed(2);
-    document.getElementById('rangoResumen').innerHTML =
-        `✅ ${fechas.length} sesión(es) generada(s) · ${horaIni}–${horaFin} (${hTot} h c/u)`;
-    actualizarEstado();
-    document.getElementById('contenedorFechas').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // ===== CÁLCULO Y VALIDACIÓN DE DURACIÓN POR SESIÓN =====
