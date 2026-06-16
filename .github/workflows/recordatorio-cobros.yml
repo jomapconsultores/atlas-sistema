@@ -1,0 +1,26 @@
+name: Recordatorio de cobros (lunes 8:00)
+
+# Se ejecuta todos los lunes a las 13:00 UTC = 08:00 en Ecuador (UTC-5).
+# GitHub Actions usa siempre UTC, por eso 13:00.
+on:
+  schedule:
+    - cron: '0 13 * * 1'
+  workflow_dispatch:   # permite ejecutarlo manualmente desde la pestaña Actions
+
+jobs:
+  enviar-recordatorio:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Llamar al endpoint de la aplicación
+        run: |
+          echo "Disparando recordatorio de cobros..."
+          codigo=$(curl -sS -o respuesta.json -w "%{http_code}" \
+            -X POST "${{ secrets.APP_URL }}/cron/recordatorio-cobros" \
+            -H "X-Cron-Token: ${{ secrets.CRON_TOKEN }}")
+          echo "HTTP $codigo"
+          cat respuesta.json
+          echo
+          if [ "$codigo" != "200" ]; then
+            echo "::error::El endpoint respondió $codigo"
+            exit 1
+          fi

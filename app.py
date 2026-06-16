@@ -4044,6 +4044,108 @@ def eliminar_lote_movimientos(lote_id):
     return redirect(url_for('movimientos_cuenta'))
 
 
+# ========== NOTIFICACIÓN DE COBROS POR CORREO (lunes 8:00) ==========
+# Destinatarios fijos del recordatorio semanal de cobros pendientes.
+COBROS_DESTINATARIOS = ['atlas.cenest@gmail.com', 'creinososter@gmail.com', 'rosaliamoscosoc@live.com']
+
+
+def _enviar_email(destinatarios, asunto, html, texto=''):
+    """Envía un correo por SMTP (Gmail por defecto). Credenciales desde variables
+    de entorno en Render: SMTP_USER, SMTP_PASSWORD (App Password de 16 dígitos),
+    y opcionalmente SMTP_HOST/SMTP_PORT/SMTP_FROM. Devuelve (ok, error)."""
+    import smtplib
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+
+    user = os.environ.get('SMTP_USER', '')
+    password = os.environ.get('SMTP_PASSWORD', '')
+    host = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
+    port = int(os.environ.get('SMTP_PORT', '587'))
+    remitente = os.environ.get('SMTP_FROM', user)
+    if not user or not password:
+        return False, 'Faltan credenciales SMTP_USER / SMTP_PASSWORD en el entorno'
+    if isinstance(destinatarios, str):
+        destinatarios = [destinatarios]
+    try:
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = asunto
+        msg['From'] = f'Atlas Centro de Estudios <{remitente}>'
+        msg['To'] = ', '.join(destinatarios)
+        if texto:
+            msg.attach(MIMEText(texto, 'plain', 'utf-8'))
+        msg.attach(MIMEText(html, 'html', 'utf-8'))
+        with smtplib.SMTP(host, port, timeout=30) as servidor:
+            servidor.starttls()
+            servidor.login(user, password)
+            servidor.sendmail(remitente, destinatarios, msg.as_string())
+        return True, None
+    except Exception as e:
+        return False, str(e)
+
+
+def _enviar_recordatorio_cobros():
+    """Construye y envía el correo de cobros pendientes a los socios.
+    Devuelve dict con el resultado. No envía correo si no hay deudas."""
+    deudas = _estudiantes_con_deuda()
+    if not deudas:
+        return {'enviado': False, 'motivo': 'sin_deudas', 'estudiantes': 0}
+    total = round(sum(d['saldo'] for d in deudas), 2)
+    hoy = date.today().strftime('%d/%m/%Y')
+    filas = ''.join(
+        f"<tr>"
+        f"<td style='padding:10px 14px;border-bottom:1px solid #eee;font-size:14px;color:#1a1a2e;'>{d['nombre']}</td>"
+        f"<td style='padding:10px 14px;border-bottom:1px solid #eee;font-size:14px;color:#db4437;font-weight:700;text-align:right;'>${d['saldo']:.2f}</td>"
+        f"</tr>"
+        for d in deudas
+    )
+    html = f"""\
+<div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;">
+  <div style="background:linear-gradient(135deg,#b45309,#f59e0b);color:#fff;padding:22px 26px;border-radius:16px 16px 0 0;">
+    <div style="font-size:26px;">🔔 Recordatorio de cobros</div>
+    <div style="font-size:13px;opacity:.9;margin-top:4px;">Atlas Centro de Estudios · {hoy}</div>
+  </div>
+  <div style="border:1px solid #eee;border-top:none;border-radius:0 0 16px 16px;padding:22px 26px;">
+    <p style="font-size:14px;color:#334155;">Estos estudiantes tienen <strong>pagos pendientes</strong>:</p>
+    <table style="width:100%;border-collapse:collapse;margin-top:10px;">
+      <thead>
+        <tr>
+          <th style="text-align:left;padding:10px 14px;font-size:12px;color:#94a3b8;text-transform:uppercase;border-bottom:2px solid #f1f1f1;">Estudiante</th>
+          <th style="text-align:right;padding:10px 14px;font-size:12px;color:#94a3b8;text-transform:uppercase;border-bottom:2px solid #f1f1f1;">Saldo</th>
+        </tr>
+      </thead>
+      <tbody>{filas}</tbody>
+      <tfoot>
+        <tr>
+          <td style="padding:12px 14px;font-size:15px;font-weight:800;color:#1a1a2e;">Total por cobrar</td>
+          <td style="padding:12px 14px;font-size:15px;font-weight:800;color:#db4437;text-align:right;">${total:.2f}</td>
+        </tr>
+      </tfoot>
+    </table>
+    <p style="font-size:12px;color:#94a3b8;margin-top:20px;">Mensaje automático del sistema Atlas. Ingresa al sistema · Módulo 3 para registrar los pagos.</p>
+  </div>
+</div>"""
+    texto = "Recordatorio de cobros pendientes - Atlas\n\n" + \
+            "\n".join(f"- {d['nombre']}: ${d['saldo']:.2f}" for d in deudas) + \
+            f"\n\nTotal por cobrar: ${total:.2f}"
+    asunto = f"🔔 Cobros pendientes Atlas ({len(deudas)} estudiante(s) · ${total:.2f})"
+    ok, error = _enviar_email(COBROS_DESTINATARIOS, asunto, html, texto)
+    return {'enviado': ok, 'error': error, 'estudiantes': len(deudas), 'total': total}
+
+
+@app.route('/cron/recordatorio-cobros', methods=['GET', 'POST'])
+def cron_recordatorio_cobros():
+    """Endpoint que dispara el correo de cobros pendientes. Lo invoca un cron
+    externo (GitHub Actions) cada lunes 08:00 (Ecuador). Protegido con el token
+    CRON_TOKEN (en cabecera 'X-Cron-Token' o parámetro ?token=)."""
+    token_esperado = os.environ.get('CRON_TOKEN', '')
+    token_recibido = request.headers.get('X-Cron-Token') or request.args.get('token', '')
+    if not token_esperado or token_recibido != token_esperado:
+        return jsonify({'success': False, 'error': 'No autorizado'}), 401
+    resultado = _enviar_recordatorio_cobros()
+    estado = 200 if resultado.get('enviado') or resultado.get('motivo') == 'sin_deudas' else 500
+    return jsonify({'success': resultado.get('enviado', False), **resultado}), estado
+
+
 # ========== INICIALIZACIÓN ==========
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
