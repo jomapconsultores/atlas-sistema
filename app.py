@@ -664,14 +664,51 @@ def passkey_eliminar(pid):
     return jsonify({'success': True})
 
 
+def _estudiantes_con_deuda():
+    """Lista de estudiantes activos con saldo pendiente (cobrar > pagado neto).
+    Misma lógica de saldo que el Módulo 3: saldo = cobrar - (pagado - devuelto).
+    Devuelve [{'nombre', 'saldo'}] ordenado de mayor a menor deuda."""
+    try:
+        estudiantes = supabase.table('estudiantes').select('id,nombres,apellidos').eq('activo', True).execute().data or []
+        ses_rows = _fetch_all(supabase.table('sesiones').select('estudiante_id,valor_total').in_('estado', ['Realizado', 'Cancelado-Pagado']))
+        pagos_rows = _fetch_all(supabase.table('pagos').select('estudiante_id,monto'))
+        try:
+            dev_rows = _fetch_all(supabase.table('devoluciones').select('estudiante_id,monto'))
+        except Exception:
+            dev_rows = []
+        cobrar_por_est, pagado_por_est, dev_por_est = {}, {}, {}
+        for s in ses_rows:
+            cobrar_por_est[s.get('estudiante_id')] = cobrar_por_est.get(s.get('estudiante_id'), 0) + (s.get('valor_total', 0) or 0)
+        for p in pagos_rows:
+            pagado_por_est[p.get('estudiante_id')] = pagado_por_est.get(p.get('estudiante_id'), 0) + (p.get('monto', 0) or 0)
+        for d in dev_rows:
+            if d.get('estudiante_id'):
+                dev_por_est[d['estudiante_id']] = dev_por_est.get(d['estudiante_id'], 0) + (d.get('monto', 0) or 0)
+        deudas = []
+        for e in estudiantes:
+            saldo = cobrar_por_est.get(e['id'], 0) - (pagado_por_est.get(e['id'], 0) - dev_por_est.get(e['id'], 0))
+            if round(saldo, 2) > 0:
+                deudas.append({'nombre': f"{e['apellidos']} {e['nombres']}", 'saldo': round(saldo, 2)})
+        deudas.sort(key=lambda x: x['saldo'], reverse=True)
+        return deudas
+    except Exception as e:
+        print(f'⚠️ _estudiantes_con_deuda: {e}')
+        return []
+
+
 @app.route('/dashboard')
 @login_required
 def dashboard():
     solicitudes_pendientes = 0
+    estudiantes_deuda = []
+    total_deuda = 0
     if current_user.rol in ['admin', 'socio']:
         solicitudes = supabase.table('anticipos_solicitudes').select('id').eq('estado', 'pendiente').execute()
         solicitudes_pendientes = len(solicitudes.data or [])
-    return render_template('dashboard.html', rol=current_user.rol, solicitudes_pendientes=solicitudes_pendientes)
+        estudiantes_deuda = _estudiantes_con_deuda()
+        total_deuda = round(sum(d['saldo'] for d in estudiantes_deuda), 2)
+    return render_template('dashboard.html', rol=current_user.rol, solicitudes_pendientes=solicitudes_pendientes,
+                           estudiantes_deuda=estudiantes_deuda, total_deuda=total_deuda)
 
 # ========== MÓDULO 1: PLANIFICACIÓN ==========
 @app.route('/modulo1', methods=['GET', 'POST'])
