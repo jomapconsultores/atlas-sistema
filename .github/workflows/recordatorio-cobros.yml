@@ -15,7 +15,7 @@ jobs:
         run: |
           echo "Disparando recordatorio de cobros..."
           codigo=$(curl -sS -o respuesta.json -w "%{http_code}" \
-            -X POST "${{ secrets.APP_URL }}/cron/recordatorio-cobros" \
+            -X POST "https://atlas-sistema.onrender.com/cron/recordatorio-cobros" \
             -H "X-Cron-Token: ${{ secrets.CRON_TOKEN }}")
           echo "HTTP $codigo"
           cat respuesta.json
