@@ -506,6 +506,7 @@ def login():
         result = supabase.table('usuarios').select('*').eq('email', request.form['email']).execute()
         if result.data and result.data[0].get('activo') and check_password(result.data[0]['password_hash'], request.form['password']):
             login_user(Usuario.get_by_id(result.data[0]['id']))
+            session['mostrar_cobros'] = True  # recordatorio de cobros: una vez por inicio de sesión
             return redirect(url_for('dashboard'))
         _registrar_intento_fallido(ip)
         flash('❌ Credenciales incorrectas o cuenta pendiente de aprobación', 'error')
@@ -642,6 +643,7 @@ def passkey_login_verificar():
         if not user or not user.activo:
             return jsonify({'success': False, 'error': 'Cuenta inactiva'})
         login_user(user)
+        session['mostrar_cobros'] = True  # recordatorio de cobros: una vez por inicio de sesión
         return jsonify({'success': True, 'redirect': url_for('dashboard')})
     except Exception:
         _registrar_intento_fallido(_ip_cliente())
@@ -702,11 +704,15 @@ def dashboard():
     solicitudes_pendientes = 0
     estudiantes_deuda = []
     total_deuda = 0
+    # El recordatorio de cobros se muestra una sola vez, en la primera carga del
+    # panel tras iniciar sesión (la bandera se fija en login y se consume aquí).
+    mostrar_cobros = session.pop('mostrar_cobros', False)
     if current_user.rol in ['admin', 'socio']:
         solicitudes = supabase.table('anticipos_solicitudes').select('id').eq('estado', 'pendiente').execute()
         solicitudes_pendientes = len(solicitudes.data or [])
-        estudiantes_deuda = _estudiantes_con_deuda()
-        total_deuda = round(sum(d['saldo'] for d in estudiantes_deuda), 2)
+        if mostrar_cobros:
+            estudiantes_deuda = _estudiantes_con_deuda()
+            total_deuda = round(sum(d['saldo'] for d in estudiantes_deuda), 2)
     return render_template('dashboard.html', rol=current_user.rol, solicitudes_pendientes=solicitudes_pendientes,
                            estudiantes_deuda=estudiantes_deuda, total_deuda=total_deuda)
 

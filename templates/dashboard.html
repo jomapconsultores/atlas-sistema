@@ -134,16 +134,11 @@
     </div>
     <style>@keyframes popCobros{from{opacity:0;transform:scale(.94) translateY(10px);}to{opacity:1;transform:scale(1) translateY(0);}}</style>
     <script>
-        function cerrarCobros(){ var o=document.getElementById('overlayCobros'); if(o){ o.style.display='none'; } try{ sessionStorage.setItem('cobrosVisto','1'); }catch(e){} }
+        function cerrarCobros(){ var o=document.getElementById('overlayCobros'); if(o){ o.style.display='none'; } }
         document.addEventListener('keydown', function(e){ if(e.key==='Escape'){ cerrarCobros(); } });
         (function(){
             var o=document.getElementById('overlayCobros');
-            if(!o){ return; }
-            // Mostrar el recordatorio solo una vez por sesión del navegador.
-            var visto = false;
-            try{ visto = sessionStorage.getItem('cobrosVisto')==='1'; }catch(e){}
-            if(visto){ o.style.display='none'; }
-            o.addEventListener('click', function(e){ if(e.target===o){ cerrarCobros(); } });
+            if(o){ o.addEventListener('click', function(e){ if(e.target===o){ cerrarCobros(); } }); }
         })();
     </script>
     {% endif %}
