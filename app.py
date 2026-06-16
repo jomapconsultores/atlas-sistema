@@ -4056,22 +4056,27 @@ COBROS_DESTINATARIOS = ['atlas.cenest@gmail.com', 'creinososter@gmail.com', 'ros
 
 
 def _enviar_email(destinatarios, asunto, html, texto=''):
-    """Envía un correo por SMTP (Gmail por defecto). Credenciales desde variables
-    de entorno en Render: SMTP_USER, SMTP_PASSWORD (App Password de 16 dígitos),
-    y opcionalmente SMTP_HOST/SMTP_PORT/SMTP_FROM. Devuelve (ok, error)."""
+    """Envía un correo. Prioriza la API HTTP de Brevo (BREVO_API_KEY) porque
+    Render bloquea el SMTP saliente en el plan gratuito; si no hay clave de
+    Brevo, cae a SMTP (útil en local). Devuelve (ok, error)."""
+    if isinstance(destinatarios, str):
+        destinatarios = [destinatarios]
+    remitente = os.environ.get('SMTP_FROM') or os.environ.get('SMTP_USER') or 'atlas.cenest@gmail.com'
+
+    brevo_key = os.environ.get('BREVO_API_KEY', '')
+    if brevo_key:
+        return _enviar_email_brevo(brevo_key, remitente, destinatarios, asunto, html, texto)
+
+    # --- Respaldo SMTP (no funciona en Render free; sirve en local) ---
     import smtplib
     from email.mime.multipart import MIMEMultipart
     from email.mime.text import MIMEText
-
     user = os.environ.get('SMTP_USER', '')
     password = os.environ.get('SMTP_PASSWORD', '')
     host = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
     port = int(os.environ.get('SMTP_PORT', '587'))
-    remitente = os.environ.get('SMTP_FROM', user)
     if not user or not password:
-        return False, 'Faltan credenciales SMTP_USER / SMTP_PASSWORD en el entorno'
-    if isinstance(destinatarios, str):
-        destinatarios = [destinatarios]
+        return False, 'Faltan credenciales: define BREVO_API_KEY (recomendado) o SMTP_USER/SMTP_PASSWORD'
     try:
         msg = MIMEMultipart('alternative')
         msg['Subject'] = asunto
@@ -4087,6 +4092,40 @@ def _enviar_email(destinatarios, asunto, html, texto=''):
         return True, None
     except Exception as e:
         return False, str(e)
+
+
+def _enviar_email_brevo(api_key, remitente, destinatarios, asunto, html, texto=''):
+    """Envía vía la API transaccional de Brevo (HTTPS, no bloqueada por Render).
+    El remitente debe estar verificado en la cuenta de Brevo."""
+    import json as _json
+    import urllib.request
+    import urllib.error
+    payload = {
+        'sender': {'name': 'Atlas Centro de Estudios', 'email': remitente},
+        'to': [{'email': d} for d in destinatarios],
+        'subject': asunto,
+        'htmlContent': html,
+    }
+    if texto:
+        payload['textContent'] = texto
+    req = urllib.request.Request(
+        'https://api.brevo.com/v3/smtp/email',
+        data=_json.dumps(payload).encode('utf-8'),
+        headers={'api-key': api_key, 'content-type': 'application/json', 'accept': 'application/json'},
+        method='POST')
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            resp.read()
+            return True, None
+    except urllib.error.HTTPError as e:
+        detalle = ''
+        try:
+            detalle = e.read().decode('utf-8')[:300]
+        except Exception:
+            pass
+        return False, f'Brevo HTTP {e.code}: {detalle}'
+    except Exception as e:
+        return False, f'Brevo error: {e}'
 
 
 def _enviar_recordatorio_cobros():
