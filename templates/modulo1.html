@@ -194,10 +194,34 @@
                 <ul class="lista-faltantes" id="listaFaltantes"></ul>
             </div>
 
+            <div class="text-center mt-2" id="hintBorrador" style="font-size:12px;color:var(--atlas-muted);">
+                💾 <span id="hintBorradorTexto">Tus avances se guardan automáticamente en este navegador</span>
+            </div>
+
             <button type="submit" class="btn btn-primary btn-lg w-100 mt-3" id="btnPlanificar" disabled>
                 ✅ Planificar
             </button>
         </form>
+    </div>
+</div>
+
+<!-- ── Aviso de borrador sin terminar (autoguardado) ───────────────── -->
+<div id="overlayBorrador" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.55); backdrop-filter:blur(3px); z-index:1080; align-items:center; justify-content:center; padding:18px;">
+    <div style="background:#fff; border-radius:22px; width:100%; max-width:460px; overflow:hidden; box-shadow:0 25px 70px rgba(0,0,0,0.35);">
+        <div style="background:linear-gradient(135deg,#1e3a5f,#1e40af); color:#fff; padding:20px 24px; position:relative;">
+            <button type="button" onclick="cerrarAvisoBorrador()" aria-label="Cerrar"
+                    style="position:absolute; top:14px; right:14px; width:34px; height:34px; border:none; border-radius:50%; background:rgba(255,255,255,0.2); color:#fff; font-size:20px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center;">&times;</button>
+            <div style="font-size:30px; line-height:1;">📝</div>
+            <div style="font-weight:800; font-size:19px; margin-top:8px;">Planificación sin terminar</div>
+            <div style="font-size:13px; opacity:0.9; margin-top:2px;">Encontramos avances que no llegaste a grabar.</div>
+        </div>
+        <div style="padding:20px 24px;">
+            <p style="font-size:14px; color:#334155; margin:0 0 18px;">¿Deseas continuar donde quedaste o empezar una planificación nueva?</p>
+            <div class="d-grid gap-2">
+                <button type="button" class="btn btn-primary" onclick="continuarBorrador()">▶️ Continuar con lo pendiente</button>
+                <button type="button" class="btn btn-outline-danger" onclick="borrarBorrador()">🗑️ Borrar y empezar de nuevo</button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -524,7 +548,11 @@ document.getElementById('formPlanificar').addEventListener('submit', function(e)
     let msg = `✅ ¿Confirmas la planificación?\n\n`;
     msg += `📋 Tipo: ${tipo}\n👨‍🎓 Estudiantes: ${numEst}\n📅 Sesiones: ${numSes}\n⏱️ Total horas: ${totalHoras.toFixed(2)} h\n\n`;
     msg += `Detalle:\n${fechas.join('\n')}`;
-    if (confirm(msg)) this.submit();
+    if (confirm(msg)) {
+        // La planificación se va a grabar: el borrador ya no es necesario.
+        try { localStorage.removeItem(DRAFT_KEY); } catch(e){}
+        this.submit();
+    }
 });
 
 // ===== DELEGACIÓN DE EVENTOS (campos dinámicos) =====
@@ -536,6 +564,155 @@ form.addEventListener('change', actualizarEstado);
 mostrarEstudiantes();
 mostrarFechas();
 actualizarEstado();
+
+// ===== AUTOGUARDADO DE BORRADOR (localStorage por usuario) =====
+const DRAFT_KEY = 'atlas_plan_borrador_{{ current_user.id }}';
+// Claves "estructurales": controlan el renderizado dinámico y se restauran aparte.
+const CLAVES_ESTRUCTURA = ['tipo_sesion','num_estudiantes','num_sesiones','mismo_precio'];
+
+function recolectarBorrador() {
+    const datos = {};
+    form.querySelectorAll('input, select, textarea').forEach(el => {
+        if (!el.name) {                       // inputs de "nuevo estudiante" usan id, no name
+            if (el.id && el.value) datos['#' + el.id] = el.value;
+            return;
+        }
+        if (el.type === 'radio') { if (el.checked) datos[el.name] = el.value; }
+        else { datos[el.name] = el.value; }
+    });
+    return datos;
+}
+
+let _guardarTO;
+function guardarBorrador() {
+    clearTimeout(_guardarTO);
+    _guardarTO = setTimeout(() => {
+        try {
+            localStorage.setItem(DRAFT_KEY, JSON.stringify(recolectarBorrador()));
+            const t = document.getElementById('hintBorradorTexto');
+            if (t) {
+                t.textContent = 'Avances guardados automáticamente';
+                clearTimeout(t._volver);
+                t._volver = setTimeout(() => { t.textContent = 'Tus avances se guardan automáticamente en este navegador'; }, 2500);
+            }
+        } catch (e) {}
+    }, 350);
+}
+
+function borradorTieneProgreso(d) {
+    if (!d) return false;
+    if (d['tipo_sesion']) return true;
+    for (const k in d) {
+        if (k.startsWith('estudiante_id_') && d[k]) return true;
+        if (k.startsWith('hora_inicio_') && d[k]) return true;
+        if (k.startsWith('hora_fin_') && d[k]) return true;
+        if (k.startsWith('#nuevo_') && (d[k] || '').trim()) return true;
+    }
+    return false;
+}
+
+function aplicarValores(datos) {
+    Object.keys(datos).forEach(k => {
+        if (k.startsWith('#')) {                       // input por id (nuevo estudiante)
+            const el = document.getElementById(k.slice(1));
+            if (el) el.value = datos[k];
+            return;
+        }
+        if (CLAVES_ESTRUCTURA.includes(k)) return;     // ya restauradas
+        const els = document.getElementsByName(k);
+        if (!els.length) return;
+        if (els[0].type === 'radio') els.forEach(r => { r.checked = (r.value === datos[k]); });
+        else els[0].value = datos[k];
+    });
+}
+
+function restaurarBorrador(datos) {
+    const tipo = document.getElementById('tipoSesion');
+    const numEst = document.getElementById('numEstudiantes');
+    const numSes = document.getElementById('numSesiones');
+    if (datos['tipo_sesion']   !== undefined) tipo.value   = datos['tipo_sesion'];
+    if (datos['num_estudiantes'] !== undefined) numEst.value = datos['num_estudiantes'];
+
+    mostrarCampos();   // renderiza campos por tipo + estudiantes (precio único por defecto)
+
+    // Precio individual por estudiante
+    if (datos['mismo_precio'] === 'no') {
+        const r = document.getElementById('mismoPrecioNo');
+        if (r) { r.checked = true; togglePreciosIndividuales(); }
+    }
+
+    // Tipo de atención (debe fijarse antes de decidir nº de sesiones por paquete)
+    if (datos['atencion_psicologica'] !== undefined) {
+        const at = document.getElementById('atencionPsicologica');
+        if (at) at.value = datos['atencion_psicologica'];
+    }
+
+    // Número de sesiones (un paquete de terapias lo fuerza y bloquea)
+    if (datos['num_sesiones'] !== undefined) numSes.value = datos['num_sesiones'];
+    const at = document.getElementById('atencionPsicologica');
+    const opt = at ? at.options[at.selectedIndex] : null;
+    const sesPaquete = opt ? parseInt(opt.dataset.sesiones || 1) : 1;
+    if (sesPaquete > 1) { numSes.value = sesPaquete; numSes.disabled = true; }
+
+    mostrarFechas();          // renderiza las tarjetas de sesión con el nº final
+    aplicarValores(datos);    // rellena todos los valores (estudiantes, horarios, profesores...)
+
+    // Mostrar campos de "nuevo" donde corresponda
+    const ne = parseInt(numEst.value) || 1;
+    for (let i = 1; i <= ne; i++) {
+        const sel = document.querySelector(`[name="estudiante_id_${i}"]`);
+        if (sel && sel.value === 'nuevo') toggleNuevo(i, 'nuevo');
+    }
+    const ns = parseInt(numSes.value) || 1;
+    for (let i = 1; i <= ns; i++) {
+        const sel = document.querySelector(`[name="profesor_${i}"]`);
+        if (sel && sel.value === 'nuevo') toggleNuevoProf(i, 'nuevo');
+    }
+    actualizarEstado();
+}
+
+function continuarBorrador() {
+    document.getElementById('overlayBorrador').style.display = 'none';
+    try { restaurarBorrador(window._borradorPendiente || {}); } catch (e) { console.error(e); }
+}
+
+function borrarBorrador() {
+    try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
+    document.getElementById('overlayBorrador').style.display = 'none';
+    // Reiniciar el formulario a su estado inicial
+    document.getElementById('tipoSesion').value = '';
+    document.getElementById('numEstudiantes').value = '1';
+    const ns = document.getElementById('numSesiones');
+    ns.value = '1'; ns.disabled = false;
+    mostrarCampos();
+    mostrarFechas();
+    actualizarEstado();
+}
+
+function cerrarAvisoBorrador() {
+    // Cerrar con la X: no restaura ni borra; el borrador queda para la próxima.
+    document.getElementById('overlayBorrador').style.display = 'none';
+}
+
+// Guardar en cada cambio (la delegación en el form cubre los campos dinámicos)
+form.addEventListener('input', guardarBorrador);
+form.addEventListener('change', guardarBorrador);
+
+// Al abrir: si hay un borrador con avances, preguntar si continuar o borrar
+(function comprobarBorrador() {
+    let raw = null;
+    try { raw = localStorage.getItem(DRAFT_KEY); } catch (e) { return; }
+    if (!raw) return;
+    let datos;
+    try { datos = JSON.parse(raw); } catch (e) { return; }
+    if (!borradorTieneProgreso(datos)) return;
+    window._borradorPendiente = datos;
+    const ov = document.getElementById('overlayBorrador');
+    if (ov) {
+        ov.style.display = 'flex';
+        ov.addEventListener('click', e => { if (e.target === ov) cerrarAvisoBorrador(); });
+    }
+})();
 
 // ===== SINCRONIZACIÓN CON GOOGLE CALENDAR =====
 // Helper: hace fetch y valida que la respuesta sea JSON (evita "Unexpected token '<'" en 404/500)
