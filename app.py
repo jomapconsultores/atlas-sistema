@@ -4,7 +4,7 @@ from flask_login import LoginManager, login_user, logout_user, login_required, c
 from werkzeug.security import generate_password_hash
 from config import Config
 from models import check_password, Usuario
-from supabase_client import supabase
+from supabase_client import supabase, SUPABASE_URL
 from google_calendar import crear_evento_calendar, eliminar_evento_calendar, crear_o_actualizar_evento_calendar
 from datetime import datetime, date, timedelta
 from calendar import monthrange
@@ -530,13 +530,45 @@ def _pk_origen():
     return f"{request.scheme}://{request.host}"
 
 
-def _pk_tabla_lista():
-    """True si la tabla usuario_passkeys existe (migration_passkeys.sql)."""
+def _pk_tabla_estado():
+    """Devuelve (ok, error_real). ok=True si la API ve la tabla usuario_passkeys.
+    Antes el error real quedaba oculto; ahora lo devolvemos para diagnosticar."""
     try:
         supabase.table('usuario_passkeys').select('id').limit(1).execute()
-        return True
+        return True, None
+    except Exception as e:
+        return False, str(e)
+
+
+def _pk_tabla_lista():
+    """True si la tabla usuario_passkeys existe (migration_passkeys.sql)."""
+    return _pk_tabla_estado()[0]
+
+
+def _pk_proyecto_ref():
+    """Ref del proyecto Supabase que USA ESTE servidor (clave para detectar si
+    Render apunta a otro proyecto distinto al que ves en el panel)."""
+    try:
+        return (SUPABASE_URL or '').split('//')[-1].split('.')[0]
     except Exception:
-        return False
+        return '?'
+
+
+@app.route('/api/passkey/diagnostico')
+@login_required
+def passkey_diagnostico():
+    """Diagnóstico en vivo: dice qué proyecto Supabase usa REALMENTE el servidor
+    desplegado y el error exacto al leer la tabla. Sirve para saber dónde crear
+    la tabla y por qué sigue saliendo el aviso."""
+    ok, err = _pk_tabla_estado()
+    return jsonify({
+        'webauthn_ok': WEBAUTHN_OK,
+        'proyecto_supabase': _pk_proyecto_ref(),
+        'supabase_url': SUPABASE_URL,
+        'tabla_usuario_passkeys_visible': ok,
+        'error_real': err,
+        'sql_editor': f"https://supabase.com/dashboard/project/{_pk_proyecto_ref()}/sql/new",
+    })
 
 
 @app.route('/api/passkey/registro/opciones', methods=['POST'])
@@ -576,6 +608,69 @@ def passkey_registro_verificar():
             expected_rp_id=_pk_rp_id(), expected_origin=_pk_origen())
         supabase.table('usuario_passkeys').insert({
             'usuario_id': current_user.id,
+            'credential_id': bytes_to_base64url(ver.credential_id),
+            'public_key': bytes_to_base64url(ver.credential_public_key),
+            'sign_count': ver.sign_count,
+            'nombre': (request.args.get('dispositivo') or 'Dispositivo')[:60],
+        }).execute()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'No se pudo registrar: {e}'})
+
+
+@app.route('/api/passkey/registro-publico/opciones', methods=['POST'])
+def passkey_registro_publico_opciones():
+    """Registrar la huella/rostro desde la pantalla de inicio (login), SIN entrar
+    al sistema. Se verifica email+contraseña; la clave privada nunca sale del
+    dispositivo. Mismo blindaje de intentos que el login normal."""
+    if not WEBAUTHN_OK:
+        return jsonify({'success': False, 'error': 'Falta la libreria webauthn en el servidor (redeploy pendiente)'})
+    if _login_bloqueado(_ip_cliente()):
+        return jsonify({'success': False, 'error': 'Demasiados intentos. Espera 5 minutos.'})
+    ok_tabla, err_tabla = _pk_tabla_estado()
+    if not ok_tabla:
+        return jsonify({'success': False, 'error':
+            f'La tabla de huellas no está disponible en el proyecto Supabase "{_pk_proyecto_ref()}". '
+            f'Crea la tabla usuario_passkeys EN ESE proyecto. Detalle: {err_tabla}'})
+    datos = request.get_json(silent=True) or {}
+    email = (datos.get('email') or '').strip()
+    password = datos.get('password') or ''
+    u = supabase.table('usuarios').select('*').eq('email', email).execute().data
+    if not (u and u[0].get('activo') and check_password(u[0]['password_hash'], password)):
+        _registrar_intento_fallido(_ip_cliente())
+        return jsonify({'success': False, 'error': 'Email o contraseña incorrectos (o cuenta sin aprobar)'})
+    uid = u[0]['id']
+    existentes = supabase.table('usuario_passkeys').select('credential_id').eq('usuario_id', uid).execute().data or []
+    opciones = generate_registration_options(
+        rp_id=_pk_rp_id(), rp_name='Atlas Centro de Estudios',
+        user_id=str(uid).encode(),
+        user_name=email or str(uid),
+        user_display_name=u[0].get('nombre') or email or 'Usuario',
+        exclude_credentials=[PublicKeyCredentialDescriptor(id=base64url_to_bytes(c['credential_id'])) for c in existentes],
+        authenticator_selection=AuthenticatorSelectionCriteria(
+            user_verification=UserVerificationRequirement.REQUIRED,
+            resident_key=ResidentKeyRequirement.PREFERRED),
+    )
+    session['pk_regpub_challenge'] = bytes_to_base64url(opciones.challenge)
+    session['pk_regpub_uid'] = uid
+    return app.response_class(options_to_json(opciones), mimetype='application/json')
+
+
+@app.route('/api/passkey/registro-publico/verificar', methods=['POST'])
+def passkey_registro_publico_verificar():
+    if not WEBAUTHN_OK:
+        return jsonify({'success': False, 'error': 'Falta la libreria webauthn en el servidor'})
+    reto = session.pop('pk_regpub_challenge', None)
+    uid = session.pop('pk_regpub_uid', None)
+    if not reto or not uid:
+        return jsonify({'success': False, 'error': 'El reto expiro: intenta de nuevo'})
+    try:
+        ver = verify_registration_response(
+            credential=request.get_data(as_text=True),
+            expected_challenge=base64url_to_bytes(reto),
+            expected_rp_id=_pk_rp_id(), expected_origin=_pk_origen())
+        supabase.table('usuario_passkeys').insert({
+            'usuario_id': uid,
             'credential_id': bytes_to_base64url(ver.credential_id),
             'public_key': bytes_to_base64url(ver.credential_public_key),
             'sign_count': ver.sign_count,

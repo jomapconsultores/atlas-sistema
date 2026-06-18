@@ -215,7 +215,10 @@
             <button type="button" class="btn-biometric" onclick="loginConHuella()">
                 🔐 Entrar con huella / Face ID
             </button>
-            <p class="login-hint">Escribe tu email arriba y usa la biometría de tu dispositivo.</p>
+            <button type="button" class="btn-biometric" onclick="registrarHuellaPublico()" style="margin-top:8px;">
+                ➕ Registrar huella / Face ID en este dispositivo
+            </button>
+            <p class="login-hint" id="pk-estado">Escribe tu email y contraseña arriba para registrar la biometría de este dispositivo.</p>
 
             <a href="/" class="back-link">← Volver al inicio</a>
         </div>
@@ -247,6 +250,50 @@ async function loginConHuella(){
         else{alert(dv.error||'No se pudo verificar la identidad')}
     }catch(e){
         if(e.name!=='NotAllowedError')alert('Biometría no disponible: '+e.message);
+    }
+}
+
+// Refleja en la pantalla de inicio si ESTE dispositivo ya tiene la biometría
+// registrada para el email escrito (marca local, sin filtrar datos del servidor).
+function pkMostrarEstado(){
+    const el=document.getElementById('pk-estado');if(!el)return;
+    const email=(document.getElementById('email').value||'').trim().toLowerCase();
+    let reg=false;try{reg=!!email&&localStorage.getItem('pk_dev_'+email)==='1'}catch(e){}
+    if(reg){el.innerHTML='✅ Este dispositivo ya tiene tu huella / Face ID registrado. Usa «Entrar con huella / Face ID».';}
+    else{el.textContent='Escribe tu email y contraseña arriba para registrar la biometría de este dispositivo.';}
+}
+document.getElementById('email').addEventListener('input',pkMostrarEstado);
+window.addEventListener('DOMContentLoaded',pkMostrarEstado);
+
+async function registrarHuellaPublico(){
+    const email=document.getElementById('email').value.trim();
+    const password=document.getElementById('password').value;
+    if(!email){alert('Escribe tu email primero');return}
+    if(!password){alert('Escribe tu contraseña para confirmar que eres tú');return}
+    if(!window.PublicKeyCredential){alert('Este navegador no soporta huella/Face ID. Usa tu contraseña.');return}
+    if(!confirm('Se abrirá el sensor de tu dispositivo.\n\n¿Quieres registrar tu HUELLA o tu ROSTRO (Face ID)?\nElige el método cuando tu teléfono o laptop te lo pida.'))return;
+    try{
+        const r=await fetch('/api/passkey/registro-publico/opciones',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password})});
+        const d=await r.json();
+        if(d.success===false){alert(d.error);return}
+        const pub={...d,challenge:b64uToBuf(d.challenge),
+            user:{...d.user,id:b64uToBuf(d.user.id)},
+            excludeCredentials:(d.excludeCredentials||[]).map(c=>({...c,id:b64uToBuf(c.id)}))};
+        const cred=await navigator.credentials.create({publicKey:pub});
+        const cuerpo={id:cred.id,rawId:bufToB64u(cred.rawId),type:cred.type,
+            response:{clientDataJSON:bufToB64u(cred.response.clientDataJSON),
+                      attestationObject:bufToB64u(cred.response.attestationObject)},
+            clientExtensionResults:cred.getClientExtensionResults()};
+        const nombre=encodeURIComponent((navigator.userAgentData&&navigator.userAgentData.platform)||navigator.platform||'Dispositivo');
+        const v=await fetch('/api/passkey/registro-publico/verificar?dispositivo='+nombre,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(cuerpo)});
+        const dv=await v.json();
+        if(dv.success){
+            try{localStorage.setItem('pk_dev_'+email.toLowerCase(),'1')}catch(e){}
+            pkMostrarEstado();
+            alert('✅ Listo: ya puedes entrar con tu huella o tu rostro en este dispositivo.');
+        }else{alert(dv.error||'No se pudo registrar')}
+    }catch(e){
+        if(e.name!=='NotAllowedError')alert('No se pudo registrar: '+e.message);
     }
 }
 </script>
