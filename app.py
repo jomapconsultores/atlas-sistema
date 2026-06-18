@@ -687,22 +687,21 @@ def passkey_login_opciones():
         return jsonify({'success': False, 'error': 'Biometria no disponible en el servidor'})
     if _login_bloqueado(_ip_cliente()):
         return jsonify({'success': False, 'error': 'Demasiados intentos. Espera 5 minutos.'})
+    # El email es OPCIONAL: si no se escribe, el navegador muestra las huellas/
+    # rostros guardados para este sitio (credenciales descubribles) y el usuario
+    # se identifica con su propia biometría, sin teclear nada.
     email = ((request.get_json(silent=True) or {}).get('email') or '').strip()
-    if not email:
-        return jsonify({'success': False, 'error': 'Escribe tu email primero'})
-    u = supabase.table('usuarios').select('id,activo').eq('email', email).execute().data
-    creds = []
-    if u and u[0].get('activo') and _pk_tabla_lista():
-        creds = supabase.table('usuario_passkeys').select('credential_id').eq('usuario_id', u[0]['id']).execute().data or []
-    if not creds:
-        _registrar_intento_fallido(_ip_cliente())
-        return jsonify({'success': False, 'error': 'Este email no tiene huella/rostro registrado. Entra con tu contrasena y registra el dispositivo en Mi Perfil.'})
+    allow = []
+    if email and _pk_tabla_lista():
+        u = supabase.table('usuarios').select('id,activo').eq('email', email).execute().data
+        if u and u[0].get('activo'):
+            creds = supabase.table('usuario_passkeys').select('credential_id').eq('usuario_id', u[0]['id']).execute().data or []
+            allow = [PublicKeyCredentialDescriptor(id=base64url_to_bytes(c['credential_id'])) for c in creds]
     opciones = generate_authentication_options(
         rp_id=_pk_rp_id(),
-        allow_credentials=[PublicKeyCredentialDescriptor(id=base64url_to_bytes(c['credential_id'])) for c in creds],
+        allow_credentials=allow or None,
         user_verification=UserVerificationRequirement.REQUIRED)
     session['pk_auth_challenge'] = bytes_to_base64url(opciones.challenge)
-    session['pk_auth_uid'] = u[0]['id']
     return app.response_class(options_to_json(opciones), mimetype='application/json')
 
 
@@ -711,8 +710,7 @@ def passkey_login_verificar():
     if not WEBAUTHN_OK:
         return jsonify({'success': False, 'error': 'Biometria no disponible en el servidor'})
     reto = session.pop('pk_auth_challenge', None)
-    uid = session.pop('pk_auth_uid', None)
-    if not reto or not uid:
+    if not reto:
         return jsonify({'success': False, 'error': 'El reto expiro: intenta de nuevo'})
     import json as _json
     cuerpo = request.get_data(as_text=True)
@@ -720,11 +718,13 @@ def passkey_login_verificar():
         cred_id = (_json.loads(cuerpo) or {}).get('id', '')
     except Exception:
         cred_id = ''
-    fila = supabase.table('usuario_passkeys').select('*').eq('usuario_id', uid).eq('credential_id', cred_id).execute().data
+    # credential_id es único: identifica al usuario aunque no se haya tecleado email.
+    fila = supabase.table('usuario_passkeys').select('*').eq('credential_id', cred_id).execute().data
     if not fila:
         _registrar_intento_fallido(_ip_cliente())
         return jsonify({'success': False, 'error': 'Credencial no reconocida'})
     f = fila[0]
+    uid = f['usuario_id']
     try:
         ver = verify_authentication_response(
             credential=cuerpo,
