@@ -692,11 +692,11 @@
                 <a href="/modulo3" class="{% if p=='/modulo3' %}active{% endif %}">Pagos de estudiantes</a>
                 <a href="/modulo5" class="{% if p=='/modulo5' %}active{% endif %}">Pagos a docentes</a>
                 <a href="/devoluciones" class="{% if p=='/devoluciones' %}active{% endif %}">Devoluciones</a>
-                <a href="/reportes" class="{% if p=='/reportes' %}active{% endif %}">Reportes</a>
                 <a href="/gastos" class="{% if p=='/gastos' %}active{% endif %}">Gastos</a>
-                <a href="/liquidacion" class="{% if p=='/liquidacion' %}active{% endif %}">Liquidación</a>
                 <a href="/gestion-anticipos" class="{% if p=='/gestion-anticipos' %}active{% endif %}">Anticipos {% if solicitudes_pendientes and solicitudes_pendientes>0 %}<span class="side-badge">{{ solicitudes_pendientes }}</span>{% endif %}</a>
                 {% if rol in ['admin','socio'] %}<a href="/movimientos-cuenta" class="{% if p=='/movimientos-cuenta' %}active{% endif %}">Movimientos en cuenta</a>{% endif %}
+                <a href="/reportes" class="{% if p=='/reportes' %}active{% endif %}">Reportes</a>
+                <a href="/liquidacion" class="{% if p=='/liquidacion' %}active{% endif %}">Liquidación</a>
             </div>
         </div>
 
