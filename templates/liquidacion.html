@@ -6,6 +6,12 @@
     <h2>⚖️ Liquidación Mensual</h2>
     <p>Distribución mensual del balance entre los socios.</p>
 </div>
+<div style="background:#e8f4fd; border-left:4px solid #1a73e8; border-radius:10px; padding:12px 16px; margin-bottom:20px; font-size:12.5px; color:#444; line-height:1.8;">
+    <strong>ℹ️ ¿Qué es la liquidación?</strong><br>
+    La liquidación calcula cuánto dinero le corresponde recibir a cada socio al cierre del mes. La fórmula es:<br>
+    <strong>Saldo de la cuenta bancaria</strong> − <strong>Gastos del período</strong> (arriendo, servicios, etc.) − <strong>Pago a docentes</strong> = <strong>Balance a distribuir</strong> ÷ número de socios.<br>
+    Si un socio también trabajó como docente, su pago por clases se suma a su parte. Si alguien pagó un gasto de su propio dinero (reembolso), también se le devuelve aquí.
+</div>
 
 <!-- Filtros y saldo -->
 <div class="card shadow border-0 mb-4" style="border-radius:15px;">
@@ -106,12 +112,23 @@
     </div>
 </div>
 
+<div style="background:#f5f5f5; border-radius:8px; padding:9px 14px; font-size:12px; color:#555; margin-bottom:16px; line-height:1.8;">
+    💡 <strong>Ingresos del mes</strong>: total de pagos recibidos de los estudiantes.
+    &nbsp;·&nbsp;<strong>Gastos del período</strong>: todos los egresos del centro (arriendo, servicios, etc.) — haz clic para ver el detalle.
+    &nbsp;·&nbsp;<strong>Pago a docentes</strong>: total que se debe pagar a profesores y psicólogos por su trabajo — haz clic para ver el detalle.
+    &nbsp;·&nbsp;<strong>Balance a distribuir</strong>: Ingresos − Gastos − Pago docentes = lo que queda para repartir entre los socios.
+</div>
+
 <!-- Cálculo -->
 <div class="card shadow border-0 mb-4" style="border-radius:15px;">
     <div class="card-header text-white fw-bold" style="background:linear-gradient(135deg,#1a73e8,#0d47a1); border-radius:15px 15px 0 0;">
         📊 Cálculo — {{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][mes-1] }} {{ anio }}
     </div>
     <div class="card-body">
+        <div style="background:#fff8e1; border-radius:8px; padding:9px 13px; font-size:12px; color:#555; margin-bottom:14px; line-height:1.8;">
+            💡 Esta tabla muestra paso a paso cómo se llega al dinero a repartir:<br>
+            Se parte del <strong>saldo real de la cuenta bancaria</strong>, se restan los <strong>gastos del período</strong> (lo que costó operar el centro), luego se resta el <strong>pago bruto a docentes</strong> (si ya se entregaron anticipos, se suma para no restarlos dos veces), y el resultado es el <strong>balance que se divide entre los {{ n_socios }} socios</strong>.
+        </div>
         <table class="table table-sm mb-0">
             <tbody>
                 <tr><td>Saldo cuenta de ahorros</td><td class="text-end fw-bold">${{ "%.2f"|format(saldo_cuenta) }}</td></tr>
@@ -140,6 +157,12 @@
         👥 Distribución entre Socios
     </div>
     <div class="card-body p-0">
+        <div style="padding:10px 16px; background:#f3e5f5; border-bottom:1px solid #e1bee7; font-size:12px; color:#444; line-height:1.8;">
+            💡 <strong>Parte alícuota</strong>: la ganancia del negocio dividida en partes iguales entre los socios (lo que le corresponde como dueño del centro de estudios).
+            &nbsp;·&nbsp;<strong>Pago docente</strong>: si el socio también dicta clases o atiende terapias, aquí se suma lo que le corresponde cobrar por ese trabajo.
+            &nbsp;·&nbsp;<strong>Reembolsos</strong>: gastos que el socio pagó de su propio bolsillo y que el centro le devuelve en esta liquidación.
+            &nbsp;·&nbsp;<strong>Total a recibir</strong>: suma de los tres conceptos anteriores = el monto total que debe recibir este mes.
+        </div>
         <table class="table table-hover mb-0">
             <thead style="background:#f8f9fa;">
                 <tr>
@@ -187,6 +210,9 @@
     <div class="card-header text-white fw-bold" style="background:linear-gradient(135deg,#f57c00,#e65100); border-radius:15px 15px 0 0;">
         💸 Reembolsos incluidos en este período
     </div>
+    <div style="padding:9px 16px; background:#fff3e0; border-bottom:1px solid #ffe0b2; font-size:12px; color:#555; line-height:1.75;">
+        💡 Un <strong>reembolso</strong> ocurre cuando un socio o empleado pagó un gasto del centro de su propio bolsillo (por ejemplo, compró materiales o pagó un servicio). En la liquidación, ese monto se le devuelve directamente a esa persona, sumándose a su "Total a recibir".
+    </div>
     <div class="card-body p-0">
         <table class="table table-sm table-hover mb-0">
             <thead style="background:#f8f9fa;">
@@ -226,6 +252,9 @@
     <div class="card-header text-white fw-bold" style="background:linear-gradient(135deg,#17a2b8,#00695c); border-radius:15px 15px 0 0;">
         👨‍🏫 Detalle Pago por Docente
     </div>
+    <div style="padding:9px 16px; background:#e0f7fa; border-bottom:1px solid #b2ebf2; font-size:12px; color:#444; line-height:1.75;">
+        💡 Muestra cuánto le corresponde recibir a cada docente o psicólogo por su trabajo este mes. Si el docente también es socio del centro, este monto ya está incluido en la columna "Pago docente" de la tabla de distribución de socios — no se paga dos veces.
+    </div>
     <div class="card-body p-0">
         <table class="table table-sm mb-0">
             <thead style="background:#f8f9fa;"><tr><th class="ps-3">Docente</th><th class="text-end">Monto</th><th class="text-center">Es socio</th></tr></thead>
@@ -254,6 +283,11 @@
 <div id="seccion-gastos" class="card shadow border-0 mb-4" style="border-radius:15px;">
     <div class="card-header text-white fw-bold" style="background:linear-gradient(135deg,#dc3545,#b71c1c); border-radius:15px 15px 0 0;">
         📋 Gastos del Período
+    </div>
+    <div style="padding:9px 16px; background:#ffebee; border-bottom:1px solid #ffcdd2; font-size:12px; color:#444; line-height:1.75;">
+        💡 Son todos los egresos del centro en este mes: arriendo, servicios básicos, internet, materiales, etc. Estos montos se restan del saldo de la cuenta antes de repartir entre los socios.
+        &nbsp;·&nbsp;<strong>Persona</strong>: quién realizó el pago.
+        &nbsp;·&nbsp;<strong>Reembolso</strong>: si alguien lo pagó de su bolsillo, se marca aquí para devolverle ese dinero en la liquidación.
     </div>
     <div class="card-body p-0">
         <table class="table table-sm table-hover mb-0">

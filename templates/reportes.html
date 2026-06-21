@@ -134,13 +134,27 @@
             </div>
         </div>
     </div>
-    
+
+    <div style="background:#e8f4fd; border-left:4px solid #1a73e8; border-radius:10px; padding:11px 16px; margin-bottom:16px; font-size:12.5px; color:#333; line-height:1.8;">
+        <strong>ℹ️ Guía de indicadores:</strong><br>
+        👥 <strong>Estudiantes Activos</strong>: personas que tienen clases planificadas este mes, con desglose por género.<br>
+        ⏱️ <strong>Horas Efectivas</strong>: suma total de horas de clase del mes según la planificación, y el promedio por estudiante.<br>
+        💰 <strong>Ingresos Recaudados</strong>: dinero realmente cobrado a los estudiantes este mes (si hubo devoluciones ya se descuentan para mostrar el neto).<br>
+        📈 <strong>Resultado Neto</strong>: ingresos del mes menos todos los gastos y pagos a docentes. Verde = el mes fue positivo; rojo = los gastos superaron los ingresos.
+    </div>
+
     <div class="card report-card mb-4">
         <div class="card-header gradient-dark text-white d-flex justify-content-between align-items-center" style="border-radius: 20px 20px 0 0;">
             <strong>💰 Balance de Resultados</strong>
             <span class="badge bg-light text-dark">Planificado vs Ejecutado</span>
         </div>
         <div class="card-body p-0">
+            <div style="padding:10px 16px; background:#fffde7; border-bottom:1px solid #f0f0f0; font-size:12px; color:#555; line-height:1.8;">
+                💡 <strong>Planificado</strong>: lo que se esperaba cobrar/gastar según las horas programadas y los gastos registrados del mes.
+                &nbsp;·&nbsp;<strong>Ejecutado</strong>: lo que realmente ocurrió (pagos recibidos de estudiantes y gastos realizados).
+                &nbsp;·&nbsp;<strong>%</strong>: qué porcentaje del total de ingresos representa cada rubro.
+                &nbsp;·&nbsp;<strong>Resultado Neto</strong>: ingresos totales menos todos los gastos — es la ganancia o pérdida real del mes.
+            </div>
             <div class="table-responsive">
                 <table class="table table-premium mb-0">
                     <thead><tr><th>Concepto</th><th class="text-end" width="14%">Planificado</th><th class="text-end" width="8%">%</th><th class="text-end" width="14%">Ejecutado</th><th class="text-end" width="8%">%</th></tr></thead>
@@ -188,6 +202,13 @@
             <strong>📚 Detalle por Asignatura / Terapia</strong>
         </div>
         <div class="card-body p-3">
+            <div style="background:#e8eaf6; border-radius:8px; padding:9px 13px; font-size:12px; color:#444; margin-bottom:12px; line-height:1.8;">
+                💡 Haz clic en cada asignatura o terapia para ver el listado de estudiantes.
+                &nbsp;<span style="background:#e3f2fd; color:#1565c0; padding:2px 8px; border-radius:8px; font-weight:600; font-size:11px;">est.</span> = número de estudiantes inscritos en esa materia este mes.
+                &nbsp;<span style="background:#e8f5e9; color:#2e7d32; padding:2px 8px; border-radius:8px; font-weight:600; font-size:11px;">hrs</span> = total de horas de clase en esa materia.
+                &nbsp;<span style="background:#fff3e0; color:#e65100; padding:2px 8px; border-radius:8px; font-weight:600; font-size:11px;">$</span> = valor total generado (horas × tarifa de cada estudiante).
+                &nbsp;El <strong>%</strong> al final indica cuánto representa del total de ingresos planificados del mes.
+            </div>
             {% for asig, datos in asignaturas_valores.items() %}
             {% set estudiantes_asig = asignaturas_estudiantes.get(asig, []) %}
             <div class="asig-item">
@@ -244,6 +265,11 @@
             <strong>💲 Pagos a Docentes y Psicólogos</strong>
         </div>
         <div class="card-body p-0">
+            <div style="padding:9px 16px; background:#fff8e1; border-bottom:1px solid #f0f0f0; font-size:12px; color:#555; line-height:1.8;">
+                💡 <strong>Docencia</strong>: lo que le corresponde pagar al profesional por las horas de clase que dictó este mes.
+                &nbsp;·&nbsp;<strong>Psicología</strong>: pago por las sesiones de psicología o psicopedagogía que atendió.
+                &nbsp;·&nbsp;<strong>%</strong>: qué parte del total pagado a profesionales le corresponde a cada persona.
+            </div>
             <div class="table-responsive">
                 <table class="table table-premium mb-0">
                     <thead><tr><th>Profesional</th><th class="text-end">Docencia</th><th class="text-end">Psicología</th><th class="text-end">Total</th><th class="text-end" width="18%">%</th></tr></thead>
@@ -284,6 +310,13 @@
         </div>
         <div class="card-body p-0">
             {% if datos_ingresos %}
+            <div style="padding:9px 16px; background:#e8f5e9; border-bottom:1px solid #f0f0f0; font-size:12px; color:#444; line-height:1.8;">
+                💡 <strong>Horas</strong>: horas de clase planificadas para el estudiante este mes.
+                &nbsp;·&nbsp;<strong>Tarifa</strong>: tipo de cobro según su planificación (individual = $15/h, grupal = $12/h).
+                &nbsp;·&nbsp;<strong>Total planificado</strong>: horas × tarifa = lo que el estudiante debería pagar este mes.
+                &nbsp;·&nbsp;<strong>Total pagado</strong>: lo que realmente ha pagado hasta la fecha.
+                &nbsp;·&nbsp;<strong>Saldo ⬆</strong>: monto que aún le falta pagar. Si dice "a favor" significa que el estudiante pagó más de lo que correspondía.
+            </div>
             <div class="table-responsive">
                 <table class="table table-premium mb-0">
                     <thead><tr>
