@@ -615,6 +615,79 @@
             h3 { font-size: 1.4rem !important; }
         }
 
+        /* ── GUÍA DE PASOS ──────────────────────────── */
+        .guide-btn {
+            background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.25);
+            color: #fff; border-radius: 8px; padding: 6px 13px;
+            font-size: 12.5px; font-weight: 700; cursor: pointer;
+            display: flex; align-items: center; gap: 6px; transition: background .2s;
+            position: relative;
+        }
+        .guide-btn:hover { background: rgba(255,255,255,0.2); }
+        .guide-badge {
+            position: absolute; top: -6px; right: -6px;
+            background: #f0c040; color: #1e3a5f;
+            font-size: 10px; font-weight: 800; border-radius: 10px; padding: 1px 6px;
+            min-width: 18px; text-align: center;
+        }
+        .guide-panel {
+            position: fixed; top: 0; right: -370px; width: 350px; height: 100vh;
+            background: #fff; z-index: 2050;
+            box-shadow: -6px 0 32px rgba(0,0,0,0.18);
+            transition: right .28s ease;
+            display: flex; flex-direction: column;
+        }
+        .guide-panel.open { right: 0; }
+        .guide-backdrop {
+            position: fixed; inset: 0; background: rgba(15,23,42,0.35);
+            z-index: 2040; opacity: 0; visibility: hidden; transition: opacity .25s;
+        }
+        .guide-backdrop.show { opacity: 1; visibility: visible; }
+        .guide-header {
+            background: linear-gradient(135deg,#1e3a5f,#1e40af);
+            color: #fff; padding: 16px 18px 13px;
+            display: flex; justify-content: space-between; align-items: flex-start; flex-shrink: 0;
+        }
+        .guide-header h5 { margin: 0; font-size: 14.5px; font-weight: 800; }
+        .guide-header small { font-size: 11px; opacity: .75; display: block; margin-top: 3px; }
+        .guide-close {
+            background: rgba(255,255,255,0.15); border: none; color: #fff;
+            border-radius: 6px; padding: 3px 9px; font-size: 17px; cursor: pointer; line-height: 1;
+        }
+        .guide-progress-wrap { padding: 11px 16px 9px; border-bottom: 1px solid #f0f0f0; flex-shrink: 0; }
+        .guide-bar-bg { height: 6px; background: #e2e8f0; border-radius: 4px; margin-bottom: 6px; }
+        .guide-bar-fill {
+            height: 100%; border-radius: 4px;
+            background: linear-gradient(90deg,#10b981,#34d399); transition: width .35s;
+        }
+        .guide-bar-label { font-size: 11.5px; color: #64748b; font-weight: 500; }
+        .guide-steps-wrap { overflow-y: auto; flex: 1; padding: 8px 10px 20px; }
+        .guide-step {
+            display: flex; align-items: flex-start; gap: 9px;
+            padding: 8px 9px; border-radius: 9px; margin-bottom: 3px;
+            border: 1px solid transparent; transition: background .15s, border-color .15s;
+        }
+        .guide-step:hover { background: #f8fafc; border-color: #e2e8f0; }
+        .guide-step.done { background: #f0fdf4; }
+        .guide-step.done .gs-title { text-decoration: line-through; color: #94a3b8; }
+        .guide-check {
+            width: 17px; height: 17px; border: 2px solid #cbd5e1; border-radius: 4px;
+            flex-shrink: 0; margin-top: 3px; display: flex; align-items: center;
+            justify-content: center; cursor: pointer; transition: all .15s; background: #fff; font-size: 10px;
+        }
+        .guide-step.done .guide-check { background: #10b981; border-color: #10b981; color: #fff; }
+        .guide-step-link {
+            flex: 1; text-decoration: none; color: inherit;
+            display: flex; align-items: flex-start; gap: 9px;
+        }
+        .gs-icon { font-size: 17px; flex-shrink: 0; margin-top: 1px; }
+        .gs-title { font-size: 12.5px; font-weight: 600; color: #1e293b; line-height: 1.3; }
+        .gs-desc { font-size: 11px; color: #64748b; margin-top: 2px; line-height: 1.4; }
+        .gs-arrow { margin-left: auto; color: #cbd5e1; font-size: 11px; align-self: center; flex-shrink: 0; padding-left: 4px; }
+        .guide-section-label {
+            font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.2px;
+            color: #94a3b8; padding: 10px 9px 4px; margin-top: 2px;
+        }
         /* ── TOUCH / TAP FEEDBACK ────────────────────── */
         @media (hover: none) {
             .btn:hover { transform: none !important; box-shadow: var(--shadow-sm) !important; }
@@ -643,12 +716,36 @@
                     <div style="color: white; font-weight: 600; font-size: 13px;">{{ current_user.nombre }}</div>
                     <div style="color: rgba(255,255,255,0.6); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-top: 2px;">{{ current_user.rol }}</div>
                 </div>
+                {% if current_user.rol in ['admin','socio'] %}
+                <button class="guide-btn" onclick="openGuide()" id="guideBtnMain" title="Guía de flujo de trabajo">
+                    <i class="bi bi-list-check"></i> Guía
+                    <span class="guide-badge" id="guideBadge" style="display:none"></span>
+                </button>
+                {% endif %}
                 <a href="/logout" class="btn-logout" style="padding: 9px 18px; display: flex; align-items: center; gap: 8px;">
                     <span style="font-size: 16px;">🚪</span> Salir
                 </a>
             </div>
         </div>
     </nav>
+
+    {% if current_user.rol in ['admin','socio'] %}
+    <div class="guide-backdrop" id="guideBackdrop" onclick="closeGuide()"></div>
+    <div class="guide-panel" id="guidePanel">
+        <div class="guide-header">
+            <div>
+                <h5>📋 Guía de Flujo de Trabajo</h5>
+                <small>Sigue los pasos para gestionar el mes correctamente</small>
+            </div>
+            <button class="guide-close" onclick="closeGuide()">×</button>
+        </div>
+        <div class="guide-progress-wrap">
+            <div class="guide-bar-bg"><div class="guide-bar-fill" id="guideFill" style="width:0%"></div></div>
+            <div class="guide-bar-label" id="guideBarLabel">0 de 10 pasos completados</div>
+        </div>
+        <div class="guide-steps-wrap" id="guideStepsWrap"></div>
+    </div>
+    {% endif %}
 
     {% set p = request.path %}
     {% set rol = current_user.rol %}
@@ -796,6 +893,90 @@
         document.querySelectorAll('.app-sidebar a').forEach(function (a) {
             a.addEventListener('click', function () { if (window.innerWidth < 992) cerrar(); });
         });
+    })();
+
+    // ── GUÍA DE PASOS ──────────────────────────────────────
+    (function () {
+        var STEPS = [
+            { sec: 'Configuración inicial' },
+            { id:'s1', icon:'📖', title:'Registrar asignaturas',       desc:'Define las materias y áreas de estudio disponibles',            url:'/asignaturas' },
+            { id:'s2', icon:'👨‍🏫', title:'Registrar docentes',          desc:'Agrega a los profesores y psicólogos del centro',               url:'/docentes' },
+            { id:'s3', icon:'👩‍🎓', title:'Registrar estudiantes',       desc:'Ingresa los datos personales de cada alumno',                   url:'/estudiantes' },
+            { sec: 'Gestión mensual' },
+            { id:'s4', icon:'📝', title:'Crear planificación del mes',  desc:'Asigna clases, horarios y tarifas a cada estudiante',           url:'/modulo1' },
+            { id:'s5', icon:'📅', title:'Revisar calendario de clases', desc:'Consulta las clases del día y marca la asistencia',             url:'/modulo2' },
+            { id:'s6', icon:'💵', title:'Registrar pagos de estudiantes', desc:'Ingresa los cobros recibidos de los alumnos en el mes',       url:'/modulo3' },
+            { id:'s7', icon:'💳', title:'Gestionar pagos a docentes',   desc:'Registra lo que corresponde pagar a cada profesor',             url:'/modulo5' },
+            { sec: 'Cierre del mes' },
+            { id:'s8', icon:'🧾', title:'Registrar gastos del mes',     desc:'Anota todos los egresos operativos (arriendo, servicios…)',     url:'/gastos' },
+            { id:'s9', icon:'📊', title:'Consultar reportes mensuales', desc:'Revisa el resumen financiero y el estado por estudiante',       url:'/reportes' },
+            { id:'s10',icon:'⚖️', title:'Realizar liquidación',         desc:'Distribuye el balance neto entre los socios del centro',        url:'/liquidacion' },
+        ];
+
+        var total = STEPS.filter(function(s){ return s.id; }).length;
+
+        function getState() {
+            try { return JSON.parse(localStorage.getItem('atlas_guide_v1') || '{}'); } catch(e) { return {}; }
+        }
+        function saveState(st) { try { localStorage.setItem('atlas_guide_v1', JSON.stringify(st)); } catch(e){} }
+
+        function render() {
+            var wrap = document.getElementById('guideStepsWrap');
+            if (!wrap) return;
+            var state = getState();
+            var done = 0;
+            var html = '';
+            STEPS.forEach(function(s) {
+                if (s.sec) {
+                    html += '<div class="guide-section-label">' + s.sec + '</div>';
+                    return;
+                }
+                var isDone = !!state[s.id];
+                if (isDone) done++;
+                var isCurrent = window.location.pathname === s.url;
+                html += '<div class="guide-step' + (isDone?' done':'') + (isCurrent?' hover':'') + '" id="gs-'+s.id+'">';
+                html += '<div class="guide-check" onclick="guideToggle(\''+s.id+'\')">' + (isDone ? '<i class="bi bi-check"></i>' : '') + '</div>';
+                html += '<a href="'+s.url+'" class="guide-step-link">';
+                html += '<span class="gs-icon">'+s.icon+'</span>';
+                html += '<div><div class="gs-title">'+s.title+'</div><div class="gs-desc">'+s.desc+'</div></div>';
+                html += '<span class="gs-arrow"><i class="bi bi-arrow-right-short"></i></span>';
+                html += '</a></div>';
+            });
+            wrap.innerHTML = html;
+
+            var pct = total > 0 ? Math.round(done / total * 100) : 0;
+            var fill = document.getElementById('guideFill');
+            var lbl  = document.getElementById('guideBarLabel');
+            if (fill) fill.style.width = pct + '%';
+            if (lbl)  lbl.textContent  = done + ' de ' + total + ' pasos completados (' + pct + '%)';
+
+            var badge = document.getElementById('guideBadge');
+            var pending = total - done;
+            if (badge) {
+                if (pending > 0) { badge.textContent = pending; badge.style.display = ''; }
+                else { badge.style.display = 'none'; }
+            }
+        }
+
+        window.guideToggle = function(id) {
+            var st = getState(); st[id] = !st[id]; saveState(st); render();
+        };
+        window.openGuide = function() {
+            render();
+            var p = document.getElementById('guidePanel');
+            var b = document.getElementById('guideBackdrop');
+            if (p) p.classList.add('open');
+            if (b) b.classList.add('show');
+        };
+        window.closeGuide = function() {
+            var p = document.getElementById('guidePanel');
+            var b = document.getElementById('guideBackdrop');
+            if (p) p.classList.remove('open');
+            if (b) b.classList.remove('show');
+        };
+
+        // Actualizar badge al cargar
+        document.addEventListener('DOMContentLoaded', function() { render(); });
     })();
     </script>
 </body>
