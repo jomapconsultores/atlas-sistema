@@ -1,0 +1,48 @@
+{
+  "name": "Atlas - Centro de Estudios",
+  "short_name": "Atlas",
+  "description": "Sistema de gestión académica y financiera para Atlas Centro de Estudios",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0a1628",
+  "theme_color": "#1e3a5f",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "/static/img/logo_atlas_redondo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/img/logo_atlas_redondo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Calendario",
+      "short_name": "Calendario",
+      "url": "/modulo2",
+      "icons": [{ "src": "/static/img/favicon.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Planificación",
+      "short_name": "Planificar",
+      "url": "/modulo1",
+      "icons": [{ "src": "/static/img/favicon.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Finanzas",
+      "short_name": "Finanzas",
+      "url": "/modulo3",
+      "icons": [{ "src": "/static/img/favicon.png", "sizes": "96x96" }]
+    }
+  ],
+  "categories": ["education", "productivity", "business"],
+  "screenshots": []
+}

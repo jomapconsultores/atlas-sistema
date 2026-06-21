@@ -517,6 +517,17 @@ def logout():
     logout_user()
     return redirect(url_for('inicio'))
 
+@app.route('/manifest.json')
+def pwa_manifest():
+    return app.send_static_file('manifest.json'), 200, {'Content-Type': 'application/manifest+json'}
+
+@app.route('/sw.js')
+def service_worker():
+    return app.send_static_file('sw.js'), 200, {
+        'Content-Type': 'application/javascript',
+        'Service-Worker-Allowed': '/'
+    }
+
 # ========== PASSKEYS: huella digital / reconocimiento facial (WebAuthn) ==========
 # El usuario registra su dispositivo desde "Mi Perfil" (con sesion iniciada) y
 # desde entonces puede entrar con la huella o el rostro de su celular/laptop.

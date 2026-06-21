@@ -5,7 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#0f172a">
     <link rel="icon" type="image/png" href="/static/img/favicon.png?v=1">
-    <link rel="apple-touch-icon" href="/static/img/favicon.png?v=1">
+    <link rel="apple-touch-icon" href="/static/img/logo_atlas_redondo.png">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Atlas">
+    <meta name="mobile-web-app-capable" content="yes">
     <title>{% block title %}Atlas{% endblock %}</title>
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -986,6 +991,13 @@
         // Actualizar badge al cargar
         document.addEventListener('DOMContentLoaded', function() { render(); });
     })();
+    </script>
+    <script>
+    if('serviceWorker' in navigator){
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js').catch(() => {});
+        });
+    }
     </script>
 </body>
 </html>
