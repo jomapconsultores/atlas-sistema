@@ -548,18 +548,26 @@
         .app-sidebar a:hover, .app-sidebar .nav-group-toggle:hover { background: #f1f5f9; color: #1e40af; }
         .app-sidebar a.active { background: #1e3a5f; color: #fff; }
         .app-sidebar a .ico, .app-sidebar .nav-group-toggle .ico { font-size: 15px; width: 19px; text-align: center; flex-shrink: 0; }
-        .app-sidebar .nav-group-toggle .chev {
-            margin-left: auto; font-size: 10px; color: #94a3b8;
-            transition: transform .22s; display: inline-block;
+        /* Chevron puro en CSS — sin dependencia de fuente de iconos */
+        .app-sidebar .nav-group-toggle::after {
+            content: ''; margin-left: auto; flex-shrink: 0;
+            width: 0; height: 0;
+            border-left: 4px solid transparent;
+            border-right: 4px solid transparent;
+            border-top: 5px solid #94a3b8;
+            transition: transform .22s;
         }
-        .app-sidebar .nav-group.open .nav-group-toggle .chev { transform: rotate(90deg); }
+        .app-sidebar .nav-group.open > .nav-group-toggle::after { transform: rotate(180deg); }
         .app-sidebar .nav-group-items { max-height: 0; overflow: hidden; transition: max-height .28s ease; padding-left: 26px; }
         .app-sidebar .nav-group.open .nav-group-items { max-height: 600px; }
         .app-sidebar .nav-group-items a {
+            display: flex; align-items: center;
             font-size: 11.5px; font-weight: 500;
             padding: 5px 8px; border-radius: 6px;
             color: #64748b; margin-bottom: 1px;
+            text-decoration: none;
         }
+        .app-sidebar .nav-group-items a::before { display: none; content: none; }
         .app-sidebar .nav-group-items a:hover { color: #1e40af; background: #eff6ff; }
         .app-sidebar .nav-group-items a.active { color: #1e40af; background: #dbeafe; font-weight: 600; }
         .app-sidebar .side-badge { margin-left: auto; background: var(--atlas-danger); color:#fff; font-size:10px; font-weight:700; border-radius: 20px; padding: 1px 7px; }
@@ -757,7 +765,7 @@
 
         {% set acad_active = p in ['/modulo1','/editar-planificaciones','/editar-planificacion-masiva','/modulo2','/modulo4','/modulo6','/asignaturas'] %}
         <div class="nav-group {% if acad_active %}open{% endif %}">
-            <button type="button" class="nav-group-toggle"><span class="ico">📚</span> Académico <i class="bi bi-chevron-right chev"></i></button>
+            <button type="button" class="nav-group-toggle"><span class="ico">📚</span> Académico</button>
             <div class="nav-group-items">
                 <a href="/modulo1" class="{% if p=='/modulo1' %}active{% endif %}">Nueva planificación</a>
                 <a href="/editar-planificaciones" class="{% if p=='/editar-planificaciones' %}active{% endif %}">Editar planificaciones</a>
@@ -771,7 +779,7 @@
 
         {% set pers_active = p in ['/estudiantes','/docentes','/padres','/contactos'] %}
         <div class="nav-group {% if pers_active %}open{% endif %}">
-            <button type="button" class="nav-group-toggle"><span class="ico">👥</span> Personas <i class="bi bi-chevron-right chev"></i></button>
+            <button type="button" class="nav-group-toggle"><span class="ico">👥</span> Personas</button>
             <div class="nav-group-items">
                 <a href="/estudiantes" class="{% if p=='/estudiantes' %}active{% endif %}">Estudiantes</a>
                 <a href="/docentes" class="{% if p=='/docentes' %}active{% endif %}">Docentes</a>
@@ -782,7 +790,7 @@
 
         {% set fin_active = p in ['/modulo3','/modulo5','/devoluciones','/reportes','/gastos','/liquidacion','/gestion-anticipos','/movimientos-cuenta'] %}
         <div class="nav-group {% if fin_active %}open{% endif %}">
-            <button type="button" class="nav-group-toggle"><span class="ico">💰</span> Finanzas <i class="bi bi-chevron-right chev"></i></button>
+            <button type="button" class="nav-group-toggle"><span class="ico">💰</span> Finanzas</button>
             <div class="nav-group-items">
                 <a href="/modulo3" class="{% if p=='/modulo3' %}active{% endif %}">Pagos de estudiantes</a>
                 <a href="/modulo5" class="{% if p=='/modulo5' %}active{% endif %}">Pagos a docentes</a>
@@ -797,7 +805,7 @@
 
         {% set psi_active = p in ['/psicologia-especial'] %}
         <div class="nav-group {% if psi_active %}open{% endif %}">
-            <button type="button" class="nav-group-toggle"><span class="ico">🧠</span> Psicología <i class="bi bi-chevron-right chev"></i></button>
+            <button type="button" class="nav-group-toggle"><span class="ico">🧠</span> Psicología</button>
             <div class="nav-group-items">
                 <a href="/psicologia-especial" class="{% if p=='/psicologia-especial' %}active{% endif %}">Psicología especial</a>
             </div>
@@ -805,7 +813,7 @@
 
         {% set adm_active = p in ['/admin/costos','/usuarios','/reporte-duplicados'] %}
         <div class="nav-group {% if adm_active %}open{% endif %}">
-            <button type="button" class="nav-group-toggle"><span class="ico">⚙️</span> Administración <i class="bi bi-chevron-right chev"></i></button>
+            <button type="button" class="nav-group-toggle"><span class="ico">⚙️</span> Administración</button>
             <div class="nav-group-items">
                 <a href="/admin/costos" class="{% if p=='/admin/costos' %}active{% endif %}">Costos</a>
                 {% if rol=='admin' %}<a href="/usuarios" class="{% if p=='/usuarios' %}active{% endif %}">Usuarios</a>{% endif %}
