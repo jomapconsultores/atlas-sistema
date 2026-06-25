@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Proforma {{ p.get('numero','') }} - Atlas{% endblock %}
+{% block title %}Proforma {{ pf.get('numero','') }} - Atlas{% endblock %}
 {% block content %}
 <style>
     .badge-estado { font-size: 12px; font-weight: 700; padding: 5px 12px !important; border-radius: 20px !important; }
@@ -18,8 +18,8 @@
 </style>
 
 <div class="page-hero">
-    <h2>📋 Proforma {{ p.get('numero','') }}</h2>
-    <p>Estado actual: <span class="badge-estado e-{{ p.get('estado','borrador') }}">{{ p.get('estado','borrador')|capitalize }}</span></p>
+    <h2>📋 Proforma {{ pf.get('numero','') }}</h2>
+    <p>Estado actual: <span class="badge-estado e-{{ pf.get('estado','borrador') }}">{{ pf.get('estado','borrador')|capitalize }}</span></p>
 </div>
 
 <div class="d-flex justify-content-between mb-3 flex-wrap gap-2">
@@ -27,7 +27,7 @@
     <div class="d-flex gap-2 flex-wrap">
         <button type="button" class="btn btn-info" onclick="window.print()">🖨️ Imprimir / PDF</button>
         <button type="button" class="btn btn-outline-dark" onclick="copiarTexto()">📄 Copiar texto</button>
-        <form method="POST" action="/proformas/{{ p['id'] }}/eliminar" onsubmit="return confirm('¿Eliminar esta proforma definitivamente?');" style="display:inline;">
+        <form method="POST" action="/proformas/{{ pf['id'] }}/eliminar" onsubmit="return confirm('¿Eliminar esta proforma definitivamente?');" style="display:inline;">
             <button type="submit" class="btn btn-outline-danger">🗑️ Eliminar</button>
         </form>
     </div>
@@ -47,17 +47,17 @@
         <div class="card mb-3">
             <div class="card-header bg-primary text-white">📧 Enviar por correo</div>
             <div class="card-body">
-                <form method="POST" action="/proformas/{{ p['id'] }}/enviar">
+                <form method="POST" action="/proformas/{{ pf['id'] }}/enviar">
                     <div class="form-check mb-2">
-                        <input class="form-check-input" type="checkbox" name="enviar_representante" id="cbRep" value="1" {{ 'checked' if p.get('representante_email') else 'disabled' }}>
+                        <input class="form-check-input" type="checkbox" name="enviar_representante" id="cbRep" value="1" {{ 'checked' if pf.get('representante_email') else 'disabled' }}>
                         <label class="form-check-label" for="cbRep">
-                            Representante {% if p.get('representante_email') %}<strong>({{ p['representante_email'] }})</strong>{% else %}<span class="text-muted">— sin correo registrado</span>{% endif %}
+                            Representante {% if pf.get('representante_email') %}<strong>({{ pf['representante_email'] }})</strong>{% else %}<span class="text-muted">— sin correo registrado</span>{% endif %}
                         </label>
                     </div>
                     <div class="form-check mb-2">
-                        <input class="form-check-input" type="checkbox" name="enviar_profesor" id="cbProf" value="1" {{ 'checked' if p.get('profesor_email') else 'disabled' }}>
+                        <input class="form-check-input" type="checkbox" name="enviar_profesor" id="cbProf" value="1" {{ 'checked' if pf.get('profesor_email') else 'disabled' }}>
                         <label class="form-check-label" for="cbProf">
-                            Docente / Psicólogo {% if p.get('profesor_email') %}<strong>({{ p['profesor_email'] }})</strong>{% else %}<span class="text-muted">— sin correo registrado</span>{% endif %}
+                            Docente / Psicólogo {% if pf.get('profesor_email') %}<strong>({{ pf['profesor_email'] }})</strong>{% else %}<span class="text-muted">— sin correo registrado</span>{% endif %}
                         </label>
                     </div>
                     <div class="mb-3">
@@ -73,16 +73,16 @@
         <div class="card mb-3">
             <div class="card-header bg-success text-white">✅ Aprobación</div>
             <div class="card-body">
-                {% if p.get('estado') in ['aprobado','incorporado'] %}
+                {% if pf.get('estado') in ['aprobado','incorporado'] %}
                 <div class="alert alert-success mb-2">Esta proforma fue aprobada.</div>
                 {% else %}
                 <p style="font-size:13px;color:var(--atlas-muted);">Marca la proforma como aprobada por el representante para poder incorporarla a la planificación.</p>
                 <div class="d-flex gap-2">
-                    <form method="POST" action="/proformas/{{ p['id'] }}/estado" style="flex:1;">
+                    <form method="POST" action="/proformas/{{ pf['id'] }}/estado" style="flex:1;">
                         <input type="hidden" name="estado" value="aprobado">
                         <button type="submit" class="btn btn-success w-100">👍 Aprobar</button>
                     </form>
-                    <form method="POST" action="/proformas/{{ p['id'] }}/estado" style="flex:1;" onsubmit="return confirm('¿Marcar como rechazada?');">
+                    <form method="POST" action="/proformas/{{ pf['id'] }}/estado" style="flex:1;" onsubmit="return confirm('¿Marcar como rechazada?');">
                         <input type="hidden" name="estado" value="rechazado">
                         <button type="submit" class="btn btn-outline-danger w-100">👎 Rechazar</button>
                     </form>
@@ -95,15 +95,15 @@
         <div class="card mb-3">
             <div class="card-header bg-secondary text-white">📅 Incorporar a planificación</div>
             <div class="card-body">
-                {% if p.get('incorporada') %}
+                {% if pf.get('incorporada') %}
                 <div class="alert alert-info mb-0">✔️ Ya se incorporó a la planificación (Módulo 1). Las sesiones aparecen en el calendario.</div>
-                {% elif p.get('estado') != 'aprobado' %}
-                <p style="font-size:13px;color:var(--atlas-muted);margin:0;">Disponible una vez la proforma esté <strong>aprobada</strong>{% if not p.get('estudiante_id') %} y vinculada a un estudiante del sistema{% endif %}.</p>
-                {% elif not p.get('estudiante_id') %}
+                {% elif pf.get('estado') != 'aprobado' %}
+                <p style="font-size:13px;color:var(--atlas-muted);margin:0;">Disponible una vez la proforma esté <strong>aprobada</strong>{% if not pf.get('estudiante_id') %} y vinculada a un estudiante del sistema{% endif %}.</p>
+                {% elif not pf.get('estudiante_id') %}
                 <div class="alert alert-warning mb-0">⚠️ La proforma no está vinculada a un estudiante del sistema, por lo que no puede incorporarse automáticamente a la planificación.</div>
                 {% else %}
-                <p style="font-size:13px;color:var(--atlas-muted);">Crea las sesiones planificadas para <strong>{{ p.get('estudiante_nombre') }}</strong> siguiendo los lineamientos del Módulo 1.</p>
-                <form method="POST" action="/proformas/{{ p['id'] }}/incorporar" onsubmit="return confirm('Se crearán las sesiones en la planificación. ¿Continuar?');">
+                <p style="font-size:13px;color:var(--atlas-muted);">Crea las sesiones planificadas para <strong>{{ pf.get('estudiante_nombre') }}</strong> siguiendo los lineamientos del Módulo 1.</p>
+                <form method="POST" action="/proformas/{{ pf['id'] }}/incorporar" onsubmit="return confirm('Se crearán las sesiones en la planificación. ¿Continuar?');">
                     <button type="submit" class="btn btn-secondary w-100">➡️ Incorporar a la planificación</button>
                 </form>
                 {% endif %}
@@ -113,11 +113,11 @@
 </div>
 
 <!-- texto plano para copiar -->
-<textarea id="textoPlano" style="position:absolute;left:-9999px;">{{ p.get('numero','') }} - Proforma Atlas Centro de Estudios
-Estudiante: {{ p.get('estudiante_nombre') or '—' }}
-Representante: {{ p.get('representante_nombre') or '—' }}
+<textarea id="textoPlano" style="position:absolute;left:-9999px;">{{ pf.get('numero','') }} - Proforma Atlas Centro de Estudios
+Estudiante: {{ pf.get('estudiante_nombre') or '—' }}
+Representante: {{ pf.get('representante_nombre') or '—' }}
 {% for it in items %}- {% if it.get('tipo_sesion') in ['terapia','ambos'] %}{{ it.get('tema_terapia') or 'Atención psicológica' }}{% else %}{{ it.get('asignatura') or 'Clase' }}{% endif %} | {{ it.get('fecha') or '' }} {{ (it.get('hora_inicio') or '')[:5] }}-{{ (it.get('hora_fin') or '')[:5] }} | ${{ '%.2f'|format(it.get('subtotal',0) or 0) }}
-{% endfor %}TOTAL: ${{ '%.2f'|format(p.get('total',0) or 0) }}</textarea>
+{% endfor %}TOTAL: ${{ '%.2f'|format(pf.get('total',0) or 0) }}</textarea>
 
 <script>
 function copiarTexto() {

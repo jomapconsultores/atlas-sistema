@@ -4541,7 +4541,7 @@ def proforma_detalle(id):
     if not p:
         flash('❌ Proforma no encontrada', 'error')
         return redirect(url_for('proformas'))
-    return render_template('proforma_detalle.html', p=p, items=items,
+    return render_template('proforma_detalle.html', pf=p, items=items,
                            copia_html=_proforma_html(p, items))
 
 
