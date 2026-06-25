@@ -785,14 +785,14 @@
         <div class="nav-group {% if acad_active %}open{% endif %}">
             <button type="button" class="nav-group-toggle"><span class="ico">📚</span> Académico</button>
             <div class="nav-group-items">
-                <a href="/proformas" class="{% if p.startswith('/proformas') %}active{% endif %}">Proformas de clases</a>
                 <a href="/modulo1" class="{% if p=='/modulo1' %}active{% endif %}">Nueva planificación</a>
                 <a href="/editar-planificaciones" class="{% if p=='/editar-planificaciones' %}active{% endif %}">Editar planificaciones</a>
                 <a href="/editar-planificacion-masiva" class="{% if p=='/editar-planificacion-masiva' %}active{% endif %}">Edición masiva</a>
+                <a href="/proformas" class="{% if p.startswith('/proformas') %}active{% endif %}">Proformas de clases</a>
                 <a href="/modulo2" class="{% if p=='/modulo2' %}active{% endif %}">Calendario diario</a>
                 <a href="/modulo4" class="{% if p=='/modulo4' %}active{% endif %}">Calendario general</a>
-                <a href="/modulo6" class="{% if p=='/modulo6' %}active{% endif %}">Reuniones</a>
                 <a href="/asignaturas" class="{% if p=='/asignaturas' %}active{% endif %}">Asignaturas</a>
+                <a href="/modulo6" class="{% if p=='/modulo6' %}active{% endif %}">Reuniones internas</a>
             </div>
         </div>
 
