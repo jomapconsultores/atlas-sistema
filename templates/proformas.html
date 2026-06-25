@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Proformas - Atlas{% endblock %}
+{% block content %}
+<style>
+    .badge-estado { font-size: 11px; font-weight: 700; padding: 4px 10px !important; border-radius: 20px !important; }
+    .e-borrador   { background:#e2e8f0; color:#475569; }
+    .e-enviado    { background:#dbeafe; color:#1e40af; }
+    .e-aprobado   { background:#d1fae5; color:#065f46; }
+    .e-incorporado{ background:#ede9fe; color:#6d28d9; }
+    .e-rechazado  { background:#fee2e2; color:#991b1b; }
+</style>
+
+<div class="page-hero">
+    <h2>📋 Proformas de clases</h2>
+    <p>Cotizaciones de horarios y costos de clases y atención psicológica. Envíalas al representante y al docente; al aprobarse se incorporan a la planificación.</p>
+</div>
+
+<div class="d-flex justify-content-between mb-3 flex-wrap gap-2">
+    <a href="/proformas/nueva" class="btn btn-primary">➕ Nueva proforma</a>
+    <a href="/modulo1" class="btn btn-outline-secondary">📝 Ir a planificación</a>
+</div>
+
+<div class="card">
+    <div class="card-header bg-dark text-white">📑 Listado de proformas</div>
+    <div class="card-body p-0">
+        {% if proformas %}
+        <div class="table-responsive">
+            <table class="table mb-0">
+                <thead>
+                    <tr>
+                        <th>Número</th><th>Estudiante</th><th>Representante</th>
+                        <th>Tipo</th><th class="text-end">Total</th><th>Estado</th><th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in proformas %}
+                    <tr>
+                        <td><strong>{{ p.get('numero','') }}</strong><div style="font-size:11px;color:#94a3b8;">{{ (p.get('created_at') or '')[:10] }}</div></td>
+                        <td>{{ p.get('estudiante_nombre') or '—' }}</td>
+                        <td>{{ p.get('representante_nombre') or '—' }}</td>
+                        <td>{{ p.get('tipo_proforma','clase')|capitalize }}</td>
+                        <td class="text-end fw-bold">${{ '%.2f'|format(p.get('total',0) or 0) }}</td>
+                        <td><span class="badge-estado e-{{ p.get('estado','borrador') }}">{{ p.get('estado','borrador')|capitalize }}</span></td>
+                        <td class="text-end"><a href="/proformas/{{ p['id'] }}" class="btn btn-sm btn-outline-primary">Ver / Enviar</a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center text-muted py-5">
+            <div style="font-size:2.5rem;">📭</div>
+            <p class="mt-2">Aún no hay proformas. Crea la primera con el botón «Nueva proforma».</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -233,6 +233,19 @@
         }
         label.form-label { font-size: 12px; font-weight: 600; color: var(--atlas-muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 4px; }
 
+        /* ── OJITO MOSTRAR/OCULTAR CONTRASEÑA ───────── */
+        .pw-wrap { position: relative; display: block; }
+        .pw-wrap input { padding-right: 42px !important; }
+        .pw-toggle {
+            position: absolute; top: 50%; right: 8px; transform: translateY(-50%);
+            background: transparent; border: none; cursor: pointer;
+            color: var(--atlas-muted); font-size: 17px; line-height: 1;
+            padding: 4px 6px; border-radius: 6px; display: flex; align-items: center;
+            transition: color .15s, background .15s; z-index: 2;
+        }
+        .pw-toggle:hover { color: var(--atlas-blue); background: #f1f5f9; }
+        .pw-toggle:focus { outline: none; color: var(--atlas-accent2); }
+
         /* ── BUTTONS ─────────────────────────────────── */
         .btn {
             border-radius: var(--radius-sm) !important;
@@ -768,10 +781,11 @@
         {% if rol in ['admin','socio'] %}
         <div class="side-section">Gestión</div>
 
-        {% set acad_active = p in ['/modulo1','/editar-planificaciones','/editar-planificacion-masiva','/modulo2','/modulo4','/modulo6','/asignaturas'] %}
+        {% set acad_active = p in ['/modulo1','/editar-planificaciones','/editar-planificacion-masiva','/modulo2','/modulo4','/modulo6','/asignaturas','/proformas','/proformas/nueva'] or p.startswith('/proformas') %}
         <div class="nav-group {% if acad_active %}open{% endif %}">
             <button type="button" class="nav-group-toggle"><span class="ico">📚</span> Académico</button>
             <div class="nav-group-items">
+                <a href="/proformas" class="{% if p.startswith('/proformas') %}active{% endif %}">Proformas de clases</a>
                 <a href="/modulo1" class="{% if p=='/modulo1' %}active{% endif %}">Nueva planificación</a>
                 <a href="/editar-planificaciones" class="{% if p=='/editar-planificaciones' %}active{% endif %}">Editar planificaciones</a>
                 <a href="/editar-planificacion-masiva" class="{% if p=='/editar-planificacion-masiva' %}active{% endif %}">Edición masiva</a>
@@ -990,6 +1004,37 @@
 
         // Actualizar badge al cargar
         document.addEventListener('DOMContentLoaded', function() { render(); });
+    })();
+    </script>
+    <script>
+    // ── OJITO: mostrar/ocultar contraseña en todos los campos type=password ──
+    (function () {
+        var OJO_ABIERTO = '<i class="bi bi-eye"></i>';
+        var OJO_CERRADO = '<i class="bi bi-eye-slash"></i>';
+        function attach(input) {
+            if (!input || input.dataset.pwToggle) return;
+            input.dataset.pwToggle = '1';
+            var wrap = document.createElement('div');
+            wrap.className = 'pw-wrap';
+            input.parentNode.insertBefore(wrap, input);
+            wrap.appendChild(input);
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'pw-toggle';
+            btn.setAttribute('aria-label', 'Mostrar u ocultar contraseña');
+            btn.setAttribute('tabindex', '-1');
+            btn.innerHTML = OJO_ABIERTO;
+            wrap.appendChild(btn);
+            btn.addEventListener('click', function () {
+                var visible = input.type === 'text';
+                input.type = visible ? 'password' : 'text';
+                btn.innerHTML = visible ? OJO_ABIERTO : OJO_CERRADO;
+                btn.setAttribute('title', visible ? 'Mostrar contraseña' : 'Ocultar contraseña');
+            });
+        }
+        document.addEventListener('DOMContentLoaded', function () {
+            document.querySelectorAll('input[type="password"]').forEach(attach);
+        });
     })();
     </script>
     <script>

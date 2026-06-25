@@ -4297,6 +4297,393 @@ def cron_recordatorio_cobros():
     return jsonify({'success': resultado.get('enviado', False), **resultado}), estado
 
 
+# ========== MÓDULO DE PROFORMAS (cotización de horarios y costos) ==========
+# Una proforma cotiza un horario de clases y/o atención psicológica con su
+# costo. Se puede enviar (imprimir / correo) al representante y al docente.
+# Una vez APROBADA se incorpora a la planificación (Módulo 1) generando las
+# sesiones correspondientes con los mismos lineamientos de costo.
+
+def _proforma_numero():
+    """Genera un número legible PRO-AAAA-#### basado en el conteo existente."""
+    anio = date.today().year
+    try:
+        r = supabase.table('proformas').select('id').execute()
+        n = len(r.data or []) + 1
+    except Exception:
+        n = 1
+    return f"PRO-{anio}-{n:04d}"
+
+
+def _calc_horas(h_ini, h_fin):
+    """Horas decimales entre dos horas 'HH:MM'. 0 si inválido/retroceso."""
+    try:
+        hi, mi = (h_ini or '')[:5].split(':')
+        hf, mf = (h_fin or '')[:5].split(':')
+        minutos = (int(hf) * 60 + int(mf)) - (int(hi) * 60 + int(mi))
+        return round(minutos / 60, 2) if minutos > 0 else 0
+    except Exception:
+        return 0
+
+
+def _parsear_items_proforma():
+    """Lee las líneas del formulario (arrays paralelos) y devuelve
+    (items, subtotal, total). Cada item es un dict listo para guardar."""
+    tipos      = request.form.getlist('item_tipo[]')
+    asignaturas = request.form.getlist('item_asignatura[]')
+    temas      = request.form.getlist('item_tema[]')
+    profesores = request.form.getlist('item_profesor[]')
+    fechas     = request.form.getlist('item_fecha[]')
+    inicios    = request.form.getlist('item_inicio[]')
+    fines      = request.form.getlist('item_fin[]')
+    precios    = request.form.getlist('item_precio[]')
+
+    items = []
+    total = 0.0
+    for i in range(len(tipos)):
+        tipo = (tipos[i] or 'clase').strip()
+        fecha = (fechas[i] if i < len(fechas) else '') or ''
+        h_ini = (inicios[i] if i < len(inicios) else '') or ''
+        h_fin = (fines[i] if i < len(fines) else '') or ''
+        try:
+            precio = float(precios[i]) if i < len(precios) and precios[i] else 0
+        except ValueError:
+            precio = 0
+        horas = _calc_horas(h_ini, h_fin)
+        es_terapia = tipo in ('terapia', 'ambos')
+        # Clases: importe = horas × precio/hora. Terapia: importe = precio de la atención (por sesión).
+        if es_terapia:
+            subtotal = round(precio, 2)
+        else:
+            subtotal = round(horas * precio, 2)
+        # Si no se llenó ninguna información de la línea, se ignora.
+        if not (fecha or h_ini or h_fin or (asignaturas[i] if i < len(asignaturas) else '') or
+                (temas[i] if i < len(temas) else '')):
+            continue
+        items.append({
+            'tipo_sesion': tipo,
+            'asignatura': (asignaturas[i] if i < len(asignaturas) else '') or '',
+            'tema_terapia': (temas[i] if i < len(temas) else '') or '',
+            'profesor': (profesores[i] if i < len(profesores) else '') or '',
+            'fecha': fecha or None,
+            'hora_inicio': h_ini or None,
+            'hora_fin': h_fin or None,
+            'horas': horas,
+            'precio_hora': precio,
+            'subtotal': subtotal,
+            'orden': i,
+        })
+        total += subtotal
+    total = round(total, 2)
+    return items, total, total
+
+
+def _proforma_html(p, items, para='copia'):
+    """HTML de la proforma usado tanto en pantalla (copia) como en el correo."""
+    hoy = (p.get('created_at') or '')[:10] or date.today().isoformat()
+    filas = ''
+    for it in items:
+        es_ter = it.get('tipo_sesion') in ('terapia', 'ambos')
+        concepto = it.get('tema_terapia') if es_ter else it.get('asignatura')
+        concepto = concepto or ('Atención psicológica' if es_ter else 'Clase')
+        horario = ''
+        if it.get('hora_inicio') and it.get('hora_fin'):
+            horario = f"{(it['hora_inicio'] or '')[:5]} – {(it['hora_fin'] or '')[:5]}"
+        detalle = it.get('profesor') or ''
+        horas = it.get('horas') or 0
+        filas += (
+            "<tr>"
+            f"<td style='padding:9px 12px;border-bottom:1px solid #eee;font-size:13px;color:#1a1a2e;'>{concepto}"
+            f"<div style='font-size:11px;color:#94a3b8;'>{detalle}</div></td>"
+            f"<td style='padding:9px 12px;border-bottom:1px solid #eee;font-size:13px;color:#334155;'>{it.get('fecha') or '—'}</td>"
+            f"<td style='padding:9px 12px;border-bottom:1px solid #eee;font-size:13px;color:#334155;'>{horario or '—'}</td>"
+            f"<td style='padding:9px 12px;border-bottom:1px solid #eee;font-size:13px;color:#334155;text-align:center;'>{horas if horas else '—'}</td>"
+            f"<td style='padding:9px 12px;border-bottom:1px solid #eee;font-size:13px;color:#1a1a2e;font-weight:700;text-align:right;'>${(it.get('subtotal') or 0):.2f}</td>"
+            "</tr>"
+        )
+    total = p.get('total') or 0
+    rep = p.get('representante_nombre') or '—'
+    est = p.get('estudiante_nombre') or '—'
+    return f"""\
+<div style="font-family:Arial,Helvetica,sans-serif;max-width:640px;margin:0 auto;color:#1a1a2e;">
+  <div style="background:linear-gradient(135deg,#0f172a,#1e3a5f);color:#fff;padding:22px 26px;border-radius:16px 16px 0 0;">
+    <div style="font-size:23px;font-weight:800;">📋 Proforma de clases</div>
+    <div style="font-size:13px;opacity:.85;margin-top:4px;">Atlas Centro de Estudios · {p.get('numero') or ''} · {hoy}</div>
+  </div>
+  <div style="border:1px solid #eee;border-top:none;border-radius:0 0 16px 16px;padding:22px 26px;">
+    <table style="width:100%;font-size:13px;color:#334155;margin-bottom:14px;">
+      <tr><td style="padding:3px 0;"><strong>Estudiante:</strong> {est}</td></tr>
+      <tr><td style="padding:3px 0;"><strong>Representante:</strong> {rep}</td></tr>
+      <tr><td style="padding:3px 0;"><strong>Validez:</strong> {p.get('validez_dias') or 15} días</td></tr>
+    </table>
+    <table style="width:100%;border-collapse:collapse;">
+      <thead>
+        <tr>
+          <th style="text-align:left;padding:8px 12px;font-size:11px;color:#94a3b8;text-transform:uppercase;border-bottom:2px solid #f1f1f1;">Concepto</th>
+          <th style="text-align:left;padding:8px 12px;font-size:11px;color:#94a3b8;text-transform:uppercase;border-bottom:2px solid #f1f1f1;">Fecha</th>
+          <th style="text-align:left;padding:8px 12px;font-size:11px;color:#94a3b8;text-transform:uppercase;border-bottom:2px solid #f1f1f1;">Horario</th>
+          <th style="text-align:center;padding:8px 12px;font-size:11px;color:#94a3b8;text-transform:uppercase;border-bottom:2px solid #f1f1f1;">Horas</th>
+          <th style="text-align:right;padding:8px 12px;font-size:11px;color:#94a3b8;text-transform:uppercase;border-bottom:2px solid #f1f1f1;">Importe</th>
+        </tr>
+      </thead>
+      <tbody>{filas}</tbody>
+      <tfoot>
+        <tr>
+          <td colspan="4" style="padding:12px;font-size:15px;font-weight:800;text-align:right;">TOTAL</td>
+          <td style="padding:12px;font-size:16px;font-weight:800;color:#059669;text-align:right;">${total:.2f}</td>
+        </tr>
+      </tfoot>
+    </table>
+    {('<p style="font-size:12px;color:#64748b;margin-top:16px;"><strong>Notas:</strong> ' + p['notas'] + '</p>') if p.get('notas') else ''}
+    <p style="font-size:11px;color:#94a3b8;margin-top:20px;">Documento generado por el sistema Atlas. Los valores corresponden a la cotización vigente y están sujetos a la aprobación del representante.</p>
+  </div>
+</div>"""
+
+
+@app.route('/proformas')
+@login_required
+@socio_admin_required
+def proformas():
+    try:
+        r = supabase.table('proformas').select('*').order('created_at', desc=True).execute()
+        lista = r.data or []
+    except Exception:
+        lista = []
+        flash('⚠️ La tabla de proformas aún no existe. Aplica migration_proformas.sql en el SQL Editor de Supabase.', 'warning')
+    return render_template('proformas.html', proformas=lista)
+
+
+@app.route('/proformas/nueva', methods=['GET', 'POST'])
+@login_required
+@socio_admin_required
+def proforma_nueva():
+    psicologia, precios_clase, precios_matricula, precios_pension = cargar_costos()
+    if request.method == 'POST':
+        try:
+            items, subtotal, total = _parsear_items_proforma()
+            if not items:
+                flash('❌ Agrega al menos una línea (clase o atención) a la proforma', 'error')
+                return redirect(url_for('proforma_nueva'))
+
+            est_id = request.form.get('estudiante_id') or ''
+            est_nombre = (request.form.get('estudiante_nombre') or '').strip()
+            if est_id and not est_nombre:
+                try:
+                    e = supabase.table('estudiantes').select('apellidos,nombres').eq('id', int(est_id)).execute().data
+                    if e:
+                        est_nombre = f"{e[0]['apellidos']} {e[0]['nombres']}"
+                except Exception:
+                    pass
+
+            tipos_items = {it['tipo_sesion'] for it in items}
+            if tipos_items <= {'terapia'}:
+                tipo_proforma = 'terapia'
+            elif 'terapia' in tipos_items or 'ambos' in tipos_items:
+                tipo_proforma = 'mixto'
+            else:
+                tipo_proforma = 'clase'
+
+            cab = {
+                'numero': _proforma_numero(),
+                'estudiante_id': int(est_id) if est_id else None,
+                'estudiante_nombre': est_nombre,
+                'representante_nombre': (request.form.get('representante_nombre') or '').strip(),
+                'representante_email': (request.form.get('representante_email') or '').strip(),
+                'profesor_nombre': (request.form.get('profesor_nombre') or '').strip(),
+                'profesor_email': (request.form.get('profesor_email') or '').strip(),
+                'encargado_apertura': (request.form.get('encargado_apertura') or '').strip(),
+                'tipo_proforma': tipo_proforma,
+                'notas': (request.form.get('notas') or '').strip(),
+                'validez_dias': int(request.form.get('validez_dias') or 15),
+                'subtotal': subtotal, 'total': total,
+                'estado': 'borrador', 'incorporada': False,
+                'creado_por': int(current_user.id),
+            }
+            r = supabase.table('proformas').insert(cab).execute()
+            pid = r.data[0]['id']
+            for it in items:
+                it_row = dict(it); it_row['proforma_id'] = pid
+                supabase.table('proforma_items').insert(it_row).execute()
+
+            flash(f'✅ Proforma {cab["numero"]} creada por ${total:.2f}', 'success')
+            return redirect(url_for('proforma_detalle', id=pid))
+        except Exception as e:
+            flash(f'❌ Error al crear la proforma: {e}', 'error')
+            return redirect(url_for('proforma_nueva'))
+
+    estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
+    return render_template('proforma_form.html',
+                           estudiantes=estudiantes.data or [],
+                           asignaturas=cargar_asignaturas(),
+                           atencion_psicologica=psicologia,
+                           precios_clase=precios_clase,
+                           profesores=cargar_profesores(),
+                           encargados=ENCARGADOS,
+                           today=date.today().isoformat())
+
+
+def _cargar_proforma(id):
+    """Devuelve (proforma, items) o (None, []) si no existe."""
+    try:
+        p = supabase.table('proformas').select('*').eq('id', id).execute().data
+        if not p:
+            return None, []
+        items = supabase.table('proforma_items').select('*').eq('proforma_id', id).order('orden').execute().data or []
+        return p[0], items
+    except Exception:
+        return None, []
+
+
+@app.route('/proformas/<int:id>')
+@login_required
+@socio_admin_required
+def proforma_detalle(id):
+    p, items = _cargar_proforma(id)
+    if not p:
+        flash('❌ Proforma no encontrada', 'error')
+        return redirect(url_for('proformas'))
+    return render_template('proforma_detalle.html', p=p, items=items,
+                           copia_html=_proforma_html(p, items))
+
+
+@app.route('/proformas/<int:id>/enviar', methods=['POST'])
+@login_required
+@socio_admin_required
+def proforma_enviar(id):
+    p, items = _cargar_proforma(id)
+    if not p:
+        flash('❌ Proforma no encontrada', 'error')
+        return redirect(url_for('proformas'))
+    destinatarios = []
+    if request.form.get('enviar_representante') and p.get('representante_email'):
+        destinatarios.append(p['representante_email'].strip())
+    if request.form.get('enviar_profesor') and p.get('profesor_email'):
+        destinatarios.append(p['profesor_email'].strip())
+    # Correo adicional escrito a mano
+    extra = (request.form.get('email_extra') or '').strip()
+    if extra:
+        destinatarios.append(extra)
+    destinatarios = [d for d in dict.fromkeys(destinatarios) if d]
+    if not destinatarios:
+        flash('❌ No hay destinatarios con correo. Marca un destinatario o escribe un correo.', 'error')
+        return redirect(url_for('proforma_detalle', id=id))
+
+    asunto = f"Proforma {p.get('numero') or ''} · Atlas Centro de Estudios"
+    html = _proforma_html(p, items, para='correo')
+    ok, error = _enviar_email(destinatarios, asunto, html)
+    if ok:
+        try:
+            supabase.table('proformas').update({
+                'estado': 'enviado' if p.get('estado') == 'borrador' else p.get('estado'),
+                'enviado_at': datetime.now().isoformat()
+            }).eq('id', id).execute()
+        except Exception:
+            pass
+        flash(f'📧 Proforma enviada a: {", ".join(destinatarios)}', 'success')
+    else:
+        flash(f'❌ No se pudo enviar el correo: {error}', 'error')
+    return redirect(url_for('proforma_detalle', id=id))
+
+
+@app.route('/proformas/<int:id>/estado', methods=['POST'])
+@login_required
+@socio_admin_required
+def proforma_estado(id):
+    """Aprobar o rechazar la proforma."""
+    nuevo = request.form.get('estado', '')
+    if nuevo not in ('aprobado', 'rechazado', 'borrador', 'enviado'):
+        flash('❌ Estado no válido', 'error')
+        return redirect(url_for('proforma_detalle', id=id))
+    updates = {'estado': nuevo}
+    if nuevo == 'aprobado':
+        updates['aprobado_at'] = datetime.now().isoformat()
+    try:
+        supabase.table('proformas').update(updates).eq('id', id).execute()
+        flash(f'✅ Proforma marcada como "{nuevo}"', 'success')
+    except Exception as e:
+        flash(f'❌ Error: {e}', 'error')
+    return redirect(url_for('proforma_detalle', id=id))
+
+
+@app.route('/proformas/<int:id>/incorporar', methods=['POST'])
+@login_required
+@socio_admin_required
+def proforma_incorporar(id):
+    """Incorpora la proforma APROBADA a la planificación (Módulo 1):
+    crea una sesión por cada línea con los mismos lineamientos de costo."""
+    p, items = _cargar_proforma(id)
+    if not p:
+        flash('❌ Proforma no encontrada', 'error')
+        return redirect(url_for('proformas'))
+    if p.get('incorporada'):
+        flash('⚠️ Esta proforma ya fue incorporada a la planificación', 'warning')
+        return redirect(url_for('proforma_detalle', id=id))
+    if p.get('estado') != 'aprobado':
+        flash('❌ Solo se puede incorporar una proforma APROBADA. Apruébala primero.', 'error')
+        return redirect(url_for('proforma_detalle', id=id))
+    if not p.get('estudiante_id'):
+        flash('❌ La proforma no tiene un estudiante registrado del sistema; no se puede incorporar a la planificación.', 'error')
+        return redirect(url_for('proforma_detalle', id=id))
+    encargado = p.get('encargado_apertura') or (ENCARGADOS[0] if ENCARGADOS else '')
+
+    creadas = 0
+    primera_fecha = None
+    for it in items:
+        fecha = it.get('fecha'); h_ini = it.get('hora_inicio'); h_fin = it.get('hora_fin')
+        if not (fecha and h_ini and h_fin):
+            continue
+        tipo = it.get('tipo_sesion') or 'clase'
+        es_terapia = tipo in ('terapia', 'ambos')
+        horas = it.get('horas') or _calc_horas(h_ini, h_fin)
+        # Mismos lineamientos que Módulo 1: terapia cobra por sesión (valor_total=precio),
+        # clase arranca en 0 (se cobra por horas a fin de mes).
+        valor_inicial = (it.get('precio_hora') or 0) if es_terapia else 0
+        grupo_id = str(uuid.uuid4())
+        datos_sesion = {
+            'tipo_sesion': tipo,
+            'asignatura': it.get('asignatura') or '',
+            'tema_terapia': it.get('tema_terapia') or '',
+            'profesor_terapeuta': it.get('profesor') or '',
+            'fecha': fecha, 'hora_inicio': h_ini, 'hora_fin': h_fin,
+            'horas': horas, 'estado': 'Planificado',
+            'encargado_apertura': encargado,
+            'precio_hora': it.get('precio_hora') or 0,
+            'valor_total': valor_inicial, 'cobro_por_sesion': es_terapia,
+            'estudiante_id': int(p['estudiante_id']), 'usuario_id': int(current_user.id),
+            'sesion_grupo_id': grupo_id,
+        }
+        try:
+            supabase.table('sesiones').insert(datos_sesion).execute()
+        except Exception:
+            datos_sesion.pop('sesion_grupo_id', None)
+            supabase.table('sesiones').insert(datos_sesion).execute()
+        creadas += 1
+        if not primera_fecha:
+            primera_fecha = fecha
+
+    try:
+        supabase.table('proformas').update({
+            'estado': 'incorporado', 'incorporada': True,
+            'incorporado_at': datetime.now().isoformat()
+        }).eq('id', id).execute()
+    except Exception:
+        pass
+    flash(f'✅ {creadas} sesión(es) incorporadas a la planificación desde la proforma {p.get("numero") or ""}', 'success')
+    return redirect(url_for('modulo2', fecha=primera_fecha or str(date.today())))
+
+
+@app.route('/proformas/<int:id>/eliminar', methods=['POST'])
+@login_required
+@socio_admin_required
+def proforma_eliminar(id):
+    try:
+        supabase.table('proforma_items').delete().eq('proforma_id', id).execute()
+        supabase.table('proformas').delete().eq('id', id).execute()
+        flash('🗑️ Proforma eliminada', 'info')
+    except Exception as e:
+        flash(f'❌ Error al eliminar: {e}', 'error')
+    return redirect(url_for('proformas'))
+
+
 # ========== INICIALIZACIÓN ==========
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

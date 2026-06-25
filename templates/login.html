@@ -92,6 +92,13 @@
         .field-group { margin-bottom: 20px; }
         .input-wrap { position: relative; }
         .input-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); font-size: 16px; color: #94a3b8; pointer-events: none; }
+        .pw-eye {
+            position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+            background: transparent; border: none; cursor: pointer;
+            color: #94a3b8; font-size: 18px; line-height: 1; padding: 4px 6px;
+            border-radius: 8px; display: flex; align-items: center; transition: color .15s, background .15s; z-index: 2;
+        }
+        .pw-eye:hover { color: #3b82f6; background: #f1f5f9; }
         .field-input {
             width: 100%; padding: 13px 14px 13px 42px;
             border: 2px solid #e2e8f0; border-radius: 12px;
@@ -208,7 +215,10 @@
                     <div class="input-wrap">
                         <i class="bi bi-lock input-icon"></i>
                         <input type="password" id="password" name="password" class="field-input"
-                               placeholder="••••••••" required autocomplete="current-password">
+                               placeholder="••••••••" required autocomplete="current-password" style="padding-right:46px;">
+                        <button type="button" id="togglePassword" class="pw-eye" aria-label="Mostrar u ocultar contraseña" tabindex="-1">
+                            <i class="bi bi-eye"></i>
+                        </button>
                     </div>
                 </div>
                 <button type="submit" class="btn-login">
@@ -328,6 +338,19 @@ async function registrarHuellaPublico(){
         if(e.name !== 'NotAllowedError') alert('No se pudo registrar: ' + e.message);
     }
 }
+
+// Ojito: mostrar / ocultar contraseña (click alterna visibilidad)
+(function () {
+    var btn = document.getElementById('togglePassword');
+    var input = document.getElementById('password');
+    if (btn && input) {
+        btn.addEventListener('click', function () {
+            var visible = input.type === 'text';
+            input.type = visible ? 'password' : 'text';
+            btn.innerHTML = visible ? '<i class="bi bi-eye"></i>' : '<i class="bi bi-eye-slash"></i>';
+        });
+    }
+})();
 
 // Registro del Service Worker para PWA
 if('serviceWorker' in navigator){

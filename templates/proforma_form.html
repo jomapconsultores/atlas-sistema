@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+{% block title %}Nueva proforma - Atlas{% endblock %}
+{% block content %}
+<style>
+    .pf-hero { background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%); border-radius: var(--radius-lg); padding: 24px 28px; color: #fff; margin-bottom: 22px; box-shadow: var(--shadow-md); }
+    .pf-hero h2 { font-weight: 800; font-size: 1.6rem; margin: 0; display:flex; align-items:center; gap:12px; }
+    .pf-hero p { margin: 6px 0 0; color: rgba(255,255,255,0.7); font-size: 13px; }
+    .pf-item { border: 1.5px solid var(--atlas-border); border-radius: var(--radius-md); padding: 16px; margin-bottom: 14px; background: #f8fafc; }
+    .pf-item .row > div { margin-bottom: 6px; }
+    .pf-subtotal { font-weight: 800; color: var(--atlas-success); }
+    .pf-total-box { background: linear-gradient(135deg,#065f46,#059669); color:#fff; border-radius: var(--radius-md); padding: 16px 22px; display:flex; justify-content:space-between; align-items:center; margin-top: 8px; }
+    .pf-total-box .lbl { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; font-weight:700; opacity:.9; }
+    .pf-total-box .val { font-size: 1.8rem; font-weight: 800; }
+    label.small { font-size:11px; font-weight:700; color: var(--atlas-muted); text-transform:uppercase; letter-spacing:.4px; margin-bottom:3px; }
+</style>
+
+<div class="pf-hero">
+    <h2>📝 Nueva proforma de clases</h2>
+    <p>Cotiza un horario de clases y/o atención psicológica con su costo. Podrás imprimirla, enviarla por correo al representante y al docente y, una vez aprobada, incorporarla a la planificación.</p>
+</div>
+
+<div class="d-flex justify-content-between mb-3 flex-wrap gap-2">
+    <a href="/proformas" class="btn btn-outline-secondary">📋 Ver proformas</a>
+</div>
+
+<form method="POST" id="formProforma" novalidate>
+    <!-- ── DATOS GENERALES ───────────────────────── -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">👤 Datos del estudiante y destinatarios</div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="small">Estudiante (del sistema)</label>
+                    <select name="estudiante_id" id="estudianteSelect" class="form-select" onchange="autollenarRepresentante()">
+                        <option value="">— Sin vincular / estudiante nuevo —</option>
+                        {% for e in estudiantes %}
+                        <option value="{{ e['id'] }}" data-padre="{{ e.get('padre_nombre','') or e.get('madre_nombre','') }}" data-nombre="{{ e['apellidos'] }} {{ e['nombres'] }}">{{ e['apellidos'] }} {{ e['nombres'] }}</option>
+                        {% endfor %}
+                    </select>
+                    <small class="text-muted" style="font-size:11px;">Vincula un estudiante para poder incorporar luego a la planificación.</small>
+                </div>
+                <div class="col-md-6">
+                    <label class="small">Nombre del estudiante (si es nuevo)</label>
+                    <input type="text" name="estudiante_nombre" id="estudianteNombre" class="form-control" placeholder="Apellidos y nombres">
+                </div>
+                <div class="col-md-6">
+                    <label class="small">Representante / Padre de familia</label>
+                    <input type="text" name="representante_nombre" id="representanteNombre" class="form-control" placeholder="Nombre del representante">
+                </div>
+                <div class="col-md-6">
+                    <label class="small">Correo del representante</label>
+                    <input type="email" name="representante_email" class="form-control" placeholder="correo@ejemplo.com">
+                </div>
+                <div class="col-md-6">
+                    <label class="small">Docente / Psicólogo</label>
+                    <input type="text" name="profesor_nombre" class="form-control" placeholder="Nombre del docente o psicólogo">
+                </div>
+                <div class="col-md-6">
+                    <label class="small">Correo del docente / psicólogo</label>
+                    <input type="email" name="profesor_email" class="form-control" placeholder="correo@ejemplo.com">
+                </div>
+                <div class="col-md-4">
+                    <label class="small">Encargado de apertura</label>
+                    <select name="encargado_apertura" class="form-select">
+                        <option value="">Seleccionar...</option>
+                        {% for enc in encargados %}<option value="{{ enc }}">{{ enc }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="small">Validez (días)</label>
+                    <input type="number" name="validez_dias" class="form-control" value="15" min="1">
+                </div>
+                <div class="col-md-6">
+                    <label class="small">Notas / observaciones</label>
+                    <input type="text" name="notas" class="form-control" placeholder="Condiciones, forma de pago, etc.">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── LÍNEAS DE LA PROFORMA ─────────────────── -->
+    <div class="card mb-4">
+        <div class="card-header bg-info text-white">📚 Horarios y costos</div>
+        <div class="card-body">
+            <div id="itemsContainer"></div>
+            <button type="button" class="btn btn-outline-primary" onclick="agregarItem()">➕ Agregar línea</button>
+
+            <div class="pf-total-box">
+                <span class="lbl">Total de la proforma</span>
+                <span class="val" id="totalProforma">$0.00</span>
+            </div>
+        </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary btn-lg w-100">✅ Crear proforma</button>
+</form>
+
+<script>
+const ASIGNATURAS = [{% for a in asignaturas %}"{{ a }}",{% endfor %}];
+const PROFESORES   = [{% for p in profesores %}"{{ p }}",{% endfor %}];
+const PRECIOS_CLASE = [{% for pr in precios_clase %}{{ pr }},{% endfor %}];
+const ATENCIONES = [{% for item in atencion_psicologica %}{nombre:"{{ item['nombre'] }}", precio:{{ item['precio'] }}},{% endfor %}];
+
+let itemIdx = 0;
+
+function autollenarRepresentante() {
+    const sel = document.getElementById('estudianteSelect');
+    const opt = sel.options[sel.selectedIndex];
+    if (!opt || !opt.value) return;
+    const padre = opt.dataset.padre || '';
+    const nombre = opt.dataset.nombre || '';
+    const repInput = document.getElementById('representanteNombre');
+    const nomInput = document.getElementById('estudianteNombre');
+    if (padre && !repInput.value) repInput.value = padre;
+    if (nombre) nomInput.value = nombre;
+}
+
+function opcionesAsignatura() {
+    return '<option value="">Seleccionar asignatura...</option>' +
+        ASIGNATURAS.map(a => `<option value="${a}">${a}</option>`).join('');
+}
+function opcionesAtencion() {
+    return '<option value="">Seleccionar atención...</option>' +
+        ATENCIONES.map(a => `<option value="${a.nombre}" data-precio="${a.precio}">${a.nombre} — $${a.precio}</option>`).join('');
+}
+function opcionesProfesor() {
+    return '<option value="">Profesor / psicólogo...</option>' +
+        PROFESORES.map(p => `<option value="${p}">${p}</option>`).join('');
+}
+
+function agregarItem() {
+    const idx = itemIdx++;
+    const div = document.createElement('div');
+    div.className = 'pf-item';
+    div.id = 'item_' + idx;
+    div.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <strong style="font-size:13px;color:var(--atlas-navy);">📌 Línea</strong>
+            <button type="button" class="btn btn-sm btn-outline-danger" onclick="quitarItem(${idx})">✕ Quitar</button>
+        </div>
+        <div class="row g-2">
+            <div class="col-md-3">
+                <label class="small">Tipo</label>
+                <select name="item_tipo[]" class="form-select form-select-sm" onchange="cambiarTipo(${idx})">
+                    <option value="clase">📚 Clase</option>
+                    <option value="terapia">🧠 Atención psicológica</option>
+                    <option value="preuniversitario">🎓 Pre universitario</option>
+                    <option value="ambos">📚🧠 Ambos</option>
+                </select>
+            </div>
+            <div class="col-md-5 campo-asignatura">
+                <label class="small">Asignatura</label>
+                <select name="item_asignatura[]" class="form-select form-select-sm">${opcionesAsignatura()}</select>
+            </div>
+            <div class="col-md-5 campo-tema" style="display:none;">
+                <label class="small">Tipo de atención</label>
+                <select name="item_tema[]" class="form-select form-select-sm" onchange="atencionElegida(${idx})">${opcionesAtencion()}</select>
+            </div>
+            <div class="col-md-4">
+                <label class="small">Profesor / Psicólogo</label>
+                <select name="item_profesor[]" class="form-select form-select-sm">${opcionesProfesor()}</select>
+            </div>
+        </div>
+        <div class="row g-2 mt-1">
+            <div class="col-md-3"><label class="small">Fecha</label><input type="date" name="item_fecha[]" class="form-control form-control-sm" value="{{ today }}"></div>
+            <div class="col-md-2"><label class="small">Inicio</label><input type="time" name="item_inicio[]" class="form-control form-control-sm" onchange="recalcular()"></div>
+            <div class="col-md-2"><label class="small">Fin</label><input type="time" name="item_fin[]" class="form-control form-control-sm" onchange="recalcular()"></div>
+            <div class="col-md-2"><label class="small precio-label">$ / hora</label><input type="number" name="item_precio[]" class="form-control form-control-sm" step="0.01" min="0" onchange="recalcular()" oninput="recalcular()"></div>
+            <div class="col-md-3 text-end">
+                <label class="small">Importe</label>
+                <div class="pf-subtotal" id="subtotal_${idx}" style="font-size:1.1rem;padding-top:4px;">$0.00</div>
+            </div>
+        </div>`;
+    document.getElementById('itemsContainer').appendChild(div);
+    // si no es la primera asignatura por defecto, dejar precio sugerido de clase
+    recalcular();
+}
+
+function quitarItem(idx) {
+    const el = document.getElementById('item_' + idx);
+    if (el) el.remove();
+    recalcular();
+}
+
+function cambiarTipo(idx) {
+    const row = document.getElementById('item_' + idx);
+    const tipo = row.querySelector('[name="item_tipo[]"]').value;
+    const esTerapia = (tipo === 'terapia' || tipo === 'ambos');
+    const esClase = (tipo === 'clase' || tipo === 'preuniversitario' || tipo === 'ambos');
+    row.querySelector('.campo-asignatura').style.display = esClase ? 'block' : 'none';
+    row.querySelector('.campo-tema').style.display = esTerapia ? 'block' : 'none';
+    row.querySelector('.precio-label').textContent = (tipo === 'terapia') ? '$ atención' : '$ / hora';
+    recalcular();
+}
+
+function atencionElegida(idx) {
+    const row = document.getElementById('item_' + idx);
+    const sel = row.querySelector('[name="item_tema[]"]');
+    const opt = sel.options[sel.selectedIndex];
+    const precio = opt ? parseFloat(opt.dataset.precio || 0) : 0;
+    if (precio) row.querySelector('[name="item_precio[]"]').value = precio;
+    recalcular();
+}
+
+function horasEntre(ini, fin) {
+    if (!ini || !fin) return 0;
+    const [hi, mi] = ini.split(':').map(Number);
+    const [hf, mf] = fin.split(':').map(Number);
+    const min = (hf * 60 + mf) - (hi * 60 + mi);
+    return min > 0 ? min / 60 : 0;
+}
+
+function recalcular() {
+    let total = 0;
+    document.querySelectorAll('.pf-item').forEach(row => {
+        const idx = row.id.split('_')[1];
+        const tipo = row.querySelector('[name="item_tipo[]"]').value;
+        const esTerapia = (tipo === 'terapia' || tipo === 'ambos');
+        const ini = row.querySelector('[name="item_inicio[]"]').value;
+        const fin = row.querySelector('[name="item_fin[]"]').value;
+        const precio = parseFloat(row.querySelector('[name="item_precio[]"]').value || 0);
+        const horas = horasEntre(ini, fin);
+        const sub = esTerapia ? precio : horas * precio;
+        const box = document.getElementById('subtotal_' + idx);
+        if (box) box.textContent = '$' + sub.toFixed(2);
+        total += sub;
+    });
+    document.getElementById('totalProforma').textContent = '$' + total.toFixed(2);
+}
+
+document.getElementById('formProforma').addEventListener('submit', function(e) {
+    if (document.querySelectorAll('.pf-item').length === 0) {
+        e.preventDefault();
+        alert('❌ Agrega al menos una línea a la proforma.');
+    }
+});
+
+// Iniciar con una línea
+agregarItem();
+</script>
+{% endblock %}

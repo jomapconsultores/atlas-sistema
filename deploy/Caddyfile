@@ -1,0 +1,22 @@
+# ============================================================
+# Caddy: emula las rutas de Supabase para que la app sea drop-in.
+#   - /rest/v1/*  -> PostgREST  (la API que usa supabase.table())
+#   - /adminer/*  -> Adminer    (panel web para ver/editar datos)
+# Si DOMAIN es un dominio real, Caddy saca certificado HTTPS solo.
+# Si DOMAIN es ":80", sirve por HTTP (útil para probar con solo IP).
+# ============================================================
+{$DOMAIN} {
+	# API PostgREST bajo el prefijo /rest/v1 (igual que Supabase)
+	handle_path /rest/v1/* {
+		reverse_proxy rest:3000
+	}
+
+	# Panel de administración de la base
+	handle_path /adminer/* {
+		reverse_proxy adminer:8080
+	}
+
+	handle {
+		respond "Atlas DB server OK" 200
+	}
+}

@@ -1,0 +1,65 @@
+# ============================================================
+# Atlas — stack de base de datos auto-alojado (Hetzner)
+# Postgres 15 + PostgREST (API drop-in de Supabase) + Adminer + Caddy
+#
+# La app Flask NO cambia: apunta SUPABASE_URL al Caddy de este servidor
+# y SUPABASE_KEY a la clave anon (JWT) generada con deploy/gen_keys.py.
+# ============================================================
+services:
+  db:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?define POSTGRES_PASSWORD en .env}
+      POSTGRES_DB: ${POSTGRES_DB:-atlas}
+      AUTHENTICATOR_PASSWORD: ${AUTHENTICATOR_PASSWORD:?define AUTHENTICATOR_PASSWORD en .env}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d:ro      # roles/grants estilo Supabase (solo primer arranque)
+    ports:
+      - "127.0.0.1:5432:5432"                       # SOLO local: el túnel SSH lo expone a tu PC
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-atlas}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rest:
+    image: postgrest/postgrest:v12.2.3
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${AUTHENTICATOR_PASSWORD}@db:5432/${POSTGRES_DB:-atlas}
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET:?define JWT_SECRET (32+ chars) en .env}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+
+  adminer:
+    image: adminer:4
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+
+  proxy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [rest, adminer]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:-:80}                         # dominio para HTTPS automático, o ":80" si solo IP
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  db_data:
+  caddy_data:
+  caddy_config:

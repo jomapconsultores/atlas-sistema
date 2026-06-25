@@ -17,25 +17,95 @@
 {% endif %}
 
 <!-- Subir estado de cuenta -->
+<style>
+    .dropzone {
+        border: 2px dashed var(--atlas-border); border-radius: var(--radius-md);
+        background: #f8fafc; padding: 26px 20px; text-align: center; cursor: pointer;
+        transition: border-color .2s, background .2s; color: var(--atlas-muted);
+    }
+    .dropzone:hover { border-color: var(--atlas-accent2); background: #eff6ff; }
+    .dropzone.dragover { border-color: var(--atlas-success); background: #ecfdf5; color: #065f46; }
+    .dropzone .dz-icon { font-size: 2.2rem; line-height: 1; }
+    .dropzone .dz-main { font-weight: 700; color: var(--atlas-text); margin-top: 6px; font-size: 14px; }
+    .dropzone .dz-sub  { font-size: 12px; margin-top: 2px; }
+    .dropzone.has-file { border-color: var(--atlas-success); background: #f0fdf8; color: #065f46; }
+    .dropzone .dz-file { font-weight: 700; font-size: 13px; margin-top: 8px; word-break: break-all; }
+</style>
 <div class="card mb-4">
     <div class="card-header bg-primary">📤 Subir estado de cuenta</div>
     <div class="card-body">
-        <form method="post" action="/movimientos-cuenta/subir" enctype="multipart/form-data" class="row g-3 align-items-end">
-            <div class="col-md-4">
-                <label class="form-label">Archivo (.xlsx recomendado, .pdf best-effort)</label>
-                <input type="file" name="archivo" class="form-control" accept=".xlsx,.xls,.xlsm,.pdf" required>
-            </div>
-            <div class="col-md-4">
-                <label class="form-label">Banco (opcional)</label>
-                <input type="text" name="banco" class="form-control" placeholder="Pichincha, Guayaquil...">
-            </div>
-            <div class="col-md-4">
-                <button class="btn btn-primary w-100">📤 Procesar</button>
+        <form method="post" action="/movimientos-cuenta/subir" enctype="multipart/form-data" id="formSubirEstado">
+            <div class="row g-3 align-items-end">
+                <div class="col-12">
+                    <label class="form-label">Archivo (.xlsx recomendado, .pdf best-effort)</label>
+                    <div class="dropzone" id="dropzone">
+                        <div class="dz-icon">📥</div>
+                        <div class="dz-main">Arrastra aquí el estado de cuenta</div>
+                        <div class="dz-sub">o haz clic para elegirlo · Excel (.xlsx, .xls, .xlsm) o PDF</div>
+                        <div class="dz-file" id="dzFile" style="display:none;"></div>
+                    </div>
+                    <input type="file" name="archivo" id="archivoInput" accept=".xlsx,.xls,.xlsm,.pdf" required style="display:none;">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Banco (opcional)</label>
+                    <input type="text" name="banco" class="form-control" placeholder="Pichincha, Guayaquil...">
+                </div>
+                <div class="col-md-6">
+                    <button class="btn btn-primary w-100">📤 Procesar</button>
+                </div>
             </div>
         </form>
         <small class="text-muted d-block mt-2">Si vuelves a subir el mismo estado de cuenta, solo se agregan los movimientos nuevos (los repetidos se ignoran automáticamente).</small>
     </div>
 </div>
+<script>
+(function () {
+    var dz = document.getElementById('dropzone');
+    var input = document.getElementById('archivoInput');
+    var fileLabel = document.getElementById('dzFile');
+    if (!dz || !input) return;
+
+    function mostrarArchivo(nombre) {
+        if (nombre) {
+            fileLabel.textContent = '✅ ' + nombre;
+            fileLabel.style.display = 'block';
+            dz.classList.add('has-file');
+        } else {
+            fileLabel.style.display = 'none';
+            dz.classList.remove('has-file');
+        }
+    }
+
+    // Clic en la zona = abrir el selector de archivos
+    dz.addEventListener('click', function () { input.click(); });
+
+    // Mostrar el nombre cuando se elige por el selector
+    input.addEventListener('change', function () {
+        mostrarArchivo(input.files.length ? input.files[0].name : '');
+    });
+
+    // Evitar que el navegador abra el archivo si se suelta fuera
+    ['dragover', 'drop'].forEach(function (ev) {
+        window.addEventListener(ev, function (e) { e.preventDefault(); });
+    });
+
+    ['dragenter', 'dragover'].forEach(function (ev) {
+        dz.addEventListener(ev, function (e) { e.preventDefault(); dz.classList.add('dragover'); });
+    });
+    ['dragleave', 'dragend', 'drop'].forEach(function (ev) {
+        dz.addEventListener(ev, function (e) { e.preventDefault(); dz.classList.remove('dragover'); });
+    });
+
+    // Soltar el archivo en la zona
+    dz.addEventListener('drop', function (e) {
+        var archivos = e.dataTransfer && e.dataTransfer.files;
+        if (archivos && archivos.length) {
+            input.files = archivos;                 // asigna el archivo arrastrado al input
+            mostrarArchivo(archivos[0].name);
+        }
+    });
+})();
+</script>
 
 <!-- Filtro por mes o por fechas específicas -->
 <form method="get" class="d-flex gap-2 align-items-end mb-3 flex-wrap">
