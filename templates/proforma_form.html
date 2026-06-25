@@ -9,6 +9,7 @@
     .pf-total-box { background: linear-gradient(135deg,#065f46,#059669); color:#fff; border-radius: var(--radius-md); padding: 16px 22px; display:flex; justify-content:space-between; align-items:center; margin-top: 8px; }
     .pf-total-box .lbl { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; font-weight:700; opacity:.9; }
     .pf-total-box .val { font-size: 1.8rem; font-weight: 800; }
+    .inline-reg { border:1.5px dashed #93c5fd; background:#eff6ff; border-radius:var(--radius-md); padding:14px; margin-top:8px; }
 
     /* ── Calendario ── */
     .cal-toolbar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
@@ -25,6 +26,7 @@
     .cal-cell:hover { border-color:#1e3a5f; box-shadow:0 2px 8px rgba(0,0,0,.07); }
     .cal-cell.out { background:#f8fafc; opacity:.45; }
     .cal-cell.today { border-color:#2563eb; box-shadow:0 0 0 2px rgba(37,99,235,.15); }
+    .cal-cell.sel { background:#dcfce7; border-color:#16a34a; box-shadow:0 0 0 2px rgba(22,163,74,.25); }
     .cal-cell .cal-day { font-size:12px; font-weight:700; margin-bottom:3px; }
     .cal-ev { font-size:10px; border-radius:5px; padding:1px 5px; margin-bottom:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .ev-c { background:#dbeafe; color:#1e40af; }
@@ -34,8 +36,9 @@
     .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; vertical-align:middle; }
     .dot.ev-c { background:#3b82f6; } .dot.ev-t { background:#8b5cf6; }
 
-    /* ── Editor de día / lista ── */
+    /* ── Paneles ── */
     .panel { border:1.5px solid var(--atlas-border); border-radius:var(--radius-md); padding:16px; background:#f8fafc; margin-top:14px; }
+    .panel.sel-panel { border-color:#16a34a; background:#f0fdf4; }
     .ed-row, .lb-row { display:flex; justify-content:space-between; align-items:center; font-size:13px; padding:6px 0; border-bottom:1px dashed #e2e8f0; }
     .ed-row:last-child, .lb-row:last-child { border-bottom:none; }
     .lb-day { margin-bottom:10px; }
@@ -47,7 +50,7 @@
 
 <div class="pf-hero">
     <h2>📝 Nueva proforma de clases</h2>
-    <p>Paso 1 — Marca el horario tentativo en el calendario. Luego, tras la aceptación del representante, asignarás los docentes y la enviarás por correo.</p>
+    <p>Paso 1 — Registra o elige al estudiante y representante, y marca el horario tentativo en el calendario.</p>
 </div>
 
 <div class="d-flex justify-content-between mb-3 flex-wrap gap-2">
@@ -60,24 +63,82 @@
         <div class="card-header bg-primary text-white">👤 Datos del estudiante y destinatarios</div>
         <div class="card-body">
             <div class="row g-3">
+                <!-- Estudiante -->
                 <div class="col-md-6">
-                    <label class="small">Estudiante (del sistema)</label>
+                    <label class="small">Estudiante registrado</label>
                     <select name="estudiante_id" id="estudianteSelect" class="form-select" onchange="autollenarRepresentante()">
                         <option value="">— Sin vincular / estudiante nuevo —</option>
                         {% for e in estudiantes %}
                         <option value="{{ e['id'] }}" data-padre="{{ e.get('padre_nombre','') or e.get('madre_nombre','') }}" data-nombre="{{ e['apellidos'] }} {{ e['nombres'] }}">{{ e['apellidos'] }} {{ e['nombres'] }}</option>
                         {% endfor %}
                     </select>
-                    <small class="text-muted" style="font-size:11px;">Vincula un estudiante para poder incorporar luego a la planificación.</small>
+                    <small class="text-muted" style="font-size:11px;">Despliega los estudiantes ya registrados. Vincúlalo para poder incorporar luego a la planificación.</small>
                 </div>
                 <div class="col-md-6">
                     <label class="small">Nombre del estudiante (si es nuevo)</label>
-                    <input type="text" name="estudiante_nombre" id="estudianteNombre" class="form-control" placeholder="Apellidos y nombres">
+                    <div class="input-group">
+                        <input type="text" name="estudiante_nombre" id="estudianteNombre" class="form-control" placeholder="Apellidos y nombres">
+                        <button type="button" class="btn btn-outline-primary" onclick="toggleNuevoEstudiante()">➕ Registrar</button>
+                    </div>
+                    <small class="text-muted" style="font-size:11px;">Regístralo en el sistema para reutilizarlo después.</small>
+                </div>
+
+                <!-- Panel registrar nuevo estudiante -->
+                <div class="col-12">
+                    <div class="inline-reg" id="regEstudiante" style="display:none;">
+                        <strong style="font-size:13px;color:#1e3a5f;">➕ Registrar nuevo estudiante</strong>
+                        <div class="row g-2 mt-1">
+                            <div class="col-md-4"><label class="small">Apellidos</label><input type="text" id="neApellidos" class="form-control form-control-sm"></div>
+                            <div class="col-md-4"><label class="small">Nombres</label><input type="text" id="neNombres" class="form-control form-control-sm"></div>
+                            <div class="col-md-4">
+                                <label class="small">Institución / procedencia</label>
+                                <input list="listaInstituciones" id="neProcedencia" class="form-control form-control-sm" placeholder="Opcional">
+                                <datalist id="listaInstituciones">{% for inst in instituciones %}<option value="{{ inst }}">{% endfor %}</datalist>
+                            </div>
+                            <div class="col-md-4"><label class="small">Padre</label><input type="text" id="nePadre" class="form-control form-control-sm" placeholder="Opcional"></div>
+                            <div class="col-md-4"><label class="small">Madre</label><input type="text" id="neMadre" class="form-control form-control-sm" placeholder="Opcional"></div>
+                            <div class="col-md-4 d-flex align-items-end gap-2">
+                                <button type="button" class="btn btn-primary btn-sm" onclick="guardarEstudiante()">💾 Guardar</button>
+                                <button type="button" class="btn btn-link btn-sm text-decoration-none" onclick="toggleNuevoEstudiante()">Cancelar</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Representante -->
+                <div class="col-md-6">
+                    <label class="small">Representante registrado</label>
+                    <select id="repSelect" class="form-select" onchange="elegirRepresentante()">
+                        <option value="">— Elegir representante registrado —</option>
+                        {% for pa in padres %}
+                        <option value="{{ pa['apellidos'] }} {{ pa['nombres'] }}">{{ pa['apellidos'] }} {{ pa['nombres'] }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
                 <div class="col-md-6">
                     <label class="small">Representante / Padre de familia</label>
-                    <input type="text" name="representante_nombre" id="representanteNombre" class="form-control" placeholder="Nombre del representante">
+                    <div class="input-group">
+                        <input type="text" name="representante_nombre" id="representanteNombre" class="form-control" placeholder="Nombre del representante">
+                        <button type="button" class="btn btn-outline-primary" onclick="toggleNuevoRep()">➕ Registrar</button>
+                    </div>
                 </div>
+
+                <!-- Panel registrar nuevo representante -->
+                <div class="col-12">
+                    <div class="inline-reg" id="regRep" style="display:none;">
+                        <strong style="font-size:13px;color:#1e3a5f;">➕ Registrar nuevo representante</strong>
+                        <div class="row g-2 mt-1">
+                            <div class="col-md-4"><label class="small">Apellidos</label><input type="text" id="nrApellidos" class="form-control form-control-sm"></div>
+                            <div class="col-md-4"><label class="small">Nombres</label><input type="text" id="nrNombres" class="form-control form-control-sm"></div>
+                            <div class="col-md-4"><label class="small">Teléfono</label><input type="text" id="nrTelefono" class="form-control form-control-sm" placeholder="Opcional"></div>
+                            <div class="col-12 d-flex gap-2">
+                                <button type="button" class="btn btn-primary btn-sm" onclick="guardarRep()">💾 Guardar</button>
+                                <button type="button" class="btn btn-link btn-sm text-decoration-none" onclick="toggleNuevoRep()">Cancelar</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="col-md-6">
                     <label class="small">Correo del representante</label>
                     <input type="email" name="representante_email" class="form-control" placeholder="correo@ejemplo.com">
@@ -119,6 +180,7 @@
                     <button type="button" id="btnSemana" onclick="cambiarVista('semana')">Semana</button>
                 </div>
                 <button type="button" class="btn btn-sm btn-outline-secondary" onclick="irHoy()">Hoy</button>
+                <button type="button" id="btnSel" class="btn btn-sm btn-outline-success" onclick="toggleSelMode()">🖱️ Seleccionar varios días</button>
                 <div class="cal-nav">
                     <button type="button" onclick="navegar(-1)">‹</button>
                     <span id="calTitle"></span>
@@ -128,6 +190,43 @@
 
             <div class="cal-head" id="calHead"></div>
             <div class="cal-body" id="calGrid"></div>
+
+            <!-- Panel de selección múltiple -->
+            <div class="panel sel-panel" id="selPanel" style="display:none;">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <strong style="color:#15803d;">✅ <span id="selCount">0</span> día(s) seleccionado(s) — agrega un bloque común</strong>
+                    <button type="button" class="btn btn-sm btn-link text-decoration-none" onclick="limpiarSeleccion()">Limpiar selección</button>
+                </div>
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-2">
+                        <label class="small">Tipo</label>
+                        <select id="selTipo" class="form-select form-select-sm" onchange="cambiarTipoSel()">
+                            <option value="clase">📚 Clase</option>
+                            <option value="terapia">🧠 Atención psicológica</option>
+                            <option value="preuniversitario">🎓 Pre universitario</option>
+                            <option value="ambos">📚🧠 Ambos</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3" id="wrapSelAsignatura">
+                        <label class="small">Asignatura</label>
+                        <select id="selAsignatura" class="form-select form-select-sm"></select>
+                    </div>
+                    <div class="col-md-3" id="wrapSelAtencion" style="display:none;">
+                        <label class="small">Tipo de atención</label>
+                        <select id="selAtencion" class="form-select form-select-sm" onchange="atencionElegidaSel()"></select>
+                    </div>
+                    <div class="col-md-2"><label class="small">Inicio</label><input type="time" id="selIni" class="form-control form-control-sm"></div>
+                    <div class="col-md-2"><label class="small">Fin</label><input type="time" id="selFin" class="form-control form-control-sm"></div>
+                    <div class="col-md-2"><label class="small" id="lblSelPrecio">$ / hora</label><input type="number" id="selPrecio" class="form-control form-control-sm" step="0.01" min="0"></div>
+                    <div class="col-md-3">
+                        <label class="small">Profesor / Psicólogo (opcional)</label>
+                        <select id="selProfesor" class="form-select form-select-sm"></select>
+                    </div>
+                    <div class="col-md-3">
+                        <button type="button" class="btn btn-success btn-sm w-100" onclick="aplicarASeleccionados()">➕ Agregar a los días seleccionados</button>
+                    </div>
+                </div>
+            </div>
 
             <!-- Editor del día seleccionado -->
             <div class="panel" id="diaEditor" style="display:none;">
@@ -243,6 +342,8 @@ let blockSeq = 1;
 let view = 'mes';
 let refDate = new Date();
 let editorFecha = null;
+let selMode = false;
+let selectedDays = new Set();
 
 /* ── helpers ── */
 function ymd(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
@@ -260,17 +361,61 @@ function opcAsignatura(){ return '<option value="">Seleccionar asignatura...</op
 function opcAtencion(){ return '<option value="">Seleccionar atención...</option>'+ATENCIONES.map(a=>`<option value="${esc(a.nombre)}" data-precio="${a.precio}">${esc(a.nombre)} — $${a.precio}</option>`).join(''); }
 function opcProfesor(){ return '<option value="">— sin asignar —</option>'+PROFESORES.map(p=>`<option value="${esc(p)}">${esc(p)}</option>`).join(''); }
 
-/* ── datos generales ── */
+/* ── datos generales: estudiante / representante ── */
 function autollenarRepresentante() {
     const sel = document.getElementById('estudianteSelect');
     const opt = sel.options[sel.selectedIndex];
     if (!opt || !opt.value) return;
-    const padre = opt.dataset.padre || '';
-    const nombre = opt.dataset.nombre || '';
-    const repInput = document.getElementById('representanteNombre');
-    const nomInput = document.getElementById('estudianteNombre');
-    if (padre && !repInput.value) repInput.value = padre;
-    if (nombre) nomInput.value = nombre;
+    const padre = opt.dataset.padre || '', nombre = opt.dataset.nombre || '';
+    if (padre && !document.getElementById('representanteNombre').value) document.getElementById('representanteNombre').value = padre;
+    if (nombre) document.getElementById('estudianteNombre').value = nombre;
+}
+function elegirRepresentante(){
+    const v=document.getElementById('repSelect').value;
+    if(v) document.getElementById('representanteNombre').value=v;
+}
+function toggleNuevoEstudiante(){ const p=document.getElementById('regEstudiante'); p.style.display=(p.style.display==='none')?'block':'none'; }
+function toggleNuevoRep(){ const p=document.getElementById('regRep'); p.style.display=(p.style.display==='none')?'block':'none'; }
+
+async function guardarEstudiante(){
+    const apellidos=document.getElementById('neApellidos').value.trim();
+    const nombres=document.getElementById('neNombres').value.trim();
+    if(!apellidos && !nombres){ alert('Indica apellidos y/o nombres del estudiante.'); return; }
+    try{
+        const res=await fetch('/api/crear_estudiante',{method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({apellidos,nombres,procedencia:document.getElementById('neProcedencia').value.trim(),
+                padre_nombre:document.getElementById('nePadre').value.trim(),madre_nombre:document.getElementById('neMadre').value.trim()})});
+        const data=await res.json();
+        if(!data.success){ alert('❌ '+(data.error||'No se pudo crear')); return; }
+        const sel=document.getElementById('estudianteSelect');
+        const o=document.createElement('option');
+        o.value=data.id; o.textContent=data.nombre; o.dataset.nombre=data.nombre;
+        o.dataset.padre=document.getElementById('nePadre').value.trim()||document.getElementById('neMadre').value.trim();
+        sel.appendChild(o); sel.value=data.id;
+        document.getElementById('estudianteNombre').value=data.nombre;
+        autollenarRepresentante();
+        ['neApellidos','neNombres','neProcedencia','nePadre','neMadre'].forEach(id=>document.getElementById(id).value='');
+        toggleNuevoEstudiante();
+        alert('✅ Estudiante registrado: '+data.nombre);
+    }catch(e){ alert('❌ Error de red al registrar el estudiante.'); }
+}
+async function guardarRep(){
+    const apellidos=document.getElementById('nrApellidos').value.trim();
+    const nombres=document.getElementById('nrNombres').value.trim();
+    if(!apellidos && !nombres){ alert('Indica apellidos y/o nombres del representante.'); return; }
+    try{
+        const res=await fetch('/api/crear_padre',{method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({apellidos,nombres,telefono:document.getElementById('nrTelefono').value.trim()})});
+        const data=await res.json();
+        if(!data.success){ alert('❌ '+(data.error||'No se pudo crear')); return; }
+        const sel=document.getElementById('repSelect');
+        const o=document.createElement('option'); o.value=data.nombre; o.textContent=data.nombre;
+        sel.appendChild(o); sel.value=data.nombre;
+        document.getElementById('representanteNombre').value=data.nombre;
+        ['nrApellidos','nrNombres','nrTelefono'].forEach(id=>document.getElementById(id).value='');
+        toggleNuevoRep();
+        alert('✅ Representante registrado: '+data.nombre);
+    }catch(e){ alert('❌ Error de red al registrar el representante.'); }
 }
 
 /* ── vista del calendario ── */
@@ -279,6 +424,8 @@ function irHoy(){ refDate=new Date(); renderCalendario(); }
 function navegar(dir){ if(view==='semana'){ refDate=addDays(refDate,7*dir); } else { refDate=new Date(refDate.getFullYear(),refDate.getMonth()+dir,1); } renderCalendario(); }
 
 function blocksDe(f){ return blocks.filter(b=>b.fecha===f).sort((a,b)=>(a.inicio||'').localeCompare(b.inicio||'')); }
+
+function clickDia(f){ if(selMode){ toggleSel(f); } else { abrirEditor(f); } }
 
 function renderCalendario(){
     document.getElementById('calHead').innerHTML = DOW.map(d=>`<div>${d}</div>`).join('');
@@ -291,7 +438,7 @@ function renderCalendario(){
         const d=addDays(start,i), f=ymd(d);
         const inMonth = view==='semana' ? true : d.getMonth()===refDate.getMonth();
         const bl=blocksDe(f);
-        html+=`<div class="cal-cell ${inMonth?'':'out'} ${f===hoyF?'today':''}" onclick="abrirEditor('${f}')">
+        html+=`<div class="cal-cell ${inMonth?'':'out'} ${f===hoyF?'today':''} ${selectedDays.has(f)?'sel':''}" onclick="clickDia('${f}')">
             <div class="cal-day">${d.getDate()}</div>
             ${bl.slice(0,3).map(b=>`<div class="cal-ev ${esTerapia(b.tipo)?'ev-t':'ev-c'}">${(b.inicio||'').slice(0,5)} ${esc(etiqueta(b))}</div>`).join('')}
             ${bl.length>3?`<div class="cal-more">+${bl.length-3} más</div>`:''}
@@ -303,6 +450,48 @@ function renderCalendario(){
     document.getElementById('calTitle').textContent = view==='semana'
         ? `${start.getDate()} ${MESES[start.getMonth()].slice(0,3)} – ${addDays(start,6).getDate()} ${MESES[addDays(start,6).getMonth()].slice(0,3)} ${addDays(start,6).getFullYear()}`
         : `${MESES[refDate.getMonth()]} ${refDate.getFullYear()}`;
+}
+
+/* ── selección múltiple de días ── */
+function toggleSelMode(){
+    selMode=!selMode;
+    document.getElementById('btnSel').classList.toggle('btn-success',selMode);
+    document.getElementById('btnSel').classList.toggle('btn-outline-success',!selMode);
+    document.getElementById('btnSel').textContent = selMode ? '✅ Modo selección activo (clic en los días)' : '🖱️ Seleccionar varios días';
+    document.getElementById('selPanel').style.display = selMode ? 'block' : 'none';
+    if(selMode){ cerrarEditor(); cambiarTipoSel(); }
+    else { selectedDays.clear(); }
+    renderCalendario();
+}
+function toggleSel(f){ if(selectedDays.has(f)) selectedDays.delete(f); else selectedDays.add(f); document.getElementById('selCount').textContent=selectedDays.size; renderCalendario(); }
+function limpiarSeleccion(){ selectedDays.clear(); document.getElementById('selCount').textContent=0; renderCalendario(); }
+function cambiarTipoSel(){
+    const tipo=document.getElementById('selTipo').value;
+    const t=esTerapia(tipo), c=(tipo==='clase'||tipo==='preuniversitario'||tipo==='ambos');
+    document.getElementById('wrapSelAsignatura').style.display=c?'block':'none';
+    document.getElementById('wrapSelAtencion').style.display=t?'block':'none';
+    document.getElementById('lblSelPrecio').textContent=(tipo==='terapia')?'$ atención':'$ / hora';
+    if(!t) document.getElementById('selPrecio').value=PRECIO_CLASE_DEF;
+}
+function atencionElegidaSel(){
+    const opt=document.getElementById('selAtencion').selectedOptions[0];
+    const pr=opt?parseFloat(opt.dataset.precio||0):0; if(pr) document.getElementById('selPrecio').value=pr;
+}
+function aplicarASeleccionados(){
+    if(!selectedDays.size){ alert('Selecciona al menos un día en el calendario.'); return; }
+    const tipo=document.getElementById('selTipo').value;
+    const ini=document.getElementById('selIni').value, fin=document.getElementById('selFin').value;
+    if(!ini||!fin){ alert('Indica hora de inicio y fin.'); return; }
+    if(!esTerapia(tipo) && horasEntre(ini,fin)<=0){ alert('La hora de fin debe ser mayor que la de inicio.'); return; }
+    let asignatura='',tema='';
+    if(esTerapia(tipo)){ tema=document.getElementById('selAtencion').value; if(tipo==='ambos') asignatura=document.getElementById('selAsignatura').value; }
+    else asignatura=document.getElementById('selAsignatura').value;
+    const precio=parseFloat(document.getElementById('selPrecio').value||0);
+    const profesor=document.getElementById('selProfesor').value;
+    [...selectedDays].sort().forEach(f=>blocks.push({id:blockSeq++,tipo,asignatura,tema,profesor,fecha:f,inicio:ini,fin:fin,precio}));
+    const n=selectedDays.size; selectedDays.clear(); document.getElementById('selCount').textContent=0;
+    renderTodo();
+    alert(`Se agregó el bloque a ${n} día(s).`);
 }
 
 /* ── editor de día ── */
@@ -394,7 +583,7 @@ function quitarBloque(id){ blocks=blocks.filter(b=>b.id!==id); renderTodo(); if(
 
 function renderLista(){
     const cont=document.getElementById('listaBloques');
-    if(!blocks.length){ cont.innerHTML='<div class="text-muted" style="font-size:13px;">Aún no hay horarios. Haz clic en un día del calendario o usa el generador recurrente.</div>'; return; }
+    if(!blocks.length){ cont.innerHTML='<div class="text-muted" style="font-size:13px;">Aún no hay horarios. Haz clic en un día del calendario, selecciona varios días, o usa el generador recurrente.</div>'; return; }
     const byDate={}; blocks.forEach(b=>{(byDate[b.fecha]=byDate[b.fecha]||[]).push(b);});
     cont.innerHTML=Object.keys(byDate).sort().map(f=>`
         <div class="lb-day">
@@ -428,14 +617,12 @@ document.getElementById('formProforma').addEventListener('submit', function(e){
 
 /* ── init ── */
 (function init(){
-    document.getElementById('edAsignatura').innerHTML=opcAsignatura();
-    document.getElementById('edAtencion').innerHTML=opcAtencion();
-    document.getElementById('edProfesor').innerHTML=opcProfesor();
-    document.getElementById('recAsignatura').innerHTML=opcAsignatura();
-    document.getElementById('recAtencion').innerHTML=opcAtencion();
-    document.getElementById('recProfesor').innerHTML=opcProfesor();
+    ['edAsignatura','recAsignatura','selAsignatura'].forEach(id=>document.getElementById(id).innerHTML=opcAsignatura());
+    ['edAtencion','recAtencion','selAtencion'].forEach(id=>document.getElementById(id).innerHTML=opcAtencion());
+    ['edProfesor','recProfesor','selProfesor'].forEach(id=>document.getElementById(id).innerHTML=opcProfesor());
     document.getElementById('edPrecio').value=PRECIO_CLASE_DEF;
     document.getElementById('recPrecio').value=PRECIO_CLASE_DEF;
+    document.getElementById('selPrecio').value=PRECIO_CLASE_DEF;
     document.getElementById('recDows').innerHTML=DOW.map((d,i)=>`<label><input type="checkbox" class="recDow" value="${i}">${d}</label>`).join('');
     const hoy='{{ today }}';
     document.getElementById('recDesde').value=hoy;

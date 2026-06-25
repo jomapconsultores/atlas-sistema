@@ -2848,6 +2848,29 @@ def gestion_padres():
     padres = supabase.table('padres_familia').select('*').eq('activo', True).order('apellidos').execute()
     return render_template('padres.html', padres=padres.data or [])
 
+@app.route('/api/crear_padre', methods=['POST'])
+@login_required
+def api_crear_padre():
+    """Registra un padre/representante desde un formulario (p.ej. la proforma)
+    y devuelve su id y nombre para insertarlo en el dropdown sin recargar."""
+    if current_user.rol not in ['admin', 'socio']:
+        return jsonify({'success': False, 'error': 'Sin permiso'})
+    data = request.get_json() or {}
+    nombres = (data.get('nombres') or '').strip()
+    apellidos = (data.get('apellidos') or '').strip()
+    if not (nombres or apellidos):
+        return jsonify({'success': False, 'error': 'Indica al menos un nombre o apellido'})
+    try:
+        r = supabase.table('padres_familia').insert({
+            'nombres': nombres, 'apellidos': apellidos,
+            'telefono': (data.get('telefono') or '').strip(), 'activo': True
+        }).execute()
+        p = r.data[0]
+        return jsonify({'success': True, 'id': p['id'],
+                        'nombre': f"{p.get('apellidos','')} {p.get('nombres','')}".strip()})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
 # ========== DOCENTES ==========
 @app.route('/docentes')
 @login_required
@@ -4511,13 +4534,19 @@ def proforma_nueva():
             return redirect(url_for('proforma_nueva'))
 
     estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
+    try:
+        padres = supabase.table('padres_familia').select('*').eq('activo', True).order('apellidos').execute().data or []
+    except Exception:
+        padres = []
     return render_template('proforma_form.html',
                            estudiantes=estudiantes.data or [],
+                           padres=padres,
                            asignaturas=cargar_asignaturas(),
                            atencion_psicologica=psicologia,
                            precios_clase=precios_clase,
                            profesores=cargar_profesores(),
                            encargados=ENCARGADOS,
+                           instituciones=sorted(set(INSTITUCIONES_DEFAULT + [e.get('procedencia','') for e in (estudiantes.data or []) if e.get('procedencia')])),
                            today=date.today().isoformat())
 
 
