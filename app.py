@@ -4542,7 +4542,34 @@ def proforma_detalle(id):
         flash('❌ Proforma no encontrada', 'error')
         return redirect(url_for('proformas'))
     return render_template('proforma_detalle.html', pf=p, items=items,
+                           profesores=cargar_profesores(),
                            copia_html=_proforma_html(p, items))
+
+
+@app.route('/proformas/<int:id>/asignar', methods=['POST'])
+@login_required
+@socio_admin_required
+def proforma_asignar(id):
+    """Paso 2: asigna el docente/psicólogo a cargo de cada casilla (item) del
+    horario, según la asignatura o terapia. Se hace tras la aceptación del
+    representante y antes de incorporar a la planificación."""
+    p, items = _cargar_proforma(id)
+    if not p:
+        flash('❌ Proforma no encontrada', 'error')
+        return redirect(url_for('proformas'))
+    if p.get('incorporada'):
+        flash('⚠️ La proforma ya fue incorporada; no se pueden cambiar los docentes.', 'warning')
+        return redirect(url_for('proforma_detalle', id=id))
+    item_ids = request.form.getlist('asig_item_id[]')
+    profesores = request.form.getlist('asig_profesor[]')
+    try:
+        for iid, prof in zip(item_ids, profesores):
+            supabase.table('proforma_items').update({'profesor': (prof or '').strip()}) \
+                .eq('id', int(iid)).eq('proforma_id', id).execute()
+        flash('✅ Docentes asignados a las casillas del horario', 'success')
+    except Exception as e:
+        flash(f'❌ Error al asignar docentes: {e}', 'error')
+    return redirect(url_for('proforma_detalle', id=id))
 
 
 @app.route('/proformas/<int:id>/enviar', methods=['POST'])

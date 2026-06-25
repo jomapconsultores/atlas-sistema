@@ -112,6 +112,51 @@
     </div>
 </div>
 
+<!-- ── PASO 2: asignar docente por casilla ── -->
+<div class="card mb-3 mt-2">
+    <div class="card-header bg-dark text-white">👨‍🏫 Paso 2 — Asignar docente / psicólogo por casilla</div>
+    <div class="card-body">
+        {% if pf.get('incorporada') %}
+        <div class="alert alert-info mb-0">La proforma ya fue incorporada a la planificación; los docentes quedaron fijados.</div>
+        {% else %}
+        <p style="font-size:13px;color:var(--atlas-muted);">Tras la aceptación del representante, asigna quién estará a cargo de cada clase o terapia según la asignatura. Puedes guardarlo en cualquier momento.</p>
+        <form method="POST" action="/proformas/{{ pf['id'] }}/asignar">
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th><th>Horario</th><th>Asignatura / Terapia</th><th style="min-width:210px;">Docente / Psicólogo a cargo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for it in items %}
+                        <tr>
+                            <td style="white-space:nowrap;">{{ it.get('fecha') or '—' }}</td>
+                            <td style="white-space:nowrap;">{{ (it.get('hora_inicio') or '')[:5] }}-{{ (it.get('hora_fin') or '')[:5] }}</td>
+                            <td>{% if it.get('tipo_sesion') in ['terapia','ambos'] %}🧠 {{ it.get('tema_terapia') or 'Atención' }}{% else %}📚 {{ it.get('asignatura') or 'Clase' }}{% endif %}</td>
+                            <td>
+                                <input type="hidden" name="asig_item_id[]" value="{{ it['id'] }}">
+                                <select name="asig_profesor[]" class="form-select form-select-sm">
+                                    <option value="">— sin asignar —</option>
+                                    {% for prof in profesores %}
+                                    <option value="{{ prof }}" {{ 'selected' if it.get('profesor')==prof else '' }}>{{ prof }}</option>
+                                    {% endfor %}
+                                    {% if it.get('profesor') and it.get('profesor') not in profesores %}
+                                    <option value="{{ it.get('profesor') }}" selected>{{ it.get('profesor') }}</option>
+                                    {% endif %}
+                                </select>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <button type="submit" class="btn btn-dark">💾 Guardar asignaciones</button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+
 <!-- texto plano para copiar -->
 <textarea id="textoPlano" style="position:absolute;left:-9999px;">{{ pf.get('numero','') }} - Proforma Atlas Centro de Estudios
 Estudiante: {{ pf.get('estudiante_nombre') or '—' }}
