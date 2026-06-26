@@ -2661,21 +2661,21 @@ def liquidacion():
 
     _, ultimo_dia = monthrange(anio, mes)
 
-    # Saldo real del banco PARA EL PERÍODO = saldo de cierre del mes seleccionado:
-    # último movimiento con saldo registrado cuya fecha sea <= fin del mes.
-    # (Antes tomaba el último movimiento global, así que un mes pasado mostraba
-    # el saldo de hoy.)
+    # Saldo real del banco PARA EL PERÍODO = saldo de cierre a fin del mes
+    # seleccionado, calculado con la MISMA cadena de saldos del módulo de
+    # movimientos para que ambos coincidan. (Antes tomaba "fecha desc, id desc"
+    # y, dentro de una misma fecha, elegía el movimiento equivocado, dando un
+    # saldo distinto al del módulo de movimientos.)
     saldo_banco = None
     fecha_saldo_banco = None
     try:
-        mv_r = supabase.table('movimientos_cuenta').select('saldo,fecha') \
-            .not_.is_('saldo', 'null') \
-            .lte('fecha', f"{anio}-{mes:02d}-{ultimo_dia}") \
-            .order('fecha', desc=True).order('id', desc=True) \
-            .limit(1).execute()
-        if mv_r.data:
-            saldo_banco = float(mv_r.data[0].get('saldo') or 0)
-            fecha_saldo_banco = str(mv_r.data[0].get('fecha') or '')[:10]
+        movs_hasta = _fetch_all(
+            supabase.table('movimientos_cuenta').select('saldo,monto,fecha')
+            .not_.is_('saldo', 'null')
+            .lte('fecha', f"{anio}-{mes:02d}-{ultimo_dia}")
+            .order('fecha', desc=True).order('id', desc=False)
+        )
+        saldo_banco, fecha_saldo_banco = _saldo_cierre_movimientos(movs_hasta)
     except Exception:
         pass
 
@@ -3825,6 +3825,29 @@ def _ordenar_por_cadena_saldos(lista):
     if len(camino) != len(con):
         return lista  # cadena rota: faltan movimientos intermedios
     return camino
+
+
+def _saldo_cierre_movimientos(movs):
+    """Saldo de CIERRE de una lista de movimientos de cuenta, usando la MISMA
+    cadena de saldos que el módulo de movimientos (movimientos_cuenta) para que
+    ambos coincidan. El cierre es el saldo que ningún otro movimiento usa como
+    saldo previo (saldo − monto). Devuelve (saldo, fecha) o (None, None)."""
+    from collections import Counter as _Counter
+    con = [m for m in movs if m.get('saldo') is not None]
+    if not con:
+        return None, None
+    ordenados = _ordenar_por_cadena_saldos(con)
+    saldos = _Counter(round(m.get('saldo') or 0, 2) for m in con)
+    previos = _Counter(round((m.get('saldo') or 0) - (m.get('monto') or 0), 2) for m in con)
+    fines = list((saldos - previos).elements())
+    inicios = list((previos - saldos).elements())
+    if len(fines) == 1 and len(inicios) == 1:
+        saldo = round(fines[0], 2)
+        mov = next((m for m in ordenados if round(m.get('saldo') or 0, 2) == saldo), ordenados[0])
+        return saldo, str(mov.get('fecha') or '')[:10]
+    # Cadena incompleta: el más reciente del listado ordenado (igual que el módulo)
+    mr = ordenados[0]
+    return round(mr.get('saldo') or 0, 2), str(mr.get('fecha') or '')[:10]
 
 
 @app.route('/movimientos-cuenta')
