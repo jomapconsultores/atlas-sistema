@@ -96,7 +96,7 @@
     </div>
 
     {% if current_user.rol in ['admin', 'socio'] and estudiantes_deuda %}
-    <!-- ===== Recordatorio de cobros pendientes (aparece al iniciar sesión) ===== -->
+    <!-- ===== Recordatorio de cobros pendientes (saldo real, recalculado en cada carga) ===== -->
     <div id="overlayCobros" style="position:fixed; inset:0; background:rgba(15,23,42,0.55); backdrop-filter:blur(3px); z-index:1080; display:flex; align-items:center; justify-content:center; padding:18px;">
         <div style="background:#fff; border-radius:22px; width:100%; max-width:480px; max-height:88vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 25px 70px rgba(0,0,0,0.35); animation:popCobros .28s ease;">
             <div style="background:linear-gradient(135deg,#b45309,#f59e0b); color:#fff; padding:20px 24px; position:relative;">

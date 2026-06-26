@@ -784,14 +784,19 @@ def _estudiantes_con_deuda():
             dev_rows = _fetch_all(supabase.table('devoluciones').select('estudiante_id,monto'))
         except Exception:
             dev_rows = []
+        def _num(v):
+            try:
+                return float(v or 0)
+            except (TypeError, ValueError):
+                return 0.0
         cobrar_por_est, pagado_por_est, dev_por_est = {}, {}, {}
         for s in ses_rows:
-            cobrar_por_est[s.get('estudiante_id')] = cobrar_por_est.get(s.get('estudiante_id'), 0) + (s.get('valor_total', 0) or 0)
+            cobrar_por_est[s.get('estudiante_id')] = cobrar_por_est.get(s.get('estudiante_id'), 0) + _num(s.get('valor_total'))
         for p in pagos_rows:
-            pagado_por_est[p.get('estudiante_id')] = pagado_por_est.get(p.get('estudiante_id'), 0) + (p.get('monto', 0) or 0)
+            pagado_por_est[p.get('estudiante_id')] = pagado_por_est.get(p.get('estudiante_id'), 0) + _num(p.get('monto'))
         for d in dev_rows:
             if d.get('estudiante_id'):
-                dev_por_est[d['estudiante_id']] = dev_por_est.get(d['estudiante_id'], 0) + (d.get('monto', 0) or 0)
+                dev_por_est[d['estudiante_id']] = dev_por_est.get(d['estudiante_id'], 0) + _num(d.get('monto'))
         deudas = []
         for e in estudiantes:
             saldo = cobrar_por_est.get(e['id'], 0) - (pagado_por_est.get(e['id'], 0) - dev_por_est.get(e['id'], 0))
@@ -810,15 +815,16 @@ def dashboard():
     solicitudes_pendientes = 0
     estudiantes_deuda = []
     total_deuda = 0
-    # El recordatorio de cobros se muestra una sola vez, en la primera carga del
-    # panel tras iniciar sesión (la bandera se fija en login y se consume aquí).
-    mostrar_cobros = session.pop('mostrar_cobros', False)
+    # La lista de deudores se recalcula SIEMPRE en cada carga del panel para que
+    # refleje el saldo real al momento: los que ya pagaron desaparecen, y si la
+    # deuda sube/baja el valor se actualiza. (Antes solo se mostraba una vez por
+    # inicio de sesión y quedaba desactualizada dentro de la sesión.)
+    session.pop('mostrar_cobros', None)  # bandera obsoleta, ya no condiciona el cálculo
     if current_user.rol in ['admin', 'socio']:
         solicitudes = supabase.table('anticipos_solicitudes').select('id').eq('estado', 'pendiente').execute()
         solicitudes_pendientes = len(solicitudes.data or [])
-        if mostrar_cobros:
-            estudiantes_deuda = _estudiantes_con_deuda()
-            total_deuda = round(sum(d['saldo'] for d in estudiantes_deuda), 2)
+        estudiantes_deuda = _estudiantes_con_deuda()
+        total_deuda = round(sum(d['saldo'] for d in estudiantes_deuda), 2)
     return render_template('dashboard.html', rol=current_user.rol, solicitudes_pendientes=solicitudes_pendientes,
                            estudiantes_deuda=estudiantes_deuda, total_deuda=total_deuda)
 
@@ -2630,10 +2636,16 @@ def liquidacion():
 
     if request.method == 'POST':
         saldo_cuenta = float(request.form.get('saldo_cuenta', 0))
+        # NO ocultar errores: si el guardado falla (p. ej. la tabla
+        # 'liquidaciones' no existe -> ejecutar migration_liquidaciones.sql),
+        # antes se mostraba "guardado" en falso y el valor nunca se
+        # actualizaba. Ahora se confirma solo si realmente persistió.
         try:
             if liq_record:
                 supabase.table('liquidaciones').update({
-                    'saldo_cuenta': saldo_cuenta
+                    'saldo_cuenta': saldo_cuenta,
+                    'registrado_por': current_user.nombre,
+                    'updated_at': datetime.now().isoformat()
                 }).eq('id', liq_record['id']).execute()
             else:
                 supabase.table('liquidaciones').insert({
@@ -2641,9 +2653,10 @@ def liquidacion():
                     'saldo_cuenta': saldo_cuenta,
                     'registrado_por': current_user.nombre
                 }).execute()
-        except Exception:
-            pass
-        flash('✅ Saldo guardado', 'success')
+            flash('✅ Saldo guardado', 'success')
+        except Exception as e:
+            print(f'⚠️ Error al guardar liquidación: {e}')
+            flash('❌ No se pudo guardar el saldo. Verifica que la tabla "liquidaciones" exista (ejecuta migration_liquidaciones.sql en Supabase).', 'error')
         return redirect(url_for('liquidacion', mes=mes, anio=anio))
 
     saldo_cuenta = float(liq_record['saldo_cuenta']) if liq_record else 0.0
