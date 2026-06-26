@@ -446,6 +446,42 @@ def inicio():
         return redirect(url_for('dashboard'))
     return render_template('landing.html', year=date.today().year)
 
+# Momento en que arrancó este proceso (sirve para saber cuándo se redeployó)
+APP_INICIADA = datetime.now()
+
+def _commit_desplegado():
+    """Commit de git que está corriendo en el servidor. Coolify inyecta
+    SOURCE_COMMIT; se contemplan otros proveedores y, de respaldo, se lee del
+    repo local. Devuelve el SHA o 'desconocido'."""
+    commit = (os.environ.get('SOURCE_COMMIT')        # Coolify
+              or os.environ.get('RENDER_GIT_COMMIT')  # Render
+              or os.environ.get('GIT_COMMIT')
+              or os.environ.get('COMMIT_SHA')
+              or os.environ.get('APP_VERSION') or '').strip()
+    if not commit:
+        try:
+            import subprocess
+            commit = subprocess.check_output(
+                ['git', 'rev-parse', 'HEAD'],
+                cwd=os.path.dirname(os.path.abspath(__file__)),
+                stderr=subprocess.DEVNULL
+            ).decode().strip()
+        except Exception:
+            commit = 'desconocido'
+    return commit
+
+@app.route('/version')
+def version():
+    """Muestra qué commit está corriendo en el servidor, para confirmar de un
+    vistazo si un cambio ya se desplegó. Público y de solo lectura."""
+    commit = _commit_desplegado()
+    return jsonify({
+        'commit': commit,
+        'commit_corto': commit[:7] if commit and commit != 'desconocido' else commit,
+        'proceso_iniciado': APP_INICIADA.isoformat(timespec='seconds'),
+        'hora_servidor': datetime.now().isoformat(timespec='seconds'),
+    })
+
 @app.route('/contacto', methods=['POST'])
 def contacto():
     """Recibe el formulario de contacto de la landing pública y lo guarda.
