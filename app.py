@@ -2644,8 +2644,7 @@ def liquidacion():
             if liq_record:
                 supabase.table('liquidaciones').update({
                     'saldo_cuenta': saldo_cuenta,
-                    'registrado_por': current_user.nombre,
-                    'updated_at': datetime.now().isoformat()
+                    'registrado_por': current_user.nombre
                 }).eq('id', liq_record['id']).execute()
             else:
                 supabase.table('liquidaciones').insert({
@@ -3850,6 +3849,52 @@ def _saldo_cierre_movimientos(movs):
     return round(mr.get('saldo') or 0, 2), str(mr.get('fecha') or '')[:10]
 
 
+def actualizar_saldos_liquidacion():
+    """Recalcula el saldo de cierre (cuenta de ahorros) de CADA mes con
+    movimientos y lo guarda en la tabla 'liquidaciones', usando la MISMA cadena
+    de saldos del módulo de Movimientos. Así la Liquidación siempre coincide con
+    Movimientos y se mantiene actualizada. Se llama tras subir un estado de
+    cuenta (el saldo del banco es la fuente de verdad: el valor arrastrado por
+    el sistema). Devuelve el número de meses actualizados."""
+    try:
+        movs = _fetch_all(
+            supabase.table('movimientos_cuenta').select('saldo,monto,fecha')
+            .not_.is_('saldo', 'null')
+            .gte('fecha', FECHA_MIN_ESTADO_CUENTA)
+            .order('fecha', desc=True).order('id', desc=False)
+        )
+    except Exception:
+        return 0
+    movs = [m for m in movs if m.get('fecha')]
+    if not movs:
+        return 0
+    actualizados = 0
+    for ym in sorted({m['fecha'][:7] for m in movs}):
+        anio, mes = int(ym[:4]), int(ym[5:7])
+        _, ultimo_dia = monthrange(anio, mes)
+        fin_mes = f"{anio}-{mes:02d}-{ultimo_dia}"
+        # Saldo de cierre = acumulado hasta fin de ese mes (mismo criterio que /liquidacion)
+        saldo, _ = _saldo_cierre_movimientos([m for m in movs if m['fecha'] <= fin_mes])
+        if saldo is None:
+            continue
+        try:
+            ex = supabase.table('liquidaciones').select('id').eq('mes', mes).eq('anio', anio).execute()
+            if ex.data:
+                supabase.table('liquidaciones').update({
+                    'saldo_cuenta': saldo,
+                    'registrado_por': 'Sistema (estado de cuenta)'
+                }).eq('id', ex.data[0]['id']).execute()
+            else:
+                supabase.table('liquidaciones').insert({
+                    'mes': mes, 'anio': anio, 'saldo_cuenta': saldo,
+                    'registrado_por': 'Sistema (estado de cuenta)'
+                }).execute()
+            actualizados += 1
+        except Exception:
+            pass
+    return actualizados
+
+
 @app.route('/movimientos-cuenta')
 @login_required
 @socio_admin_required
@@ -4049,11 +4094,19 @@ def subir_estado_cuenta():
 
     n_conciliados = conciliar_nuevos(insertados)
 
+    # El saldo del banco es la fuente de verdad: refrescar el saldo de la cuenta
+    # de ahorros guardado en cada mes para que la Liquidación coincida siempre
+    # con Movimientos (corrige valores viejos o guardados a mano que quedaron
+    # desactualizados al subir un nuevo estado de cuenta).
+    n_meses_saldo = actualizar_saldos_liquidacion()
+
     partes = [f'✅ {len(insertados)} movimientos agregados', f'{n_conciliados} cruzados automáticamente con pagos/gastos']
     if ya_existian:
         partes.append(f'{ya_existian} repetidos ignorados')
     if antes_de_mayo:
         partes.append(f'{len(antes_de_mayo)} anteriores a mayo descartados')
+    if n_meses_saldo:
+        partes.append(f'saldo de cuenta de ahorros actualizado en {n_meses_saldo} mes(es)')
     flash(' · '.join(partes) + '.', 'success')
     return redirect(url_for('movimientos_cuenta'))
 
