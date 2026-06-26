@@ -2659,15 +2659,18 @@ def liquidacion():
             flash('❌ No se pudo guardar el saldo. Verifica que la tabla "liquidaciones" exista (ejecuta migration_liquidaciones.sql en Supabase).', 'error')
         return redirect(url_for('liquidacion', mes=mes, anio=anio))
 
-    saldo_cuenta = float(liq_record['saldo_cuenta']) if liq_record else 0.0
     _, ultimo_dia = monthrange(anio, mes)
 
-    # Saldo real del banco: movimiento más reciente con campo saldo != null
+    # Saldo real del banco PARA EL PERÍODO = saldo de cierre del mes seleccionado:
+    # último movimiento con saldo registrado cuya fecha sea <= fin del mes.
+    # (Antes tomaba el último movimiento global, así que un mes pasado mostraba
+    # el saldo de hoy.)
     saldo_banco = None
     fecha_saldo_banco = None
     try:
         mv_r = supabase.table('movimientos_cuenta').select('saldo,fecha') \
             .not_.is_('saldo', 'null') \
+            .lte('fecha', f"{anio}-{mes:02d}-{ultimo_dia}") \
             .order('fecha', desc=True).order('id', desc=True) \
             .limit(1).execute()
         if mv_r.data:
@@ -2675,6 +2678,20 @@ def liquidacion():
             fecha_saldo_banco = str(mv_r.data[0].get('fecha') or '')[:10]
     except Exception:
         pass
+
+    # "Auto pero editable": el saldo de la cuenta de ahorros se toma del estado
+    # de cuenta subido (saldo_banco) y se actualiza con lo subido. Si el usuario
+    # guardó un valor manual para este período, ese override tiene prioridad
+    # (el botón "Usar saldo del banco" del template permite re-sincronizar).
+    if liq_record is not None:
+        saldo_cuenta = float(liq_record['saldo_cuenta'])
+        saldo_es_auto = False
+    elif saldo_banco is not None:
+        saldo_cuenta = saldo_banco
+        saldo_es_auto = True
+    else:
+        saldo_cuenta = 0.0
+        saldo_es_auto = False
 
     # Gastos del período
     try:
@@ -2763,6 +2780,7 @@ def liquidacion():
     return render_template('liquidacion.html',
         mes=mes, anio=anio, saldo_cuenta=saldo_cuenta,
         saldo_banco=saldo_banco, fecha_saldo_banco=fecha_saldo_banco,
+        saldo_es_auto=saldo_es_auto,
         liq_guardada=liq_record is not None,
         gastos=gastos_periodo.data or [], total_gastos=total_gastos, gastos_por_cat=gastos_por_cat,
         reembolsos_por_socio=reembolsos_por_socio,

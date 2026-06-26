@@ -41,7 +41,8 @@
 <div class="card shadow border-0 mb-4" style="border-radius:15px;">
     <div class="card-header text-white fw-bold" style="background:linear-gradient(135deg,#2e7d32,#1b5e20); border-radius:15px 15px 0 0;">
         🏦 Saldo de la Cuenta de Ahorros
-        {% if liq_guardada %}<span class="badge bg-light text-success ms-2" style="font-size:12px;">✅ Guardado</span>{% endif %}
+        {% if saldo_es_auto %}<span class="badge bg-light text-primary ms-2" style="font-size:12px;">🔄 Auto (estado de cuenta)</span>
+        {% elif liq_guardada %}<span class="badge bg-light text-success ms-2" style="font-size:12px;">✏️ Manual guardado</span>{% endif %}
     </div>
     <div class="card-body">
         {% if saldo_banco is not none %}
@@ -55,7 +56,7 @@
                 <strong>{{ fecha_saldo_banco }}</strong>
             </div>
             <div class="ms-auto" style="font-size:11px; color:#777; max-width:200px; line-height:1.4;">
-                Este es el saldo del banco según movimientos de cuenta cargados. Úsalo como referencia para el campo de abajo.
+                Saldo de cierre del mes según el estado de cuenta cargado. El campo de abajo se autocompleta con este valor.
             </div>
         </div>
         {% endif %}
@@ -63,19 +64,30 @@
             <div class="col-md-4">
                 <label class="form-label fw-bold">Saldo actual ($)
                     {% if saldo_banco is not none %}
-                    <span class="badge bg-info text-dark ms-1" style="font-size:10px; vertical-align:middle;" title="Saldo bancario según movimientos de cuenta">${{ "%.2f"|format(saldo_banco) }} banco</span>
+                    <span class="badge bg-info text-dark ms-1" style="font-size:10px; vertical-align:middle;" title="Saldo bancario según el estado de cuenta del mes">${{ "%.2f"|format(saldo_banco) }} banco</span>
                     {% endif %}
                 </label>
                 <div class="input-group">
                     <span class="input-group-text border-0 bg-light">$</span>
-                    <input type="number" name="saldo_cuenta" class="form-control border-0 shadow-sm" step="0.01" value="{{ '%.2f'|format(saldo_cuenta) }}" placeholder="0.00">
+                    <input type="number" id="inputSaldoCuenta" name="saldo_cuenta" class="form-control border-0 shadow-sm" step="0.01" value="{{ '%.2f'|format(saldo_cuenta) }}" placeholder="0.00">
                 </div>
             </div>
             <div class="col-auto">
                 <button type="submit" class="btn btn-success shadow-sm">💾 Guardar saldo</button>
             </div>
+            {% if saldo_banco is not none %}
+            <div class="col-auto">
+                <button type="button" class="btn btn-outline-primary shadow-sm"
+                        onclick="document.getElementById('inputSaldoCuenta').value=({{ '%.2f'|format(saldo_banco) }}).toFixed(2);"
+                        title="Copiar el saldo del estado de cuenta al campo (recuerda Guardar)">🔄 Usar saldo del banco (${{ "%.2f"|format(saldo_banco) }})</button>
+            </div>
+            {% endif %}
             <div class="col-12">
-                <small class="text-muted">Este valor se guarda y persiste para el mes seleccionado. Los demás cálculos se actualizan automáticamente con los datos reales.</small>
+                <small class="text-muted">
+                    {% if saldo_es_auto %}El saldo se tomó automáticamente del estado de cuenta del mes. Puedes editarlo y guardar un valor manual si lo necesitas.
+                    {% else %}Estás usando un valor manual guardado. Pulsa <strong>🔄 Usar saldo del banco</strong> y luego <strong>Guardar</strong> para volver a tomar el saldo del estado de cuenta.{% endif %}
+                    Los demás cálculos se actualizan automáticamente con los datos reales.
+                </small>
             </div>
         </form>
     </div>
