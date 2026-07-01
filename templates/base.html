@@ -721,7 +721,15 @@
             .module-card:hover { transform: none; box-shadow: 0 2px 12px rgba(0,0,0,0.04) !important; }
             .module-card:active { transform: scale(0.98); }
         }
+        /* ── NOTA DE FERIADOS (planificación) ─────────── */
+        .feriado-nota {
+            margin-top: 4px; padding: 4px 8px; border-radius: 6px;
+            font-size: 11.5px; font-weight: 600; line-height: 1.3;
+        }
+        .feriado-nota.is-nacional { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+        .feriado-nota.is-local    { background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; }
     </style>
+    <script src="/static/feriados.js?v=1"></script>
 </head>
 <body class="{% if current_user.is_authenticated %}has-sidebar{% endif %}">
     {% if current_user.is_authenticated %}

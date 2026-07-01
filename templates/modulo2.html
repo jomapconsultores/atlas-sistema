@@ -35,6 +35,7 @@
     <button type="button" class="btn btn-outline-primary btn-sm" onclick="sincronizarTodos()">🔄 Sincronizar Fecha</button>
     {% endif %}
 </form>
+<div class="feriado-nota mb-3" id="feriado_dia" style="display:none;"></div>
 
 <div class="card shadow mb-4">
     <div class="card-header bg-success text-white"><strong>Sesiones del {{ fecha }}</strong></div>
@@ -94,6 +95,14 @@
 </div>
 
 <script>
+// Muestra si el día visualizado es feriado nacional o local (Cuenca)
+(function(){
+    if (!window.ATLAS_FERIADOS) return;
+    var nota = document.getElementById('feriado_dia');
+    var input = document.querySelector('input[name="fecha"]');
+    if (nota && input) ATLAS_FERIADOS.pintarNota(nota, input.value);
+})();
+
 document.querySelectorAll('.radio-sesion').forEach(r => {
     r.addEventListener('change', function() {
         if (!this.checked) return;

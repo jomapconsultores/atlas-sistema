@@ -373,7 +373,7 @@ function mostrarFechas() {
                 <span class="badge-duracion vacio" id="duracion_${i}">⏱️ Sin horario</span>
             </div>
             <div class="row g-2">
-                <div class="col-md-3"><label class="small">Fecha *</label><input type="date" name="fecha_${i}" class="form-control" value="{{ today }}" required></div>
+                <div class="col-md-3"><label class="small">Fecha *</label><input type="date" name="fecha_${i}" class="form-control" value="{{ today }}" onchange="revisarFeriado(${i})" required><div class="feriado-nota" id="feriado_${i}" style="display:none;"></div></div>
                 <div class="col-md-3"><label class="small">Inicio *</label><input type="time" name="hora_inicio_${i}" class="form-control" required></div>
                 <div class="col-md-3"><label class="small">Fin *</label><input type="time" name="hora_fin_${i}" class="form-control" required></div>
                 <div class="col-md-3">
@@ -398,7 +398,16 @@ function mostrarFechas() {
         </div>`;
     }
     document.getElementById('contenedorFechas').innerHTML = html;
+    for (let i = 1; i <= num; i++) revisarFeriado(i);
     actualizarEstado();
+}
+
+// Muestra bajo la fecha si cae en feriado nacional o local (Cuenca)
+function revisarFeriado(i) {
+    if (!window.ATLAS_FERIADOS) return;
+    const input = $(`[name="fecha_${i}"]`);
+    const nota = document.getElementById(`feriado_${i}`);
+    if (input && nota) ATLAS_FERIADOS.pintarNota(nota, input.value);
 }
 
 function toggleNuevoProf(num, val) {
@@ -535,7 +544,7 @@ document.getElementById('formPlanificar').addEventListener('submit', function(e)
     const numSes = parseInt(document.getElementById('numSesiones').value);
     const numEst = document.getElementById('numEstudiantes').value;
     const tipo = document.getElementById('tipoSesion').value;
-    let fechas = [], totalHoras = 0;
+    let fechas = [], totalHoras = 0, feriados = [];
     for (let i = 1; i <= numSes; i++) {
         const fecha = $(`[name="fecha_${i}"]`)?.value;
         const hIni = $(`[name="hora_inicio_${i}"]`)?.value;
@@ -543,10 +552,15 @@ document.getElementById('formPlanificar').addEventListener('submit', function(e)
         const ev = evaluarSesion(i);
         totalHoras += ev.horas;
         fechas.push(`📅 Sesión ${i}: ${fecha}  ${hIni} → ${hFin}  (${ev.horas.toFixed(2)} h)`);
+        const fer = window.ATLAS_FERIADOS ? ATLAS_FERIADOS.getFeriado(fecha) : null;
+        if (fer) feriados.push(`Sesión ${i} (${fecha}): ${fer.etiqueta}`);
     }
 
     let msg = `✅ ¿Confirmas la planificación?\n\n`;
     msg += `📋 Tipo: ${tipo}\n👨‍🎓 Estudiantes: ${numEst}\n📅 Sesiones: ${numSes}\n⏱️ Total horas: ${totalHoras.toFixed(2)} h\n\n`;
+    if (feriados.length > 0) {
+        msg += `⚠️ Hay sesiones en día feriado:\n${feriados.join('\n')}\n\n`;
+    }
     msg += `Detalle:\n${fechas.join('\n')}`;
     if (confirm(msg)) {
         // La planificación se va a grabar: el borrador ya no es necesario.
@@ -667,6 +681,7 @@ function restaurarBorrador(datos) {
     for (let i = 1; i <= ns; i++) {
         const sel = document.querySelector(`[name="profesor_${i}"]`);
         if (sel && sel.value === 'nuevo') toggleNuevoProf(i, 'nuevo');
+        revisarFeriado(i);   // refresca la nota de feriado con la fecha restaurada
     }
     actualizarEstado();
 }
