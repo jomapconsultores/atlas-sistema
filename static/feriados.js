@@ -188,10 +188,44 @@
       '<ul class="feriado-lista">' + filas + '</ul></div>';
   }
 
+  // ── Auto-cableado: input[type=date][data-feriado] recibe su nota sola ──
+  function attachAuto(input) {
+    if (!input || input._ferWired) return;
+    input._ferWired = true;
+    var nota = document.createElement('div');
+    nota.className = 'feriado-nota';
+    nota.style.display = 'none';
+    if (input.nextSibling) input.parentNode.insertBefore(nota, input.nextSibling);
+    else input.parentNode.appendChild(nota);
+    var upd = function () { pintarNota(nota, input.value); };
+    input.addEventListener('change', upd);
+    input.addEventListener('input', upd);
+    upd();
+  }
+
+  function autoInit() {
+    var sel = 'input[type="date"][data-feriado]';
+    document.querySelectorAll(sel).forEach(attachAuto);
+    if (!window.MutationObserver || !document.body) return;
+    new MutationObserver(function (muts) {
+      muts.forEach(function (m) {
+        Array.prototype.forEach.call(m.addedNodes || [], function (n) {
+          if (n.nodeType !== 1) return;
+          if (n.matches && n.matches(sel)) attachAuto(n);
+          if (n.querySelectorAll) n.querySelectorAll(sel).forEach(attachAuto);
+        });
+      });
+    }).observe(document.body, { childList: true, subtree: true });
+  }
+
+  if (document.readyState !== 'loading') autoInit();
+  else document.addEventListener('DOMContentLoaded', autoInit);
+
   window.ATLAS_FERIADOS = {
     getFeriado: getFeriado,
     pintarNota: pintarNota,
     attach: attach,
+    attachAuto: attachAuto,
     resumen: resumen,
     proximos: proximos,
     pintarLista: pintarLista

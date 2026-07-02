@@ -33,6 +33,12 @@
     .ev-t { background:#ede9fe; color:#6d28d9; }
     .cal-more { font-size:10px; color:var(--atlas-muted); font-weight:600; }
     .cal-body.semana .cal-cell { min-height:150px; }
+    /* Feriados en el calendario */
+    .cal-cell.feriado-nac { background:#fffbeb; }
+    .cal-cell.feriado-local { background:#eff6ff; }
+    .cal-feriado { font-size:9.5px; font-weight:700; border-radius:5px; padding:1px 5px; margin-bottom:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .cal-cell.feriado-nac .cal-feriado { background:#fef3c7; color:#92400e; }
+    .cal-cell.feriado-local .cal-feriado { background:#dbeafe; color:#1e40af; }
     .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; vertical-align:middle; }
     .dot.ev-c { background:#3b82f6; } .dot.ev-t { background:#8b5cf6; }
 
@@ -301,8 +307,8 @@
                             <label class="small">Profesor / Psicólogo (opcional)</label>
                             <select id="recProfesor" class="form-select form-select-sm"></select>
                         </div>
-                        <div class="col-md-2"><label class="small">Desde</label><input type="date" id="recDesde" class="form-control form-control-sm"></div>
-                        <div class="col-md-2"><label class="small">Hasta</label><input type="date" id="recHasta" class="form-control form-control-sm"></div>
+                        <div class="col-md-2"><label class="small">Desde</label><input type="date" id="recDesde" class="form-control form-control-sm" data-feriado></div>
+                        <div class="col-md-2"><label class="small">Hasta</label><input type="date" id="recHasta" class="form-control form-control-sm" data-feriado></div>
                         <div class="col-md-3">
                             <button type="button" class="btn btn-success btn-sm w-100" onclick="generarRecurrente()">⚙️ Generar bloques</button>
                         </div>
@@ -438,8 +444,11 @@ function renderCalendario(){
         const d=addDays(start,i), f=ymd(d);
         const inMonth = view==='semana' ? true : d.getMonth()===refDate.getMonth();
         const bl=blocksDe(f);
-        html+=`<div class="cal-cell ${inMonth?'':'out'} ${f===hoyF?'today':''} ${selectedDays.has(f)?'sel':''}" onclick="clickDia('${f}')">
+        const fer = window.ATLAS_FERIADOS ? ATLAS_FERIADOS.getFeriado(f) : null;
+        const ferCls = fer ? (' feriado '+(fer.tipo==='local'?'feriado-local':'feriado-nac')) : '';
+        html+=`<div class="cal-cell ${inMonth?'':'out'} ${f===hoyF?'today':''} ${selectedDays.has(f)?'sel':''}${ferCls}" onclick="clickDia('${f}')">
             <div class="cal-day">${d.getDate()}</div>
+            ${fer?`<div class="cal-feriado" title="${esc(fer.nombre)}">${fer.tipo==='local'?'📍':'🎌'} ${esc(fer.nombre)}</div>`:''}
             ${bl.slice(0,3).map(b=>`<div class="cal-ev ${esTerapia(b.tipo)?'ev-t':'ev-c'}">${(b.inicio||'').slice(0,5)} ${esc(etiqueta(b))}</div>`).join('')}
             ${bl.length>3?`<div class="cal-more">+${bl.length-3} más</div>`:''}
         </div>`;

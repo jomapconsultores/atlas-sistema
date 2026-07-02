@@ -56,9 +56,9 @@
                             {% for s in sesiones %}
                             <tr id="fila-{{ s['id'] }}">
                                 <td>
-                                    <span class="fecha-texto-{{ s['id'] }}">{{ s['fecha'] }}</span>
+                                    <span class="fecha-texto fecha-texto-{{ s['id'] }}" data-fecha="{{ s['fecha'] }}">{{ s['fecha'] }}</span>
                                     {% if current_user.rol in ['admin','socio'] %}
-                                    <input type="date" class="form-control form-control-sm fecha-input-{{ s['id'] }}" value="{{ s['fecha'] }}" style="display:none;width:130px;">
+                                    <input type="date" class="form-control form-control-sm fecha-input-{{ s['id'] }}" value="{{ s['fecha'] }}" style="display:none;width:130px;" data-feriado>
                                     {% endif %}
                                 </td>
                                 <td>
@@ -227,5 +227,20 @@ async function sincronizarReunion(id) {
     location.reload();
 }
 {% endif %}
+
+// Marca los días feriados (nacionales y locales) junto a la fecha de cada sesión
+(function(){
+    if (!window.ATLAS_FERIADOS) return;
+    document.querySelectorAll('.fecha-texto').forEach(function(sp){
+        var fer = ATLAS_FERIADOS.getFeriado(sp.dataset.fecha);
+        if (!fer) return;
+        var chip = document.createElement('span');
+        chip.className = 'feriado-chip ' + (fer.tipo==='local'?'is-local':'is-nacional');
+        chip.style.marginLeft = '6px';
+        chip.title = fer.nombre;
+        chip.textContent = (fer.tipo==='local'?'📍 ':'🎌 ') + fer.nombre;
+        sp.insertAdjacentElement('afterend', chip);
+    });
+})();
 </script>
 {% endblock %}

@@ -577,7 +577,22 @@
         }
         .app-sidebar .nav-group.open > .nav-group-toggle::after { transform: rotate(180deg); }
         .app-sidebar .nav-group-items { max-height: 0; overflow: hidden; transition: max-height .28s ease; padding-left: 26px; }
-        .app-sidebar .nav-group.open .nav-group-items { max-height: 600px; }
+        .app-sidebar .nav-group.open > .nav-group-items { max-height: 600px; }
+        /* ── Submenús anidados (padre navegable + chevron) ── */
+        .app-sidebar .nav-nested { margin-bottom: 1px; }
+        .app-sidebar .nav-parent { display: flex; align-items: center; gap: 2px; }
+        .app-sidebar .nav-parent > a { flex: 1 1 auto; min-width: 0; }
+        .app-sidebar .nav-chev {
+            flex: 0 0 auto; border: none; background: transparent; cursor: pointer;
+            padding: 6px 8px; display: flex; align-items: center; border-radius: 6px;
+        }
+        .app-sidebar .nav-chev:hover { background: #f1f5f9; }
+        .app-sidebar .nav-chev::after {
+            content: ''; width: 0; height: 0;
+            border-left: 4px solid transparent; border-right: 4px solid transparent;
+            border-top: 5px solid #94a3b8; transition: transform .22s;
+        }
+        .app-sidebar .nav-nested.open > .nav-parent .nav-chev::after { transform: rotate(180deg); }
         .app-sidebar .nav-group-items a {
             display: flex; align-items: center;
             font-size: 11.5px; font-weight: 500;
@@ -740,7 +755,7 @@
         .feriado-chip.is-nacional { background: #fef3c7; color: #92400e; }
         .feriado-chip.is-local    { background: #dbeafe; color: #1e40af; }
     </style>
-    <script src="/static/feriados.js?v=2"></script>
+    <script src="/static/feriados.js?v=3"></script>
 </head>
 <body class="{% if current_user.is_authenticated %}has-sidebar{% endif %}">
     {% if current_user.is_authenticated %}
@@ -830,14 +845,45 @@
         <div class="nav-group {% if fin_active %}open{% endif %}">
             <button type="button" class="nav-group-toggle"><span class="ico">💰</span> Finanzas</button>
             <div class="nav-group-items">
-                <a href="/modulo3" class="{% if p=='/modulo3' %}active{% endif %}">Pagos de estudiantes</a>
-                <a href="/modulo5" class="{% if p=='/modulo5' %}active{% endif %}">Pagos a docentes</a>
-                <a href="/devoluciones" class="{% if p=='/devoluciones' %}active{% endif %}">Devoluciones</a>
+
+                {# Pagos de estudiantes › Devoluciones #}
+                <div class="nav-group nav-nested {% if p in ['/modulo3','/devoluciones'] %}open{% endif %}">
+                    <div class="nav-parent">
+                        <a href="/modulo3" class="{% if p=='/modulo3' %}active{% endif %}">Pagos de estudiantes</a>
+                        <button type="button" class="nav-chev" aria-label="Ver devoluciones"></button>
+                    </div>
+                    <div class="nav-group-items">
+                        <a href="/devoluciones" class="{% if p=='/devoluciones' %}active{% endif %}">Devoluciones</a>
+                    </div>
+                </div>
+
+                {# Pagos a docentes › Anticipos #}
+                <div class="nav-group nav-nested {% if p in ['/modulo5','/gestion-anticipos'] %}open{% endif %}">
+                    <div class="nav-parent">
+                        <a href="/modulo5" class="{% if p=='/modulo5' %}active{% endif %}">Pagos a docentes</a>
+                        <button type="button" class="nav-chev" aria-label="Ver anticipos"></button>
+                    </div>
+                    <div class="nav-group-items">
+                        <a href="/gestion-anticipos" class="{% if p=='/gestion-anticipos' %}active{% endif %}">Anticipos {% if solicitudes_pendientes and solicitudes_pendientes>0 %}<span class="side-badge">{{ solicitudes_pendientes }}</span>{% endif %}</a>
+                    </div>
+                </div>
+
+                {# Gastos #}
                 <a href="/gastos" class="{% if p=='/gastos' %}active{% endif %}">Gastos</a>
-                <a href="/gestion-anticipos" class="{% if p=='/gestion-anticipos' %}active{% endif %}">Anticipos {% if solicitudes_pendientes and solicitudes_pendientes>0 %}<span class="side-badge">{{ solicitudes_pendientes }}</span>{% endif %}</a>
-                {% if rol in ['admin','socio'] %}<a href="/movimientos-cuenta" class="{% if p=='/movimientos-cuenta' %}active{% endif %}">Movimientos en cuenta</a>{% endif %}
-                <a href="/reportes" class="{% if p=='/reportes' %}active{% endif %}">Reportes</a>
-                <a href="/liquidacion" class="{% if p=='/liquidacion' %}active{% endif %}">Liquidación</a>
+
+                {# Liquidación › Movimientos en cuenta #}
+                <div class="nav-group nav-nested {% if p in ['/liquidacion','/movimientos-cuenta'] %}open{% endif %}">
+                    <div class="nav-parent">
+                        <a href="/liquidacion" class="{% if p=='/liquidacion' %}active{% endif %}">Liquidación</a>
+                        <button type="button" class="nav-chev" aria-label="Ver movimientos en cuenta"></button>
+                    </div>
+                    <div class="nav-group-items">
+                        <a href="/movimientos-cuenta" class="{% if p=='/movimientos-cuenta' %}active{% endif %}">Movimientos en cuenta</a>
+                    </div>
+                </div>
+
+                {# Reportes #}
+                <a href="/reportes" class="{% if p=='/reportes' %}active{% endif %}">Reportes ATLAS</a>
             </div>
         </div>
 
@@ -924,6 +970,13 @@
         document.querySelectorAll('.app-sidebar .nav-group-toggle').forEach(function (btn) {
             btn.addEventListener('click', function () {
                 btn.closest('.nav-group').classList.toggle('open');
+            });
+        });
+        // Chevron de submenú anidado: despliega/colapsa sin navegar
+        document.querySelectorAll('.app-sidebar .nav-chev').forEach(function (chev) {
+            chev.addEventListener('click', function (e) {
+                e.preventDefault(); e.stopPropagation();
+                chev.closest('.nav-nested').classList.toggle('open');
             });
         });
         var sidebar = document.getElementById('appSidebar');
