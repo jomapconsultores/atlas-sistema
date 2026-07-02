@@ -2614,6 +2614,14 @@ def gestion_gastos():
     except Exception:
         reembolsos_pend = supabase.table('gastos').select('*').eq('reembolso', True).order('fecha', desc=True).execute()
 
+    # Reembolsos YA pagados (para la sección "Pagados", recogida). Se ordenan por
+    # la fecha en que se pagó el reembolso.
+    try:
+        reembolsos_pagados = supabase.table('gastos').select('*').eq('reembolso', True) \
+            .eq('reembolso_pagado', True).order('fecha_reembolso_pagado', desc=True).execute().data or []
+    except Exception:
+        reembolsos_pagados = []
+
     return render_template('gastos.html',
                          gastos=gastos.data or [], total=total, mes=mes, anio=anio, today=date.today(),
                          pagos_docentes_detalle=pagos_docentes_detalle,
@@ -2622,6 +2630,8 @@ def gestion_gastos():
                          total_psicologia_mes=total_psicologia_mes,
                          total_sesiones_docentes=total_sesiones_docentes,
                          reembolsos_pend=reembolsos_pend.data or [],
+                         reembolsos_pagados=reembolsos_pagados,
+                         es_admin=(current_user.rol == 'admin'),
                          socios=SOCIOS)
 
 @app.route('/api/gasto/<int:id>/eliminar', methods=['POST'])
@@ -2657,6 +2667,22 @@ def api_marcar_reembolso_pagado(id):
         supabase.table('gastos').update({
             'reembolso_pagado': True,
             'fecha_reembolso_pagado': fecha
+        }).eq('id', id).execute()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/gasto/<int:id>/reversar-reembolso', methods=['POST'])
+@login_required
+@socio_admin_required
+def api_reversar_reembolso(id):
+    """Reversa un reembolso pagado por error: vuelve a 'pendiente'. Solo admin."""
+    if current_user.rol != 'admin':
+        return jsonify({'success': False, 'error': 'Solo el administrador puede reversar reembolsos'}), 403
+    try:
+        supabase.table('gastos').update({
+            'reembolso_pagado': False,
+            'fecha_reembolso_pagado': None
         }).eq('id', id).execute()
         return jsonify({'success': True})
     except Exception as e:

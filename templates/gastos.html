@@ -7,6 +7,20 @@
     <p>Registra y controla los gastos del centro y los reembolsos.</p>
 </div>
 
+<!-- ========== PESTAÑAS: GASTOS | DOCENTES ========== -->
+<ul class="nav nav-tabs mb-3" id="gastosTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="tab-gastos-btn" data-bs-toggle="tab" data-bs-target="#tab-gastos" type="button" role="tab">📉 Gastos</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-docentes-btn" data-bs-toggle="tab" data-bs-target="#tab-docentes" type="button" role="tab">👨‍🏫 Docentes</button>
+    </li>
+</ul>
+<div class="tab-content">
+
+<!-- ===== PESTAÑA DOCENTES ===== -->
+<div class="tab-pane fade" id="tab-docentes" role="tabpanel" aria-labelledby="tab-docentes-btn">
+
 <!-- ========== PAGOS A DOCENTES Y PSICÓLOGOS ========== -->
 <div class="card shadow mb-4 border-0" style="border-radius: 15px; overflow: hidden;">
     <div class="card-header bg-gradient text-white" style="background: linear-gradient(135deg, #1a73e8, #0d47a1);">
@@ -94,6 +108,11 @@
         <small class="text-muted">💡 Haga clic en la fecha o en el estado de pago para modificar. Los valores se calculan automáticamente del módulo 5.</small>
     </div>
 </div>
+
+</div><!-- /tab-docentes -->
+
+<!-- ===== PESTAÑA GASTOS ===== -->
+<div class="tab-pane fade show active" id="tab-gastos" role="tabpanel" aria-labelledby="tab-gastos-btn">
 
 <div class="row">
     <!-- FORMULARIO DE GASTO -->
@@ -228,10 +247,11 @@
                         </thead>
                         <tbody>
                             {% for g in gastos %}
-                            <tr id="fila-gasto-{{ g['id'] }}" style="transition: all 0.2s;">
+                            <tr id="fila-gasto-{{ g['id'] }}" style="transition: all 0.2s;{% if g.get('_para_otro_periodo') %}opacity:.6;background:#fff8e1;{% endif %}">
                                 <td>
                                     <span class="editable-celda" onclick="editarGastoInline({{ g['id'] }}, 'fecha', '{{ g['fecha'] }}')" style="cursor: pointer;">{{ g['fecha'] }}</span>
-                                    {% if g.get('_de_otro_mes') %}<br><span class="badge bg-info" title="Pagado en otro mes pero considerado para este período">considerado</span>{% endif %}
+                                    {% if g.get('_de_otro_mes') %}<br><span class="badge bg-info" title="Con fecha de otro mes pero considerado para este período">✔ considerado aquí</span>{% endif %}
+                                    {% if g.get('_para_otro_periodo') %}<br><span class="badge bg-warning text-dark" title="No cuenta en este mes; corresponde a otro período">↷ corresponde a {{ ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][(g.get('mes_periodo') or g.get('mes') or 1)-1] }} {{ g.get('anio_periodo') or g.get('anio') }}</span>{% endif %}
                                 </td>
                                 <td>
                                     <span class="editable-celda" onclick="editarGastoInline({{ g['id'] }}, 'concepto', '{{ g['concepto']|escape }}')" style="cursor: pointer;">{{ g['concepto'][:30] }}{% if g['concepto']|length > 30 %}...{% endif %}</span>
@@ -345,7 +365,53 @@
         {% endif %}
     </div>
 </div>
+
+<!-- ===== REEMBOLSOS YA PAGADOS (recogido) ===== -->
+<div class="card shadow border-0 mt-3" style="border-radius:15px; overflow:hidden;">
+    <div class="card-header text-white d-flex justify-content-between align-items-center" style="background:linear-gradient(135deg,#546e7a,#37474f); cursor:pointer;"
+         data-bs-toggle="collapse" data-bs-target="#reembolsosPagados" role="button" aria-expanded="false">
+        <strong>✅ Reembolsos pagados <span class="badge bg-light text-dark">{{ reembolsos_pagados|length }}</span></strong>
+        <span class="small">▼ ver / ocultar</span>
+    </div>
+    <div class="collapse" id="reembolsosPagados">
+        <div class="card-body p-0">
+            {% if reembolsos_pagados %}
+            <table class="table table-sm table-hover mb-0">
+                <thead style="background:#f8f9fa;">
+                    <tr>
+                        <th class="ps-3">Fecha gasto</th><th>Concepto</th><th>Pagó</th>
+                        <th>Reembolsado a</th><th>Pagado el</th><th class="text-end">Monto</th>
+                        {% if es_admin %}<th class="text-center">Acciones</th>{% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in reembolsos_pagados %}
+                    <tr id="reembolso-pagado-{{ r['id'] }}">
+                        <td class="ps-3 text-muted small">{{ r['fecha'] }}</td>
+                        <td>{{ r['concepto'][:35] }}{% if r['concepto']|length > 35 %}…{% endif %}</td>
+                        <td>{{ r.get('persona','—') }}</td>
+                        <td>{{ r.get('reembolsado_a','—') }}</td>
+                        <td class="text-muted small">{{ r.get('fecha_reembolso_pagado','—') }}</td>
+                        <td class="text-end fw-bold text-success">${{ "%.2f"|format(r['monto']) }}</td>
+                        {% if es_admin %}
+                        <td class="text-center">
+                            <button class="btn btn-outline-warning btn-sm" onclick="reversarReembolso({{ r['id'] }})" title="Reversar: vuelve a pendiente por si hubo una equivocación">↩️ Reversar</button>
+                        </td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="text-center py-3 text-muted small">Aún no hay reembolsos pagados.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
 {% endif %}
+
+</div><!-- /tab-gastos -->
+</div><!-- /tab-content -->
 
 <!-- MODAL DE EDICIÓN RÁPIDA -->
 <div class="modal fade" id="modalEdicionRapida" tabindex="-1">
@@ -534,5 +600,38 @@ async function marcarReembolsoPagado(id) {
         alert('❌ Error: ' + (res.error || 'No se pudo marcar'));
     }
 }
+
+async function reversarReembolso(id) {
+    if (!confirm('¿Reversar este reembolso? Volverá a la lista de pendientes (úsalo si se marcó pagado por equivocación).')) return;
+    const r = await fetch('/api/gasto/' + id + '/reversar-reembolso', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    });
+    const res = await r.json();
+    if (res.success) {
+        const fila = document.getElementById('reembolso-pagado-' + id);
+        if (fila) { fila.style.opacity = '0.4'; fila.style.transition = 'opacity 0.4s'; }
+        setTimeout(() => location.reload(), 500);
+    } else {
+        alert('❌ Error: ' + (res.error || 'No se pudo reversar'));
+    }
+}
+
+// Recuerda la pestaña activa (Gastos/Docentes) entre recargas (p. ej. al filtrar el mes)
+document.addEventListener('DOMContentLoaded', function () {
+    var KEY = 'gastos_tab_activa';
+    document.querySelectorAll('#gastosTabs button[data-bs-toggle="tab"]').forEach(function (b) {
+        b.addEventListener('shown.bs.tab', function (e) {
+            try { localStorage.setItem(KEY, e.target.getAttribute('data-bs-target')); } catch (_) {}
+        });
+    });
+    try {
+        var t = localStorage.getItem(KEY);
+        if (t) {
+            var btn = document.querySelector('#gastosTabs button[data-bs-target="' + t + '"]');
+            if (btn && window.bootstrap) new bootstrap.Tab(btn).show();
+        }
+    } catch (_) {}
+});
 </script>
 {% endblock %}
