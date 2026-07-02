@@ -258,6 +258,46 @@
 </div>
 {% endif %}
 
+<!-- Reembolsos pendientes de pago (TODOS los periodos) -->
+{% if reembolsos_pendientes %}
+<div class="card shadow border-0 mb-4" style="border-radius:15px; border:2px solid #f57c00 !important;">
+    <div class="card-header text-white fw-bold d-flex justify-content-between align-items-center" style="background:linear-gradient(135deg,#e65100,#bf360c); border-radius:13px 13px 0 0;">
+        <span>⏳ Reembolsos pendientes de pago (todos los períodos)</span>
+        <span class="badge bg-light text-danger fs-6">${{ "%.2f"|format(total_reembolsos_pendientes) }}</span>
+    </div>
+    <div style="padding:9px 16px; background:#fff3e0; border-bottom:1px solid #ffe0b2; font-size:12px; color:#555; line-height:1.7;">
+        💡 Estos reembolsos aún <strong>no</strong> se han pagado a la persona, sin importar de qué mes sean. Aparecen aquí siempre (aunque cambies el mes de la liquidación) hasta que los marques como pagados en Gastos. Un reembolso <strong>reversado</strong> reaparece aquí.
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-sm table-hover mb-0">
+            <thead style="background:#f8f9fa;">
+                <tr><th class="ps-3">Fecha</th><th>Concepto</th><th>Período</th><th>Reembolsar a</th><th class="text-end">Monto</th></tr>
+            </thead>
+            <tbody>
+                {% for g in reembolsos_pendientes %}
+                <tr>
+                    <td class="ps-3">{{ g['fecha'] }}</td>
+                    <td>{{ g['concepto'][:40] }}{% if g['concepto']|length > 40 %}…{% endif %}</td>
+                    <td><span class="badge bg-secondary">{{ ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][(g.get('mes_periodo') or g.get('mes') or 1)-1] }} {{ g.get('anio_periodo') or g.get('anio') }}</span></td>
+                    <td><span class="badge bg-warning text-white">{{ g.get('reembolsado_a','') }}</span></td>
+                    <td class="text-end fw-bold text-warning">${{ "%.2f"|format(g['monto']) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot style="background:#f8f9fa; font-weight:bold;">
+                <tr><td colspan="4" class="ps-3">Total pendiente por reembolsar</td><td class="text-end text-warning">${{ "%.2f"|format(total_reembolsos_pendientes) }}</td></tr>
+            </tfoot>
+        </table>
+        <div style="padding:8px 16px; font-size:12px; color:#555;">
+            <strong>Por persona:</strong>
+            {% for socio, monto in reembolsos_pend_por_socio.items() %}
+            <span class="badge bg-light text-dark border">{{ socio }}: ${{ "%.2f"|format(monto) }}</span>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <!-- Detalle pago por docente -->
 {% if pago_por_docente %}
 <div id="seccion-docentes" class="card shadow border-0 mb-4" style="border-radius:15px;">

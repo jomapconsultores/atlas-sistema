@@ -2787,6 +2787,19 @@ def liquidacion():
     except Exception:
         gastos_reembolso_pend = type('obj', (object,), {'data': []})()
 
+    # Reembolsos AÚN NO pagados de CUALQUIER período (para una sección siempre
+    # visible: así un reembolso pendiente/reversado nunca queda oculto por estar
+    # en otro mes). No altera el reparto por período de arriba.
+    reembolsos_pendientes = sorted(
+        [g for g in (gastos_reembolso_pend.data or [])
+         if g.get('reembolsado_a') and not g.get('reembolso_pagado')],
+        key=lambda g: g.get('fecha') or '', reverse=True)
+    reembolsos_pend_por_socio = {}
+    for g in reembolsos_pendientes:
+        b = g['reembolsado_a']
+        reembolsos_pend_por_socio[b] = round(reembolsos_pend_por_socio.get(b, 0) + (g.get('monto', 0) or 0), 2)
+    total_reembolsos_pendientes = round(sum(g.get('monto', 0) or 0 for g in reembolsos_pendientes), 2)
+
     # Ingresos del período (netos de devoluciones)
     pagos_mes = _fetch_all(supabase.table('pagos').select('*').gte('fecha_pago', f"{anio}-{mes:02d}-01").lte('fecha_pago', f"{anio}-{mes:02d}-{ultimo_dia}"))
     total_ingresos_bruto = sum(p.get('monto', 0) or 0 for p in pagos_mes)
@@ -2855,6 +2868,9 @@ def liquidacion():
         gastos=gastos_periodo.data or [], total_gastos=total_gastos, gastos_por_cat=gastos_por_cat,
         reembolsos_por_socio=reembolsos_por_socio,
         gastos_reembolso_pend=gastos_reembolso_pend.data or [],
+        reembolsos_pendientes=reembolsos_pendientes,
+        reembolsos_pend_por_socio=reembolsos_pend_por_socio,
+        total_reembolsos_pendientes=total_reembolsos_pendientes,
         total_ingresos=total_ingresos, total_ingresos_bruto=total_ingresos_bruto,
         total_devoluciones=total_devoluciones, total_pago_docentes=total_pago_docentes,
         total_anticipos=total_anticipos, total_pago_docentes_neto=total_pago_docentes_neto,
