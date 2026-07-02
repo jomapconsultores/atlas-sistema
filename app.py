@@ -2712,6 +2712,30 @@ def api_reversar_reembolso(id):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+@app.route('/api/gasto/<int:id>/marcar-pagado', methods=['POST'])
+@login_required
+@socio_admin_required
+def api_marcar_gasto_pagado(id):
+    """Marca un gasto como pagado y registra la fecha del pago."""
+    data = request.get_json() or {}
+    fecha = (data.get('fecha') or date.today().isoformat()).strip()
+    try:
+        supabase.table('gastos').update({'pagado': True, 'fecha_pago': fecha}).eq('id', id).execute()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': 'No se pudo. ¿Ya ejecutaste migration_liquidacion_gastos_pago.sql? ' + str(e)})
+
+@app.route('/api/gasto/<int:id>/reversar-pago', methods=['POST'])
+@login_required
+@socio_admin_required
+def api_reversar_gasto_pago(id):
+    """Revierte el pago de un gasto (vuelve a pendiente)."""
+    try:
+        supabase.table('gastos').update({'pagado': False, 'fecha_pago': None}).eq('id', id).execute()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
 @app.route('/api/cuenta-pago/guardar', methods=['POST'])
 @login_required
 @socio_admin_required
@@ -2758,26 +2782,35 @@ def liquidacion():
 
     if request.method == 'POST':
         saldo_cuenta = float(request.form.get('saldo_cuenta', 0))
+        # Porcentaje del balance POSITIVO que se reparte entre socios (0–100).
+        try:
+            pct = float(request.form.get('porcentaje_reparto', 100) or 100)
+        except (TypeError, ValueError):
+            pct = 100.0
+        pct = max(0.0, min(100.0, pct))
         # NO ocultar errores: si el guardado falla (p. ej. la tabla
         # 'liquidaciones' no existe -> ejecutar migration_liquidaciones.sql),
         # antes se mostraba "guardado" en falso y el valor nunca se
         # actualizaba. Ahora se confirma solo si realmente persistió.
         try:
+            base_upd = {'saldo_cuenta': saldo_cuenta, 'registrado_por': current_user.nombre}
+            def _con_pct(d):
+                d2 = dict(d); d2['porcentaje_reparto'] = pct; return d2
             if liq_record:
-                supabase.table('liquidaciones').update({
-                    'saldo_cuenta': saldo_cuenta,
-                    'registrado_por': current_user.nombre
-                }).eq('id', liq_record['id']).execute()
+                try:
+                    supabase.table('liquidaciones').update(_con_pct(base_upd)).eq('id', liq_record['id']).execute()
+                except Exception:
+                    supabase.table('liquidaciones').update(base_upd).eq('id', liq_record['id']).execute()
             else:
-                supabase.table('liquidaciones').insert({
-                    'mes': mes, 'anio': anio,
-                    'saldo_cuenta': saldo_cuenta,
-                    'registrado_por': current_user.nombre
-                }).execute()
-            flash('✅ Saldo guardado', 'success')
+                nuevo = {'mes': mes, 'anio': anio, **base_upd}
+                try:
+                    supabase.table('liquidaciones').insert(_con_pct(nuevo)).execute()
+                except Exception:
+                    supabase.table('liquidaciones').insert(nuevo).execute()
+            flash('✅ Datos guardados', 'success')
         except Exception as e:
             print(f'⚠️ Error al guardar liquidación: {e}')
-            flash('❌ No se pudo guardar el saldo. Verifica que la tabla "liquidaciones" exista (ejecuta migration_liquidaciones.sql en Supabase).', 'error')
+            flash('❌ No se pudo guardar. Verifica que la tabla "liquidaciones" exista (ejecuta migration_liquidaciones.sql en Supabase).', 'error')
         return redirect(url_for('liquidacion', mes=mes, anio=anio))
 
     _, ultimo_dia = monthrange(anio, mes)
@@ -2890,15 +2923,35 @@ def liquidacion():
     total_pago_docentes_neto = round(total_pago_docentes - total_anticipos, 2)
     balance = round(saldo_cuenta - total_gastos - total_pago_docentes_neto, 2)
 
-    # Reparto en partes iguales según la lista de SOCIOS, con centavos exactos:
-    # las primeras partes se redondean y la ÚLTIMA absorbe la diferencia, de
-    # modo que la suma de las alícuotas sea exactamente el balance.
+    # ── Regla de reparto ──
+    #  • Balance NEGATIVO  -> se reparte automáticamente el 100% (todos asumen
+    #    la parte proporcional de la pérdida).
+    #  • Balance POSITIVO  -> se reparte solo el 'porcentaje_reparto' guardado
+    #    (0 = no se reparte; la alícuota queda en 0). Lo no repartido se retiene.
+    porcentaje_reparto = 100.0
+    if liq_record and liq_record.get('porcentaje_reparto') is not None:
+        try:
+            porcentaje_reparto = max(0.0, min(100.0, float(liq_record.get('porcentaje_reparto'))))
+        except (TypeError, ValueError):
+            porcentaje_reparto = 100.0
+    balance_negativo = balance < 0
+    if balance_negativo:
+        monto_repartir = balance                    # automático, 100%
+        pct_efectivo = 100.0
+    else:
+        pct_efectivo = porcentaje_reparto
+        monto_repartir = round(balance * pct_efectivo / 100.0, 2)
+    monto_retenido = round(balance - monto_repartir, 2)
+
+    # Reparto en partes iguales, con centavos exactos: las primeras partes se
+    # redondean y la ÚLTIMA absorbe la diferencia, de modo que la suma de las
+    # alícuotas sea exactamente 'monto_repartir'.
     n_socios = len(SOCIOS) or 1
-    parte_base = round(balance / n_socios, 2)
+    parte_base = round(monto_repartir / n_socios, 2)
 
     distribucion_socios = []
     for i, socio in enumerate(SOCIOS):
-        parte_socio = parte_base if i < n_socios - 1 else round(balance - parte_base * (n_socios - 1), 2)
+        parte_socio = parte_base if i < n_socios - 1 else round(monto_repartir - parte_base * (n_socios - 1), 2)
         # Pago al socio-docente NETO de su propio anticipo aprobado
         pago_docente_socio = round(pago_por_docente.get(socio, 0) - anticipos_por_docente.get(socio, 0), 2)
         reembolso_socio = round(reembolsos_por_socio.get(socio, 0), 2)
@@ -2916,6 +2969,8 @@ def liquidacion():
         saldo_banco=saldo_banco, fecha_saldo_banco=fecha_saldo_banco,
         saldo_es_auto=saldo_es_auto,
         liq_guardada=liq_record is not None,
+        porcentaje_reparto=porcentaje_reparto, balance_negativo=balance_negativo,
+        monto_repartir=monto_repartir, monto_retenido=monto_retenido, pct_efectivo=pct_efectivo,
         gastos=gastos_periodo.data or [], total_gastos=total_gastos, gastos_por_cat=gastos_por_cat,
         reembolsos_por_socio=reembolsos_por_socio,
         gastos_reembolso_pend=gastos_reembolso_pend.data or [],

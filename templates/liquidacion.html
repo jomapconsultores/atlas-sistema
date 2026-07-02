@@ -72,8 +72,23 @@
                     <input type="number" id="inputSaldoCuenta" name="saldo_cuenta" class="form-control border-0 shadow-sm" step="0.01" value="{{ '%.2f'|format(saldo_cuenta) }}" placeholder="0.00">
                 </div>
             </div>
+            <div class="col-md-4">
+                <label class="form-label fw-bold">Reparto del balance a socios</label>
+                {% if balance_negativo %}
+                <input type="hidden" name="porcentaje_reparto" value="100">
+                <div class="form-control border-0 shadow-sm bg-light text-danger" style="cursor:default;">
+                    ⚠️ Balance negativo → se reparte automático (100%)
+                </div>
+                {% else %}
+                <div class="input-group">
+                    <input type="number" name="porcentaje_reparto" class="form-control border-0 shadow-sm" min="0" max="100" step="1" value="{{ porcentaje_reparto|round(0)|int }}">
+                    <span class="input-group-text border-0 bg-light">% a repartir</span>
+                </div>
+                <small class="text-muted">Positivo: <strong>0</strong> = no repartir (alícuota $0) · <strong>100</strong> = repartir todo. Se divide en partes iguales; lo no repartido queda retenido.</small>
+                {% endif %}
+            </div>
             <div class="col-auto">
-                <button type="submit" class="btn btn-success shadow-sm">💾 Guardar saldo</button>
+                <button type="submit" class="btn btn-success shadow-sm">💾 Guardar</button>
             </div>
             {% if saldo_banco is not none %}
             <div class="col-auto">
@@ -151,12 +166,22 @@
                 <tr class="text-muted"><td><small>= Pago a docentes neto pendiente</small></td><td class="text-end"><small>-${{ "%.2f"|format(total_pago_docentes_neto) }}</small></td></tr>
                 {% endif %}
                 <tr class="fw-bold border-top" style="font-size:16px;">
-                    <td>Balance a distribuir (÷ {{ n_socios }})</td>
+                    <td>Balance</td>
                     <td class="text-end {{ 'text-success' if balance>=0 else 'text-danger' }}">${{ "%.2f"|format(balance) }}</td>
                 </tr>
+                {% if not balance_negativo and pct_efectivo < 100 %}
+                <tr style="color:#6f42c1;">
+                    <td>Se reparte ({{ pct_efectivo|round(0)|int }}%)</td>
+                    <td class="text-end">${{ "%.2f"|format(monto_repartir) }}</td>
+                </tr>
                 <tr class="text-muted">
-                    <td>Parte alícuota por socio</td>
-                    <td class="text-end">${{ "%.2f"|format(balance / n_socios) }}</td>
+                    <td>Retenido (no repartido)</td>
+                    <td class="text-end">${{ "%.2f"|format(monto_retenido) }}</td>
+                </tr>
+                {% endif %}
+                <tr class="text-muted">
+                    <td>Parte alícuota por socio (÷ {{ n_socios }})</td>
+                    <td class="text-end">${{ "%.2f"|format(monto_repartir / n_socios) }}</td>
                 </tr>
             </tbody>
         </table>
@@ -205,7 +230,7 @@
             <tfoot style="background:#f8f9fa; font-weight:bold;">
                 <tr>
                     <td class="ps-3">TOTAL</td>
-                    <td class="text-end">${{ "%.2f"|format(balance) }}</td>
+                    <td class="text-end">${{ "%.2f"|format(monto_repartir) }}</td>
                     <td class="text-end text-primary">${{ "%.2f"|format(distribucion_socios|sum(attribute='pago_docente')) }}</td>
                     <td class="text-end text-warning">${{ "%.2f"|format(distribucion_socios|sum(attribute='reembolso')) }}</td>
                     <td class="text-end">${{ "%.2f"|format(distribucion_socios|sum(attribute='neto')) }}</td>

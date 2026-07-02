@@ -245,6 +245,7 @@
                                 <th>👤 Persona</th>
                                 <th class="text-end">Monto</th>
                                 <th class="text-center">🔄</th>
+                                <th class="text-center">💵 Pago</th>
                                 <th class="text-center">🗑️</th>
                             </tr>
                         </thead>
@@ -277,6 +278,13 @@
                                     <span class="text-muted">—</span>
                                     {% endif %}
                                 </td>
+                                <td class="text-center" style="white-space:nowrap;">
+                                    {% if g.get('pagado') %}
+                                    <span class="badge bg-success" style="cursor:pointer;" title="Pagado el {{ g.get('fecha_pago','') }} — clic para revertir" onclick="marcarGastoPagado({{ g['id'] }}, true, '{{ g.get('fecha_pago','') }}')">✅ {{ g.get('fecha_pago','') }}</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary" style="cursor:pointer;" title="Registrar pago y fecha" onclick="marcarGastoPagado({{ g['id'] }}, false, '')">⏳ Pagar</span>
+                                    {% endif %}
+                                </td>
                                 <td class="text-center">
                                     <button class="btn btn-outline-danger btn-sm border-0" onclick="eliminarGasto({{ g['id'] }})" title="Eliminar">🗑️</button>
                                 </td>
@@ -287,7 +295,7 @@
                             <tr>
                                 <td colspan="4">Total</td>
                                 <td class="text-end">${{ "%.2f"|format(total) }}</td>
-                                <td colspan="2"></td>
+                                <td colspan="3"></td>
                             </tr>
                         </tfoot>
                     </table>
@@ -707,6 +715,25 @@ async function reversarReembolso(id) {
         setTimeout(() => location.reload(), 500);
     } else {
         alert('❌ Error: ' + (res.error || 'No se pudo reversar'));
+    }
+}
+
+// ── Pago de gastos (registrar fecha) ──
+async function marcarGastoPagado(id, pagado, fecha) {
+    if (pagado) {
+        if (!confirm('¿Quitar la marca de pagado de este gasto?')) return;
+        const r = await fetch('/api/gasto/' + id + '/reversar-pago', {method: 'POST', headers: {'Content-Type': 'application/json'}});
+        const res = await r.json();
+        if (res.success) location.reload(); else alert('❌ ' + (res.error || 'No se pudo'));
+    } else {
+        const f = prompt('¿En qué fecha se pagó este gasto? (YYYY-MM-DD)', fecha || '{{ today }}');
+        if (f === null) return;
+        if (!f.trim()) { alert('Indica la fecha del pago.'); return; }
+        const r = await fetch('/api/gasto/' + id + '/marcar-pagado', {
+            method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({fecha: f.trim()})
+        });
+        const res = await r.json();
+        if (res.success) location.reload(); else alert('❌ ' + (res.error || 'No se pudo'));
     }
 }
 
