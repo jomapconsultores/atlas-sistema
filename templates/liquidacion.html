@@ -81,10 +81,10 @@
                 </div>
                 {% else %}
                 <div class="input-group">
-                    <input type="number" name="porcentaje_reparto" class="form-control border-0 shadow-sm" min="0" max="100" step="1" value="{{ porcentaje_reparto|round(0)|int }}">
+                    <input type="number" name="porcentaje_reparto" class="form-control border-0 shadow-sm" min="0" max="100" step="1" value="{{ porcentaje_reparto|round(0)|int }}" onchange="this.form.submit()">
                     <span class="input-group-text border-0 bg-light">% a repartir</span>
                 </div>
-                <small class="text-muted">Positivo: <strong>0</strong> = no repartir (alícuota $0) · <strong>100</strong> = repartir todo. Se divide en partes iguales; lo no repartido queda retenido.</small>
+                <small class="text-muted">Se aplica al instante al cambiarlo. <strong>0</strong> = no repartir (alícuota $0) · <strong>100</strong> = repartir todo. Se divide en partes iguales; lo no repartido queda retenido.</small>
                 {% endif %}
             </div>
             <div class="col-auto">
