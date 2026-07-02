@@ -15,6 +15,9 @@
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="tab-docentes-btn" data-bs-toggle="tab" data-bs-target="#tab-docentes" type="button" role="tab">👨‍🏫 Gasto docente</button>
     </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-cuentas-btn" data-bs-toggle="tab" data-bs-target="#tab-cuentas" type="button" role="tab">💳 Cuentas de pago</button>
+    </li>
 </ul>
 <div class="tab-content">
 
@@ -409,7 +412,92 @@
 {% endif %}
 
 </div><!-- /tab-gastos -->
+
+<!-- ===== PESTAÑA CUENTAS DE PAGO ===== -->
+<div class="tab-pane fade" id="tab-cuentas" role="tabpanel" aria-labelledby="tab-cuentas-btn">
+    <div class="card shadow border-0 mb-4" style="border-radius:15px; overflow:hidden;">
+        <div class="card-header text-white" style="background:linear-gradient(135deg,#6a1b9a,#4a148c);">
+            <strong>💳 Cuentas de pago de docentes y psicólogos</strong>
+        </div>
+        {% if not cuentas_ok %}
+        <div style="padding:12px 16px; background:#fff3e0; color:#8a5300; font-size:13px;">
+            ⚠️ Falta crear la tabla de cuentas. Ejecuta una vez <code>migration_cuentas_pago.sql</code> en Supabase y recarga.
+        </div>
+        {% endif %}
+        <div style="padding:9px 16px; background:#f3e5f5; border-bottom:1px solid #e1bee7; font-size:12px; color:#555;">
+            💡 Haz clic en una persona para registrar o editar sus datos de cuenta (banco, tipo, número, cédula, correo). El botón verde ✓ indica que ya tiene datos guardados.
+        </div>
+        <div class="card-body">
+            <div class="row g-2">
+                {% for p in personas_cuentas %}
+                <div class="col-md-4 col-sm-6">
+                    <button type="button" class="btn w-100 text-start d-flex justify-content-between align-items-center {{ 'btn-outline-success' if cuentas_pago.get(p) else 'btn-outline-secondary' }}"
+                            style="border-radius:10px;" onclick="abrirCuentaPago('{{ p|escape }}')">
+                        <span>👤 {{ p }}</span>
+                        <span>{{ '✓' if cuentas_pago.get(p) else '＋' }}</span>
+                    </button>
+                </div>
+                {% endfor %}
+                {% if not personas_cuentas %}
+                <div class="text-muted text-center py-4">No hay docentes registrados todavía.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
 </div><!-- /tab-content -->
+
+<!-- ===== MODAL CUENTA DE PAGO ===== -->
+<div class="modal fade" id="modalCuentaPago" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content border-0 shadow-lg" style="border-radius:15px;">
+            <div class="modal-header text-white" style="background:linear-gradient(135deg,#6a1b9a,#4a148c); border-radius:15px 15px 0 0;">
+                <h6 class="modal-title">💳 Cuenta de pago</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="cp_persona">
+                <div class="mb-2">
+                    <label class="form-label fw-bold small">Nombre completo</label>
+                    <input type="text" id="cp_nombre_completo" class="form-control" placeholder="Nombres y apellidos">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-bold small">Número de cédula</label>
+                    <input type="text" id="cp_cedula" class="form-control" inputmode="numeric" placeholder="0102030405">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-bold small">Banco</label>
+                    <input type="text" id="cp_banco" class="form-control" list="listaBancos" placeholder="Escribe o elige un banco">
+                    <datalist id="listaBancos">
+                        {% for b in bancos_lista %}<option value="{{ b }}">{% endfor %}
+                    </datalist>
+                    <small class="text-muted">Si el banco no está, escríbelo: se guarda y aparecerá la próxima vez.</small>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-bold small">Tipo de cuenta</label>
+                    <select id="cp_tipo_cuenta" class="form-select">
+                        <option value="">Seleccionar...</option>
+                        <option value="Ahorros">Ahorros</option>
+                        <option value="Corriente">Corriente</option>
+                    </select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-bold small">Número de cuenta</label>
+                    <input type="text" id="cp_numero_cuenta" class="form-control" inputmode="numeric" placeholder="Número de cuenta">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-bold small">Correo electrónico</label>
+                    <input type="email" id="cp_correo" class="form-control" placeholder="correo@ejemplo.com">
+                </div>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success btn-sm" onclick="guardarCuentaPago()">💾 Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- MODAL DE EDICIÓN RÁPIDA -->
 <div class="modal fade" id="modalEdicionRapida" tabindex="-1">
@@ -620,6 +708,39 @@ async function reversarReembolso(id) {
     } else {
         alert('❌ Error: ' + (res.error || 'No se pudo reversar'));
     }
+}
+
+// ── Cuentas de pago ──
+const CUENTAS_PAGO = {{ cuentas_pago|tojson }};
+function abrirCuentaPago(persona) {
+    const c = CUENTAS_PAGO[persona] || {};
+    document.getElementById('cp_persona').value = persona;
+    document.getElementById('cp_nombre_completo').value = c.nombre_completo || persona;
+    document.getElementById('cp_cedula').value = c.cedula || '';
+    document.getElementById('cp_banco').value = c.banco || '';
+    document.getElementById('cp_tipo_cuenta').value = c.tipo_cuenta || '';
+    document.getElementById('cp_numero_cuenta').value = c.numero_cuenta || '';
+    document.getElementById('cp_correo').value = c.correo || '';
+    new bootstrap.Modal(document.getElementById('modalCuentaPago')).show();
+}
+async function guardarCuentaPago() {
+    const payload = {
+        persona: document.getElementById('cp_persona').value,
+        nombre_completo: document.getElementById('cp_nombre_completo').value.trim(),
+        cedula: document.getElementById('cp_cedula').value.trim(),
+        banco: document.getElementById('cp_banco').value.trim(),
+        tipo_cuenta: document.getElementById('cp_tipo_cuenta').value,
+        numero_cuenta: document.getElementById('cp_numero_cuenta').value.trim(),
+        correo: document.getElementById('cp_correo').value.trim(),
+    };
+    try {
+        const r = await fetch('/api/cuenta-pago/guardar', {
+            method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
+        });
+        const res = await r.json();
+        if (res.success) { location.reload(); }
+        else { alert('❌ ' + (res.error || 'No se pudo guardar')); }
+    } catch (e) { alert('❌ Error de conexión'); }
 }
 
 // Recuerda la pestaña activa (Gastos/Docentes) entre recargas (p. ej. al filtrar el mes)

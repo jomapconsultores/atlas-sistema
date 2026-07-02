@@ -2624,6 +2624,25 @@ def gestion_gastos():
     except Exception:
         reembolsos_pagados = []
 
+    # ── Cuentas de pago (datos bancarios) por persona ──
+    # Lista de personas = docentes/psicólogos registrados + quienes tienen pago este mes.
+    personas_cuentas = sorted(set(cargar_profesores()) | set(pagos_docentes_detalle.keys()))
+    cuentas_pago = {}
+    try:
+        _cp = supabase.table('cuentas_pago_docentes').select('*').execute().data or []
+        for c in _cp:
+            cuentas_pago[c.get('persona')] = c
+        cuentas_ok = True
+    except Exception:
+        cuentas_ok = False
+    # Banco: catálogo que va creciendo (bancos comunes + los ya guardados)
+    bancos_seed = ['Banco Pichincha', 'Banco Guayaquil', 'Produbanco', 'Banco del Pacífico',
+                   'Banco Bolivariano', 'Banco Internacional', 'Banco del Austro', 'Banco de Loja',
+                   'Banco de Machala', 'Banco Solidario', 'JEP', 'Cooperativa JEP',
+                   'Jardín Azuayo', 'CB Cooperativa', 'BanEcuador']
+    bancos_guardados = [c.get('banco') for c in cuentas_pago.values() if c.get('banco')]
+    bancos_lista = sorted(set(bancos_seed) | set(bancos_guardados))
+
     return render_template('gastos.html',
                          gastos=gastos.data or [], total=total, mes=mes, anio=anio, today=date.today(),
                          pagos_docentes_detalle=pagos_docentes_detalle,
@@ -2634,6 +2653,10 @@ def gestion_gastos():
                          reembolsos_pend=reembolsos_pend.data or [],
                          reembolsos_pagados=reembolsos_pagados,
                          es_admin=(current_user.rol == 'admin'),
+                         personas_cuentas=personas_cuentas,
+                         cuentas_pago=cuentas_pago,
+                         cuentas_ok=cuentas_ok,
+                         bancos_lista=bancos_lista,
                          socios=SOCIOS)
 
 @app.route('/api/gasto/<int:id>/eliminar', methods=['POST'])
@@ -2688,6 +2711,35 @@ def api_reversar_reembolso(id):
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/cuenta-pago/guardar', methods=['POST'])
+@login_required
+@socio_admin_required
+def api_guardar_cuenta_pago():
+    """Crea o actualiza los datos de cuenta de pago de una persona."""
+    data = request.get_json() or {}
+    persona = norm_nombre(data.get('persona', ''))
+    if not persona:
+        return jsonify({'success': False, 'error': 'Falta la persona'}), 400
+    registro = {
+        'persona': persona,
+        'nombre_completo': (data.get('nombre_completo') or '').strip(),
+        'cedula': (data.get('cedula') or '').strip(),
+        'banco': (data.get('banco') or '').strip(),
+        'tipo_cuenta': (data.get('tipo_cuenta') or '').strip(),
+        'numero_cuenta': (data.get('numero_cuenta') or '').strip(),
+        'correo': (data.get('correo') or '').strip(),
+        'actualizado_por': current_user.nombre,
+    }
+    try:
+        existente = supabase.table('cuentas_pago_docentes').select('id').eq('persona', persona).execute()
+        if existente.data:
+            supabase.table('cuentas_pago_docentes').update(registro).eq('id', existente.data[0]['id']).execute()
+        else:
+            supabase.table('cuentas_pago_docentes').insert(registro).execute()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': 'No se pudo guardar. ¿Ya ejecutaste migration_cuentas_pago.sql? Detalle: ' + str(e)})
 
 # ========== LIQUIDACIÓN ==========
 @app.route('/liquidacion', methods=['GET', 'POST'])
