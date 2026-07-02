@@ -31,10 +31,10 @@
             <strong>💵 Pagos a Docentes y Psicólogos - {{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][mes-1] }} {{ anio }}</strong>
             <div class="d-flex align-items-center gap-2">
                 <form method="get" class="d-flex gap-1 mb-0">
-                    <select name="mes" class="form-select form-select-sm border-0" style="width:auto;" onchange="this.form.submit()">
+                    <select name="mes" class="form-select form-select-sm text-dark" style="min-width:84px;" onchange="this.form.submit()">
                         {% for m in range(1,13) %}<option value="{{ m }}" {{ 'selected' if m == mes }}>{{ ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][m-1] }}</option>{% endfor %}
                     </select>
-                    <select name="anio" class="form-select form-select-sm border-0" style="width:auto;" onchange="this.form.submit()">
+                    <select name="anio" class="form-select form-select-sm text-dark" style="min-width:80px;" onchange="this.form.submit()">
                         {% for a in range(2025, 2031) %}<option value="{{ a }}" {{ 'selected' if a == anio }}>{{ a }}</option>{% endfor %}
                     </select>
                 </form>
@@ -43,8 +43,8 @@
         </div>
     </div>
     <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table table-hover mb-0" style="font-size: 14px;">
+        <div class="table-responsive" style="-webkit-overflow-scrolling:touch;">
+            <table class="table table-hover mb-0" style="font-size: 14px; min-width: 780px;">
                 <thead style="background: #f8f9fa;">
                     <tr>
                         <th class="ps-3">👨‍🏫 Docente / Psicólogo</th>
@@ -108,7 +108,7 @@
         </div>
     </div>
     <div class="card-footer bg-light">
-        <small class="text-muted">💡 Clic en <strong>⏳ Registrar pago</strong> para anotar que se pagó y en qué fecha. Clic en <strong>✅ Pagado</strong> para revertir. Los montos se calculan automáticamente del módulo 5.</small>
+        <small class="text-muted">💡 En pantallas angostas, <strong>desliza la tabla → </strong> para ver las columnas Fecha y Pagado. Clic en <strong>⏳ Registrar pago</strong> para anotar que se pagó y en qué fecha; clic en <strong>✅ Pagado</strong> para revertir. Los montos se calculan del módulo 5.</small>
     </div>
 </div>
 
@@ -219,14 +219,14 @@
             <div class="card-body p-2">
                 <form class="mb-2 row g-2">
                     <div class="col-auto">
-                        <select name="mes" class="form-select form-select-sm border-0 shadow-sm" onchange="this.form.submit()">
+                        <select name="mes" class="form-select form-select-sm shadow-sm" style="min-width:84px;" onchange="this.form.submit()">
                             {% for m in range(1, 13) %}
                             <option value="{{ m }}" {{ 'selected' if m == mes }}>{{ ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][m-1] }}</option>
                             {% endfor %}
                         </select>
                     </div>
                     <div class="col-auto">
-                        <select name="anio" class="form-select form-select-sm border-0 shadow-sm" onchange="this.form.submit()">
+                        <select name="anio" class="form-select form-select-sm shadow-sm" style="min-width:80px;" onchange="this.form.submit()">
                             {% for a in range(2025, 2031) %}
                             <option value="{{ a }}" {{ 'selected' if a == anio }}>{{ a }}</option>
                             {% endfor %}
