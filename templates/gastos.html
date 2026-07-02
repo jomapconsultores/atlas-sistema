@@ -381,7 +381,7 @@
                     <tr>
                         <th class="ps-3">Fecha gasto</th><th>Concepto</th><th>Pagó</th>
                         <th>Reembolsado a</th><th>Pagado el</th><th class="text-end">Monto</th>
-                        {% if es_admin %}<th class="text-center">Acciones</th>{% endif %}
+                        <th class="text-center">Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -393,11 +393,9 @@
                         <td>{{ r.get('reembolsado_a','—') }}</td>
                         <td class="text-muted small">{{ r.get('fecha_reembolso_pagado','—') }}</td>
                         <td class="text-end fw-bold text-success">${{ "%.2f"|format(r['monto']) }}</td>
-                        {% if es_admin %}
                         <td class="text-center">
                             <button class="btn btn-outline-warning btn-sm" onclick="reversarReembolso({{ r['id'] }})" title="Reversar: vuelve a pendiente por si hubo una equivocación">↩️ Reversar</button>
                         </td>
-                        {% endif %}
                     </tr>
                     {% endfor %}
                 </tbody>

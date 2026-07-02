@@ -2678,9 +2678,8 @@ def api_marcar_reembolso_pagado(id):
 @login_required
 @socio_admin_required
 def api_reversar_reembolso(id):
-    """Reversa un reembolso pagado por error: vuelve a 'pendiente'. Solo admin."""
-    if current_user.rol != 'admin':
-        return jsonify({'success': False, 'error': 'Solo el administrador puede reversar reembolsos'}), 403
+    """Reversa un reembolso pagado por error: vuelve a 'pendiente'.
+    Disponible para admin y socios (igual que 'marcar pagado')."""
     try:
         supabase.table('gastos').update({
             'reembolso_pagado': False,
