@@ -15,7 +15,10 @@ create table if not exists cuentas_pago_docentes (
     updated_at      timestamptz default now()
 );
 
--- Mismo modelo de acceso que el resto de tablas de la app (clave anon).
-alter table cuentas_pago_docentes disable row level security;
+-- Acceso para la app (clave anon): RLS con política permisiva.
+alter table cuentas_pago_docentes enable row level security;
+drop policy if exists cuentas_pago_acceso on cuentas_pago_docentes;
+create policy cuentas_pago_acceso on cuentas_pago_docentes
+    for all to anon, authenticated using (true) with check (true);
 grant all on cuentas_pago_docentes to anon, authenticated;
 grant usage, select on all sequences in schema public to anon, authenticated;
