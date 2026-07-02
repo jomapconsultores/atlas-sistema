@@ -568,7 +568,9 @@ def pwa_manifest():
 def service_worker():
     return app.send_static_file('sw.js'), 200, {
         'Content-Type': 'application/javascript',
-        'Service-Worker-Allowed': '/'
+        'Service-Worker-Allowed': '/',
+        # Nunca cachear el propio SW: así el navegador detecta cambios al instante
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
     }
 
 # ========== PASSKEYS: huella digital / reconocimiento facial (WebAuthn) ==========
