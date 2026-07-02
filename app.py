@@ -238,6 +238,13 @@ PAGO_DOCENCIA_CANCELADO = 5   # valor FIJO al docente por clase Cancelado-Pagado
 PORCENTAJE_PSICOLOGIA = 0.4018
 COMISION_CLIENTE_EXTERNO = 0.25
 
+def norm_nombre(v):
+    """Normaliza un nombre para evitar duplicidad por espacios: recorta los
+    extremos y colapsa espacios internos repetidos. No toca mayúsculas ni
+    acentos (para no fusionar nombres que deban ser distintos)."""
+    return re.sub(r'\s+', ' ', (v or '')).strip()
+
+
 def dedup_sesiones_docente(sesiones):
     """Devuelve una fila por sesión física (profesor+fecha+horario).
     Evita contar el pago al docente múltiples veces cuando varios
@@ -961,9 +968,9 @@ def modulo1():
                 fecha = request.form.get(f'fecha_{sesion_num}')
                 h_ini = request.form.get(f'hora_inicio_{sesion_num}')
                 h_fin = request.form.get(f'hora_fin_{sesion_num}')
-                profesor = request.form.get(f'profesor_{sesion_num}', '')
-                nuevo_prof = request.form.get(f'nuevo_profesor_{sesion_num}', '')
-                encargado = request.form.get(f'encargado_{sesion_num}', '')
+                profesor = norm_nombre(request.form.get(f'profesor_{sesion_num}', ''))
+                nuevo_prof = norm_nombre(request.form.get(f'nuevo_profesor_{sesion_num}', ''))
+                encargado = norm_nombre(request.form.get(f'encargado_{sesion_num}', ''))
                 if nuevo_prof and profesor == 'nuevo':
                     profesor = nuevo_prof
                 if not fecha or not h_ini or not h_fin:
@@ -1226,8 +1233,8 @@ def api_editar_sesion(id):
             'estudiante_id': data['estudiante_id'],
             'asignatura': data.get('asignatura', ''),
             'tema_terapia': data.get('tema_terapia', ''),
-            'profesor_terapeuta': data['profesor_terapeuta'],
-            'encargado_apertura': data['encargado_apertura'],
+            'profesor_terapeuta': norm_nombre(data['profesor_terapeuta']),
+            'encargado_apertura': norm_nombre(data['encargado_apertura']),
             'estado': estado_nuevo,
             'observaciones': data.get('observaciones', ''),
             'valor_total': valor_total,
@@ -1500,7 +1507,7 @@ def cambiar_estudiante_sesion(id):
 def cambiar_profesor_sesion(id):
     try:
         data = request.get_json()
-        nuevo_profesor = data.get('profesor', '')
+        nuevo_profesor = norm_nombre(data.get('profesor', ''))
         supabase.table('sesiones').update({'profesor_terapeuta': nuevo_profesor}).eq('id', id).execute()
         try:
             _sincronizar_sesion_en_calendar(id)
@@ -1774,7 +1781,7 @@ def modulo5():
     anticipos = supabase.table('anticipos_solicitudes').select('*').eq('estado', 'aprobado').execute()
     anticipos_por_docente = {}
     for a in (anticipos.data or []):
-        docente = a.get('usuario_nombre', '')
+        docente = norm_nombre(a.get('usuario_nombre', ''))
         anticipos_por_docente[docente] = anticipos_por_docente.get(docente, 0) + a.get('monto', 0)
     
     # Mapa grupo_id → lista de estudiantes (antes del dedup)
@@ -1804,7 +1811,7 @@ def modulo5():
         horas = s.get('horas', 0) or 0
         valor = s.get('valor_total', 0) or 0
         tipo = s.get('tipo_sesion', 'clase')
-        profesor = s.get('profesor_terapeuta', 'Desconocido')
+        profesor = norm_nombre(s.get('profesor_terapeuta', '')) or 'Desconocido'
         profesores_lista.add(profesor)
         estado = s.get('estado', '')
         
@@ -3190,7 +3197,7 @@ def editar_perfil():
             updates['password_hash'] = generate_password_hash(request.form['password'])
         supabase.table('usuarios').update(updates).eq('id', current_user.id).execute()
         if current_user.rol in ['profesor', 'psicologo']:
-            supabase.table('sesiones').update({'profesor_terapeuta': request.form['nombre']}).eq('profesor_terapeuta', current_user.nombre).execute()
+            supabase.table('sesiones').update({'profesor_terapeuta': norm_nombre(request.form['nombre'])}).eq('profesor_terapeuta', current_user.nombre).execute()
         flash('✅ Perfil actualizado', 'success')
         return redirect(url_for('dashboard'))
     return render_template('editar_perfil.html')
@@ -4822,7 +4829,7 @@ def proforma_incorporar(id):
     if not p.get('estudiante_id'):
         flash('❌ La proforma no tiene un estudiante registrado del sistema; no se puede incorporar a la planificación.', 'error')
         return redirect(url_for('proforma_detalle', id=id))
-    encargado = p.get('encargado_apertura') or (ENCARGADOS[0] if ENCARGADOS else '')
+    encargado = norm_nombre(p.get('encargado_apertura') or (ENCARGADOS[0] if ENCARGADOS else ''))
 
     creadas = 0
     primera_fecha = None
@@ -4841,7 +4848,7 @@ def proforma_incorporar(id):
             'tipo_sesion': tipo,
             'asignatura': it.get('asignatura') or '',
             'tema_terapia': it.get('tema_terapia') or '',
-            'profesor_terapeuta': it.get('profesor') or '',
+            'profesor_terapeuta': norm_nombre(it.get('profesor') or ''),
             'fecha': fecha, 'hora_inicio': h_ini, 'hora_fin': h_fin,
             'horas': horas, 'estado': 'Planificado',
             'encargado_apertura': encargado,
