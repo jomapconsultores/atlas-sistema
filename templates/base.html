@@ -754,6 +754,15 @@
         .feriado-chip { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 20px; white-space: nowrap; }
         .feriado-chip.is-nacional { background: #fef3c7; color: #92400e; }
         .feriado-chip.is-local    { background: #dbeafe; color: #1e40af; }
+        /* ── FLECHA DE LOS <select> SIN ENCIMARSE CON EL TEXTO ──
+           Las reglas de arriba fijan el padding de .form-select y tapan el
+           espacio que Bootstrap reserva para la flecha. Se restaura aquí. */
+        select.form-select {
+            padding-right: 2.4rem !important;
+            background-position: right 0.75rem center !important;
+            background-size: 15px 11px !important;
+            text-overflow: ellipsis;
+        }
     </style>
     <script src="/static/feriados.js?v=3"></script>
 </head>
