@@ -728,8 +728,19 @@
         }
         .feriado-nota.is-nacional { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
         .feriado-nota.is-local    { background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; }
+        /* ── PANEL LISTA DE FERIADOS ──────────────────── */
+        .feriado-panel { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; }
+        .feriado-panel-tit { font-weight: 700; font-size: 12.5px; color: #334155; margin-bottom: 6px; }
+        .feriado-lista { list-style: none; margin: 0; padding: 0; }
+        .feriado-item { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 4px 0; border-bottom: 1px dashed #e2e8f0; font-size: 12px; }
+        .feriado-item:last-child { border-bottom: none; }
+        .feriado-fecha { color: #64748b; min-width: 120px; font-variant-numeric: tabular-nums; }
+        .feriado-nombre { color: #1e293b; font-weight: 600; flex: 1; }
+        .feriado-chip { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 20px; white-space: nowrap; }
+        .feriado-chip.is-nacional { background: #fef3c7; color: #92400e; }
+        .feriado-chip.is-local    { background: #dbeafe; color: #1e40af; }
     </style>
-    <script src="/static/feriados.js?v=1"></script>
+    <script src="/static/feriados.js?v=2"></script>
 </head>
 <body class="{% if current_user.is_authenticated %}has-sidebar{% endif %}">
     {% if current_user.is_authenticated %}

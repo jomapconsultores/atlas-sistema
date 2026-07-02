@@ -177,6 +177,7 @@
                         <p class="step-sub">Fecha, hora de inicio y fin. La duración se calcula y valida automáticamente.</p>
                     </div>
                 </div>
+                <div id="panelFeriados"></div>
                 <div class="mb-3" style="max-width:320px;">
                     <label class="form-label">Número de Sesiones *</label>
                     <select name="num_sesiones" id="numSesiones" class="form-select" onchange="mostrarFechas()">
@@ -578,6 +579,8 @@ form.addEventListener('change', actualizarEstado);
 mostrarEstudiantes();
 mostrarFechas();
 actualizarEstado();
+// Lista visible de próximos feriados (nacionales y locales)
+if (window.ATLAS_FERIADOS) ATLAS_FERIADOS.pintarLista(document.getElementById('panelFeriados'), 8);
 
 // ===== AUTOGUARDADO DE BORRADOR (localStorage por usuario) =====
 const DRAFT_KEY = 'atlas_plan_borrador_{{ current_user.id }}';

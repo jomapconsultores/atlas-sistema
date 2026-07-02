@@ -132,10 +132,68 @@
     return res;
   }
 
+  // 'YYYY-MM-DD' -> Date local (evita corrimientos por zona horaria)
+  function parseLocal(str) {
+    var p = str.split('-');
+    return new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+  }
+
+  var DOW = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+  var MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+  function etiquetaFecha(fechaStr) {
+    var f = parseLocal(fechaStr);
+    return DOW[f.getDay()] + ' ' + f.getDate() + ' ' + MESES[f.getMonth()] + ' ' + f.getFullYear();
+  }
+
+  // Próximos feriados (desde hoy o desde 'desdeStr'), ordenados por fecha.
+  function proximos(cantidad, desdeStr) {
+    cantidad = cantidad || 6;
+    var hoy = desdeStr ? parseLocal(desdeStr) : new Date();
+    hoy.setHours(0, 0, 0, 0);
+    var anioBase = hoy.getFullYear();
+    var lista = [];
+    for (var y = anioBase; y <= anioBase + 1; y++) {
+      var mapa = feriadosDelAnio(y);
+      Object.keys(mapa).forEach(function (mmdd) {
+        var f = parseLocal(y + '-' + mmdd);
+        if (f.getTime() >= hoy.getTime()) {
+          var info = getFeriado(y + '-' + mmdd);
+          lista.push({
+            fecha: y + '-' + mmdd, _t: f.getTime(),
+            fechaTexto: etiquetaFecha(y + '-' + mmdd),
+            nombre: info.nombre, tipo: info.tipo, ambito: info.ambito, etiqueta: info.etiqueta
+          });
+        }
+      });
+    }
+    lista.sort(function (a, b) { return a._t - b._t; });
+    return lista.slice(0, cantidad);
+  }
+
+  // Pinta un panel con la lista de próximos feriados dentro de containerEl.
+  function pintarLista(containerEl, cantidad, desdeStr) {
+    if (!containerEl) return;
+    var items = proximos(cantidad, desdeStr);
+    if (!items.length) { containerEl.innerHTML = ''; return; }
+    var filas = items.map(function (it) {
+      var chip = it.tipo === 'local'
+        ? '<span class="feriado-chip is-local">Local · Cuenca</span>'
+        : '<span class="feriado-chip is-nacional">Nacional</span>';
+      return '<li class="feriado-item"><span class="feriado-fecha">' + it.fechaTexto +
+        '</span><span class="feriado-nombre">' + it.nombre + '</span>' + chip + '</li>';
+    }).join('');
+    containerEl.innerHTML =
+      '<div class="feriado-panel"><div class="feriado-panel-tit">📅 Próximos feriados</div>' +
+      '<ul class="feriado-lista">' + filas + '</ul></div>';
+  }
+
   window.ATLAS_FERIADOS = {
     getFeriado: getFeriado,
     pintarNota: pintarNota,
     attach: attach,
-    resumen: resumen
+    resumen: resumen,
+    proximos: proximos,
+    pintarLista: pintarLista
   };
 })();
