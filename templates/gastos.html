@@ -13,7 +13,7 @@
         <button class="nav-link active" id="tab-gastos-btn" data-bs-toggle="tab" data-bs-target="#tab-gastos" type="button" role="tab">📉 Gastos</button>
     </li>
     <li class="nav-item" role="presentation">
-        <button class="nav-link" id="tab-docentes-btn" data-bs-toggle="tab" data-bs-target="#tab-docentes" type="button" role="tab">👨‍🏫 Docentes</button>
+        <button class="nav-link" id="tab-docentes-btn" data-bs-toggle="tab" data-bs-target="#tab-docentes" type="button" role="tab">👨‍🏫 Gasto docente</button>
     </li>
 </ul>
 <div class="tab-content">
@@ -78,9 +78,9 @@
                         </td>
                         <td class="text-center">
                             {% if datos.pagado %}
-                                <span class="badge bg-success fs-6" style="cursor: pointer;" onclick="togglePagado('{{ nombre }}')">✅</span>
+                                <span class="badge bg-success fs-6" style="cursor: pointer;" title="Pagado{% if datos.fecha_pago %} el {{ datos.fecha_pago }}{% endif %} — clic para revertir" onclick="togglePagado('{{ nombre }}', true, '{{ datos.fecha_pago or '' }}')">✅ Pagado</span>
                             {% else %}
-                                <span class="badge bg-secondary fs-6" style="cursor: pointer;" onclick="togglePagado('{{ nombre }}')">⏳</span>
+                                <span class="badge bg-secondary fs-6" style="cursor: pointer;" title="Marcar pago realizado y anotar la fecha" onclick="togglePagado('{{ nombre }}', false, '{{ datos.fecha_pago or '' }}')">⏳ Registrar pago</span>
                             {% endif %}
                         </td>
                     </tr>
@@ -105,7 +105,7 @@
         </div>
     </div>
     <div class="card-footer bg-light">
-        <small class="text-muted">💡 Haga clic en la fecha o en el estado de pago para modificar. Los valores se calculan automáticamente del módulo 5.</small>
+        <small class="text-muted">💡 Clic en <strong>⏳ Registrar pago</strong> para anotar que se pagó y en qué fecha. Clic en <strong>✅ Pagado</strong> para revertir. Los montos se calculan automáticamente del módulo 5.</small>
     </div>
 </div>
 
@@ -550,18 +550,25 @@ async function guardarFechaPagoDocente(nombre, fecha) {
     }
 }
 
-function togglePagado(nombre) {
-    if (confirm('¿Cambiar estado de pago para ' + nombre + '?')) {
-        guardarTogglePagado(nombre);
+function togglePagado(nombre, estaPagado, fechaActual) {
+    if (estaPagado) {
+        if (!confirm('¿Quitar la marca de pagado de ' + nombre + '?')) return;
+        guardarTogglePagado(nombre, null);
+    } else {
+        // Marcar el pago realizado: pedir la fecha en que se pagó
+        const fecha = prompt('¿En qué fecha se realizó el pago a ' + nombre + '? (YYYY-MM-DD)', fechaActual || '{{ today }}');
+        if (fecha === null) return;   // cancelado
+        if (!fecha.trim()) { alert('Debes indicar la fecha del pago.'); return; }
+        guardarTogglePagado(nombre, fecha.trim());
     }
 }
 
-async function guardarTogglePagado(nombre) {
+async function guardarTogglePagado(nombre, fecha) {
     try {
         const response = await fetch('/api/pago-docente/toggle', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({docente: nombre, mes: {{ mes }}, anio: {{ anio }}})
+            body: JSON.stringify({docente: nombre, mes: {{ mes }}, anio: {{ anio }}, fecha: fecha})
         });
         const result = await response.json();
         if (result.success) {

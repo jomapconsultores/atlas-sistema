@@ -3307,15 +3307,22 @@ def api_toggle_pago_docente():
     docente = data.get('docente')
     mes = int(data.get('mes') or date.today().month)
     anio = int(data.get('anio') or date.today().year)
+    # Al marcar como pagado se puede anotar la fecha en que se realizó el pago.
+    fecha = (data.get('fecha') or '').strip() or None
     try:
         existente = supabase.table('fechas_pago_docentes').select('*').eq('docente_nombre', docente).eq('mes', mes).eq('anio', anio).execute()
         if existente.data and existente.data[0].get('pagado'):
+            # Estaba pagado -> se revierte a pendiente
             supabase.table('fechas_pago_docentes').update({'pagado': False}).eq('id', existente.data[0]['id']).execute()
         elif existente.data:
-            supabase.table('fechas_pago_docentes').update({'pagado': True}).eq('id', existente.data[0]['id']).execute()
+            # Marcar pagado y, si vino, guardar la fecha del pago
+            upd = {'pagado': True}
+            if fecha:
+                upd['fecha_pago'] = fecha
+            supabase.table('fechas_pago_docentes').update(upd).eq('id', existente.data[0]['id']).execute()
         else:
             supabase.table('fechas_pago_docentes').insert({
-                'docente_nombre': docente, 'pagado': True,
+                'docente_nombre': docente, 'pagado': True, 'fecha_pago': fecha,
                 'mes': mes, 'anio': anio, 'registrado_por': current_user.nombre
             }).execute()
         return jsonify({'success': True})
