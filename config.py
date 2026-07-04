@@ -2,11 +2,11 @@ import os
 
 
 class Config:
-    # Clave de firma de sesiones. EN PRODUCCIÓN debe venir de la variable de
-    # entorno SECRET_KEY (Render → Environment). El valor de respaldo solo
-    # existe para no romper el arranque local; cualquier clave escrita en el
-    # código se considera comprometida.
-    SECRET_KEY = os.environ.get('SECRET_KEY') or 'atlas-dev-cambiar-en-render-no-usar-en-produccion'
+    # Clave de firma de sesiones. Debe venir siempre de la variable de entorno
+    # SECRET_KEY. Sin fallback: una clave hardcodeada en el código permitiría
+    # forjar cookies de sesión válidas para cualquier usuario si el env var
+    # falta en algún despliegue.
+    SECRET_KEY = os.environ['SECRET_KEY']
 
     # Cookies de sesión endurecidas: solo HTTPS, inaccesibles desde JS y con
     # SameSite (mitiga robo de sesión y CSRF básico). Para desarrollo local
@@ -17,5 +17,7 @@ class Config:
     REMEMBER_COOKIE_HTTPONLY = True
     REMEMBER_COOKIE_SECURE = os.environ.get('FLASK_INSECURE_COOKIES') != '1'
 
-    SQLALCHEMY_DATABASE_URI = 'https://naubddczohedvtywmmmy.supabase.co'
-    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    # Límite de tamaño de request/archivo subido (estados de cuenta XLSX/PDF).
+    # Sin esto, un archivo muy pesado (o mal intencionado) podía agotar la
+    # memoria del proceso y tumbar la app para todos los usuarios.
+    MAX_CONTENT_LENGTH = 15 * 1024 * 1024  # 15 MB

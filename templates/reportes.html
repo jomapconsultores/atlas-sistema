@@ -165,6 +165,14 @@
                         <tr style="background: #e8f5e9;"><td colspan="5"><strong>➕ INGRESOS</strong></td></tr>
                         <tr><td><span class="badge bg-primary badge-premium">📚 Clases</span></td><td class="text-end">${{ "%.2f"|format(planificado_clases) }}</td><td class="text-end">{{ (planificado_clases/plan_total*100)|round(1) if plan_total>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(ejecutado_clases) }}</td><td class="text-end">{{ (ejecutado_clases/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</td></tr>
                         <tr><td><span class="badge bg-success badge-premium">🧠 Psicología</span></td><td class="text-end">${{ "%.2f"|format(planificado_psicologia) }}</td><td class="text-end">{{ (planificado_psicologia/plan_total*100)|round(1) if plan_total>0 else 0 }}%</td><td class="text-end">${{ "%.2f"|format(ejecutado_psicologia) }}</td><td class="text-end">{{ (ejecutado_psicologia/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</td></tr>
+                        {% if ejecutado_sin_clasificar and (ejecutado_sin_clasificar > 0.01 or ejecutado_sin_clasificar < -0.01) %}
+                        <tr title="Pagos de este mes cuyas sesiones no son de este mes, y/o efecto de devoluciones">
+                            <td><span class="badge bg-secondary badge-premium">🔧 Otros / sin clasificar</span></td>
+                            <td class="text-end">—</td><td class="text-end">—</td>
+                            <td class="text-end">${{ "%.2f"|format(ejecutado_sin_clasificar) }}</td>
+                            <td class="text-end">{{ (ejecutado_sin_clasificar/ejec_total*100)|round(1) if ejec_total>0 else 0 }}%</td>
+                        </tr>
+                        {% endif %}
                         <tr style="background: #c8e6c9; font-weight: 700;"><td><strong>Total Ingresos</strong></td><td class="text-end"><strong>${{ "%.2f"|format(plan_total) }}</strong></td><td class="text-end"><strong>100%</strong></td><td class="text-end"><strong>${{ "%.2f"|format(ejec_total) }}</strong></td><td class="text-end"><strong>100%</strong></td></tr>
                         
                         <tr style="background: #ffebee;"><td colspan="5"><strong>➖ GASTOS</strong></td></tr>

@@ -2,6 +2,7 @@ import os
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash
+from markupsafe import escape
 from config import Config
 from models import check_password, Usuario
 from supabase_client import supabase, SUPABASE_URL
@@ -13,6 +14,7 @@ import uuid
 import io
 import csv
 import hashlib
+import hmac
 import re
 import unicodedata
 
@@ -42,6 +44,15 @@ except Exception:
 
 app = Flask(__name__)
 app.config.from_object(Config)
+# Coolify/Traefik hace de reverse proxy delante de la app: sin esto,
+# request.remote_addr sería la IP interna del proxy y cualquiera podría
+# anular el límite de fuerza bruta mandando un X-Forwarded-For distinto en
+# cada request. x_for=1 confía solo en el último salto (el proxy propio) y
+# descarta lo que el cliente pueda inventar antes de esa cabecera.
+# Si en el futuro se agrega otro proxy/CDN delante (p.ej. Cloudflare), subir
+# este número al total de saltos de confianza.
+from werkzeug.middleware.proxy_fix import ProxyFix
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1)
 app.secret_key = Config.SECRET_KEY
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 31536000  # 1 año de caché para estáticos
 
@@ -75,15 +86,26 @@ LOGIN_VENTANA_SEG = 300  # 8 intentos fallidos cada 5 minutos
 
 
 def _ip_cliente():
-    xff = request.headers.get('X-Forwarded-For', '')
-    return (xff.split(',')[0].strip() if xff else request.remote_addr) or 'desconocida'
+    # ProxyFix (configurado arriba) ya resuelve remote_addr a partir del
+    # X-Forwarded-For del proxy de confianza; leer la cabecera de nuevo acá
+    # permitiría a un cliente anteponer su propio valor y anular el límite.
+    return request.remote_addr or 'desconocida'
 
 
-def _login_bloqueado(ip):
+def _clave_intento(ip, email=''):
+    # Combina IP+email: sin esto, dos usuarios detrás del mismo NAT/wifi se
+    # bloqueaban entre sí con los intentos fallidos del otro.
+    email = (email or '').strip().lower()
+    return f"{ip}|{email}" if email else ip
+
+def _login_bloqueado(clave):
     import time
     ahora = time.time()
-    _INTENTOS_LOGIN[ip] = [t for t in _INTENTOS_LOGIN.get(ip, []) if ahora - t < LOGIN_VENTANA_SEG]
-    return len(_INTENTOS_LOGIN[ip]) >= LOGIN_MAX_INTENTOS
+    _INTENTOS_LOGIN[clave] = [t for t in _INTENTOS_LOGIN.get(clave, []) if ahora - t < LOGIN_VENTANA_SEG]
+    return len(_INTENTOS_LOGIN[clave]) >= LOGIN_MAX_INTENTOS
+
+def _resetear_intentos(clave):
+    _INTENTOS_LOGIN.pop(clave, None)
 
 
 def _registrar_intento_fallido(ip):
@@ -93,6 +115,18 @@ def _registrar_intento_fallido(ip):
 @login_manager.user_loader
 def load_user(user_id):
     return Usuario.get_by_id(int(user_id))
+
+@app.before_request
+def _revalidar_usuario_activo():
+    # load_user() ya trae 'activo' fresco de la BD en cada request, pero
+    # Flask-Login por sí solo no cierra la sesión de alguien desactivado
+    # DESPUÉS del login (is_active solo se chequea en login_user). Sin esto,
+    # 'rechazar' a un usuario en /usuarios no le quita el acceso hasta que
+    # expire su cookie de sesión.
+    if current_user.is_authenticated and not current_user.is_active():
+        logout_user()
+        flash('⚠️ Tu cuenta fue desactivada. Contacta al administrador.', 'error')
+        return redirect(url_for('login'))
 
 def admin_required(f):
     @wraps(f)
@@ -111,6 +145,16 @@ def socio_admin_required(f):
             return redirect(url_for('dashboard'))
         return f(*args, **kwargs)
     return decorated
+
+def _puede_gestionar_sesion(sesion):
+    """Admin/socio gestionan cualquier sesión; el resto solo la propia
+    (match exacto de nombre normalizado, no substring: evita que 'Ana'
+    gestione sesiones de 'Mariana')."""
+    if current_user.rol in ('admin', 'socio'):
+        return True
+    nombre = norm_nombre(current_user.nombre).lower()
+    profesor = norm_nombre(sesion.get('profesor_terapeuta') or '').lower()
+    return bool(nombre) and nombre == profesor
 
 # Inyecta contadores (anticipos pendientes y contactos nuevos) en TODAS las plantillas (badges del menú lateral).
 # Con caché de 30 s: antes eran 2 consultas a la BD en CADA página que se abría.
@@ -315,6 +359,25 @@ def cargar_costos():
     _COSTOS_CACHE['t'] = time.time()
     return result
 
+# ========== FILTROS DE PERÍODO (mes/año por query string) ==========
+def _mes_anio_args():
+    """Lee mes/año de la URL con fallback al mes actual si faltan o no son
+    válidos (antes un int('abc') o un mes fuera de 1-12 tiraban un 500)."""
+    hoy = date.today()
+    try:
+        mes = int(request.args.get('mes', hoy.month))
+        if not (1 <= mes <= 12):
+            mes = hoy.month
+    except (TypeError, ValueError):
+        mes = hoy.month
+    try:
+        anio = int(request.args.get('anio', hoy.year))
+        if anio < 2000 or anio > 2100:
+            anio = hoy.year
+    except (TypeError, ValueError):
+        anio = hoy.year
+    return mes, anio
+
 # ========== PAGINACIÓN SUPABASE ==========
 def _fetch_all(builder, page_size=1000):
     """Trae TODAS las filas de una consulta paginando con .range().
@@ -330,6 +393,32 @@ def _fetch_all(builder, page_size=1000):
         if len(lote) < page_size:
             return filas
         offset += page_size
+
+def _pago_docentes_mes(mes, anio):
+    """Sesiones Realizado/Cancelado-Pagado del mes, agregadas por docente con
+    la regla única de pago (pago_sesion_docente/dedup_sesiones_docente).
+    Devuelve (detalle_por_docente, total_docencia, total_psicologia, total_pago).
+    Compartido por /gastos y /liquidacion — antes cada uno tenía su propia
+    copia de esta cuenta y ya hubo un bug histórico por divergir entre sí."""
+    _, ultimo_dia = monthrange(anio, mes)
+    sesiones_mes = _fetch_all(supabase.table('sesiones').select('*').in_('estado', ['Realizado', 'Cancelado-Pagado'])
+                              .gte('fecha', f"{anio}-{mes:02d}-01").lte('fecha', f"{anio}-{mes:02d}-{ultimo_dia}"))
+    detalle = {}
+    total_docencia = total_psicologia = total_pago = 0
+    for s in dedup_sesiones_docente(sesiones_mes):
+        prof = s.get('profesor_terapeuta', 'Desconocido')
+        if prof not in detalle:
+            detalle[prof] = {'pago_docencia': 0, 'pago_psicologia': 0, 'total_pagar': 0, 'sesiones': 0,
+                              'fecha_pago': None, 'pagado': False}
+        pago_doc, pago_psi = pago_sesion_docente(s)
+        detalle[prof]['sesiones'] += 1
+        detalle[prof]['pago_docencia'] += pago_doc
+        detalle[prof]['pago_psicologia'] += pago_psi
+        detalle[prof]['total_pagar'] += pago_doc + pago_psi
+        total_docencia += pago_doc
+        total_psicologia += pago_psi
+        total_pago += pago_doc + pago_psi
+    return detalle, round(total_docencia, 2), round(total_psicologia, 2), round(total_pago, 2)
 
 # ========== DEVOLUCIONES (helpers) ==========
 def devoluciones_periodo(anio, mes, solo_estudiantes=True):
@@ -381,6 +470,18 @@ def crear_devolucion(tipo_cliente, fecha, monto, tipo_pago, motivo, pagar_docent
     if monto <= 0:
         raise ValueError('El monto a devolver debe ser mayor a 0')
     monto_docente = float(monto_docente or 0) if pagar_docente else 0
+
+    # Anti doble-envío: un doble clic/reenvío del formulario con la misma
+    # sesión duplicaría el gasto de pago al docente y la propia devolución.
+    if sesion_id:
+        try:
+            ya_existe = supabase.table('devoluciones').select('id').eq('sesion_id', int(sesion_id)).execute()
+            if ya_existe.data:
+                raise ValueError('Ya existe una devolución registrada para esta sesión')
+        except ValueError:
+            raise
+        except Exception:
+            pass  # columna 'sesion_id' puede no existir aún en instalaciones viejas
 
     # 1) Gasto automático al docente
     gasto_id = None
@@ -542,16 +643,17 @@ def registro():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        ip = _ip_cliente()
-        if _login_bloqueado(ip):
+        clave = _clave_intento(_ip_cliente(), request.form.get('email', ''))
+        if _login_bloqueado(clave):
             flash('⛔ Demasiados intentos fallidos. Espera 5 minutos e inténtalo de nuevo.', 'error')
             return render_template('login.html')
         result = supabase.table('usuarios').select('*').eq('email', request.form['email']).execute()
         if result.data and result.data[0].get('activo') and check_password(result.data[0]['password_hash'], request.form['password']):
             login_user(Usuario.get_by_id(result.data[0]['id']))
             session['mostrar_cobros'] = True  # recordatorio de cobros: una vez por inicio de sesión
+            _resetear_intentos(clave)
             return redirect(url_for('dashboard'))
-        _registrar_intento_fallido(ip)
+        _registrar_intento_fallido(clave)
         flash('❌ Credenciales incorrectas o cuenta pendiente de aprobación', 'error')
     return render_template('login.html')
 
@@ -612,6 +714,7 @@ def _pk_proyecto_ref():
 
 @app.route('/api/passkey/diagnostico')
 @login_required
+@admin_required
 def passkey_diagnostico():
     """Diagnóstico en vivo: dice qué proyecto Supabase usa REALMENTE el servidor
     desplegado y el error exacto al leer la tabla. Sirve para saber dónde crear
@@ -681,20 +784,22 @@ def passkey_registro_publico_opciones():
     dispositivo. Mismo blindaje de intentos que el login normal."""
     if not WEBAUTHN_OK:
         return jsonify({'success': False, 'error': 'Falta la libreria webauthn en el servidor (redeploy pendiente)'})
-    if _login_bloqueado(_ip_cliente()):
+    datos = request.get_json(silent=True) or {}
+    email = (datos.get('email') or '').strip()
+    clave_intento = _clave_intento(_ip_cliente(), email)
+    if _login_bloqueado(clave_intento):
         return jsonify({'success': False, 'error': 'Demasiados intentos. Espera 5 minutos.'})
     ok_tabla, err_tabla = _pk_tabla_estado()
     if not ok_tabla:
         return jsonify({'success': False, 'error':
             f'La tabla de huellas no está disponible en el proyecto Supabase "{_pk_proyecto_ref()}". '
             f'Crea la tabla usuario_passkeys EN ESE proyecto. Detalle: {err_tabla}'})
-    datos = request.get_json(silent=True) or {}
-    email = (datos.get('email') or '').strip()
     password = datos.get('password') or ''
     u = supabase.table('usuarios').select('*').eq('email', email).execute().data
     if not (u and u[0].get('activo') and check_password(u[0]['password_hash'], password)):
-        _registrar_intento_fallido(_ip_cliente())
+        _registrar_intento_fallido(clave_intento)
         return jsonify({'success': False, 'error': 'Email o contraseña incorrectos (o cuenta sin aprobar)'})
+    _resetear_intentos(clave_intento)
     uid = u[0]['id']
     existentes = supabase.table('usuario_passkeys').select('credential_id').eq('usuario_id', uid).execute().data or []
     opciones = generate_registration_options(
@@ -918,6 +1023,11 @@ def modulo1():
                 return redirect(url_for('modulo1'))
 
             # 2) Cada sesión: datos completos y horario coherente (sin horas en retroceso ni negativas)
+            # ocupadas_batch acumula las sesiones de este mismo envío por
+            # (profesor, fecha): sin esto, dos sesiones que se cruzan dentro
+            # del propio paquete no se detectaban porque ninguna existía aún
+            # en la BD al momento de validar.
+            ocupadas_batch = {}
             for sesion_num in range(1, num_sesiones + 1):
                 fecha = request.form.get(f'fecha_{sesion_num}')
                 h_ini = request.form.get(f'hora_inicio_{sesion_num}')
@@ -957,6 +1067,8 @@ def modulo1():
                             'profesor_terapeuta', prof_efectivo).eq('fecha', fecha).neq('estado', 'Cancelado').execute().data or []
                     except Exception:
                         ocupadas = []
+                    clave_batch = (prof_efectivo, fecha)
+                    ocupadas = ocupadas + ocupadas_batch.get(clave_batch, [])
                     ni, nf = h_ini[:5], h_fin[:5]
                     for ex in ocupadas:
                         ei = (ex.get('hora_inicio') or '')[:5]
@@ -965,6 +1077,7 @@ def modulo1():
                             flash(f'⛔ {prof_efectivo} ya está ocupado el {fecha} de {ei} a {ef}. '
                                   f'No se puede agendar de {ni} a {nf} (sesión {sesion_num}).', 'error')
                             return redirect(url_for('modulo1'))
+                    ocupadas_batch.setdefault(clave_batch, []).append({'hora_inicio': ni, 'hora_fin': nf})
 
             for sesion_num in range(1, num_sesiones + 1):
                 fecha = request.form.get(f'fecha_{sesion_num}')
@@ -1144,6 +1257,7 @@ def api_sesiones_para_sincronizar():
 
 @app.route('/api/estudiante/<int:id>/sesiones')
 @login_required
+@socio_admin_required
 def api_estudiante_sesiones(id):
     sesiones = supabase.table('sesiones').select('id, fecha, hora_inicio, hora_fin, tipo_sesion, valor_total, asignatura, tema_terapia').eq('estudiante_id', id).order('fecha', desc=True).execute()
     resultado = []
@@ -1168,11 +1282,8 @@ def api_sesion_unica(id):
         return jsonify({'error': 'No encontrada'}), 404
     sesion = s.data[0]
     # Usuarios no-admin solo pueden ver sesiones donde son el profesor/terapeuta
-    if current_user.rol not in ('admin', 'socio'):
-        nombre = current_user.nombre.strip().lower()
-        profesor = (sesion.get('profesor_terapeuta') or '').strip().lower()
-        if nombre not in profesor and profesor not in nombre:
-            return jsonify({'error': 'Sin permiso'}), 403
+    if not _puede_gestionar_sesion(sesion):
+        return jsonify({'error': 'Sin permiso'}), 403
     if sesion.get('hora_inicio'):
         sesion['hora_inicio'] = sesion['hora_inicio'][:5]
     if sesion.get('hora_fin'):
@@ -1334,8 +1445,7 @@ def _sincronizar_sesion_en_calendar(id):
                 eliminar_evento_calendar(ev_id)
             except Exception as e:
                 print(f'⚠️ Error eliminando evento cancelado de Calendar (sesión {id}): {e}')
-        for sid in sibling_ids:
-            supabase.table('sesiones').update({'evento_calendar_id': None}).eq('id', sid).execute()
+        supabase.table('sesiones').update({'evento_calendar_id': None}).in_('id', sibling_ids).execute()
         return 'eliminado', None
 
     # Representante: la sesión modificada si sigue activa; si no, la primera activa
@@ -1361,26 +1471,35 @@ def _sincronizar_sesion_en_calendar(id):
         'valor_total': sum(g.get('valor_total', 0) or 0 for g in activos)
     }, ev_id)
     if evento_id:
-        for g in grp:
-            if g.get('evento_calendar_id') != evento_id:
-                supabase.table('sesiones').update({'evento_calendar_id': evento_id}).eq('id', g['id']).execute()
+        ids_a_actualizar = [g['id'] for g in grp if g.get('evento_calendar_id') != evento_id]
+        if ids_a_actualizar:
+            supabase.table('sesiones').update({'evento_calendar_id': evento_id}).in_('id', ids_a_actualizar).execute()
         return evento_id, None
     return None, 'No se pudo crear/actualizar el evento en Google Calendar'
 
 @app.route('/api/sesion/<int:id>/toggle', methods=['POST'])
 @login_required
 def toggle_sesion(id):
+    s0 = supabase.table('sesiones').select('*').eq('id', id).execute()
+    if not s0.data:
+        return jsonify({'success': False, 'error': 'No encontrada'}), 404
+    if not _puede_gestionar_sesion(s0.data[0]):
+        return jsonify({'success': False, 'error': 'Sin permiso'}), 403
+
     data = request.get_json()
     estado = data.get('estado', 'Realizado')
     updates = {'estado': estado}
-    
+
     if estado in ['Realizado', 'Cancelado-Pagado']:
-        s = supabase.table('sesiones').select('*').eq('id', id).execute()
+        s = s0
         if s.data:
             sd = s.data[0]
             tipo_sesion = sd.get('tipo_sesion', 'clase')
             horas = sd.get('horas', 1) or 1
-            precio_hora = sd.get('precio_hora', 10) or 10
+            # 'or 10' trataría un precio legítimo de $0 (clase gratuita) como
+            # vacío y lo reemplazaría por el default; is None es lo correcto.
+            _ph = sd.get('precio_hora')
+            precio_hora = _ph if _ph is not None else 10
 
             # Valor que paga el estudiante
             if sd.get('cobro_por_sesion') or tipo_sesion in ['terapia', 'ambos']:
@@ -1447,13 +1566,8 @@ def modulo2():
         return render_template('modulo2.html', sesiones=sesiones.data or [], fecha=fecha,
                              estudiantes=estudiantes_lista, profesores=cargar_profesores())
     
-    nombre_usuario = current_user.nombre.strip().lower()
     todas = supabase.table('sesiones').select('*, estudiantes(*)').eq('fecha', fecha).order('hora_inicio').execute()
-    sesiones_filtradas = []
-    for s in (todas.data or []):
-        profesor = (s.get('profesor_terapeuta') or '').strip().lower()
-        if nombre_usuario in profesor or profesor in nombre_usuario:
-            sesiones_filtradas.append(s)
+    sesiones_filtradas = [s for s in (todas.data or []) if _puede_gestionar_sesion(s)]
     return render_template('modulo2.html', sesiones=sesiones_filtradas, fecha=fecha,
                          estudiantes=estudiantes_lista, profesores=cargar_profesores())
 
@@ -1461,6 +1575,12 @@ def modulo2():
 @login_required
 def modificar_sesion(id):
     try:
+        s0 = supabase.table('sesiones').select('*').eq('id', id).execute()
+        if not s0.data:
+            return jsonify({'success': False, 'error': 'No encontrada'}), 404
+        if not _puede_gestionar_sesion(s0.data[0]):
+            return jsonify({'success': False, 'error': 'Sin permiso'}), 403
+
         data = request.get_json()
         fecha = data.get('fecha')
         h_ini = data.get('hora_inicio', '')[:5]
@@ -1483,6 +1603,12 @@ def modificar_sesion(id):
 @login_required
 def cambiar_estudiante_sesion(id):
     try:
+        s0 = supabase.table('sesiones').select('*').eq('id', id).execute()
+        if not s0.data:
+            return jsonify({'success': False, 'error': 'No encontrada'}), 404
+        if not _puede_gestionar_sesion(s0.data[0]):
+            return jsonify({'success': False, 'error': 'Sin permiso'}), 403
+
         data = request.get_json()
         estudiante_id = data.get('estudiante_id')
         if estudiante_id == 'nuevo':
@@ -1506,6 +1632,7 @@ def cambiar_estudiante_sesion(id):
 
 @app.route('/api/sesion/<int:id>/cambiar-profesor', methods=['POST'])
 @login_required
+@socio_admin_required
 def cambiar_profesor_sesion(id):
     try:
         data = request.get_json()
@@ -1528,12 +1655,7 @@ def api_sesiones_pendientes():
         sesiones_data = sesiones.data or []
     else:
         todas = query.order('fecha').order('hora_inicio').execute()
-        sesiones_data = []
-        nombre_usuario = current_user.nombre.strip().lower()
-        for s in (todas.data or []):
-            profesor = (s.get('profesor_terapeuta') or '').strip().lower()
-            if nombre_usuario in profesor or profesor in nombre_usuario:
-                sesiones_data.append(s)
+        sesiones_data = [s for s in (todas.data or []) if _puede_gestionar_sesion(s)]
     
     resultado = []
     for s in sesiones_data:
@@ -1780,7 +1902,13 @@ def modulo5():
                 sesiones_filtradas_est.append(s)
         sesiones_data = sesiones_filtradas_est
     
-    anticipos = supabase.table('anticipos_solicitudes').select('*').eq('estado', 'aprobado').execute()
+    # Acotado al mes en que se aprobó (fecha_aprobacion) cuando hay un mes
+    # seleccionado: antes se restaba en TODOS los meses hasta descontarlo a
+    # mano. Sin filtro de mes (vista "todo el historial") se deja sin acotar.
+    anticipos_query = supabase.table('anticipos_solicitudes').select('*').eq('estado', 'aprobado')
+    if mes and mes != '':
+        anticipos_query = anticipos_query.gte('fecha_aprobacion', fecha_inicio).lte('fecha_aprobacion', fecha_fin)
+    anticipos = anticipos_query.execute()
     anticipos_por_docente = {}
     for a in (anticipos.data or []):
         docente = norm_nombre(a.get('usuario_nombre', ''))
@@ -1948,6 +2076,7 @@ def api_encargados():
 
 @app.route('/api/encargados/crear', methods=['POST'])
 @login_required
+@socio_admin_required
 def api_crear_encargado():
     data = request.get_json()
     nombre = data.get('nombre', '').strip().upper()
@@ -2066,9 +2195,24 @@ def solicitar_anticipo():
         flash('❌ Solo docentes y psicólogos pueden solicitar anticipos', 'error')
         return redirect(url_for('dashboard'))
     try:
+        monto = float(request.form['monto'])
+        # Mismo límite que ya calcula/muestra mis_anticipos() (min="5"
+        # max="{{ disponible }}" en el form): antes solo se validaba en HTML,
+        # bypasseable con un POST directo.
+        _, _ud = monthrange(date.today().year, date.today().month)
+        _sesiones_mes = _fetch_all(supabase.table('sesiones').select('*').in_('estado', ['Realizado', 'Cancelado-Pagado'])
+                                    .eq('profesor_terapeuta', current_user.nombre)
+                                    .gte('fecha', f"{date.today().year}-{date.today().month:02d}-01")
+                                    .lte('fecha', f"{date.today().year}-{date.today().month:02d}-{_ud:02d}"))
+        _total_mes = round(sum(sum(pago_sesion_docente(s)) for s in dedup_sesiones_docente(_sesiones_mes)), 2)
+        _anticipos_aprob = supabase.table('anticipos_solicitudes').select('monto').eq('usuario_id', current_user.id).eq('estado', 'aprobado').execute().data or []
+        disponible = round(_total_mes - sum(a.get('monto', 0) or 0 for a in _anticipos_aprob), 2)
+        if monto < 5 or monto > disponible:
+            flash(f'❌ El monto debe estar entre $5 y ${disponible:.2f} (disponible este mes)', 'error')
+            return redirect(url_for('mis_anticipos'))
         supabase.table('anticipos_solicitudes').insert({
             'usuario_id': current_user.id, 'usuario_nombre': current_user.nombre,
-            'monto': float(request.form['monto']), 'motivo': request.form['motivo'],
+            'monto': monto, 'motivo': request.form['motivo'],
             'estado': 'pendiente', 'fecha_solicitud': date.today().isoformat()
         }).execute()
         flash('✅ Solicitud de anticipo enviada', 'success')
@@ -2087,8 +2231,14 @@ def gestion_anticipos():
 @login_required
 @socio_admin_required
 def aprobar_anticipo(id):
-    supabase.table('anticipos_solicitudes').update({'estado': 'aprobado', 'fecha_aprobacion': date.today().isoformat(), 'aprobado_por': current_user.nombre}).eq('id', id).execute()
-    flash('✅ Anticipo aprobado', 'success')
+    # .eq('estado','pendiente'): sin esto, un doble clic o un reenvío del
+    # formulario podía re-aprobar un anticipo ya 'descontado', duplicando el
+    # descuento al docente en la próxima liquidación.
+    r = supabase.table('anticipos_solicitudes').update({'estado': 'aprobado', 'fecha_aprobacion': date.today().isoformat(), 'aprobado_por': current_user.nombre}).eq('id', id).eq('estado', 'pendiente').execute()
+    if r.data:
+        flash('✅ Anticipo aprobado', 'success')
+    else:
+        flash('⚠️ Ese anticipo ya no está pendiente (puede que ya se haya aprobado/rechazado)', 'warning')
     return redirect(url_for('gestion_anticipos'))
 
 @app.route('/rechazar-anticipo/<int:id>', methods=['POST'])
@@ -2172,42 +2322,51 @@ def psicologia_especial():
 @login_required
 @socio_admin_required
 def crear_cliente_externo():
-    data = request.get_json()
-    result = supabase.table('clientes_externos').insert({
-        'nombre': data['nombre'], 'telefono': data.get('telefono', ''), 'email': data.get('email', ''),
-        'activo': True, 'usuario_id': current_user.id
-    }).execute()
-    return jsonify({'success': True, 'id': result.data[0]['id'] if result.data else None})
+    try:
+        data = request.get_json()
+        result = supabase.table('clientes_externos').insert({
+            'nombre': data['nombre'], 'telefono': data.get('telefono', ''), 'email': data.get('email', ''),
+            'activo': True, 'usuario_id': current_user.id
+        }).execute()
+        return jsonify({'success': True, 'id': result.data[0]['id'] if result.data else None})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'Faltan datos o son inválidos: {e}'}), 400
 
 @app.route('/api/cita-psicologia', methods=['POST'])
 @login_required
 @socio_admin_required
 def crear_cita_psicologia():
-    data = request.get_json()
-    valor_cita = round(float(data.get('valor', 0) or 0), 2)
-    comision_centro = round(valor_cita * COMISION_CLIENTE_EXTERNO, 2)
-    result = supabase.table('citas_psicologia').insert({
-        'cliente_id': data['cliente_id'], 'psicologo_id': data['psicologo_id'],
-        'psicologo_nombre': data['psicologo_nombre'], 'fecha': data['fecha'],
-        'hora_inicio': data['hora_inicio'], 'hora_fin': data['hora_fin'], 'valor': valor_cita,
-        'monto_pagado': 0, 'comision_centro': comision_centro, 'pago_psicologo': round(valor_cita - comision_centro, 2),
-        'estado': 'agendada', 'usuario_id': current_user.id
-    }).execute()
-    return jsonify({'success': True, 'id': result.data[0]['id'] if result.data else None})
+    try:
+        data = request.get_json()
+        valor_cita = round(max(0.0, float(data.get('valor', 0) or 0)), 2)
+        comision_centro = round(valor_cita * COMISION_CLIENTE_EXTERNO, 2)
+        result = supabase.table('citas_psicologia').insert({
+            'cliente_id': data['cliente_id'], 'psicologo_id': data['psicologo_id'],
+            'psicologo_nombre': data['psicologo_nombre'], 'fecha': data['fecha'],
+            'hora_inicio': data['hora_inicio'], 'hora_fin': data['hora_fin'], 'valor': valor_cita,
+            'monto_pagado': 0, 'comision_centro': comision_centro, 'pago_psicologo': round(valor_cita - comision_centro, 2),
+            'estado': 'agendada', 'usuario_id': current_user.id
+        }).execute()
+        return jsonify({'success': True, 'id': result.data[0]['id'] if result.data else None})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'Faltan datos o son inválidos: {e}'}), 400
 
 @app.route('/api/cita/<int:id>/pagar', methods=['POST'])
 @login_required
 @socio_admin_required
 def registrar_pago_cita(id):
-    data = request.get_json()
-    cita = supabase.table('citas_psicologia').select('*').eq('id', id).execute()
-    if not cita.data:
-        return jsonify({'success': False, 'error': 'Cita no encontrada'})
-    c = cita.data[0]
-    nuevo_pagado = round((c.get('monto_pagado', 0) or 0) + float(data.get('monto', 0) or 0), 2)
-    nuevo_estado = 'pagada' if nuevo_pagado >= (c.get('valor', 0) or 0) else 'parcial'
-    supabase.table('citas_psicologia').update({'monto_pagado': nuevo_pagado, 'estado': nuevo_estado}).eq('id', id).execute()
-    return jsonify({'success': True, 'nuevo_estado': nuevo_estado, 'pagado': nuevo_pagado})
+    try:
+        data = request.get_json()
+        cita = supabase.table('citas_psicologia').select('*').eq('id', id).execute()
+        if not cita.data:
+            return jsonify({'success': False, 'error': 'Cita no encontrada'})
+        c = cita.data[0]
+        nuevo_pagado = round((c.get('monto_pagado', 0) or 0) + float(data.get('monto', 0) or 0), 2)
+        nuevo_estado = 'pagada' if nuevo_pagado >= (c.get('valor', 0) or 0) else 'parcial'
+        supabase.table('citas_psicologia').update({'monto_pagado': nuevo_pagado, 'estado': nuevo_estado}).eq('id', id).execute()
+        return jsonify({'success': True, 'nuevo_estado': nuevo_estado, 'pagado': nuevo_pagado})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'Monto inválido: {e}'}), 400
 
 @app.route('/api/cita/<int:id>/completar', methods=['POST'])
 @login_required
@@ -2234,38 +2393,46 @@ def mis_clientes():
 def crear_mi_cliente():
     if current_user.rol != 'psicologo':
         return jsonify({'success': False, 'error': 'Solo psicólogos pueden crear clientes'})
-    data = request.get_json()
-    result = supabase.table('clientes_externos').insert({
-        'nombre': data['nombre'], 'telefono': data.get('telefono', ''), 'email': data.get('email', ''),
-        'psicologo_id': current_user.id, 'psicologo_nombre': current_user.nombre,
-        'activo': True, 'usuario_id': current_user.id
-    }).execute()
-    return jsonify({'success': True, 'id': result.data[0]['id'] if result.data else None})
+    try:
+        data = request.get_json()
+        result = supabase.table('clientes_externos').insert({
+            'nombre': data['nombre'], 'telefono': data.get('telefono', ''), 'email': data.get('email', ''),
+            'psicologo_id': current_user.id, 'psicologo_nombre': current_user.nombre,
+            'activo': True, 'usuario_id': current_user.id
+        }).execute()
+        return jsonify({'success': True, 'id': result.data[0]['id'] if result.data else None})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'Faltan datos o son inválidos: {e}'}), 400
 
 @app.route('/api/mi-cita', methods=['POST'])
 @login_required
 def crear_mi_cita():
     if current_user.rol != 'psicologo':
         return jsonify({'success': False, 'error': 'Solo psicólogos pueden agendar citas'})
-    data = request.get_json()
-    valor_cita = round(float(data.get('valor', 0) or 0), 2)
-    comision_centro = round(valor_cita * COMISION_CLIENTE_EXTERNO, 2)
-    result = supabase.table('citas_psicologia').insert({
-        'cliente_id': data['cliente_id'], 'psicologo_id': current_user.id,
-        'psicologo_nombre': current_user.nombre, 'fecha': data['fecha'],
-        'hora_inicio': data['hora_inicio'], 'hora_fin': data['hora_fin'], 'valor': valor_cita,
-        'monto_pagado': 0, 'comision_centro': comision_centro, 'pago_psicologo': round(valor_cita - comision_centro, 2),
-        'estado': 'agendada', 'usuario_id': current_user.id
-    }).execute()
-    return jsonify({'success': True, 'id': result.data[0]['id'] if result.data else None})
+    try:
+        data = request.get_json()
+        cliente = supabase.table('clientes_externos').select('id').eq('id', data.get('cliente_id')).eq('psicologo_id', current_user.id).execute()
+        if not cliente.data:
+            return jsonify({'success': False, 'error': 'Cliente no encontrado'}), 403
+        valor_cita = round(max(0.0, float(data.get('valor', 0) or 0)), 2)
+        comision_centro = round(valor_cita * COMISION_CLIENTE_EXTERNO, 2)
+        result = supabase.table('citas_psicologia').insert({
+            'cliente_id': data['cliente_id'], 'psicologo_id': current_user.id,
+            'psicologo_nombre': current_user.nombre, 'fecha': data['fecha'],
+            'hora_inicio': data['hora_inicio'], 'hora_fin': data['hora_fin'], 'valor': valor_cita,
+            'monto_pagado': 0, 'comision_centro': comision_centro, 'pago_psicologo': round(valor_cita - comision_centro, 2),
+            'estado': 'agendada', 'usuario_id': current_user.id
+        }).execute()
+        return jsonify({'success': True, 'id': result.data[0]['id'] if result.data else None})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'Faltan datos o son inválidos: {e}'}), 400
 
 # ========== REPORTES ==========
 @app.route('/reportes')
 @login_required
 @socio_admin_required
 def reportes():
-    mes = int(request.args.get('mes', date.today().month))
-    anio = int(request.args.get('anio', date.today().year))
+    mes, anio = _mes_anio_args()
     estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
     
     datos_estudiantes = []
@@ -2281,9 +2448,6 @@ def reportes():
     total_facturado_psicologia = 0
     total_facturado = 0
     
-    asignaturas_detalle = {}
-    horas_por_materia = {}
-    cumplimiento = {'planificado': 0, 'realizado': 0, 'cancelado': 0, 'cancelado-pagado': 0}
     ingresos_por_tipo = {}
     pagos_por_docente = {}
     total_docencia = 0
@@ -2391,15 +2555,6 @@ def reportes():
             pagos_por_docente[prof]['pago_psicologia'] += pago_psicologia
             pagos_por_docente[prof]['total_pagar'] += total_pagar
         
-        for s in ses_data:
-            asig = s.get('asignatura') or s.get('tema_terapia') or 'Sin registro'
-            horas_por_materia[asig] = horas_por_materia.get(asig, 0) + (s.get('horas', 0) or 0)
-            if asig not in asignaturas_detalle:
-                asignaturas_detalle[asig] = {'plan': 0, 'real': 0, 'canc': 0}
-            if s['estado'] in ['Realizado', 'Cancelado-Pagado']:
-                asignaturas_detalle[asig]['real'] += s.get('horas', 0) or 0
-            cumplimiento[s.get('estado', 'Planificado').lower()] = cumplimiento.get(s.get('estado', 'Planificado').lower(), 0) + 1
-        
         if cobrar > 0 or pagado > 0 or horas_real > 0:
             datos_estudiantes.append({
                 'id': eid, 'estudiante': nombre_est_full,
@@ -2438,11 +2593,6 @@ def reportes():
     total_docencia = round(total_docencia, 2)
     total_psicologia = round(total_psicologia, 2)
     balance = round(total_ingresos - total_gastos - total_pago_docentes, 2)
-
-    correcciones = supabase.table('correcciones_pagos').select('*').order('fecha_correccion', desc=True).limit(30).execute()
-    observaciones = supabase.table('sesiones').select('*, estudiantes(apellidos, nombres)').not_.is_('observaciones', 'null').order('fecha', desc=True).limit(30).execute()
-    _, ultimo_dia = monthrange(anio, mes)
-    nuevos_usuarios = supabase.table('usuarios').select('*').gte('fecha_registro', f"{anio}-{mes:02d}-01").lte('fecha_registro', f"{anio}-{mes:02d}-{ultimo_dia}").execute()
 
     estudiantes_hombres = 0
     estudiantes_mujeres = 0
@@ -2494,8 +2644,6 @@ def reportes():
                          total_gastos=total_gastos, balance=balance,
                          gastos=gastos_mes.data or [], mes=mes, anio=anio,
                          ingresos_por_tipo=ingresos_por_tipo, gastos_por_categoria=gastos_por_categoria,
-                         horas_por_materia=horas_por_materia, asignaturas_detalle=asignaturas_detalle,
-                         cumplimiento=cumplimiento,
                          pagos_por_docente=pagos_por_docente, total_pago_docentes=total_pago_docentes,
                          total_docencia=total_docencia, total_psicologia=total_psicologia,
                          total_pago_docentes_general=total_pago_docentes_general,
@@ -2504,14 +2652,19 @@ def reportes():
                          planificado_psicologia=planificado_psicologia,
                          ejecutado_clases=total_facturado_clases,
                          ejecutado_psicologia=total_facturado_psicologia,
+                         # Diferencia entre el total de ingresos y lo atribuido a
+                         # clases/psicología: pagos de este mes cuyas sesiones NO
+                         # son de este mes (no hay de dónde derivar el tipo) más el
+                         # efecto de las devoluciones (que sí restan del total pero
+                         # no del desglose por tipo). Se muestra explícita para que
+                         # el desglose siempre sume 100% del total.
+                         ejecutado_sin_clasificar=round(total_ingresos - total_facturado_clases - total_facturado_psicologia, 2),
                          estudiantes_hombres=estudiantes_hombres,
                          estudiantes_mujeres=estudiantes_mujeres,
                          horas_por_estudiante=horas_por_estudiante,
                          cobrar_por_estudiante=cobrar_por_estudiante,
                          asignaturas_valores=asignaturas_valores,
                          asignaturas_estudiantes=asignaturas_estudiantes,
-                         correcciones=correcciones.data or [], observaciones=observaciones.data or [],
-                         nuevos_usuarios=nuevos_usuarios.data or [], total_planificado=0,
                          datos_ingresos=datos_ingresos)
 
 
@@ -2542,8 +2695,7 @@ def gestion_gastos():
         flash('✅ Gasto registrado', 'success')
         return redirect(url_for('gestion_gastos'))
     
-    mes = int(request.args.get('mes', date.today().month))
-    anio = int(request.args.get('anio', date.today().year))
+    mes, anio = _mes_anio_args()
     # Incluye los gastos con FECHA en el mes Y los CONSIDERADOS para el mes (mes_periodo)
     try:
         gastos = supabase.table('gastos').select('*').or_(
@@ -2567,39 +2719,10 @@ def gestion_gastos():
             total += g.get('monto', 0) or 0
     total = round(total, 2)
     
-    # Obtener pagos a docentes del mes
-    _, ultimo_dia = monthrange(anio, mes)
-    sesiones_mes = _fetch_all(supabase.table('sesiones').select('*').in_('estado', ['Realizado', 'Cancelado-Pagado']).gte('fecha', f"{anio}-{mes:02d}-01").lte('fecha', f"{anio}-{mes:02d}-{ultimo_dia}"))
+    # Pago a docentes del mes: helper compartido con liquidacion().
+    pagos_docentes_detalle, total_docencia_mes, total_psicologia_mes, total_pago_docentes_mes = _pago_docentes_mes(mes, anio)
+    total_sesiones_docentes = sum(d['sesiones'] for d in pagos_docentes_detalle.values())
 
-    pagos_docentes_detalle = {}
-    total_sesiones_docentes = 0
-    total_docencia_mes = 0
-    total_psicologia_mes = 0
-    total_pago_docentes_mes = 0
-    
-    for s in dedup_sesiones_docente(sesiones_mes):
-        prof = s.get('profesor_terapeuta', 'Desconocido')
-        if prof not in pagos_docentes_detalle:
-            pagos_docentes_detalle[prof] = {'pago_docencia': 0, 'pago_psicologia': 0, 'total_pagar': 0, 'sesiones': 0, 'fecha_pago': None, 'pagado': False}
-
-        pagos_docentes_detalle[prof]['sesiones'] += 1
-        total_sesiones_docentes += 1
-
-        # Regla ÚNICA (igual que Módulo 5, Reportes y Liquidación): 'ambos'
-        # paga docencia (horas × $7) + psicología (% del valor); antes este
-        # panel omitía la parte de docencia en 'ambos' y descuadraba
-        pago_doc, pago_psi = pago_sesion_docente(s)
-        pagos_docentes_detalle[prof]['pago_docencia'] += pago_doc
-        pagos_docentes_detalle[prof]['pago_psicologia'] += pago_psi
-        pagos_docentes_detalle[prof]['total_pagar'] += pago_doc + pago_psi
-        total_docencia_mes += pago_doc
-        total_psicologia_mes += pago_psi
-        total_pago_docentes_mes += pago_doc + pago_psi
-
-    total_docencia_mes = round(total_docencia_mes, 2)
-    total_psicologia_mes = round(total_psicologia_mes, 2)
-    total_pago_docentes_mes = round(total_pago_docentes_mes, 2)
-    
     # Cargar fechas de pago guardadas
     fechas = supabase.table('fechas_pago_docentes').select('*').eq('mes', mes).eq('anio', anio).execute()
     for f in (fechas.data or []):
@@ -2610,17 +2733,20 @@ def gestion_gastos():
     
     # Reembolsos pendientes (todos los períodos, no pagados). Se usa OR is.null
     # porque neq('reembolso_pagado', True) excluía las filas con el campo NULL.
+    # _fetch_all: sin paginar, PostgREST corta en 1000 filas y los reembolsos
+    # pendientes/pagados (acumulados de TODOS los períodos) se truncarían en
+    # silencio al crecer la tabla de gastos.
     try:
-        reembolsos_pend = supabase.table('gastos').select('*').eq('reembolso', True) \
-            .or_('reembolso_pagado.is.null,reembolso_pagado.eq.false').order('fecha', desc=True).execute()
+        reembolsos_pend = _fetch_all(supabase.table('gastos').select('*').eq('reembolso', True)
+            .or_('reembolso_pagado.is.null,reembolso_pagado.eq.false').order('fecha', desc=True))
     except Exception:
-        reembolsos_pend = supabase.table('gastos').select('*').eq('reembolso', True).order('fecha', desc=True).execute()
+        reembolsos_pend = _fetch_all(supabase.table('gastos').select('*').eq('reembolso', True).order('fecha', desc=True))
 
     # Reembolsos YA pagados (para la sección "Pagados", recogida). Se ordenan por
     # la fecha en que se pagó el reembolso.
     try:
-        reembolsos_pagados = supabase.table('gastos').select('*').eq('reembolso', True) \
-            .eq('reembolso_pagado', True).order('fecha_reembolso_pagado', desc=True).execute().data or []
+        reembolsos_pagados = _fetch_all(supabase.table('gastos').select('*').eq('reembolso', True)
+            .eq('reembolso_pagado', True).order('fecha_reembolso_pagado', desc=True))
     except Exception:
         reembolsos_pagados = []
 
@@ -2650,7 +2776,7 @@ def gestion_gastos():
                          total_docencia_mes=total_docencia_mes,
                          total_psicologia_mes=total_psicologia_mes,
                          total_sesiones_docentes=total_sesiones_docentes,
-                         reembolsos_pend=reembolsos_pend.data or [],
+                         reembolsos_pend=reembolsos_pend,
                          reembolsos_pagados=reembolsos_pagados,
                          es_admin=(current_user.rol == 'admin'),
                          personas_cuentas=personas_cuentas,
@@ -2673,7 +2799,13 @@ def api_actualizar_reembolso(id):
     data = request.get_json()
     update = {}
     if 'reembolsado_a' in data:
-        update['reembolsado_a'] = data['reembolsado_a'] or None
+        valor = data['reembolsado_a'] or None
+        # Debe calzar EXACTO con un nombre de SOCIOS: la liquidación agrupa
+        # los reembolsos por ese texto, y un valor que no calce se pierde
+        # silenciosamente del reparto sin ningún aviso.
+        if valor is not None and valor not in SOCIOS:
+            return jsonify({'success': False, 'error': f'"{valor}" no es un socio válido. Debe ser uno de: {", ".join(SOCIOS)}'}), 400
+        update['reembolsado_a'] = valor
     if 'reembolso' in data:
         update['reembolso'] = bool(data['reembolso'])
     try:
@@ -2756,11 +2888,9 @@ def api_guardar_cuenta_pago():
         'actualizado_por': current_user.nombre,
     }
     try:
-        existente = supabase.table('cuentas_pago_docentes').select('id').eq('persona', persona).execute()
-        if existente.data:
-            supabase.table('cuentas_pago_docentes').update(registro).eq('id', existente.data[0]['id']).execute()
-        else:
-            supabase.table('cuentas_pago_docentes').insert(registro).execute()
+        # 'persona' es UNIQUE en el esquema: upsert en una sola llamada en vez
+        # de SELECT + INSERT/UPDATE.
+        supabase.table('cuentas_pago_docentes').upsert(registro, on_conflict='persona').execute()
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': 'No se pudo guardar. ¿Ya ejecutaste migration_cuentas_pago.sql? Detalle: ' + str(e)})
@@ -2770,8 +2900,7 @@ def api_guardar_cuenta_pago():
 @login_required
 @socio_admin_required
 def liquidacion():
-    mes = int(request.args.get('mes', date.today().month))
-    anio = int(request.args.get('anio', date.today().year))
+    mes, anio = _mes_anio_args()
 
     # Cargar o crear registro de liquidación guardado
     try:
@@ -2781,7 +2910,10 @@ def liquidacion():
         liq_record = None
 
     if request.method == 'POST':
-        saldo_cuenta = float(request.form.get('saldo_cuenta', 0))
+        try:
+            saldo_cuenta = float(request.form.get('saldo_cuenta', 0) or 0)
+        except (TypeError, ValueError):
+            saldo_cuenta = 0.0
         # Porcentaje del balance POSITIVO que se reparte entre socios (0–100).
         try:
             pct = float(request.form.get('porcentaje_reparto', 100) or 100)
@@ -2865,17 +2997,19 @@ def liquidacion():
             benef = g['reembolsado_a']
             reembolsos_por_socio[benef] = reembolsos_por_socio.get(benef, 0) + (g.get('monto', 0) or 0)
 
-    # Gastos pendientes de reembolso (de cualquier período anterior también)
+    # Gastos pendientes de reembolso (de cualquier período anterior también).
+    # _fetch_all: sin paginar, esta lista acumulada de TODA la historia se
+    # truncaría en silencio pasadas las 1000 filas de PostgREST.
     try:
-        gastos_reembolso_pend = supabase.table('gastos').select('*').eq('reembolso', True).execute()
+        gastos_reembolso_pend = _fetch_all(supabase.table('gastos').select('*').eq('reembolso', True))
     except Exception:
-        gastos_reembolso_pend = type('obj', (object,), {'data': []})()
+        gastos_reembolso_pend = []
 
     # Reembolsos AÚN NO pagados de CUALQUIER período (para una sección siempre
     # visible: así un reembolso pendiente/reversado nunca queda oculto por estar
     # en otro mes). No altera el reparto por período de arriba.
     reembolsos_pendientes = sorted(
-        [g for g in (gastos_reembolso_pend.data or [])
+        [g for g in gastos_reembolso_pend
          if g.get('reembolsado_a') and not g.get('reembolso_pagado')],
         key=lambda g: g.get('fecha') or '', reverse=True)
     reembolsos_pend_por_socio = {}
@@ -2890,31 +3024,35 @@ def liquidacion():
     total_devoluciones = devoluciones_periodo(anio, mes)
     total_ingresos = total_ingresos_bruto - total_devoluciones
 
-    # Pago a docentes del período
-    sesiones_mes = _fetch_all(supabase.table('sesiones').select('*').in_('estado', ['Realizado', 'Cancelado-Pagado']).gte('fecha', f"{anio}-{mes:02d}-01").lte('fecha', f"{anio}-{mes:02d}-{ultimo_dia}"))
-
-    pago_por_docente = {}
-    total_pago_docentes = 0
-    for s in dedup_sesiones_docente(sesiones_mes):
-        prof = s.get('profesor_terapeuta', 'Desconocido')
-        # Regla única de pago (incluye 'ambos' dividido: clases + % terapia)
-        pago = sum(pago_sesion_docente(s))
-        pago_por_docente[prof] = pago_por_docente.get(prof, 0) + pago
-        total_pago_docentes += pago
+    # Pago a docentes del período: helper compartido con gestion_gastos().
+    _detalle_docentes, _td, _tp, total_pago_docentes = _pago_docentes_mes(mes, anio)
+    pago_por_docente = {prof: d['total_pagar'] for prof, d in _detalle_docentes.items()}
 
     # Anticipos APROBADOS = adelantos ya entregados al docente: reducen el pago
     # neto que aún debe salir de la cuenta (mismo criterio que el Módulo 5).
     # Sin esto, un adelanto ya desembolsado se restaba dos veces del balance.
+    # Acotado al mes en que se aprobó (fecha_aprobacion): antes, un anticipo
+    # aprobado se seguía restando en TODOS los meses siguientes hasta que
+    # alguien lo marcaba 'descontado' a mano.
     try:
-        anticipos_rows = supabase.table('anticipos_solicitudes').select('usuario_nombre,monto').eq('estado', 'aprobado').execute().data or []
+        anticipos_rows = (supabase.table('anticipos_solicitudes').select('usuario_nombre,monto')
+            .eq('estado', 'aprobado')
+            .gte('fecha_aprobacion', f"{anio}-{mes:02d}-01")
+            .lte('fecha_aprobacion', f"{anio}-{mes:02d}-{ultimo_dia}")
+            .execute().data or [])
     except Exception:
         anticipos_rows = []
     anticipos_por_docente = {}
     for a in anticipos_rows:
         nom = a.get('usuario_nombre', '')
         anticipos_por_docente[nom] = anticipos_por_docente.get(nom, 0) + (a.get('monto', 0) or 0)
-    # Solo se descuentan los anticipos de docentes con pago este período
-    total_anticipos = round(sum(anticipos_por_docente.get(p, 0) for p in pago_por_docente), 2)
+    # Se descuentan los anticipos de docentes con pago este período, MÁS los
+    # de cualquier socio (su anticipo se resta siempre en su fila individual,
+    # más abajo, tenga o no sesiones el mes) — si no se incluyen aquí también,
+    # el balance/reparto agregado queda inflado por ese monto y "desaparece"
+    # sin quedar reflejado en ningún socio ni en lo retenido.
+    docentes_con_deduccion = set(pago_por_docente) | set(SOCIOS)
+    total_anticipos = round(sum(anticipos_por_docente.get(p, 0) for p in docentes_con_deduccion), 2)
 
     total_gastos = round(total_gastos, 2)
     total_ingresos = round(total_ingresos, 2)
@@ -2973,7 +3111,7 @@ def liquidacion():
         monto_repartir=monto_repartir, monto_retenido=monto_retenido, pct_efectivo=pct_efectivo,
         gastos=gastos_periodo.data or [], total_gastos=total_gastos, gastos_por_cat=gastos_por_cat,
         reembolsos_por_socio=reembolsos_por_socio,
-        gastos_reembolso_pend=gastos_reembolso_pend.data or [],
+        gastos_reembolso_pend=gastos_reembolso_pend,
         reembolsos_pendientes=reembolsos_pendientes,
         reembolsos_pend_por_socio=reembolsos_pend_por_socio,
         total_reembolsos_pendientes=total_reembolsos_pendientes,
@@ -2986,6 +3124,7 @@ def liquidacion():
 # ========== ESTUDIANTES ==========
 @app.route('/estudiantes', methods=['GET', 'POST'])
 @login_required
+@socio_admin_required
 def gestion_estudiantes():
     estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
     # Instituciones dinámicas: default + las ya registradas en la BD
@@ -2997,6 +3136,7 @@ def gestion_estudiantes():
 
 @app.route('/api/crear_estudiante', methods=['POST'])
 @login_required
+@socio_admin_required
 def api_crear_estudiante():
     data = request.get_json()
     result = supabase.table('estudiantes').insert({
@@ -3232,14 +3372,14 @@ def gestion_usuarios():
 @app.route('/mi-reporte')
 @login_required
 def mi_reporte():
-    mes = int(request.args.get('mes', date.today().month))
-    anio = int(request.args.get('anio', date.today().year))
+    mes, anio = _mes_anio_args()
     datos = []
     total_horas = 0
     total_a_pagar = 0
     anticipos_aprobados = 0
-    nombre_usuario = current_user.nombre.strip().lower()
-    palabras_usuario = nombre_usuario.split()
+    # Match exacto (no substring): un nombre vacío o una coincidencia parcial
+    # ('ana' en 'mariana') no debe traer sesiones de otra persona.
+    nombre_usuario = norm_nombre(current_user.nombre).lower()
     sesiones_data = _fetch_all(supabase.table('sesiones').select('*, estudiantes(*)').in_('estado', ['Realizado', 'Cancelado-Pagado']).order('fecha', desc=True))
 
     # Mapa grupo_id → lista de estudiantes para clases grupales
@@ -3256,7 +3396,14 @@ def mi_reporte():
             if _nom2 not in _ests_por_grupo_mr[_gid]:
                 _ests_por_grupo_mr[_gid].append(_nom2)
 
-    anticipos = supabase.table('anticipos_solicitudes').select('*').eq('usuario_id', current_user.id).eq('estado', 'aprobado').execute()
+    # Acotado al mes de aprobación, igual que en liquidacion()/módulo 5: un
+    # anticipo no debe seguir descontándose mes tras mes indefinidamente.
+    _ultimo_dia_mr = monthrange(anio, mes)[1]
+    anticipos = (supabase.table('anticipos_solicitudes').select('*')
+        .eq('usuario_id', current_user.id).eq('estado', 'aprobado')
+        .gte('fecha_aprobacion', f"{anio}-{mes:02d}-01")
+        .lte('fecha_aprobacion', f"{anio}-{mes:02d}-{_ultimo_dia_mr}")
+        .execute())
     for a in (anticipos.data or []):
         anticipos_aprobados += a.get('monto', 0)
 
@@ -3271,29 +3418,17 @@ def mi_reporte():
     for s in fuente:
         if mes != 0 and s.get('fecha', '') and s['fecha'][:7] != f"{anio}-{mes:02d}":
             continue
-        profesor = (s.get('profesor_terapeuta') or '').strip().lower()
+        profesor = norm_nombre(s.get('profesor_terapeuta') or '').lower()
         est = s.get('estudiantes', {})
-        nombre_est = f"{est.get('apellidos', '')} {est.get('nombres', '')}".strip().lower()
+        nombre_est = norm_nombre(f"{est.get('apellidos', '')} {est.get('nombres', '')}").lower()
         incluir = False
 
-        if es_docente:
-            if nombre_usuario in profesor or profesor in nombre_usuario:
-                incluir = True
-            else:
-                for p in palabras_usuario:
-                    if len(p) >= 3 and p in profesor:
-                        incluir = True
-                        break
+        if not nombre_usuario:
+            pass  # perfil sin nombre: no matchear nada (evita traer todo el sistema)
+        elif es_docente:
+            incluir = profesor == nombre_usuario
         elif current_user.rol in ['estudiante', 'padre']:
-            apellidos_est = (est.get('apellidos', '') or '').strip().lower()
-            nombres_est = (est.get('nombres', '') or '').strip().lower()
-            if nombre_usuario in nombre_est or nombre_est in nombre_usuario:
-                incluir = True
-            else:
-                for p in palabras_usuario:
-                    if len(p) >= 3 and (p in apellidos_est or p in nombres_est):
-                        incluir = True
-                        break
+            incluir = nombre_est == nombre_usuario
 
         if incluir:
             horas = s.get('horas', 0) or 0
@@ -3342,12 +3477,16 @@ def mi_reporte():
 @login_required
 def editar_perfil():
     if request.method == 'POST':
-        updates = {'nombre': request.form['nombre'], 'email': request.form['email']}
+        nombre_nuevo = norm_nombre(request.form.get('nombre', ''))
+        if not nombre_nuevo:
+            flash('⚠️ El nombre no puede quedar vacío', 'error')
+            return render_template('editar_perfil.html')
+        updates = {'nombre': nombre_nuevo, 'email': request.form['email']}
         if request.form.get('password'):
             updates['password_hash'] = generate_password_hash(request.form['password'])
         supabase.table('usuarios').update(updates).eq('id', current_user.id).execute()
         if current_user.rol in ['profesor', 'psicologo']:
-            supabase.table('sesiones').update({'profesor_terapeuta': norm_nombre(request.form['nombre'])}).eq('profesor_terapeuta', current_user.nombre).execute()
+            supabase.table('sesiones').update({'profesor_terapeuta': nombre_nuevo}).eq('profesor_terapeuta', current_user.nombre).execute()
         flash('✅ Perfil actualizado', 'success')
         return redirect(url_for('dashboard'))
     return render_template('editar_perfil.html')
@@ -3355,6 +3494,7 @@ def editar_perfil():
 # ========== API GENERAL ==========
 @app.route('/api/estudiante/<int:id>')
 @login_required
+@socio_admin_required
 def api_estudiante(id):
     ses = supabase.table('sesiones').select('*').eq('estudiante_id', id).eq('estado', 'Realizado').execute()
     pag = supabase.table('pagos').select('*').eq('estudiante_id', id).order('fecha_pago', desc=True).execute()
@@ -3367,6 +3507,7 @@ def api_estudiante(id):
 
 @app.route('/api/estudiantes')
 @login_required
+@socio_admin_required
 def api_estudiantes():
     est = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
     return jsonify([{'id': e['id'], 'nombre': f"{e['apellidos']} {e['nombres']}"} for e in (est.data or [])])
@@ -3550,6 +3691,9 @@ def devoluciones():
             else:
                 cliente_id = int(request.form['cliente_id']) if request.form.get('cliente_id') else None
                 cita_id = int(request.form['cita_id']) if request.form.get('cita_id') else None
+                if not cliente_id or not cita_id:
+                    flash('❌ Selecciona el cliente externo y la cita', 'error')
+                    return redirect(url_for('devoluciones'))
 
             # Misma lógica que el Módulo 3: gasto al docente + devolución +
             # cita externa + cancelar la sesión asociada (evita el doble pago
@@ -3579,8 +3723,7 @@ def devoluciones():
         return redirect(url_for('devoluciones'))
 
     # GET
-    mes = int(request.args.get('mes', date.today().month))
-    anio = int(request.args.get('anio', date.today().year))
+    mes, anio = _mes_anio_args()
 
     estudiantes = supabase.table('estudiantes').select('id,nombres,apellidos').eq('activo', True).order('apellidos').execute()
     estudiantes_lista = [{'id': e['id'], 'nombre': f"{e['apellidos']} {e['nombres']}"} for e in (estudiantes.data or [])]
@@ -3629,27 +3772,33 @@ def eliminar_devolucion(id):
     if not dev.data:
         return jsonify({'success': False, 'error': 'No encontrada'})
     d = dev.data[0]
-    # Revertir el gasto vinculado
+    # Orden pensado para no quedar en un estado inconsistente si algo falla a
+    # mitad de camino: primero las reversiones (recuperables/reintentables),
+    # y el borrado del gasto y de la propia devolución AL FINAL. Antes el
+    # gasto se borraba primero; si la reversión de la cita fallaba después,
+    # quedaba el gasto ya eliminado pero la devolución seguía existiendo,
+    # apuntando a un gasto_id inexistente.
+    try:
+        # Revertir el pago de la cita externa (volver a sumar lo devuelto)
+        if d.get('tipo_cliente') == 'externo' and d.get('cita_id'):
+            cita = supabase.table('citas_psicologia').select('*').eq('id', d['cita_id']).execute()
+            if cita.data:
+                c = cita.data[0]
+                nuevo_pagado = round((c.get('monto_pagado', 0) or 0) + (d.get('monto', 0) or 0), 2)
+                nuevo_estado = 'pagada' if nuevo_pagado >= (c.get('valor', 0) or 0) else 'parcial'
+                supabase.table('citas_psicologia').update({
+                    'monto_pagado': nuevo_pagado, 'estado': nuevo_estado
+                }).eq('id', d['cita_id']).execute()
+        # Restaurar la sesión que la devolución canceló (vuelve a cobrarse y a
+        # pagarse al docente por sesión, ya que el gasto vinculado se elimina abajo)
+        if d.get('sesion_id'):
+            supabase.table('sesiones').update({'estado': 'Realizado'}).eq('id', d['sesion_id']).execute()
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'No se pudo revertir cita/sesión, nada se eliminó: {e}'})
+    # Recién ahora, con las reversiones ya confirmadas: borrar el gasto y la devolución.
     if d.get('gasto_id'):
         try:
             supabase.table('gastos').delete().eq('id', d['gasto_id']).execute()
-        except Exception:
-            pass
-    # Revertir el pago de la cita externa (volver a sumar lo devuelto)
-    if d.get('tipo_cliente') == 'externo' and d.get('cita_id'):
-        cita = supabase.table('citas_psicologia').select('*').eq('id', d['cita_id']).execute()
-        if cita.data:
-            c = cita.data[0]
-            nuevo_pagado = round((c.get('monto_pagado', 0) or 0) + (d.get('monto', 0) or 0), 2)
-            nuevo_estado = 'pagada' if nuevo_pagado >= (c.get('valor', 0) or 0) else 'parcial'
-            supabase.table('citas_psicologia').update({
-                'monto_pagado': nuevo_pagado, 'estado': nuevo_estado
-            }).eq('id', d['cita_id']).execute()
-    # Restaurar la sesión que la devolución canceló (vuelve a cobrarse y a
-    # pagarse al docente por sesión, ya que el gasto vinculado se eliminó)
-    if d.get('sesion_id'):
-        try:
-            supabase.table('sesiones').update({'estado': 'Realizado'}).eq('id', d['sesion_id']).execute()
         except Exception:
             pass
     supabase.table('devoluciones').delete().eq('id', id).execute()
@@ -3691,8 +3840,29 @@ def _norm_num(v):
         return 0.0
     return -n if neg else n
 
-def _norm_fecha(v):
-    """Devuelve 'YYYY-MM-DD' a partir de varios formatos comunes o None."""
+def _detectar_orden_fecha(valores_crudos):
+    """Determina si un lote de fechas con separador /- es predominantemente
+    mes/día (formato US) en vez de día/mes (default). Busca al menos una
+    fecha NO ambigua: si el primer número es >12 el formato es día/mes (no
+    puede ser mes), si el SEGUNDO es >12 el formato es mes/día. Sin ninguna
+    fecha que lo revele, se asume día/mes (comportamiento previo)."""
+    votos_dmy = votos_mdy = 0
+    for v in valores_crudos:
+        m = re.match(r'^(\d{1,2})[/-](\d{1,2})[/-]\d{2,4}', str(v or '').strip())
+        if not m:
+            continue
+        a, b = int(m.group(1)), int(m.group(2))
+        if a > 12:
+            votos_dmy += 1
+        elif b > 12:
+            votos_mdy += 1
+    return votos_mdy > votos_dmy
+
+def _norm_fecha(v, preferir_mdy=False):
+    """Devuelve 'YYYY-MM-DD' a partir de varios formatos comunes o None.
+    preferir_mdy=True prueba mes/día antes que día/mes (bancos con export en
+    formato US); por defecto se asume día/mes, como antes. Ver
+    _detectar_orden_fecha para decidir esto por archivo, no fila por fila."""
     if v is None or v == '':
         return None
     if isinstance(v, (datetime, date)):
@@ -3700,7 +3870,10 @@ def _norm_fecha(v):
     s = str(v).strip()
     # quita parte de hora si viene 'YYYY-MM-DD HH:MM:SS' o '2026-6-10, 2:23 PM'
     s = s.split(' ')[0].rstrip(',;')
-    for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y', '%d/%m/%y', '%d-%m-%y', '%m/%d/%Y'):
+    formatos = ['%Y-%m-%d']
+    formatos += ['%m/%d/%Y', '%d/%m/%Y', '%d-%m-%Y', '%d/%m/%y', '%d-%m-%y'] if preferir_mdy \
+        else ['%d/%m/%Y', '%d-%m-%Y', '%d/%m/%y', '%d-%m-%y', '%m/%d/%Y']
+    for fmt in formatos:
         try:
             return datetime.strptime(s, fmt).strftime('%Y-%m-%d')
         except ValueError:
@@ -3767,12 +3940,12 @@ def _mapear_columnas(headers):
                 break
     return mapa
 
-def _fila_a_movimiento(row, mapa):
+def _fila_a_movimiento(row, mapa, preferir_mdy=False):
     """Convierte una fila (lista) en un movimiento normalizado o None."""
     def cell(campo):
         i = mapa.get(campo)
         return row[i] if (i is not None and i < len(row)) else None
-    fecha = _norm_fecha(cell('fecha'))
+    fecha = _norm_fecha(cell('fecha'), preferir_mdy=preferir_mdy)
     if not fecha:
         return None
     descripcion = str(cell('descripcion') or '').strip()
@@ -3824,9 +3997,16 @@ def parsear_estado_cuenta(file_bytes, filename):
                 break
         if header_idx is None:
             return [], 'No se reconocieron las columnas (fecha y débito/crédito o monto) en el Excel.'
+        filas_datos = filas[header_idx + 1:]
+        # La fecha suele venir como datetime nativo de Excel (sin ambigüedad);
+        # esto solo importa cuando el banco la exporta como texto 'DD/MM' vs
+        # 'MM/DD'. Se decide una vez para todo el archivo, no fila por fila.
+        idx_fecha = mapa.get('fecha')
+        crudos_fecha = [f[idx_fecha] for f in filas_datos if idx_fecha is not None and idx_fecha < len(f)] if idx_fecha is not None else []
+        preferir_mdy = _detectar_orden_fecha(crudos_fecha)
         movs = []
-        for fila in filas[header_idx + 1:]:
-            mv = _fila_a_movimiento(list(fila), mapa)
+        for fila in filas_datos:
+            mv = _fila_a_movimiento(list(fila), mapa, preferir_mdy=preferir_mdy)
             if mv:
                 movs.append(mv)
         return movs, None
@@ -3842,12 +4022,17 @@ def parsear_estado_cuenta(file_bytes, filename):
         # Best-effort: líneas que empiezan con fecha y traen al menos un monto
         patron_fecha = re.compile(r'^(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s+(.*)')
         patron_monto = re.compile(r'-?\$?\(?\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})\)?')
-        for linea in texto.splitlines():
-            linea = linea.strip()
+        lineas = [l.strip() for l in texto.splitlines()]
+        # Formato día/mes vs mes/día decidido una vez para todo el PDF (no
+        # línea por línea): mezclar ambos en un mismo estado de cuenta
+        # invertiría fechas en silencio para las filas ambiguas.
+        fechas_crudas_pdf = [mf.group(1) for mf in (patron_fecha.match(l) for l in lineas) if mf]
+        preferir_mdy_pdf = _detectar_orden_fecha(fechas_crudas_pdf)
+        for linea in lineas:
             mf = patron_fecha.match(linea)
             if not mf:
                 continue
-            fecha = _norm_fecha(mf.group(1))
+            fecha = _norm_fecha(mf.group(1), preferir_mdy=preferir_mdy_pdf)
             if not fecha:
                 continue
             resto = mf.group(2)
@@ -3862,6 +4047,14 @@ def parsear_estado_cuenta(file_bytes, filename):
                 monto, saldo = valores[-1], None
             descripcion = patron_monto.sub('', resto).strip()
             if monto == 0:
+                continue
+            # "SALDO ANTERIOR"/"SALDO INICIAL" es informativo (el saldo con el
+            # que arranca el estado de cuenta), no un movimiento real. Cuando
+            # la línea trae un solo número, ese caso caía en la rama de
+            # 'monto' de arriba y se registraba como un crédito fantasma que
+            # inflaba totales y contaminaba la cadena de saldos.
+            desc_norm = _norm_texto(descripcion)
+            if 'saldo anterior' in desc_norm or 'saldo inicial' in desc_norm:
                 continue
             movs.append({
                 'fecha': fecha, 'descripcion': descripcion, 'referencia': '',
@@ -3972,17 +4165,25 @@ def conciliar_nuevos(movs):
                 mejor = candidatos[0][2]
                 tipo, ref_id = 'pago', mejor['id']
                 usados_pago.add(mejor['id'])
-        else:  # débito ↔ gasto
+        else:  # débito ↔ gasto: mismo desempate por cercanía de fecha que crédito↔pago
+            candidatos_g = []
             for g in gastos:
                 if g['id'] in usados_gasto:
                     continue
                 if abs((g.get('monto') or 0) - abs(m['monto'])) < 0.01:
                     dias = _dias_entre(g.get('fecha'), m['fecha'])
                     if dias is not None and dias <= DIAS_TOLERANCIA_CONCILIACION:
-                        tipo, ref_id = 'gasto', g['id']
-                        usados_gasto.add(g['id'])
-                        break
+                        candidatos_g.append((dias, g))
+            if candidatos_g:
+                candidatos_g.sort(key=lambda c: c[0])
+                mejor_g = candidatos_g[0][1]
+                tipo, ref_id = 'gasto', mejor_g['id']
+                usados_gasto.add(mejor_g['id'])
         if tipo:
+            # Nota: no se pudo convertir esto a un update por lotes real — cada
+            # fila necesita un 'conciliado_id' distinto, y un upsert parcial
+            # fallaría contra las columnas NOT NULL de la tabla (lote_id,
+            # monto, hash_mov) que este payload no reenvía.
             supabase.table('movimientos_cuenta').update({
                 'estado_conciliacion': 'conciliado', 'conciliado_tipo': tipo, 'conciliado_id': ref_id
             }).eq('id', m['id']).execute()
@@ -4275,22 +4476,35 @@ def subir_estado_cuenta():
         return redirect(url_for('movimientos_cuenta'))
 
     lote_id = str(uuid.uuid4())
-    insertados = []
-    for m in nuevos:
-        fila = {
+
+    def _fila_movimiento(m):
+        return {
             'lote_id': lote_id, 'banco': banco or None, 'fecha': m['fecha'],
             'descripcion': m['descripcion'], 'referencia': m['referencia'] or None,
             'monto': m['monto'], 'tipo': m['tipo'], 'saldo': m['saldo'],
             'hash_mov': m['hash_mov'], 'estado_conciliacion': 'pendiente',
             'cargado_por': current_user.nombre
         }
-        try:
-            res = supabase.table('movimientos_cuenta').insert(fila).execute()
-            if res.data:
-                m['id'] = res.data[0]['id']
-                insertados.append(m)
-        except Exception:
-            pass  # hash duplicado por carrera u otro error: se ignora
+
+    insertados = []
+    # Insert por lotes: un estado de cuenta típico son 150-300 movimientos, y
+    # antes cada uno era un round-trip HTTP separado. Si el lote entero falla
+    # (ej. choque de hash único dentro del lote), reintenta fila por fila para
+    # no perder las que sí son válidas — mismo comportamiento tolerante que antes.
+    try:
+        res = supabase.table('movimientos_cuenta').insert([_fila_movimiento(m) for m in nuevos]).execute()
+        for m, row in zip(nuevos, res.data or []):
+            m['id'] = row['id']
+            insertados.append(m)
+    except Exception:
+        for m in nuevos:
+            try:
+                res = supabase.table('movimientos_cuenta').insert(_fila_movimiento(m)).execute()
+                if res.data:
+                    m['id'] = res.data[0]['id']
+                    insertados.append(m)
+            except Exception:
+                pass  # hash duplicado por carrera u otro error: se ignora
 
     n_conciliados = conciliar_nuevos(insertados)
 
@@ -4620,7 +4834,8 @@ def cron_recordatorio_cobros():
     CRON_TOKEN (en cabecera 'X-Cron-Token' o parámetro ?token=)."""
     token_esperado = os.environ.get('CRON_TOKEN', '')
     token_recibido = request.headers.get('X-Cron-Token') or request.args.get('token', '')
-    if not token_esperado or token_recibido != token_esperado:
+    # compare_digest en vez de != : evita filtrar el token por timing attack.
+    if not token_esperado or not hmac.compare_digest(token_recibido, token_esperado):
         return jsonify({'success': False, 'error': 'No autorizado'}), 401
     resultado = _enviar_recordatorio_cobros()
     estado = 200 if resultado.get('enviado') or resultado.get('motivo') == 'sin_deudas' else 500
@@ -4634,13 +4849,22 @@ def cron_recordatorio_cobros():
 # sesiones correspondientes con los mismos lineamientos de costo.
 
 def _proforma_numero():
-    """Genera un número legible PRO-AAAA-#### basado en el conteo existente."""
+    """Genera un número legible PRO-AAAA-#### para el año actual.
+    Nota: usa el MÁXIMO correlativo existente (no un conteo total, que se
+    corre si se borró alguna proforma) para reducir colisiones, pero sigue
+    habiendo una ventana de carrera entre leer y crear si dos personas crean
+    una proforma al mismo tiempo — el fix completo requiere una restricción
+    UNIQUE en la columna 'numero' a nivel de base de datos."""
     anio = date.today().year
+    n = 1
     try:
-        r = supabase.table('proformas').select('id').execute()
-        n = len(r.data or []) + 1
+        r = supabase.table('proformas').select('numero').like('numero', f'PRO-{anio}-%').execute()
+        for row in (r.data or []):
+            m = re.match(rf'^PRO-{anio}-(\d+)$', row.get('numero') or '')
+            if m:
+                n = max(n, int(m.group(1)) + 1)
     except Exception:
-        n = 1
+        pass
     return f"PRO-{anio}-{n:04d}"
 
 
@@ -4675,7 +4899,7 @@ def _parsear_items_proforma():
         h_ini = (inicios[i] if i < len(inicios) else '') or ''
         h_fin = (fines[i] if i < len(fines) else '') or ''
         try:
-            precio = float(precios[i]) if i < len(precios) and precios[i] else 0
+            precio = max(0.0, float(precios[i])) if i < len(precios) and precios[i] else 0
         except ValueError:
             precio = 0
         horas = _calc_horas(h_ini, h_fin)
@@ -4708,31 +4932,37 @@ def _parsear_items_proforma():
 
 
 def _proforma_html(p, items, para='copia'):
-    """HTML de la proforma usado tanto en pantalla (copia) como en el correo."""
+    """HTML de la proforma usado tanto en pantalla (copia) como en el correo.
+    Todo texto libre (nombres, notas, asignatura/tema) se escapa: este HTML se
+    renderiza con |safe y también se manda por email, así que sin escape un
+    dato guardado con HTML/JS embebido se ejecutaría en la sesión de quien
+    lo abre."""
     hoy = (p.get('created_at') or '')[:10] or date.today().isoformat()
     filas = ''
     for it in items:
         es_ter = it.get('tipo_sesion') in ('terapia', 'ambos')
         concepto = it.get('tema_terapia') if es_ter else it.get('asignatura')
-        concepto = concepto or ('Atención psicológica' if es_ter else 'Clase')
+        concepto = escape(concepto or ('Atención psicológica' if es_ter else 'Clase'))
         horario = ''
         if it.get('hora_inicio') and it.get('hora_fin'):
             horario = f"{(it['hora_inicio'] or '')[:5]} – {(it['hora_fin'] or '')[:5]}"
-        detalle = it.get('profesor') or ''
+        detalle = escape(it.get('profesor') or '')
         horas = it.get('horas') or 0
         filas += (
             "<tr>"
             f"<td style='padding:9px 12px;border-bottom:1px solid #eee;font-size:13px;color:#1a1a2e;'>{concepto}"
             f"<div style='font-size:11px;color:#94a3b8;'>{detalle}</div></td>"
-            f"<td style='padding:9px 12px;border-bottom:1px solid #eee;font-size:13px;color:#334155;'>{it.get('fecha') or '—'}</td>"
+            f"<td style='padding:9px 12px;border-bottom:1px solid #eee;font-size:13px;color:#334155;'>{escape(it.get('fecha') or '—')}</td>"
             f"<td style='padding:9px 12px;border-bottom:1px solid #eee;font-size:13px;color:#334155;'>{horario or '—'}</td>"
             f"<td style='padding:9px 12px;border-bottom:1px solid #eee;font-size:13px;color:#334155;text-align:center;'>{horas if horas else '—'}</td>"
             f"<td style='padding:9px 12px;border-bottom:1px solid #eee;font-size:13px;color:#1a1a2e;font-weight:700;text-align:right;'>${(it.get('subtotal') or 0):.2f}</td>"
             "</tr>"
         )
     total = p.get('total') or 0
-    rep = p.get('representante_nombre') or '—'
-    est = p.get('estudiante_nombre') or '—'
+    rep = escape(p.get('representante_nombre') or '—')
+    est = escape(p.get('estudiante_nombre') or '—')
+    notas_html = ('<p style="font-size:12px;color:#64748b;margin-top:16px;"><strong>Notas:</strong> '
+                  + str(escape(p['notas'])) + '</p>') if p.get('notas') else ''
     return f"""\
 <div style="font-family:Arial,Helvetica,sans-serif;max-width:640px;margin:0 auto;color:#1a1a2e;">
   <div style="background:linear-gradient(135deg,#0f172a,#1e3a5f);color:#fff;padding:22px 26px;border-radius:16px 16px 0 0;">
@@ -4763,7 +4993,7 @@ def _proforma_html(p, items, para='copia'):
         </tr>
       </tfoot>
     </table>
-    {('<p style="font-size:12px;color:#64748b;margin-top:16px;"><strong>Notas:</strong> ' + p['notas'] + '</p>') if p.get('notas') else ''}
+    {notas_html}
     <p style="font-size:11px;color:#94a3b8;margin-top:20px;">Documento generado por el sistema Atlas. Los valores corresponden a la cotización vigente y están sujetos a la aprobación del representante.</p>
   </div>
 </div>"""
@@ -4828,7 +5058,17 @@ def proforma_nueva():
                 'estado': 'borrador', 'incorporada': False,
                 'creado_por': int(current_user.id),
             }
-            r = supabase.table('proformas').insert(cab).execute()
+            # Reintenta con un número nuevo si el insert falla por choque de
+            # 'numero' (ej. una futura restricción UNIQUE en la BD detectando
+            # dos proformas creadas al mismo tiempo).
+            for _intento in range(3):
+                try:
+                    r = supabase.table('proformas').insert(cab).execute()
+                    break
+                except Exception:
+                    if _intento == 2:
+                        raise
+                    cab['numero'] = _proforma_numero()
             pid = r.data[0]['id']
             for it in items:
                 it_row = dict(it); it_row['proforma_id'] = pid
@@ -4988,6 +5228,18 @@ def proforma_incorporar(id):
         return redirect(url_for('proforma_detalle', id=id))
     encargado = norm_nombre(p.get('encargado_apertura') or (ENCARGADOS[0] if ENCARGADOS else ''))
 
+    # Se marca 'incorporada' ANTES de crear las sesiones (no al final): si el
+    # proceso falla a mitad del bucle, un reintento queda bloqueado por el
+    # guard de arriba en vez de duplicar las sesiones ya creadas.
+    try:
+        supabase.table('proformas').update({
+            'estado': 'incorporado', 'incorporada': True,
+            'incorporado_at': datetime.now().isoformat()
+        }).eq('id', id).execute()
+    except Exception:
+        flash('❌ No se pudo marcar la proforma como incorporada. Intenta de nuevo.', 'error')
+        return redirect(url_for('proforma_detalle', id=id))
+
     creadas = 0
     primera_fecha = None
     for it in items:
@@ -5023,13 +5275,6 @@ def proforma_incorporar(id):
         if not primera_fecha:
             primera_fecha = fecha
 
-    try:
-        supabase.table('proformas').update({
-            'estado': 'incorporado', 'incorporada': True,
-            'incorporado_at': datetime.now().isoformat()
-        }).eq('id', id).execute()
-    except Exception:
-        pass
     flash(f'✅ {creadas} sesión(es) incorporadas a la planificación desde la proforma {p.get("numero") or ""}', 'success')
     return redirect(url_for('modulo2', fecha=primera_fecha or str(date.today())))
 

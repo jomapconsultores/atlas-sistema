@@ -305,14 +305,38 @@ document.getElementById('paraleloNuevo').addEventListener('change',function(){
 // ===== BUSCADOR DE INSTITUCIÓN (formulario nuevo) =====
 let _instTimer=null;
 function filtrarInstituciones(q){clearTimeout(_instTimer);_instTimer=setTimeout(()=>_mostrarOpciones(q),150);}
+function _filaInst(texto, onClick, extraStyle){
+    const div=document.createElement('div');
+    div.textContent=texto;
+    div.style.cssText='padding:7px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid #f5f5f5;'+(extraStyle||'');
+    const hoverBg=extraStyle?'#e3f2fd':'#e8f0fe';
+    div.addEventListener('mousedown',onClick);
+    div.addEventListener('mouseover',()=>div.style.background=hoverBg);
+    div.addEventListener('mouseout',()=>div.style.background='');
+    return div;
+}
 function _mostrarOpciones(q){
+    // Construido con DOM + textContent (no innerHTML con datos) para que un
+    // nombre de institución guardado con HTML/JS embebido no se ejecute.
     const dd=document.getElementById('dropdownInst');
     const lower=q.toLowerCase().trim();
     const matches=lower?INSTITUCIONES.filter(i=>i.toLowerCase().includes(lower)):INSTITUCIONES;
-    let html=matches.map(i=>`<div onmousedown="seleccionarInst('${i.replace(/'/g,"\\'")}')" style="padding:7px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid #f5f5f5;" onmouseover="this.style.background='#e8f0fe'" onmouseout="this.style.background=''">${i}</div>`).join('');
-    if(q.trim()&&!INSTITUCIONES.some(i=>i.toLowerCase()===lower))
-        html+=`<div onmousedown="crearInst('${q.replace(/'/g,"\\'")}')" style="padding:7px 12px;cursor:pointer;font-size:13px;color:#1a73e8;font-weight:600;" onmouseover="this.style.background='#e3f2fd'" onmouseout="this.style.background=''">➕ Crear: "${q}"</div>`;
-    dd.innerHTML=html||'<div style="padding:8px 12px;color:#999;font-size:12px;">Sin resultados</div>';
+    dd.innerHTML='';
+    let filas=0;
+    matches.forEach(i=>{
+        dd.appendChild(_filaInst(i, ()=>seleccionarInst(i)));
+        filas++;
+    });
+    if(q.trim()&&!INSTITUCIONES.some(i=>i.toLowerCase()===lower)){
+        dd.appendChild(_filaInst(`➕ Crear: "${q}"`, ()=>crearInst(q), 'color:#1a73e8;font-weight:600;'));
+        filas++;
+    }
+    if(!filas){
+        const vacio=document.createElement('div');
+        vacio.textContent='Sin resultados';
+        vacio.style.cssText='padding:8px 12px;color:#999;font-size:12px;';
+        dd.appendChild(vacio);
+    }
     dd.style.display='block';
 }
 function seleccionarInst(v){document.getElementById('inputInstNuevo').value=v;document.getElementById('dropdownInst').style.display='none';}

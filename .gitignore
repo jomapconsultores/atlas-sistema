@@ -5,3 +5,4 @@ __pycache__/
 service-account.json
 credentials.json
 *.log
+atlas.db
