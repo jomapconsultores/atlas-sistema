@@ -562,7 +562,6 @@ def _commit_desplegado():
     SOURCE_COMMIT; se contemplan otros proveedores y, de respaldo, se lee del
     repo local. Devuelve el SHA o 'desconocido'."""
     commit = (os.environ.get('SOURCE_COMMIT')        # Coolify
-              or os.environ.get('RENDER_GIT_COMMIT')  # Render
               or os.environ.get('GIT_COMMIT')
               or os.environ.get('COMMIT_SHA')
               or os.environ.get('APP_VERSION') or '').strip()
@@ -705,7 +704,7 @@ def _pk_tabla_lista():
 
 def _pk_proyecto_ref():
     """Ref del proyecto Supabase que USA ESTE servidor (clave para detectar si
-    Render apunta a otro proyecto distinto al que ves en el panel)."""
+    el servidor apunta a otro proyecto distinto al que ves en el panel)."""
     try:
         return (SUPABASE_URL or '').split('//')[-1].split('.')[0]
     except Exception:
@@ -4706,9 +4705,8 @@ COBROS_DESTINATARIOS = ['atlas.cenest@gmail.com', 'creinososter@gmail.com', 'ros
 
 
 def _enviar_email(destinatarios, asunto, html, texto=''):
-    """Envía un correo. Prioriza la API HTTP de Brevo (BREVO_API_KEY) porque
-    Render bloquea el SMTP saliente en el plan gratuito; si no hay clave de
-    Brevo, cae a SMTP (útil en local). Devuelve (ok, error)."""
+    """Envía un correo. Prioriza la API HTTP de Brevo (BREVO_API_KEY); si no
+    hay clave de Brevo, cae a SMTP (útil en local). Devuelve (ok, error)."""
     if isinstance(destinatarios, str):
         destinatarios = [destinatarios]
     remitente = os.environ.get('SMTP_FROM') or os.environ.get('SMTP_USER') or 'atlas.cenest@gmail.com'
@@ -4717,7 +4715,7 @@ def _enviar_email(destinatarios, asunto, html, texto=''):
     if brevo_key:
         return _enviar_email_brevo(brevo_key, remitente, destinatarios, asunto, html, texto)
 
-    # --- Respaldo SMTP (no funciona en Render free; sirve en local) ---
+    # --- Respaldo SMTP (sirve en local) ---
     import smtplib
     from email.mime.multipart import MIMEMultipart
     from email.mime.text import MIMEText
@@ -4745,7 +4743,7 @@ def _enviar_email(destinatarios, asunto, html, texto=''):
 
 
 def _enviar_email_brevo(api_key, remitente, destinatarios, asunto, html, texto=''):
-    """Envía vía la API transaccional de Brevo (HTTPS, no bloqueada por Render).
+    """Envía vía la API transaccional de Brevo (HTTPS).
     El remitente debe estar verificado en la cuenta de Brevo."""
     import json as _json
     import urllib.request

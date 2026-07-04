@@ -73,7 +73,7 @@ docker compose exec -T db psql -U postgres -d atlas < atlas_dump.sql
 
 ## 6. Repuntar la app
 
-En el entorno de la app (Render o local), cambia:
+En el entorno de la app (Coolify o local), cambia:
 ```
 SUPABASE_URL=https://TU_DOMINIO         # o http://IP
 SUPABASE_KEY=<clave anon de gen_keys.py>

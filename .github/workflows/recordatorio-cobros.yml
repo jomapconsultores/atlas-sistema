@@ -12,10 +12,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Llamar al endpoint de la aplicación
+        # Requiere el secret APP_URL con la URL base de la app en su hosting
+        # actual (p.ej. el dominio de Coolify), sin slash final.
         run: |
           echo "Disparando recordatorio de cobros..."
           codigo=$(curl -sS -o respuesta.json -w "%{http_code}" \
-            -X POST "https://atlas-sistema.onrender.com/cron/recordatorio-cobros" \
+            -X POST "${{ secrets.APP_URL }}/cron/recordatorio-cobros" \
             -H "X-Cron-Token: ${{ secrets.CRON_TOKEN }}")
           echo "HTTP $codigo"
           cat respuesta.json
