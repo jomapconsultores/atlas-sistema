@@ -6,3 +6,5 @@ service-account.json
 credentials.json
 *.log
 atlas.db
+ejemplo_estado_cuenta.pdf
+ejemplo_estado_cuenta.xlsx
