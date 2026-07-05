@@ -1,5 +1,5 @@
 import os
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session, g
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash
 from markupsafe import escape
@@ -175,6 +175,77 @@ def api_socio_admin_required(f):
         return f(*args, **kwargs)
     return decorated
 
+# ========== PERMISOS GRANULARES POR MÓDULO/SUBMÓDULO ==========
+# Antes, cada sección (Académico, Personas, Psicología, Finanzas) era
+# admin/socio-only sin excepción. Ahora un admin puede otorgarle a
+# CUALQUIER usuario (de cualquier rol, ej. 'secretaria') acceso a un
+# módulo/submódulo puntual desde /usuarios, vía la tabla usuario_permisos.
+MODULOS_DISPONIBLES = [
+    {'key': 'academico', 'label': 'Académico', 'grupo': None},
+    {'key': 'personas', 'label': 'Personas', 'grupo': None},
+    {'key': 'psicologia', 'label': 'Psicología especial', 'grupo': None},
+    {'key': 'finanzas.pagos_estudiantes', 'label': 'Pagos de estudiantes', 'grupo': 'Finanzas'},
+    {'key': 'finanzas.devoluciones', 'label': 'Devoluciones', 'grupo': 'Finanzas'},
+    {'key': 'finanzas.pagos_docentes', 'label': 'Pagos a docentes', 'grupo': 'Finanzas'},
+    {'key': 'finanzas.anticipos', 'label': 'Anticipos', 'grupo': 'Finanzas'},
+    {'key': 'finanzas.gastos', 'label': 'Gastos', 'grupo': 'Finanzas'},
+    {'key': 'finanzas.liquidacion', 'label': 'Liquidación', 'grupo': 'Finanzas'},
+    {'key': 'finanzas.movimientos', 'label': 'Movimientos en cuenta', 'grupo': 'Finanzas'},
+    {'key': 'finanzas.reportes', 'label': 'Reportes ATLAS', 'grupo': 'Finanzas'},
+]
+MODULOS_KEYS = {m['key'] for m in MODULOS_DISPONIBLES}
+
+# Default de un usuario 'secretaria' recién creado: Académico, Personas y
+# Pagos de estudiantes. Devoluciones queda AFUERA a propósito — requiere
+# autorización expresa de un socio/admin (se otorga aparte, individualmente).
+PERMISOS_DEFAULT_SECRETARIA = ['academico', 'personas', 'finanzas.pagos_estudiantes']
+
+def _permisos_usuario_actual():
+    """Set de módulos otorgados al usuario logueado, con caché de request
+    (flask.g) para no repetir la consulta en cada tiene_modulo() de la misma
+    página."""
+    if not hasattr(g, '_permisos_cache'):
+        try:
+            filas = supabase.table('usuario_permisos').select('modulo').eq('usuario_id', current_user.id).execute().data or []
+            g._permisos_cache = {f['modulo'] for f in filas}
+        except Exception:
+            g._permisos_cache = set()
+    return g._permisos_cache
+
+def tiene_modulo(modulo_key):
+    """Admin/socio siempre tienen acceso total (igual que antes). Cualquier
+    otro rol necesita un permiso explícito otorgado por un ADMIN (/usuarios
+    exige rol admin estricto, no socio) en /usuarios."""
+    if not current_user.is_authenticated:
+        return False
+    if current_user.rol in ('admin', 'socio'):
+        return True
+    return modulo_key in _permisos_usuario_actual()
+
+def requiere_modulo(modulo_key):
+    """Como socio_admin_required, pero además deja pasar a cualquier usuario
+    al que se le haya otorgado este módulo específico."""
+    def decorator(f):
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            if not tiene_modulo(modulo_key):
+                flash('❌ Acceso restringido', 'error')
+                return redirect(url_for('dashboard'))
+            return f(*args, **kwargs)
+        return decorated
+    return decorator
+
+def requiere_modulo_api(modulo_key):
+    """Variante JSON de requiere_modulo, para endpoints /api/* consumidos por fetch()."""
+    def decorator(f):
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            if not tiene_modulo(modulo_key):
+                return jsonify({'success': False, 'error': 'Acceso restringido'}), 403
+            return f(*args, **kwargs)
+        return decorated
+    return decorator
+
 def _puede_gestionar_sesion(sesion):
     """Admin/socio gestionan cualquier sesión; el resto solo la propia
     (match exacto de nombre normalizado, no substring: evita que 'Ana'
@@ -192,9 +263,12 @@ _GLOBALES_CACHE = {'t': 0.0, 'datos': {'solicitudes_pendientes': 0, 'contactos_n
 @app.context_processor
 def inyectar_globales():
     import time
+    # tiene_modulo se expone SIEMPRE (lo usa el nav de base.html para
+    # cualquier rol, no solo admin/socio).
+    base = {'tiene_modulo': tiene_modulo}
     try:
         if not (current_user.is_authenticated and getattr(current_user, 'rol', None) in ['admin', 'socio']):
-            return {'solicitudes_pendientes': 0, 'contactos_nuevos': 0}
+            return {**base, 'solicitudes_pendientes': 0, 'contactos_nuevos': 0}
         if time.time() - _GLOBALES_CACHE['t'] > 30:
             solicitudes = supabase.table('anticipos_solicitudes').select('id').eq('estado', 'pendiente').execute()
             pendientes = len(solicitudes.data or [])
@@ -205,9 +279,9 @@ def inyectar_globales():
                 contactos_nuevos = 0
             _GLOBALES_CACHE['datos'] = {'solicitudes_pendientes': pendientes, 'contactos_nuevos': contactos_nuevos}
             _GLOBALES_CACHE['t'] = time.time()
-        return dict(_GLOBALES_CACHE['datos'])
+        return {**base, **_GLOBALES_CACHE['datos']}
     except Exception:
-        return {'solicitudes_pendientes': 0, 'contactos_nuevos': 0}
+        return {**base, 'solicitudes_pendientes': 0, 'contactos_nuevos': 0}
 
 # Evita que el navegador cachee las páginas HTML (causa de "no veo los cambios" tras desplegar).
 # Los recursos estáticos (logo, etc.) NO se tocan y siguen cacheando normalmente.
@@ -1009,7 +1083,7 @@ def dashboard():
 # ========== MÓDULO 1: PLANIFICACIÓN ==========
 @app.route('/modulo1', methods=['GET', 'POST'])
 @login_required
-@socio_admin_required
+@requiere_modulo('academico')
 def modulo1():
     psicologia, precios_clase, precios_matricula, precios_pension = cargar_costos()
     
@@ -1203,7 +1277,7 @@ def modulo1():
 # ========== EDITOR DE PLANIFICACIONES ==========
 @app.route('/editar-planificaciones')
 @login_required
-@socio_admin_required
+@requiere_modulo('academico')
 def editar_planificaciones():
     psicologia, precios_clase, _, _ = cargar_costos()
     estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
@@ -1218,7 +1292,7 @@ def editar_planificaciones():
 
 @app.route('/editar-planificacion-masiva')
 @login_required
-@socio_admin_required
+@requiere_modulo('academico')
 def editar_planificacion_masiva():
     psicologia, precios_clase, _, _ = cargar_costos()
     estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
@@ -1234,7 +1308,7 @@ def editar_planificacion_masiva():
 # ========== API PARA EDITAR ==========
 @app.route('/api/sesiones/todas')
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('academico')
 def api_sesiones_todas():
     sesiones = supabase.table('sesiones').select('*, estudiantes(apellidos, nombres)').order('fecha', desc=True).execute()
     resultado = []
@@ -1261,7 +1335,7 @@ def api_sesiones_todas():
 
 @app.route('/api/sesiones/para-sincronizar')
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('academico')
 def api_sesiones_para_sincronizar():
     """Devuelve las sesiones en estado 'Realizado' listas para sincronizar con Google Calendar.
     Acepta filtros opcionales ?mes=&anio= para limitar a un mes concreto."""
@@ -1285,7 +1359,7 @@ def api_sesiones_para_sincronizar():
 
 @app.route('/api/estudiante/<int:id>/sesiones')
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('academico')
 def api_estudiante_sesiones(id):
     sesiones = supabase.table('sesiones').select('id, fecha, hora_inicio, hora_fin, tipo_sesion, valor_total, asignatura, tema_terapia').eq('estudiante_id', id).order('fecha', desc=True).execute()
     resultado = []
@@ -1320,7 +1394,7 @@ def api_sesion_unica(id):
 
 @app.route('/api/sesion/<int:id>/editar', methods=['POST'])
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('academico')
 def api_editar_sesion(id):
     try:
         data = request.get_json()
@@ -1421,7 +1495,7 @@ def api_editar_sesion(id):
 
 @app.route('/api/sesion/<int:id>/eliminar', methods=['POST'])
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('academico')
 def eliminar_sesion(id):
     try:
         # Borrar primero el evento del Google Calendar (si existe) antes de eliminar la fila
@@ -1660,7 +1734,7 @@ def cambiar_estudiante_sesion(id):
 
 @app.route('/api/sesion/<int:id>/cambiar-profesor', methods=['POST'])
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('academico')
 def cambiar_profesor_sesion(id):
     try:
         data = request.get_json()
@@ -1703,7 +1777,7 @@ def api_sesiones_pendientes():
 # ========== MÓDULO 3: PAGOS ==========
 @app.route('/modulo3', methods=['GET', 'POST'])
 @login_required
-@socio_admin_required
+@requiere_modulo('finanzas.pagos_estudiantes')
 def modulo3():
     if request.method == 'POST':
         accion = request.form.get('accion', 'pagar')
@@ -1885,8 +1959,9 @@ def modulo4():
 def modulo5():
     if current_user.rol in ['profesor', 'psicologo']:
         return redirect(url_for('mi_reporte'))
-    # Estudiantes/padres no ven la nómina de todos los docentes
-    if current_user.rol not in ['admin', 'socio']:
+    # Estudiantes/padres no ven la nómina de todos los docentes; un usuario
+    # con el módulo finanzas.pagos_docentes otorgado sí puede (ej. secretaría).
+    if not tiene_modulo('finanzas.pagos_docentes'):
         flash('❌ Acceso restringido', 'error')
         return redirect(url_for('dashboard'))
 
@@ -2033,7 +2108,7 @@ def modulo5():
 # ========== MÓDULO 6: REUNIONES ==========
 @app.route('/modulo6', methods=['GET', 'POST'])
 @login_required
-@socio_admin_required
+@requiere_modulo('academico')
 def modulo6():
     if request.method == 'POST':
         try:
@@ -2062,14 +2137,14 @@ def modulo6():
 
 @app.route('/api/reunion/<int:id>/eliminar', methods=['POST'])
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('academico')
 def eliminar_reunion(id):
     supabase.table('reuniones').delete().eq('id', id).execute()
     return jsonify({'success': True})
 
 @app.route('/api/reunion/<int:id>/sincronizar', methods=['POST'])
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('academico')
 def sincronizar_reunion(id):
     try:
         reunion = supabase.table('reuniones').select('*').eq('id', id).execute()
@@ -2104,7 +2179,7 @@ def api_encargados():
 
 @app.route('/api/encargados/crear', methods=['POST'])
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('academico')
 def api_crear_encargado():
     data = request.get_json()
     nombre = data.get('nombre', '').strip().upper()
@@ -2250,14 +2325,14 @@ def solicitar_anticipo():
 
 @app.route('/gestion-anticipos')
 @login_required
-@socio_admin_required
+@requiere_modulo('finanzas.anticipos')
 def gestion_anticipos():
     solicitudes = supabase.table('anticipos_solicitudes').select('*').order('fecha_solicitud', desc=True).execute()
     return render_template('gestion_anticipos.html', solicitudes=solicitudes.data or [])
 
 @app.route('/aprobar-anticipo/<int:id>', methods=['POST'])
 @login_required
-@socio_admin_required
+@requiere_modulo('finanzas.anticipos')
 def aprobar_anticipo(id):
     # .eq('estado','pendiente'): sin esto, un doble clic o un reenvío del
     # formulario podía re-aprobar un anticipo ya 'descontado', duplicando el
@@ -2271,7 +2346,7 @@ def aprobar_anticipo(id):
 
 @app.route('/rechazar-anticipo/<int:id>', methods=['POST'])
 @login_required
-@socio_admin_required
+@requiere_modulo('finanzas.anticipos')
 def rechazar_anticipo(id):
     supabase.table('anticipos_solicitudes').update({'estado': 'rechazado', 'motivo_rechazo': request.form.get('motivo_rechazo', 'Sin motivo')}).eq('id', id).execute()
     flash('❌ Anticipo rechazado', 'info')
@@ -2279,7 +2354,7 @@ def rechazar_anticipo(id):
 
 @app.route('/descontar-anticipo/<int:id>', methods=['POST'])
 @login_required
-@socio_admin_required
+@requiere_modulo('finanzas.anticipos')
 def descontar_anticipo(id):
     """Marca un anticipo aprobado como DESCONTADO (ya restado de un pago al
     docente). Así deja de restarse en los períodos siguientes: el Módulo 5 y
@@ -2296,7 +2371,7 @@ def descontar_anticipo(id):
 # ========== CONTACTOS (solicitudes desde la landing) ==========
 @app.route('/contactos')
 @login_required
-@socio_admin_required
+@requiere_modulo('personas')
 def contactos_lista():
     try:
         contactos = supabase.table('contactos').select('*').order('fecha_registro', desc=True).execute().data or []
@@ -2307,7 +2382,7 @@ def contactos_lista():
 
 @app.route('/contacto/<int:id>/atender', methods=['POST'])
 @login_required
-@socio_admin_required
+@requiere_modulo('personas')
 def atender_contacto(id):
     try:
         supabase.table('contactos').update({
@@ -2321,7 +2396,7 @@ def atender_contacto(id):
 
 @app.route('/contacto/<int:id>/eliminar', methods=['POST'])
 @login_required
-@socio_admin_required
+@requiere_modulo('personas')
 def eliminar_contacto(id):
     try:
         supabase.table('contactos').delete().eq('id', id).execute()
@@ -2333,7 +2408,7 @@ def eliminar_contacto(id):
 # ========== PSICOLOGÍA ESPECIAL ==========
 @app.route('/psicologia-especial')
 @login_required
-@socio_admin_required
+@requiere_modulo('psicologia')
 def psicologia_especial():
     clientes = supabase.table('clientes_externos').select('*').eq('activo', True).order('nombre').execute()
     citas = supabase.table('citas_psicologia').select('*, clientes_externos(*)').order('fecha', desc=True).execute()
@@ -2354,7 +2429,7 @@ def psicologia_especial():
 # para el día que un admin necesite hacerlo por un psicólogo.
 @app.route('/api/cliente-externo', methods=['POST'])
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('psicologia')
 def crear_cliente_externo():
     try:
         data = request.get_json()
@@ -2368,7 +2443,7 @@ def crear_cliente_externo():
 
 @app.route('/api/cita-psicologia', methods=['POST'])
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('psicologia')
 def crear_cita_psicologia():
     try:
         data = request.get_json()
@@ -2387,7 +2462,7 @@ def crear_cita_psicologia():
 
 @app.route('/api/cita/<int:id>/pagar', methods=['POST'])
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('psicologia')
 def registrar_pago_cita(id):
     try:
         data = request.get_json()
@@ -2404,7 +2479,7 @@ def registrar_pago_cita(id):
 
 @app.route('/api/cita/<int:id>/completar', methods=['POST'])
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('psicologia')
 def completar_cita(id):
     supabase.table('citas_psicologia').update({'estado': 'realizada', 'fecha_realizacion': date.today().isoformat()}).eq('id', id).execute()
     return jsonify({'success': True})
@@ -2464,7 +2539,7 @@ def crear_mi_cita():
 # ========== REPORTES ==========
 @app.route('/reportes')
 @login_required
-@socio_admin_required
+@requiere_modulo('finanzas.reportes')
 def reportes():
     mes, anio = _mes_anio_args()
     estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
@@ -2705,7 +2780,7 @@ def reportes():
 # ========== GASTOS ==========
 @app.route('/gastos', methods=['GET', 'POST'])
 @login_required
-@socio_admin_required
+@requiere_modulo('finanzas.gastos')
 def gestion_gastos():
     if request.method == 'POST':
         fecha = request.form['fecha']
@@ -2821,14 +2896,14 @@ def gestion_gastos():
 
 @app.route('/api/gasto/<int:id>/eliminar', methods=['POST'])
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('finanzas.gastos')
 def eliminar_gasto(id):
     supabase.table('gastos').delete().eq('id', id).execute()
     return jsonify({'success': True})
 
 @app.route('/api/gasto/<int:id>/reembolso', methods=['POST'])
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('finanzas.gastos')
 def api_actualizar_reembolso(id):
     data = request.get_json()
     update = {}
@@ -2850,7 +2925,7 @@ def api_actualizar_reembolso(id):
 
 @app.route('/api/gasto/<int:id>/marcar-reembolso-pagado', methods=['POST'])
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('finanzas.gastos')
 def api_marcar_reembolso_pagado(id):
     data = request.get_json() or {}
     fecha = data.get('fecha', date.today().isoformat())
@@ -2865,7 +2940,7 @@ def api_marcar_reembolso_pagado(id):
 
 @app.route('/api/gasto/<int:id>/reversar-reembolso', methods=['POST'])
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('finanzas.gastos')
 def api_reversar_reembolso(id):
     """Reversa un reembolso pagado por error: vuelve a 'pendiente'.
     Disponible para admin y socios (igual que 'marcar pagado')."""
@@ -2880,7 +2955,7 @@ def api_reversar_reembolso(id):
 
 @app.route('/api/gasto/<int:id>/marcar-pagado', methods=['POST'])
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('finanzas.gastos')
 def api_marcar_gasto_pagado(id):
     """Marca un gasto como pagado y registra la fecha del pago."""
     data = request.get_json() or {}
@@ -2893,7 +2968,7 @@ def api_marcar_gasto_pagado(id):
 
 @app.route('/api/gasto/<int:id>/reversar-pago', methods=['POST'])
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('finanzas.gastos')
 def api_reversar_gasto_pago(id):
     """Revierte el pago de un gasto (vuelve a pendiente)."""
     try:
@@ -2904,7 +2979,7 @@ def api_reversar_gasto_pago(id):
 
 @app.route('/api/cuenta-pago/guardar', methods=['POST'])
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('finanzas.gastos')
 def api_guardar_cuenta_pago():
     """Crea o actualiza los datos de cuenta de pago de una persona."""
     data = request.get_json() or {}
@@ -2932,7 +3007,7 @@ def api_guardar_cuenta_pago():
 # ========== LIQUIDACIÓN ==========
 @app.route('/liquidacion', methods=['GET', 'POST'])
 @login_required
-@socio_admin_required
+@requiere_modulo('finanzas.liquidacion')
 def liquidacion():
     mes, anio = _mes_anio_args()
 
@@ -3158,7 +3233,7 @@ def liquidacion():
 # ========== ESTUDIANTES ==========
 @app.route('/estudiantes', methods=['GET', 'POST'])
 @login_required
-@socio_admin_required
+@requiere_modulo('personas')
 def gestion_estudiantes():
     estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
     # Instituciones dinámicas: default + las ya registradas en la BD
@@ -3170,7 +3245,7 @@ def gestion_estudiantes():
 
 @app.route('/api/crear_estudiante', methods=['POST'])
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('personas')
 def api_crear_estudiante():
     data = request.get_json() or {}
     nombres = (data.get('nombres') or '').strip()
@@ -3237,7 +3312,7 @@ def eliminar_estudiante(id):
 # ========== PADRES ==========
 @app.route('/padres', methods=['GET', 'POST'])
 @login_required
-@socio_admin_required
+@requiere_modulo('personas')
 def gestion_padres():
     if request.method == 'POST':
         supabase.table('padres_familia').insert({
@@ -3275,7 +3350,7 @@ def api_crear_padre():
 # ========== DOCENTES ==========
 @app.route('/docentes')
 @login_required
-@socio_admin_required
+@requiere_modulo('personas')
 def gestion_docentes():
     try:
         docentes = supabase.table('docentes').select('*').eq('activo', True).order('apellidos').execute()
@@ -3287,7 +3362,7 @@ def gestion_docentes():
 
 @app.route('/api/crear_docente_form', methods=['POST'])
 @login_required
-@socio_admin_required
+@requiere_modulo('personas')
 def crear_docente_form():
     asigs = request.form.getlist('asignaturas')
     supabase.table('docentes').insert({
@@ -3304,7 +3379,7 @@ def crear_docente_form():
 
 @app.route('/api/docente/<int:id>/editar', methods=['POST'])
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('personas')
 def api_editar_docente(id):
     data = request.get_json()
     campo = data.get('campo')
@@ -3320,7 +3395,7 @@ def api_editar_docente(id):
 
 @app.route('/api/docente/<int:id>/eliminar', methods=['POST'])
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('personas')
 def eliminar_docente(id):
     try:
         supabase.table('docentes').update({'activo': False}).eq('id', id).execute()
@@ -3331,7 +3406,7 @@ def eliminar_docente(id):
 # ========== ASIGNATURAS ==========
 @app.route('/asignaturas')
 @login_required
-@socio_admin_required
+@requiere_modulo('academico')
 def gestion_asignaturas():
     try:
         asigs = supabase.table('asignaturas').select('*').eq('activo', True).order('nombre').execute()
@@ -3342,7 +3417,7 @@ def gestion_asignaturas():
 
 @app.route('/api/crear_asignatura_form', methods=['POST'])
 @login_required
-@socio_admin_required
+@requiere_modulo('academico')
 def crear_asignatura_form():
     nombre = request.form['nombre'].strip()
     if nombre:
@@ -3352,7 +3427,7 @@ def crear_asignatura_form():
 
 @app.route('/api/asignatura/<int:id>/editar', methods=['POST'])
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('academico')
 def api_editar_asignatura(id):
     data = request.get_json()
     valor = (data.get('valor', '') or '').strip()
@@ -3366,7 +3441,7 @@ def api_editar_asignatura(id):
 
 @app.route('/api/asignatura/<int:id>/eliminar', methods=['POST'])
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('academico')
 def eliminar_asignatura(id):
     try:
         supabase.table('asignaturas').update({'activo': False}).eq('id', id).execute()
@@ -3389,11 +3464,23 @@ def gestion_usuarios():
             supabase.table('usuarios').update({'activo': False}).eq('id', uid).execute()
             flash('❌ Usuario desactivado', 'info')
         elif accion == 'crear':
-            supabase.table('usuarios').insert({
+            rol_nuevo = request.form['rol']
+            nuevo = supabase.table('usuarios').insert({
                 'nombre': request.form['nombre'], 'email': request.form['email'],
                 'password_hash': generate_password_hash(request.form['password']),
-                'rol': request.form['rol'], 'activo': True
+                'rol': rol_nuevo, 'activo': True
             }).execute()
+            # Secretaría arranca con Académico, Personas y Pagos de estudiantes.
+            # Devoluciones queda afuera: requiere autorización expresa aparte.
+            if rol_nuevo == 'secretaria' and nuevo.data:
+                nuevo_id = nuevo.data[0]['id']
+                try:
+                    supabase.table('usuario_permisos').insert([
+                        {'usuario_id': nuevo_id, 'modulo': m, 'otorgado_por': current_user.nombre}
+                        for m in PERMISOS_DEFAULT_SECRETARIA
+                    ]).execute()
+                except Exception as e:
+                    flash(f'⚠️ Usuario creado, pero no se pudieron asignar los permisos por defecto: {e}', 'warning')
             flash('✅ Usuario creado', 'success')
         elif accion == 'editar':
             edit_id = request.form.get('edit_id')
@@ -3404,8 +3491,48 @@ def gestion_usuarios():
             flash('✅ Usuario actualizado', 'success')
         return redirect(url_for('gestion_usuarios'))
     usuarios = supabase.table('usuarios').select('*').order('fecha_registro', desc=True).execute()
-    return render_template('usuarios.html', usuarios=usuarios.data or [])
-    
+    usuarios_data = usuarios.data or []
+    # Permisos actuales de cada usuario no-admin/socio, para pre-marcar los
+    # checkboxes del panel de permisos en el template.
+    permisos_por_usuario = {}
+    try:
+        ids_relevantes = [u['id'] for u in usuarios_data if u.get('rol') not in ('admin', 'socio')]
+        for i in range(0, len(ids_relevantes), 100):
+            filas = supabase.table('usuario_permisos').select('usuario_id,modulo').in_('usuario_id', ids_relevantes[i:i + 100]).execute().data or []
+            for f in filas:
+                permisos_por_usuario.setdefault(f['usuario_id'], []).append(f['modulo'])
+    except Exception:
+        pass
+    return render_template('usuarios.html', usuarios=usuarios_data,
+                          modulos_disponibles=MODULOS_DISPONIBLES,
+                          permisos_por_usuario=permisos_por_usuario)
+
+@app.route('/api/usuario/<int:id>/permisos', methods=['POST'])
+@login_required
+@api_admin_required
+def api_guardar_permisos_usuario(id):
+    """Reemplaza el set COMPLETO de módulos otorgados a un usuario (los
+    checkboxes marcados definen el 100% de su acceso, no es aditivo)."""
+    data = request.get_json() or {}
+    modulos_nuevos = set(m for m in (data.get('modulos') or []) if m in MODULOS_KEYS)
+    try:
+        actuales = {f['modulo'] for f in supabase.table('usuario_permisos').select('modulo').eq('usuario_id', id).execute().data or []}
+        a_agregar = modulos_nuevos - actuales
+        a_quitar = actuales - modulos_nuevos
+        # Insertar los nuevos ANTES de borrar los que sobran: si el insert
+        # falla a mitad de camino, el usuario conserva sus permisos previos
+        # en vez de quedar sin ninguno (delete-primero podía dejarlo así).
+        if a_agregar:
+            supabase.table('usuario_permisos').insert([
+                {'usuario_id': id, 'modulo': m, 'otorgado_por': current_user.nombre}
+                for m in a_agregar
+            ]).execute()
+        for m in a_quitar:
+            supabase.table('usuario_permisos').delete().eq('usuario_id', id).eq('modulo', m).execute()
+        return jsonify({'success': True, 'modulos': sorted(modulos_nuevos)})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+
 # ========== MI REPORTE ==========
 @app.route('/mi-reporte')
 @login_required
@@ -3532,7 +3659,7 @@ def editar_perfil():
 # ========== API GENERAL ==========
 @app.route('/api/estudiante/<int:id>')
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('personas')
 def api_estudiante(id):
     ses = supabase.table('sesiones').select('*').eq('estudiante_id', id).eq('estado', 'Realizado').execute()
     pag = supabase.table('pagos').select('*').eq('estudiante_id', id).order('fecha_pago', desc=True).execute()
@@ -3545,7 +3672,7 @@ def api_estudiante(id):
 
 @app.route('/api/estudiantes')
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('personas')
 def api_estudiantes():
     est = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
     return jsonify([{'id': e['id'], 'nombre': f"{e['apellidos']} {e['nombres']}"} for e in (est.data or [])])
@@ -3562,7 +3689,7 @@ def agregar_observacion(id):
 # ========== API EDICIÓN RÁPIDA DE GASTOS ==========
 @app.route('/api/gasto/<int:id>/editar', methods=['POST'])
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('finanzas.gastos')
 def api_editar_gasto(id):
     data = request.get_json()
     campo = data.get('campo')
@@ -3581,7 +3708,7 @@ def api_editar_gasto(id):
 # ========== API FECHA PAGO DOCENTES ==========
 @app.route('/api/pago-docente/fecha', methods=['POST'])
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('finanzas.pagos_docentes')
 def api_fecha_pago_docente():
     data = request.get_json()
     docente = data.get('docente')
@@ -3604,7 +3731,7 @@ def api_fecha_pago_docente():
 
 @app.route('/api/pago-docente/toggle', methods=['POST'])
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('finanzas.pagos_docentes')
 def api_toggle_pago_docente():
     data = request.get_json()
     docente = data.get('docente')
@@ -3709,7 +3836,7 @@ def reporte_duplicados():
 # ========== DEVOLUCIONES DE DINERO ==========
 @app.route('/devoluciones', methods=['GET', 'POST'])
 @login_required
-@socio_admin_required
+@requiere_modulo('finanzas.devoluciones')
 def devoluciones():
     if request.method == 'POST':
         accion = request.form.get('accion', 'registrar')
@@ -3804,7 +3931,7 @@ def devoluciones():
 
 @app.route('/api/devolucion/<int:id>/eliminar', methods=['POST'])
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('finanzas.devoluciones')
 def eliminar_devolucion(id):
     dev = supabase.table('devoluciones').select('*').eq('id', id).execute()
     if not dev.data:
@@ -4336,7 +4463,7 @@ def actualizar_saldos_liquidacion():
 
 @app.route('/movimientos-cuenta')
 @login_required
-@socio_admin_required
+@requiere_modulo('finanzas.movimientos')
 def movimientos_cuenta():
     # Validación de parámetros (un ?mes=14 o ?anio=abc daba error 500)
     try:
@@ -4461,7 +4588,7 @@ def movimientos_cuenta():
 
 @app.route('/movimientos-cuenta/subir', methods=['POST'])
 @login_required
-@socio_admin_required
+@requiere_modulo('finanzas.movimientos')
 def subir_estado_cuenta():
     archivo = request.files.get('archivo')
     if not archivo or not archivo.filename:
@@ -4564,7 +4691,7 @@ def subir_estado_cuenta():
 
 @app.route('/movimientos-cuenta/conciliar-todo', methods=['POST'])
 @login_required
-@socio_admin_required
+@requiere_modulo('finanzas.movimientos')
 def conciliar_pendientes():
     """Re-cruza todos los movimientos pendientes con los pagos y gastos registrados."""
     movs = supabase.table('movimientos_cuenta').select('id,fecha,monto,descripcion') \
@@ -4578,7 +4705,7 @@ def conciliar_pendientes():
 
 @app.route('/api/movimiento/<int:id>/candidatos')
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('finanzas.movimientos')
 def candidatos_movimiento(id):
     """Pagos (créditos) o gastos (débitos) candidatos para enlazar manualmente un movimiento.
     Marca coincidencia de monto, cercanía de fecha y nombre del padre/madre/estudiante."""
@@ -4626,7 +4753,7 @@ def candidatos_movimiento(id):
 
 @app.route('/api/estudiantes/lista')
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('finanzas.movimientos')
 def estudiantes_lista_conciliacion():
     """Estudiantes (apellidos + nombres) para el selector del enlace manual."""
     r = supabase.table('estudiantes').select('id,nombres,apellidos').order('apellidos').execute()
@@ -4637,7 +4764,7 @@ def estudiantes_lista_conciliacion():
 
 @app.route('/api/estudiante/<int:id>/historial-pagos')
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('finanzas.movimientos')
 def historial_pagos_estudiante(id):
     """Historial para el enlace manual: pagos del estudiante (fecha, monto, tipo,
     concepto) con las asignaturas de sus sesiones cercanas a cada pago (±30 días;
@@ -4679,7 +4806,7 @@ def historial_pagos_estudiante(id):
 
 @app.route('/api/movimiento/<int:id>/justificar', methods=['POST'])
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('finanzas.movimientos')
 def justificar_movimiento(id):
     data = request.get_json() or {}
     texto = (data.get('justificacion', '') or '').strip()
@@ -4692,7 +4819,7 @@ def justificar_movimiento(id):
 
 @app.route('/api/movimiento/<int:id>/conciliar', methods=['POST'])
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('finanzas.movimientos')
 def conciliar_manual(id):
     data = request.get_json() or {}
     tipo = data.get('tipo')
@@ -4712,9 +4839,52 @@ def conciliar_manual(id):
     }).eq('id', id).execute()
     return jsonify({'success': True})
 
+@app.route('/api/movimiento/<int:id>/crear-gasto-y-conciliar', methods=['POST'])
+@login_required
+@requiere_modulo_api('finanzas.movimientos')
+@requiere_modulo_api('finanzas.gastos')  # crea un gasto real: exige también ese módulo, no solo movimientos
+def crear_gasto_y_conciliar(id):
+    """Cuando un movimiento negativo (débito) no tiene ningún gasto registrado
+    que le corresponda, crea el gasto de una vez (con la fecha y el monto del
+    propio movimiento) y lo concilia en la misma operación."""
+    mov = supabase.table('movimientos_cuenta').select('*').eq('id', id).execute().data
+    if not mov:
+        return jsonify({'success': False, 'error': 'Movimiento no encontrado'}), 404
+    mov = mov[0]
+    if (mov.get('monto') or 0) >= 0:
+        return jsonify({'success': False, 'error': 'Este movimiento no es un débito'}), 400
+    data = request.get_json() or {}
+    concepto = (data.get('concepto') or '').strip()
+    if not concepto:
+        return jsonify({'success': False, 'error': 'Falta el concepto del gasto'}), 400
+    fecha = mov['fecha']
+    fecha_obj = datetime.strptime(fecha, '%Y-%m-%d')
+    gasto_data = {
+        'concepto': concepto, 'monto': round(abs(mov['monto']), 2), 'fecha': fecha,
+        'categoria': (data.get('categoria') or '').strip(),
+        'persona': (data.get('persona') or '').strip(),
+        'reembolso': False, 'registrado_por': current_user.nombre,
+        'mes': fecha_obj.month, 'anio': fecha_obj.year,
+        'mes_periodo': fecha_obj.month, 'anio_periodo': fecha_obj.year
+    }
+    try:
+        try:
+            ins = supabase.table('gastos').insert(gasto_data).execute()
+        except Exception:
+            gasto_data.pop('mes_periodo', None)
+            gasto_data.pop('anio_periodo', None)
+            ins = supabase.table('gastos').insert(gasto_data).execute()
+        gasto_id = ins.data[0]['id']
+        supabase.table('movimientos_cuenta').update({
+            'estado_conciliacion': 'conciliado', 'conciliado_tipo': 'gasto', 'conciliado_id': gasto_id
+        }).eq('id', id).execute()
+        return jsonify({'success': True, 'gasto_id': gasto_id})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+
 @app.route('/api/movimiento/<int:id>/pendiente', methods=['POST'])
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('finanzas.movimientos')
 def revertir_movimiento(id):
     supabase.table('movimientos_cuenta').update({
         'estado_conciliacion': 'pendiente', 'conciliado_tipo': None,
@@ -5038,7 +5208,7 @@ def _proforma_html(p, items, para='copia'):
 
 @app.route('/proformas')
 @login_required
-@socio_admin_required
+@requiere_modulo('academico')
 def proformas():
     try:
         r = supabase.table('proformas').select('*').order('created_at', desc=True).execute()
@@ -5051,7 +5221,7 @@ def proformas():
 
 @app.route('/proformas/nueva', methods=['GET', 'POST'])
 @login_required
-@socio_admin_required
+@requiere_modulo('academico')
 def proforma_nueva():
     psicologia, precios_clase, precios_matricula, precios_pension = cargar_costos()
     if request.method == 'POST':
@@ -5148,7 +5318,7 @@ def _cargar_proforma(id):
 
 @app.route('/proformas/<int:id>')
 @login_required
-@socio_admin_required
+@requiere_modulo('academico')
 def proforma_detalle(id):
     p, items = _cargar_proforma(id)
     if not p:
@@ -5161,7 +5331,7 @@ def proforma_detalle(id):
 
 @app.route('/proformas/<int:id>/asignar', methods=['POST'])
 @login_required
-@socio_admin_required
+@requiere_modulo('academico')
 def proforma_asignar(id):
     """Paso 2: asigna el docente/psicólogo a cargo de cada casilla (item) del
     horario, según la asignatura o terapia. Se hace tras la aceptación del
@@ -5187,7 +5357,7 @@ def proforma_asignar(id):
 
 @app.route('/proformas/<int:id>/enviar', methods=['POST'])
 @login_required
-@socio_admin_required
+@requiere_modulo('academico')
 def proforma_enviar(id):
     p, items = _cargar_proforma(id)
     if not p:
@@ -5226,7 +5396,7 @@ def proforma_enviar(id):
 
 @app.route('/proformas/<int:id>/estado', methods=['POST'])
 @login_required
-@socio_admin_required
+@requiere_modulo('academico')
 def proforma_estado(id):
     """Aprobar o rechazar la proforma."""
     nuevo = request.form.get('estado', '')
@@ -5246,7 +5416,7 @@ def proforma_estado(id):
 
 @app.route('/proformas/<int:id>/incorporar', methods=['POST'])
 @login_required
-@socio_admin_required
+@requiere_modulo('academico')
 def proforma_incorporar(id):
     """Incorpora la proforma APROBADA a la planificación (Módulo 1):
     crea una sesión por cada línea con los mismos lineamientos de costo."""
@@ -5318,7 +5488,7 @@ def proforma_incorporar(id):
 
 @app.route('/proformas/<int:id>/eliminar', methods=['POST'])
 @login_required
-@socio_admin_required
+@requiere_modulo('academico')
 def proforma_eliminar(id):
     try:
         supabase.table('proforma_items').delete().eq('proforma_id', id).execute()

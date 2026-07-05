@@ -25,14 +25,61 @@
     <div class="col-md-3"><input type="text" name="nombre" class="form-control form-control-premium" placeholder="Nombre" required></div>
     <div class="col-md-3"><input type="email" name="email" class="form-control form-control-premium" placeholder="Email" required></div>
     <div class="col-md-2"><input type="password" name="password" class="form-control form-control-premium" placeholder="Contraseña" required></div>
-    <div class="col-md-2"><select name="rol" class="form-select form-select-premium"><option value="admin">Admin</option><option value="socio">Socio</option><option value="profesor">Profesor</option><option value="psicologo">Psicólogo</option><option value="estudiante">Estudiante</option><option value="padre">Padre</option></select></div>
+    <div class="col-md-2"><select name="rol" class="form-select form-select-premium"><option value="admin">Admin</option><option value="socio">Socio</option><option value="secretaria">Secretaría</option><option value="profesor">Profesor</option><option value="psicologo">Psicólogo</option><option value="estudiante">Estudiante</option><option value="padre">Padre</option></select></div>
     <div class="col-md-2"><button type="submit" class="btn btn-danger btn-premium w-100">✅ Crear</button></div>
 </form></div></div>
 
 <div class="card-premium"><div class="card-header-grad grad-dark">📋 Usuarios Registrados</div><div class="card-body p-0">
 <div class="table-responsive"><table class="table table-premium mb-0"><thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Estado</th><th>Acción</th></tr></thead><tbody>
-{% for u in usuarios %}<tr><td>{{ u.nombre }}</td><td>{{ u.email }}</td><td><span class="badge-premium text-white bg-{{ 'dark' if u.rol=='admin' else 'primary' if u.rol=='socio' else 'success' if u.rol=='profesor' else 'purple' if u.rol=='psicologo' else 'info' }}">{{ u.rol }}</span></td><td><span class="badge-premium text-white bg-{{ 'success' if u.activo else 'danger' }}">{{ 'Activo' if u.activo else 'Inactivo' }}</span></td><td>
+{% for u in usuarios %}
+<tr><td>{{ u.nombre }}</td><td>{{ u.email }}</td><td><span class="badge-premium text-white bg-{{ 'dark' if u.rol=='admin' else 'primary' if u.rol=='socio' else 'warning' if u.rol=='secretaria' else 'success' if u.rol=='profesor' else 'purple' if u.rol=='psicologo' else 'info' }}">{{ u.rol }}</span></td><td><span class="badge-premium text-white bg-{{ 'success' if u.activo else 'danger' }}">{{ 'Activo' if u.activo else 'Inactivo' }}</span></td><td>
 <form method="POST" style="display:inline;"><input type="hidden" name="usuario_id" value="{{ u.id }}"><input type="hidden" name="accion" value="{{ 'rechazar' if u.activo else 'aprobar' }}"><button type="submit" class="btn btn-sm btn-{{ 'warning' if u.activo else 'success' }} btn-premium">{{ '❌ Desactivar' if u.activo else '✅ Aprobar' }}</button></form>
-</td></tr>{% endfor %}
+{% if u.rol not in ['admin', 'socio'] %}
+<button type="button" class="btn btn-sm btn-outline-secondary btn-premium" onclick="togglePermisos({{ u.id }})">🔐 Permisos</button>
+{% endif %}
+</td></tr>
+{% if u.rol not in ['admin', 'socio'] %}
+<tr id="permisos-fila-{{ u.id }}" style="display:none;"><td colspan="5" class="bg-light">
+    <div class="p-3">
+        <strong>Módulos habilitados para {{ u.nombre }}:</strong>
+        <div class="row mt-2" id="permisos-checks-{{ u.id }}">
+            {% set otorgados = permisos_por_usuario.get(u.id, []) %}
+            {% for m in modulos_disponibles %}
+            <div class="col-md-3 col-6">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" value="{{ m.key }}" id="perm-{{ u.id }}-{{ m.key }}" {% if m.key in otorgados %}checked{% endif %}>
+                    <label class="form-check-label" for="perm-{{ u.id }}-{{ m.key }}" style="font-size:12px;">{{ (m.grupo ~ ' › ') if m.grupo else '' }}{{ m.label }}</label>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        <button type="button" class="btn btn-sm btn-primary btn-premium mt-2" onclick="guardarPermisos({{ u.id }})">💾 Guardar permisos</button>
+        <span id="permisos-msg-{{ u.id }}" class="ms-2 small"></span>
+    </div>
+</td></tr>
+{% endif %}
+{% endfor %}
 </tbody></table></div></div></div>
+<script>
+function togglePermisos(id){
+    const fila = document.getElementById('permisos-fila-' + id);
+    fila.style.display = fila.style.display === 'none' ? '' : 'none';
+}
+async function guardarPermisos(id){
+    const checks = document.querySelectorAll('#permisos-checks-' + id + ' input[type=checkbox]:checked');
+    const modulos = Array.from(checks).map(c => c.value);
+    const msg = document.getElementById('permisos-msg-' + id);
+    msg.textContent = 'Guardando...';
+    try {
+        const r = await fetch('/api/usuario/' + id + '/permisos', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({modulos})
+        });
+        const j = await r.json();
+        msg.textContent = j.success ? '✅ Guardado' : ('❌ ' + (j.error || 'Error'));
+    } catch (e) {
+        msg.textContent = '❌ Error de red';
+    }
+}
+</script>
 {% endblock %}

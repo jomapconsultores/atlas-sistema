@@ -582,6 +582,12 @@
         .app-sidebar .nav-nested { margin-bottom: 1px; }
         .app-sidebar .nav-parent { display: flex; align-items: center; gap: 2px; }
         .app-sidebar .nav-parent > a { flex: 1 1 auto; min-width: 0; }
+        /* Cuando el usuario tiene el submódulo pero no el padre (ej. secretaría
+           con "Devoluciones" otorgado pero no "Pagos de estudiantes") */
+        .app-sidebar .nav-parent > .nav-parent-label {
+            flex: 1 1 auto; min-width: 0; padding: 8px 10px; font-size: 13px;
+            color: #94a3b8; cursor: default;
+        }
         .app-sidebar .nav-chev {
             flex: 0 0 auto; border: none; background: transparent; cursor: pointer;
             padding: 6px 8px; display: flex; align-items: center; border-radius: 6px;
@@ -818,12 +824,30 @@
 
     {% set p = request.path %}
     {% set rol = current_user.rol %}
+    {% set es_admin_socio = rol in ['admin','socio'] %}
+    {# Cada módulo/submódulo puede venir del rol (admin/socio, acceso total)
+       o de un permiso individual otorgado desde /usuarios (ej. secretaría,
+       o cualquier otro rol al que un admin le haya habilitado algo puntual). #}
+    {% set puede_academico = es_admin_socio or tiene_modulo('academico') %}
+    {% set puede_personas = es_admin_socio or tiene_modulo('personas') %}
+    {% set puede_psicologia = es_admin_socio or tiene_modulo('psicologia') %}
+    {% set puede_pagos_estudiantes = es_admin_socio or tiene_modulo('finanzas.pagos_estudiantes') %}
+    {% set puede_devoluciones = es_admin_socio or tiene_modulo('finanzas.devoluciones') %}
+    {% set puede_pagos_docentes = es_admin_socio or tiene_modulo('finanzas.pagos_docentes') %}
+    {% set puede_anticipos_fin = es_admin_socio or tiene_modulo('finanzas.anticipos') %}
+    {% set puede_gastos_fin = es_admin_socio or tiene_modulo('finanzas.gastos') %}
+    {% set puede_liquidacion = es_admin_socio or tiene_modulo('finanzas.liquidacion') %}
+    {% set puede_movimientos = es_admin_socio or tiene_modulo('finanzas.movimientos') %}
+    {% set puede_reportes_fin = es_admin_socio or tiene_modulo('finanzas.reportes') %}
+    {% set puede_finanzas = puede_pagos_estudiantes or puede_devoluciones or puede_pagos_docentes or puede_anticipos_fin or puede_gastos_fin or puede_liquidacion or puede_movimientos or puede_reportes_fin %}
+    {% set puede_gestion = puede_academico or puede_personas or puede_psicologia or puede_finanzas %}
     <aside class="app-sidebar" id="appSidebar">
         <a href="/dashboard" class="{% if p=='/dashboard' %}active{% endif %}"><span class="ico">🏠</span> Inicio</a>
 
-        {% if rol in ['admin','socio'] %}
+        {% if puede_gestion %}
         <div class="side-section">Gestión</div>
 
+        {% if puede_academico %}
         {% set acad_active = p in ['/modulo1','/editar-planificaciones','/editar-planificacion-masiva','/modulo2','/modulo4','/modulo6','/asignaturas','/proformas','/proformas/nueva'] or p.startswith('/proformas') %}
         <div class="nav-group {% if acad_active %}open{% endif %}">
             <button type="button" class="nav-group-toggle"><span class="ico">📚</span> Académico</button>
@@ -838,7 +862,9 @@
                 <a href="/modulo6" class="{% if p=='/modulo6' %}active{% endif %}">Reuniones internas</a>
             </div>
         </div>
+        {% endif %}
 
+        {% if puede_personas %}
         {% set pers_active = p in ['/estudiantes','/docentes','/padres','/contactos'] %}
         <div class="nav-group {% if pers_active %}open{% endif %}">
             <button type="button" class="nav-group-toggle"><span class="ico">👥</span> Personas</button>
@@ -849,53 +875,76 @@
                 <a href="/contactos" class="{% if p=='/contactos' %}active{% endif %}">Contactos {% if contactos_nuevos and contactos_nuevos>0 %}<span class="side-badge">{{ contactos_nuevos }}</span>{% endif %}</a>
             </div>
         </div>
+        {% endif %}
 
+        {% if puede_finanzas %}
         {% set fin_active = p in ['/modulo3','/modulo5','/devoluciones','/reportes','/gastos','/liquidacion','/gestion-anticipos','/movimientos-cuenta'] %}
         <div class="nav-group {% if fin_active %}open{% endif %}">
             <button type="button" class="nav-group-toggle"><span class="ico">💰</span> Finanzas</button>
             <div class="nav-group-items">
 
-                {# Pagos de estudiantes › Devoluciones #}
+                {# Pagos de estudiantes › Devoluciones (cada uno con su propio permiso) #}
+                {% if puede_pagos_estudiantes or puede_devoluciones %}
                 <div class="nav-group nav-nested {% if p in ['/modulo3','/devoluciones'] %}open{% endif %}">
                     <div class="nav-parent">
-                        <a href="/modulo3" class="{% if p=='/modulo3' %}active{% endif %}">Pagos de estudiantes</a>
-                        <button type="button" class="nav-chev" aria-label="Ver devoluciones"></button>
+                        {% if puede_pagos_estudiantes %}<a href="/modulo3" class="{% if p=='/modulo3' %}active{% endif %}">Pagos de estudiantes</a>
+                        {% else %}<span class="nav-parent-label">Pagos de estudiantes</span>{% endif %}
+                        {% if puede_devoluciones %}<button type="button" class="nav-chev" aria-label="Ver devoluciones"></button>{% endif %}
                     </div>
+                    {% if puede_devoluciones %}
                     <div class="nav-group-items">
                         <a href="/devoluciones" class="{% if p=='/devoluciones' %}active{% endif %}">Devoluciones</a>
                     </div>
+                    {% endif %}
                 </div>
+                {% endif %}
 
-                {# Pagos a docentes › Anticipos #}
+                {# Pagos a docentes › Anticipos (cada uno con su propio permiso) #}
+                {% if puede_pagos_docentes or puede_anticipos_fin %}
                 <div class="nav-group nav-nested {% if p in ['/modulo5','/gestion-anticipos'] %}open{% endif %}">
                     <div class="nav-parent">
-                        <a href="/modulo5" class="{% if p=='/modulo5' %}active{% endif %}">Pagos a docentes</a>
-                        <button type="button" class="nav-chev" aria-label="Ver anticipos"></button>
+                        {% if puede_pagos_docentes %}<a href="/modulo5" class="{% if p=='/modulo5' %}active{% endif %}">Pagos a docentes</a>
+                        {% else %}<span class="nav-parent-label">Pagos a docentes</span>{% endif %}
+                        {% if puede_anticipos_fin %}<button type="button" class="nav-chev" aria-label="Ver anticipos"></button>{% endif %}
                     </div>
+                    {% if puede_anticipos_fin %}
                     <div class="nav-group-items">
                         <a href="/gestion-anticipos" class="{% if p=='/gestion-anticipos' %}active{% endif %}">Anticipos {% if solicitudes_pendientes and solicitudes_pendientes>0 %}<span class="side-badge">{{ solicitudes_pendientes }}</span>{% endif %}</a>
                     </div>
+                    {% endif %}
                 </div>
+                {% endif %}
 
                 {# Gastos #}
+                {% if puede_gastos_fin %}
                 <a href="/gastos" class="{% if p=='/gastos' %}active{% endif %}">Gastos</a>
+                {% endif %}
 
-                {# Liquidación › Movimientos en cuenta #}
+                {# Liquidación › Movimientos en cuenta (cada uno con su propio permiso) #}
+                {% if puede_liquidacion or puede_movimientos %}
                 <div class="nav-group nav-nested {% if p in ['/liquidacion','/movimientos-cuenta'] %}open{% endif %}">
                     <div class="nav-parent">
-                        <a href="/liquidacion" class="{% if p=='/liquidacion' %}active{% endif %}">Liquidación</a>
-                        <button type="button" class="nav-chev" aria-label="Ver movimientos en cuenta"></button>
+                        {% if puede_liquidacion %}<a href="/liquidacion" class="{% if p=='/liquidacion' %}active{% endif %}">Liquidación</a>
+                        {% else %}<span class="nav-parent-label">Liquidación</span>{% endif %}
+                        {% if puede_movimientos %}<button type="button" class="nav-chev" aria-label="Ver movimientos en cuenta"></button>{% endif %}
                     </div>
+                    {% if puede_movimientos %}
                     <div class="nav-group-items">
                         <a href="/movimientos-cuenta" class="{% if p=='/movimientos-cuenta' %}active{% endif %}">Movimientos en cuenta</a>
                     </div>
+                    {% endif %}
                 </div>
+                {% endif %}
 
                 {# Reportes #}
+                {% if puede_reportes_fin %}
                 <a href="/reportes" class="{% if p=='/reportes' %}active{% endif %}">Reportes ATLAS</a>
+                {% endif %}
             </div>
         </div>
+        {% endif %}
 
+        {% if puede_psicologia %}
         {% set psi_active = p in ['/psicologia-especial'] %}
         <div class="nav-group {% if psi_active %}open{% endif %}">
             <button type="button" class="nav-group-toggle"><span class="ico">🧠</span> Psicología</button>
@@ -903,7 +952,9 @@
                 <a href="/psicologia-especial" class="{% if p=='/psicologia-especial' %}active{% endif %}">Psicología especial</a>
             </div>
         </div>
+        {% endif %}
 
+        {% if es_admin_socio %}
         {% set adm_active = p in ['/admin/costos','/usuarios','/reporte-duplicados'] %}
         <div class="nav-group {% if adm_active %}open{% endif %}">
             <button type="button" class="nav-group-toggle"><span class="ico">⚙️</span> Administración</button>
@@ -913,8 +964,10 @@
                 <a href="/reporte-duplicados" class="{% if p=='/reporte-duplicados' %}active{% endif %}">Reporte duplicados</a>
             </div>
         </div>
+        {% endif %}
+        {% endif %}
 
-        {% elif rol=='profesor' %}
+        {% if rol=='profesor' %}
         <div class="side-section">Mi trabajo</div>
         <a href="/modulo2" class="{% if p=='/modulo2' %}active{% endif %}"><span class="ico">📅</span> Mis clases</a>
         <a href="/mi-reporte" class="{% if p=='/mi-reporte' %}active{% endif %}"><span class="ico">📊</span> Mi reporte</a>

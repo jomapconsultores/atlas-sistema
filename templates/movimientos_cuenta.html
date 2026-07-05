@@ -305,6 +305,19 @@
                     </select>
                     <div id="enlaceHistorial"></div>
                 </div>
+
+                <!-- Crear un gasto nuevo cuando el débito no tiene ninguno registrado -->
+                <div id="enlaceGastoNuevoZona" style="display:none;">
+                    <hr>
+                    <label class="form-label fw-bold">🧾 ¿No existe el gasto todavía? Créalo y se enlaza de una vez:</label>
+                    <div class="row g-2">
+                        <div class="col-md-6"><input type="text" id="gastoNuevoConcepto" class="form-control" placeholder="Concepto *"></div>
+                        <div class="col-md-3"><input type="text" id="gastoNuevoCategoria" class="form-control" placeholder="Categoría"></div>
+                        <div class="col-md-3"><input type="text" id="gastoNuevoPersona" class="form-control" placeholder="Persona/proveedor"></div>
+                    </div>
+                    <button type="button" class="btn btn-outline-primary btn-sm mt-2" onclick="crearGastoDesdeMovimiento()">➕ Crear gasto y enlazar</button>
+                    <span id="gastoNuevoMsg" class="ms-2 small"></span>
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -341,6 +354,11 @@ function abrirEnlace(id) {
     document.getElementById('enlaceEstudianteZona').style.display = 'none';
     document.getElementById('enlaceHistorial').innerHTML = '';
     document.getElementById('enlaceEstudiante').value = '';
+    document.getElementById('enlaceGastoNuevoZona').style.display = 'none';
+    document.getElementById('gastoNuevoConcepto').value = '';
+    document.getElementById('gastoNuevoCategoria').value = '';
+    document.getElementById('gastoNuevoPersona').value = '';
+    document.getElementById('gastoNuevoMsg').textContent = '';
     new bootstrap.Modal(document.getElementById('modalEnlace')).show();
     fetch('/api/movimiento/' + id + '/candidatos').then(r => r.json()).then(d => {
         if (!d.success) { alert('Error: ' + (d.error||'')); return; }
@@ -352,8 +370,28 @@ function abrirEnlace(id) {
         if (Number(m.monto) > 0) {  // créditos: se pueden enlazar a pagos de estudiantes
             document.getElementById('enlaceEstudianteZona').style.display = '';
             cargarEstudiantes();
+        } else {  // débitos: si no hay un gasto que corresponda, se puede crear uno nuevo
+            document.getElementById('enlaceGastoNuevoZona').style.display = '';
         }
     });
+}
+
+function crearGastoDesdeMovimiento() {
+    var concepto = document.getElementById('gastoNuevoConcepto').value.trim();
+    var msg = document.getElementById('gastoNuevoMsg');
+    if (!concepto) { msg.textContent = '❌ Falta el concepto'; return; }
+    msg.textContent = 'Creando...';
+    fetch('/api/movimiento/' + enlaceMovId + '/crear-gasto-y-conciliar', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            concepto: concepto,
+            categoria: document.getElementById('gastoNuevoCategoria').value.trim(),
+            persona: document.getElementById('gastoNuevoPersona').value.trim()
+        })
+    }).then(r => r.json()).then(d => {
+        if (d.success) { location.reload(); }
+        else { msg.textContent = '❌ ' + (d.error || 'Error'); }
+    }).catch(function() { msg.textContent = '❌ Error de red'; });
 }
 
 function cargarEstudiantes() {
