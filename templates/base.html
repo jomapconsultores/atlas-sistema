@@ -789,7 +789,14 @@
             <div style="display: flex; align-items: center; gap: 18px;">
                 <div style="text-align: right;">
                     <div style="color: white; font-weight: 600; font-size: 13px;">{{ current_user.nombre }}</div>
+                    {% if mis_roles and mis_roles|length > 1 %}
+                    <select id="selectorRolActivo" onchange="cambiarRolActivo(this.value)"
+                        style="background:rgba(255,255,255,0.12); color:#fff; border:1px solid rgba(255,255,255,0.25); border-radius:6px; font-size:11px; text-transform:uppercase; letter-spacing:1px; padding:2px 6px; margin-top:2px;">
+                        {% for r in mis_roles %}<option value="{{ r }}" {% if r == current_user.rol %}selected{% endif %}>{{ r }}</option>{% endfor %}
+                    </select>
+                    {% else %}
                     <div style="color: rgba(255,255,255,0.6); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-top: 2px;">{{ current_user.rol }}</div>
+                    {% endif %}
                 </div>
                 {% if current_user.rol in ['admin','socio'] %}
                 <button class="guide-btn" onclick="openGuide()" id="guideBtnMain" title="Guía de flujo de trabajo">
@@ -840,7 +847,11 @@
     {% set puede_movimientos = es_admin_socio or tiene_modulo('finanzas.movimientos') %}
     {% set puede_reportes_fin = es_admin_socio or tiene_modulo('finanzas.reportes') %}
     {% set puede_finanzas = puede_pagos_estudiantes or puede_devoluciones or puede_pagos_docentes or puede_anticipos_fin or puede_gastos_fin or puede_liquidacion or puede_movimientos or puede_reportes_fin %}
-    {% set puede_gestion = puede_academico or puede_personas or puede_psicologia or puede_finanzas %}
+    {% set puede_costos = es_admin_socio or tiene_modulo('administracion.costos') %}
+    {% set puede_reporte_duplicados = es_admin_socio or tiene_modulo('administracion.reporte_duplicados') %}
+    {# 'Usuarios' queda SIEMPRE admin-only (rol=='admin' estricto, no es otorgable) #}
+    {% set puede_administracion = puede_costos or puede_reporte_duplicados or rol=='admin' %}
+    {% set puede_gestion = puede_academico or puede_personas or puede_psicologia or puede_finanzas or puede_administracion %}
     <aside class="app-sidebar" id="appSidebar">
         <a href="/dashboard" class="{% if p=='/dashboard' %}active{% endif %}"><span class="ico">🏠</span> Inicio</a>
 
@@ -954,14 +965,14 @@
         </div>
         {% endif %}
 
-        {% if es_admin_socio %}
+        {% if puede_administracion %}
         {% set adm_active = p in ['/admin/costos','/usuarios','/reporte-duplicados'] %}
         <div class="nav-group {% if adm_active %}open{% endif %}">
             <button type="button" class="nav-group-toggle"><span class="ico">⚙️</span> Administración</button>
             <div class="nav-group-items">
-                <a href="/admin/costos" class="{% if p=='/admin/costos' %}active{% endif %}">Costos</a>
+                {% if puede_costos %}<a href="/admin/costos" class="{% if p=='/admin/costos' %}active{% endif %}">Costos</a>{% endif %}
                 {% if rol=='admin' %}<a href="/usuarios" class="{% if p=='/usuarios' %}active{% endif %}">Usuarios</a>{% endif %}
-                <a href="/reporte-duplicados" class="{% if p=='/reporte-duplicados' %}active{% endif %}">Reporte duplicados</a>
+                {% if puede_reporte_duplicados %}<a href="/reporte-duplicados" class="{% if p=='/reporte-duplicados' %}active{% endif %}">Reporte duplicados</a>{% endif %}
             </div>
         </div>
         {% endif %}
@@ -1027,6 +1038,20 @@
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" defer></script>
     <script>
+    // ── Selector de rol activo (multi-rol) ──
+    async function cambiarRolActivo(rol) {
+        try {
+            const r = await fetch('/api/cambiar-rol', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({rol: rol})
+            });
+            const j = await r.json();
+            if (j.success) { location.href = '/dashboard'; }
+            else { alert('❌ ' + (j.error || 'No se pudo cambiar de rol')); location.reload(); }
+        } catch (e) {
+            alert('❌ Error de red al cambiar de rol');
+        }
+    }
     // ── Sidebar: submenús colapsables + apertura en móvil ──
     (function () {
         document.querySelectorAll('.app-sidebar .nav-group-toggle').forEach(function (btn) {

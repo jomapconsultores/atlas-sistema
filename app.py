@@ -192,13 +192,24 @@ MODULOS_DISPONIBLES = [
     {'key': 'finanzas.liquidacion', 'label': 'Liquidación', 'grupo': 'Finanzas'},
     {'key': 'finanzas.movimientos', 'label': 'Movimientos en cuenta', 'grupo': 'Finanzas'},
     {'key': 'finanzas.reportes', 'label': 'Reportes ATLAS', 'grupo': 'Finanzas'},
+    {'key': 'administracion.costos', 'label': 'Costos', 'grupo': 'Administración'},
+    {'key': 'administracion.reporte_duplicados', 'label': 'Reporte duplicados', 'grupo': 'Administración'},
 ]
 MODULOS_KEYS = {m['key'] for m in MODULOS_DISPONIBLES}
+
+# 'Usuarios' (crear cuentas, asignar roles, otorgar permisos a otros) queda
+# a propósito FUERA de MODULOS_DISPONIBLES: es la única forma de evitar que
+# alguien se auto-otorgue ese poder desde el propio panel de permisos.
 
 # Default de un usuario 'secretaria' recién creado: Académico, Personas y
 # Pagos de estudiantes. Devoluciones queda AFUERA a propósito — requiere
 # autorización expresa de un socio/admin (se otorga aparte, individualmente).
 PERMISOS_DEFAULT_SECRETARIA = ['academico', 'personas', 'finanzas.pagos_estudiantes']
+
+# Roles entre los que un usuario puede tener permitido cambiar (multi-rol).
+# usuarios.rol sigue siendo el rol ACTIVO en cada momento — esto es solo el
+# conjunto de roles que un admin le habilitó para elegir.
+ROLES_DISPONIBLES = ['admin', 'socio', 'secretaria', 'profesor', 'psicologo', 'estudiante', 'padre']
 
 def _permisos_usuario_actual():
     """Set de módulos otorgados al usuario logueado, con caché de request
@@ -211,6 +222,19 @@ def _permisos_usuario_actual():
         except Exception:
             g._permisos_cache = set()
     return g._permisos_cache
+
+def _roles_disponibles_usuario_actual():
+    """Roles entre los que el usuario logueado puede cambiar (selector del
+    navbar), con caché de request. Siempre incluye su rol activo actual (por
+    si la cuenta es de antes de existir usuario_roles y no tiene filas ahí)."""
+    if not hasattr(g, '_roles_cache'):
+        try:
+            filas = supabase.table('usuario_roles').select('rol').eq('usuario_id', current_user.id).execute().data or []
+            g._roles_cache = {f['rol'] for f in filas}
+        except Exception:
+            g._roles_cache = set()
+        g._roles_cache.add(current_user.rol)
+    return g._roles_cache
 
 def tiene_modulo(modulo_key):
     """Admin/socio siempre tienen acceso total (igual que antes). Cualquier
@@ -265,7 +289,11 @@ def inyectar_globales():
     import time
     # tiene_modulo se expone SIEMPRE (lo usa el nav de base.html para
     # cualquier rol, no solo admin/socio).
-    base = {'tiene_modulo': tiene_modulo}
+    try:
+        mis_roles = sorted(_roles_disponibles_usuario_actual()) if current_user.is_authenticated else []
+    except Exception:
+        mis_roles = []
+    base = {'tiene_modulo': tiene_modulo, 'mis_roles': mis_roles}
     try:
         if not (current_user.is_authenticated and getattr(current_user, 'rol', None) in ['admin', 'socio']):
             return {**base, 'solicitudes_pendientes': 0, 'contactos_nuevos': 0}
@@ -2197,14 +2225,14 @@ def api_crear_encargado():
 # ========== ADMINISTRACIÓN DE COSTOS ==========
 @app.route('/admin/costos')
 @login_required
-@socio_admin_required  # ← CAMBIADO
+@requiere_modulo('administracion.costos')
 def admin_costos():
     costos = supabase.table('costos_config').select('*').order('tipo').order('concepto').execute()
     return render_template('admin_costos.html', costos=costos.data or [])
 
 @app.route('/api/costos/crear', methods=['POST'])
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('administracion.costos')
 def api_crear_costo():
     data = request.get_json()
     try:
@@ -2226,7 +2254,7 @@ def api_crear_costo():
 
 @app.route('/api/costos/<int:id>/editar', methods=['POST'])
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('administracion.costos')
 def api_editar_costo(id):
     data = request.get_json()
     try:
@@ -2248,7 +2276,7 @@ def api_editar_costo(id):
 
 @app.route('/api/costos/<int:id>/toggle', methods=['POST'])
 @login_required
-@api_socio_admin_required
+@requiere_modulo_api('administracion.costos')
 def api_toggle_costo(id):
     costo = supabase.table('costos_config').select('activo').eq('id', id).execute()
     if costo.data:
@@ -3465,33 +3493,65 @@ def gestion_usuarios():
             flash('❌ Usuario desactivado', 'info')
         elif accion == 'crear':
             rol_nuevo = request.form['rol']
+            if rol_nuevo not in ROLES_DISPONIBLES:
+                flash('❌ Rol inválido', 'error')
+                return redirect(url_for('gestion_usuarios'))
             nuevo = supabase.table('usuarios').insert({
                 'nombre': request.form['nombre'], 'email': request.form['email'],
                 'password_hash': generate_password_hash(request.form['password']),
                 'rol': rol_nuevo, 'activo': True
             }).execute()
-            # Secretaría arranca con Académico, Personas y Pagos de estudiantes.
-            # Devoluciones queda afuera: requiere autorización expresa aparte.
-            if rol_nuevo == 'secretaria' and nuevo.data:
+            if nuevo.data:
                 nuevo_id = nuevo.data[0]['id']
+                # Siempre arranca con su propio rol como único disponible en el
+                # selector (multi-rol); el admin puede agregarle más después.
                 try:
-                    supabase.table('usuario_permisos').insert([
-                        {'usuario_id': nuevo_id, 'modulo': m, 'otorgado_por': current_user.nombre}
-                        for m in PERMISOS_DEFAULT_SECRETARIA
-                    ]).execute()
-                except Exception as e:
-                    flash(f'⚠️ Usuario creado, pero no se pudieron asignar los permisos por defecto: {e}', 'warning')
+                    supabase.table('usuario_roles').insert({
+                        'usuario_id': nuevo_id, 'rol': rol_nuevo, 'otorgado_por': current_user.nombre
+                    }).execute()
+                except Exception:
+                    pass
+                # Secretaría arranca con Académico, Personas y Pagos de estudiantes.
+                # Devoluciones queda afuera: requiere autorización expresa aparte.
+                if rol_nuevo == 'secretaria':
+                    try:
+                        supabase.table('usuario_permisos').insert([
+                            {'usuario_id': nuevo_id, 'modulo': m, 'otorgado_por': current_user.nombre}
+                            for m in PERMISOS_DEFAULT_SECRETARIA
+                        ]).execute()
+                    except Exception as e:
+                        flash(f'⚠️ Usuario creado, pero no se pudieron asignar los permisos por defecto: {e}', 'warning')
             flash('✅ Usuario creado', 'success')
         elif accion == 'editar':
-            edit_id = request.form.get('edit_id')
-            updates = {'nombre': request.form['nombre'], 'email': request.form['email'], 'rol': request.form['rol']}
+            edit_id = int(request.form.get('edit_id'))
+            rol_editado = request.form['rol']
+            if rol_editado not in ROLES_DISPONIBLES:
+                flash('❌ Rol inválido', 'error')
+                return redirect(url_for('gestion_usuarios'))
+            # Mismo invariante que api_guardar_roles_usuario: este formulario
+            # NO puede dejar el sistema sin ningún administrador (antes este
+            # 'editar' bypaseaba ese chequeo).
+            if rol_editado != 'admin' and not _admins_disponibles(excluir_id=edit_id):
+                flash('❌ No se puede quitar admin: quedaría el sistema sin ningún administrador', 'error')
+                return redirect(url_for('gestion_usuarios'))
+            updates = {'nombre': request.form['nombre'], 'email': request.form['email'], 'rol': rol_editado}
             if request.form.get('password'):
                 updates['password_hash'] = generate_password_hash(request.form['password'])
-            supabase.table('usuarios').update(updates).eq('id', int(edit_id)).execute()
+            supabase.table('usuarios').update(updates).eq('id', edit_id).execute()
+            # Evita el drift con usuario_roles: el rol activo asignado acá
+            # queda también como uno de sus roles otorgados (si no lo tenía).
+            try:
+                supabase.table('usuario_roles').upsert(
+                    {'usuario_id': edit_id, 'rol': rol_editado, 'otorgado_por': current_user.nombre},
+                    on_conflict='usuario_id,rol'
+                ).execute()
+            except Exception:
+                pass
             flash('✅ Usuario actualizado', 'success')
         return redirect(url_for('gestion_usuarios'))
     usuarios = supabase.table('usuarios').select('*').order('fecha_registro', desc=True).execute()
     usuarios_data = usuarios.data or []
+    todos_los_ids = [u['id'] for u in usuarios_data]
     # Permisos actuales de cada usuario no-admin/socio, para pre-marcar los
     # checkboxes del panel de permisos en el template.
     permisos_por_usuario = {}
@@ -3503,9 +3563,20 @@ def gestion_usuarios():
                 permisos_por_usuario.setdefault(f['usuario_id'], []).append(f['modulo'])
     except Exception:
         pass
+    # Roles otorgados a CADA usuario (multi-rol aplica a cualquiera, incluido admin/socio).
+    roles_por_usuario = {}
+    try:
+        for i in range(0, len(todos_los_ids), 100):
+            filas = supabase.table('usuario_roles').select('usuario_id,rol').in_('usuario_id', todos_los_ids[i:i + 100]).execute().data or []
+            for f in filas:
+                roles_por_usuario.setdefault(f['usuario_id'], []).append(f['rol'])
+    except Exception:
+        pass
     return render_template('usuarios.html', usuarios=usuarios_data,
                           modulos_disponibles=MODULOS_DISPONIBLES,
-                          permisos_por_usuario=permisos_por_usuario)
+                          permisos_por_usuario=permisos_por_usuario,
+                          roles_disponibles=ROLES_DISPONIBLES,
+                          roles_por_usuario=roles_por_usuario)
 
 @app.route('/api/usuario/<int:id>/permisos', methods=['POST'])
 @login_required
@@ -3532,6 +3603,102 @@ def api_guardar_permisos_usuario(id):
         return jsonify({'success': True, 'modulos': sorted(modulos_nuevos)})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 400
+
+def _admins_disponibles(excluir_id=None):
+    """IDs de usuarios ACTIVOS que pueden operar como admin: su rol actual
+    es 'admin' o tienen 'admin' entre los roles que se les otorgó (multi-rol).
+    Se usa para no dejar el sistema sin ningún administrador al editar roles
+    o eliminar un usuario."""
+    ids = set()
+    try:
+        for u in supabase.table('usuarios').select('id').eq('rol', 'admin').eq('activo', True).execute().data or []:
+            ids.add(u['id'])
+    except Exception:
+        pass
+    try:
+        activos = {u['id'] for u in supabase.table('usuarios').select('id,activo').eq('activo', True).execute().data or []}
+        for f in supabase.table('usuario_roles').select('usuario_id').eq('rol', 'admin').execute().data or []:
+            if f['usuario_id'] in activos:
+                ids.add(f['usuario_id'])
+    except Exception:
+        pass
+    if excluir_id is not None:
+        ids.discard(excluir_id)
+    return ids
+
+@app.route('/api/usuario/<int:id>/roles', methods=['POST'])
+@login_required
+@api_admin_required
+def api_guardar_roles_usuario(id):
+    """Reemplaza el set COMPLETO de roles disponibles para un usuario
+    (multi-rol: puede tener varios y cambiar cuál tiene activo)."""
+    data = request.get_json() or {}
+    roles_nuevos = set(r for r in (data.get('roles') or []) if r in ROLES_DISPONIBLES)
+    if not roles_nuevos:
+        return jsonify({'success': False, 'error': 'Debe tener al menos un rol'}), 400
+    if 'admin' not in roles_nuevos and not _admins_disponibles(excluir_id=id):
+        return jsonify({'success': False, 'error': 'No se puede quitar admin: quedaría el sistema sin ningún administrador'}), 400
+    try:
+        actuales = {f['rol'] for f in supabase.table('usuario_roles').select('rol').eq('usuario_id', id).execute().data or []}
+        a_agregar = roles_nuevos - actuales
+        a_quitar = actuales - roles_nuevos
+        if a_agregar:
+            supabase.table('usuario_roles').insert([
+                {'usuario_id': id, 'rol': r, 'otorgado_por': current_user.nombre}
+                for r in a_agregar
+            ]).execute()
+        for r in a_quitar:
+            supabase.table('usuario_roles').delete().eq('usuario_id', id).eq('rol', r).execute()
+        # Si el rol ACTIVO actual ya no está en el nuevo set, lo reseteamos a
+        # cualquiera de los que sí le quedaron (nunca lo dejamos sin uno válido).
+        actual = supabase.table('usuarios').select('rol').eq('id', id).execute().data
+        if actual and actual[0]['rol'] not in roles_nuevos:
+            supabase.table('usuarios').update({'rol': sorted(roles_nuevos)[0]}).eq('id', id).execute()
+        return jsonify({'success': True, 'roles': sorted(roles_nuevos)})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+@app.route('/api/cambiar-rol', methods=['POST'])
+@login_required
+def api_cambiar_rol():
+    """Cualquier usuario puede cambiar su propio rol ACTIVO a otro de los
+    que un admin ya le otorgó (selector arriba en el navbar)."""
+    data = request.get_json() or {}
+    rol_pedido = data.get('rol')
+    try:
+        mis_roles = {f['rol'] for f in supabase.table('usuario_roles').select('rol').eq('usuario_id', current_user.id).execute().data or []}
+    except Exception:
+        mis_roles = set()
+    # Compatibilidad: si todavía no tiene ninguna fila en usuario_roles
+    # (cuentas viejas previas a esta migración), al menos puede "cambiar" a
+    # su propio rol actual.
+    mis_roles.add(current_user.rol)
+    if rol_pedido not in mis_roles:
+        return jsonify({'success': False, 'error': 'Ese rol no está habilitado para tu cuenta'}), 403
+    supabase.table('usuarios').update({'rol': rol_pedido}).eq('id', current_user.id).execute()
+    return jsonify({'success': True, 'rol': rol_pedido})
+
+@app.route('/api/usuario/<int:id>/eliminar', methods=['POST'])
+@login_required
+@api_admin_required
+def api_eliminar_usuario(id):
+    """Elimina definitivamente un usuario. No se puede eliminar a sí mismo
+    ni al último administrador del sistema."""
+    if id == current_user.id:
+        return jsonify({'success': False, 'error': 'No podés eliminar tu propia cuenta'}), 400
+    objetivo = supabase.table('usuarios').select('rol').eq('id', id).execute().data
+    if not objetivo:
+        return jsonify({'success': False, 'error': 'Usuario no encontrado'}), 404
+    es_admin = objetivo[0]['rol'] == 'admin' or id in {
+        f['usuario_id'] for f in (supabase.table('usuario_roles').select('usuario_id').eq('rol', 'admin').execute().data or [])
+    }
+    if es_admin and not _admins_disponibles(excluir_id=id):
+        return jsonify({'success': False, 'error': 'No se puede eliminar: quedaría el sistema sin ningún administrador'}), 400
+    try:
+        supabase.table('usuarios').delete().eq('id', id).execute()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'No se pudo eliminar (¿tiene sesiones/gastos/pagos asociados?): {e}'}), 400
 
 # ========== MI REPORTE ==========
 @app.route('/mi-reporte')
@@ -3762,11 +3929,8 @@ def api_toggle_pago_docente():
 # ========== REPORTE DE CLASES GRUPALES / DUPLICADOS ==========
 @app.route('/reporte-duplicados')
 @login_required
+@requiere_modulo('administracion.reporte_duplicados')
 def reporte_duplicados():
-    if current_user.rol not in ['admin', 'socio']:
-        flash('❌ Acceso restringido', 'error')
-        return redirect(url_for('dashboard'))
-
     try:
         sesiones = supabase.table('sesiones').select(
             'id,fecha,hora_inicio,hora_fin,profesor_terapeuta,estudiante_id,horas,tipo_sesion,estado,valor_total,asignatura,tema_terapia,sesion_grupo_id,estudiantes(nombres,apellidos)'
