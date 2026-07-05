@@ -54,6 +54,8 @@ services:
       - "443:443"
     environment:
       DOMAIN: ${DOMAIN:-:80}                         # dominio para HTTPS automático, o ":80" si solo IP
+      ADMINER_AUTH_USER: ${ADMINER_AUTH_USER:?define ADMINER_AUTH_USER en .env (protege /adminer/*)}
+      ADMINER_AUTH_HASH: ${ADMINER_AUTH_HASH:?define ADMINER_AUTH_HASH en .env — hash bcrypt, ver .env.example}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

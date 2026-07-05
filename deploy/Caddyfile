@@ -11,8 +11,13 @@
 		reverse_proxy rest:3000
 	}
 
-	# Panel de administración de la base
+	# Panel de administración de la base — protegido con Basic Auth ademas del
+	# login propio de Adminer (usuario/clave de Postgres), para no dejarlo
+	# expuesto a cualquiera con solo la URL.
 	handle_path /adminer/* {
+		basicauth {
+			{$ADMINER_AUTH_USER} {$ADMINER_AUTH_HASH}
+		}
 		reverse_proxy adminer:8080
 	}
 
