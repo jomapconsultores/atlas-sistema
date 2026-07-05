@@ -3137,9 +3137,13 @@ def gestion_estudiantes():
 @login_required
 @socio_admin_required
 def api_crear_estudiante():
-    data = request.get_json()
+    data = request.get_json() or {}
+    nombres = (data.get('nombres') or '').strip()
+    apellidos = (data.get('apellidos') or '').strip()
+    if not nombres or not apellidos:
+        return jsonify({'success': False, 'error': 'Faltan nombres o apellidos'}), 400
     result = supabase.table('estudiantes').insert({
-        'nombres': data['nombres'], 'apellidos': data['apellidos'],
+        'nombres': nombres, 'apellidos': apellidos,
         'nivel_curso': a_oracion(data.get('nivel_curso', '')),
         'procedencia': data.get('procedencia', ''),
         'padre_nombre': data.get('padre_nombre', ''),
