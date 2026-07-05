@@ -17,6 +17,7 @@ import hashlib
 import hmac
 import re
 import unicodedata
+import concurrent.futures
 
 # Lectura de estados de cuenta. Se importan de forma opcional para no romper
 # el arranque si la dependencia no está instalada (el módulo avisa al usuario).
@@ -926,13 +927,27 @@ def _estudiantes_con_deuda():
     Misma lógica de saldo que el Módulo 3: saldo = cobrar - (pagado - devuelto).
     Devuelve [{'nombre', 'saldo'}] ordenado de mayor a menor deuda."""
     try:
-        estudiantes = supabase.table('estudiantes').select('id,nombres,apellidos').eq('activo', True).execute().data or []
-        ses_rows = _fetch_all(supabase.table('sesiones').select('estudiante_id,valor_total').in_('estado', ['Realizado', 'Cancelado-Pagado']))
-        pagos_rows = _fetch_all(supabase.table('pagos').select('estudiante_id,monto'))
-        try:
-            dev_rows = _fetch_all(supabase.table('devoluciones').select('estudiante_id,monto'))
-        except Exception:
-            dev_rows = []
+        # Las 4 consultas son independientes entre sí, así que se lanzan en
+        # paralelo en vez de una tras otra (esta función corre en cada carga
+        # del dashboard). 'devoluciones' sigue siendo opcional: si falla no
+        # rompe el cálculo del resto.
+        def _fetch_dev():
+            try:
+                return _fetch_all(supabase.table('devoluciones').select('estudiante_id,monto'))
+            except Exception:
+                return []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+            fut_estudiantes = executor.submit(
+                lambda: supabase.table('estudiantes').select('id,nombres,apellidos').eq('activo', True).execute().data or [])
+            fut_ses = executor.submit(
+                lambda: _fetch_all(supabase.table('sesiones').select('estudiante_id,valor_total').in_('estado', ['Realizado', 'Cancelado-Pagado'])))
+            fut_pagos = executor.submit(
+                lambda: _fetch_all(supabase.table('pagos').select('estudiante_id,monto')))
+            fut_dev = executor.submit(_fetch_dev)
+            estudiantes = fut_estudiantes.result()
+            ses_rows = fut_ses.result()
+            pagos_rows = fut_pagos.result()
+            dev_rows = fut_dev.result()
         def _num(v):
             try:
                 return float(v or 0)
@@ -1022,6 +1037,29 @@ def modulo1():
                 return redirect(url_for('modulo1'))
 
             # 2) Cada sesión: datos completos y horario coherente (sin horas en retroceso ni negativas)
+            # Pre-cálculo de los pares (profesor, fecha) distintos del envío para
+            # consultar 'sesiones' con un solo query por profesor (antes se hacía
+            # una consulta por cada línea del formulario, aunque compartieran profesor/fecha).
+            profesores_fechas = {}
+            for _sn in range(1, num_sesiones + 1):
+                _fecha_v = request.form.get(f'fecha_{_sn}')
+                _profesor_v0 = request.form.get(f'profesor_{_sn}', '')
+                _nuevo_prof_v0 = request.form.get(f'nuevo_profesor_{_sn}', '')
+                _prof_efectivo0 = _nuevo_prof_v0.strip() if (_profesor_v0 == 'nuevo' and _nuevo_prof_v0.strip()) else _profesor_v0
+                if _fecha_v and _prof_efectivo0 and _prof_efectivo0 != 'nuevo':
+                    profesores_fechas.setdefault(_prof_efectivo0, set()).add(_fecha_v)
+
+            ocupadas_existentes = {}
+            for _prof_nombre, _fechas_set in profesores_fechas.items():
+                try:
+                    _filas = supabase.table('sesiones').select('hora_inicio,hora_fin,estado,fecha').eq(
+                        'profesor_terapeuta', _prof_nombre).in_('fecha', list(_fechas_set)).neq(
+                        'estado', 'Cancelado').execute().data or []
+                except Exception:
+                    _filas = []
+                for _fila in _filas:
+                    ocupadas_existentes.setdefault((_prof_nombre, _fila.get('fecha')), []).append(_fila)
+
             # ocupadas_batch acumula las sesiones de este mismo envío por
             # (profesor, fecha): sin esto, dos sesiones que se cruzan dentro
             # del propio paquete no se detectaban porque ninguna existía aún
@@ -1061,11 +1099,7 @@ def modulo1():
                 # 3) El docente/psicólogo no puede tener otra sesión que se cruce en el mismo horario
                 prof_efectivo = nuevo_prof_v.strip() if (profesor_v == 'nuevo' and nuevo_prof_v.strip()) else profesor_v
                 if prof_efectivo and prof_efectivo != 'nuevo':
-                    try:
-                        ocupadas = supabase.table('sesiones').select('hora_inicio,hora_fin,estado').eq(
-                            'profesor_terapeuta', prof_efectivo).eq('fecha', fecha).neq('estado', 'Cancelado').execute().data or []
-                    except Exception:
-                        ocupadas = []
+                    ocupadas = list(ocupadas_existentes.get((prof_efectivo, fecha), []))
                     clave_batch = (prof_efectivo, fecha)
                     ocupadas = ocupadas + ocupadas_batch.get(clave_batch, [])
                     ni, nf = h_ini[:5], h_fin[:5]
@@ -1077,6 +1111,15 @@ def modulo1():
                                   f'No se puede agendar de {ni} a {nf} (sesión {sesion_num}).', 'error')
                             return redirect(url_for('modulo1'))
                     ocupadas_batch.setdefault(clave_batch, []).append({'hora_inicio': ni, 'hora_fin': nf})
+
+            # Nombres de los estudiantes validados: se obtienen una sola vez
+            # (antes se re-consultaba 'estudiantes' por cada combinación sesión x estudiante)
+            nombres_estudiantes_map = {}
+            if estudiantes_validos:
+                est_info_batch = supabase.table('estudiantes').select('id,apellidos,nombres').in_(
+                    'id', [int(e) for e in estudiantes_validos]).execute()
+                for e in (est_info_batch.data or []):
+                    nombres_estudiantes_map[e['id']] = f"{e['apellidos']} {e['nombres']}"
 
             for sesion_num in range(1, num_sesiones + 1):
                 fecha = request.form.get(f'fecha_{sesion_num}')
@@ -1135,9 +1178,8 @@ def modulo1():
                         except Exception:
                             datos_sesion.pop('sesion_grupo_id', None)
                             supabase.table('sesiones').insert(datos_sesion).execute()
-                        est_info = supabase.table('estudiantes').select('apellidos, nombres').eq('id', int(eid)).execute()
-                        if est_info.data:
-                            nombre_completo = f"{est_info.data[0]['apellidos']} {est_info.data[0]['nombres']}"
+                        nombre_completo = nombres_estudiantes_map.get(int(eid))
+                        if nombre_completo:
                             if nombre_completo not in estudiantes_nombres:
                                 estudiantes_nombres.append(nombre_completo)
                 
@@ -5068,9 +5110,12 @@ def proforma_nueva():
                         raise
                     cab['numero'] = _proforma_numero()
             pid = r.data[0]['id']
+            items_rows = []
             for it in items:
                 it_row = dict(it); it_row['proforma_id'] = pid
-                supabase.table('proforma_items').insert(it_row).execute()
+                items_rows.append(it_row)
+            if items_rows:
+                supabase.table('proforma_items').insert(items_rows).execute()
 
             flash(f'✅ Proforma {cab["numero"]} creada por ${total:.2f}', 'success')
             return redirect(url_for('proforma_detalle', id=pid))
@@ -5240,6 +5285,7 @@ def proforma_incorporar(id):
 
     creadas = 0
     primera_fecha = None
+    datos_sesiones_todas = []
     for it in items:
         fecha = it.get('fecha'); h_ini = it.get('hora_inicio'); h_fin = it.get('hora_fin')
         if not (fecha and h_ini and h_fin):
@@ -5264,14 +5310,25 @@ def proforma_incorporar(id):
             'estudiante_id': int(p['estudiante_id']), 'usuario_id': int(current_user.id),
             'sesion_grupo_id': grupo_id,
         }
-        try:
-            supabase.table('sesiones').insert(datos_sesion).execute()
-        except Exception:
-            datos_sesion.pop('sesion_grupo_id', None)
-            supabase.table('sesiones').insert(datos_sesion).execute()
-        creadas += 1
+        datos_sesiones_todas.append(datos_sesion)
         if not primera_fecha:
             primera_fecha = fecha
+
+    if datos_sesiones_todas:
+        try:
+            supabase.table('sesiones').insert(datos_sesiones_todas).execute()
+            creadas = len(datos_sesiones_todas)
+        except Exception:
+            # Si el insert por lote falla, se recurre al insert individual
+            # (con el mismo fallback de siempre por si 'sesion_grupo_id' no existe aún).
+            creadas = 0
+            for datos_sesion in datos_sesiones_todas:
+                try:
+                    supabase.table('sesiones').insert(datos_sesion).execute()
+                except Exception:
+                    datos_sesion.pop('sesion_grupo_id', None)
+                    supabase.table('sesiones').insert(datos_sesion).execute()
+                creadas += 1
 
     flash(f'✅ {creadas} sesión(es) incorporadas a la planificación desde la proforma {p.get("numero") or ""}', 'success')
     return redirect(url_for('modulo2', fecha=primera_fecha or str(date.today())))
