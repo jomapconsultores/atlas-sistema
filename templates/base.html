@@ -790,7 +790,7 @@
                 <div style="text-align: right;">
                     <div style="color: white; font-weight: 600; font-size: 13px;">{{ current_user.nombre }}</div>
                     {% if mis_roles and mis_roles|length > 1 %}
-                    <select id="selectorRolActivo" onchange="cambiarRolActivo(this.value)"
+                    <select id="selectorRolActivo" aria-label="Rol activo" onchange="cambiarRolActivo(this.value)"
                         style="background:rgba(255,255,255,0.12); color:#fff; border:1px solid rgba(255,255,255,0.25); border-radius:6px; font-size:11px; text-transform:uppercase; letter-spacing:1px; padding:2px 6px; margin-top:2px;">
                         {% for r in mis_roles %}<option value="{{ r }}" {% if r == current_user.rol %}selected{% endif %}>{{ r }}</option>{% endfor %}
                     </select>
@@ -983,7 +983,7 @@
         <a href="/modulo2" class="{% if p=='/modulo2' %}active{% endif %}"><span class="ico">📅</span> Mis clases</a>
         <a href="/mi-reporte" class="{% if p=='/mi-reporte' %}active{% endif %}"><span class="ico">📊</span> Mi reporte</a>
         <a href="/mis-anticipos" class="{% if p=='/mis-anticipos' %}active{% endif %}"><span class="ico">🏦</span> Mis anticipos</a>
-        <a href="/gastos" class="{% if p=='/gastos' %}active{% endif %}"><span class="ico">📉</span> Gastos</a>
+        {% if puede_gastos_fin %}<a href="/gastos" class="{% if p=='/gastos' %}active{% endif %}"><span class="ico">📉</span> Gastos</a>{% endif %}
 
         {% elif rol=='psicologo' %}
         <div class="side-section">Mi trabajo</div>
@@ -991,7 +991,7 @@
         <a href="/mi-reporte" class="{% if p=='/mi-reporte' %}active{% endif %}"><span class="ico">📊</span> Mi reporte</a>
         <a href="/mis-clientes" class="{% if p=='/mis-clientes' %}active{% endif %}"><span class="ico">🧠</span> Mis clientes</a>
         <a href="/mis-anticipos" class="{% if p=='/mis-anticipos' %}active{% endif %}"><span class="ico">🏦</span> Mis anticipos</a>
-        <a href="/gastos" class="{% if p=='/gastos' %}active{% endif %}"><span class="ico">📉</span> Gastos</a>
+        {% if puede_gastos_fin %}<a href="/gastos" class="{% if p=='/gastos' %}active{% endif %}"><span class="ico">📉</span> Gastos</a>{% endif %}
 
         {% elif rol=='estudiante' %}
         <div class="side-section">Mi cuenta</div>
@@ -1050,6 +1050,7 @@
             else { alert('❌ ' + (j.error || 'No se pudo cambiar de rol')); location.reload(); }
         } catch (e) {
             alert('❌ Error de red al cambiar de rol');
+            location.reload();
         }
     }
     // ── Sidebar: submenús colapsables + apertura en móvil ──

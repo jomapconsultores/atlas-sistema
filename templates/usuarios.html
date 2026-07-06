@@ -33,12 +33,22 @@
 <div class="table-responsive"><table class="table table-premium mb-0"><thead><tr><th>Nombre</th><th>Email</th><th>Rol activo</th><th>Estado</th><th>Acción</th></tr></thead><tbody>
 {% for u in usuarios %}
 <tr><td>{{ u.nombre }}</td><td>{{ u.email }}</td><td><span class="badge-premium text-white bg-{{ 'dark' if u.rol=='admin' else 'primary' if u.rol=='socio' else 'warning' if u.rol=='secretaria' else 'success' if u.rol=='profesor' else 'purple' if u.rol=='psicologo' else 'info' }}">{{ u.rol }}</span></td><td><span class="badge-premium text-white bg-{{ 'success' if u.activo else 'danger' }}">{{ 'Activo' if u.activo else 'Inactivo' }}</span></td><td>
-<form method="POST" style="display:inline;"><input type="hidden" name="usuario_id" value="{{ u.id }}"><input type="hidden" name="accion" value="{{ 'rechazar' if u.activo else 'aprobar' }}"><button type="submit" class="btn btn-sm btn-{{ 'warning' if u.activo else 'success' }} btn-premium">{{ '❌ Desactivar' if u.activo else '✅ Aprobar' }}</button></form>
+{% if u.activo %}
+<form method="POST" style="display:inline;"><input type="hidden" name="usuario_id" value="{{ u.id }}"><input type="hidden" name="accion" value="rechazar"><button type="submit" class="btn btn-sm btn-warning btn-premium">❌ Desactivar</button></form>
+{% else %}
+<form method="POST" style="display:inline;"><input type="hidden" name="usuario_id" value="{{ u.id }}"><input type="hidden" name="accion" value="aprobar">
+    <select name="rol" class="form-select form-select-premium" style="display:inline-block; width:auto;" required>
+        <option value="">Rol a otorgar...</option>
+        {% for r in roles_disponibles %}<option value="{{ r }}" {% if r == u.rol %}selected{% endif %}>{{ r }}</option>{% endfor %}
+    </select>
+    <button type="submit" class="btn btn-sm btn-success btn-premium">✅ Aprobar</button>
+</form>
+{% endif %}
 <button type="button" class="btn btn-sm btn-outline-dark btn-premium" onclick="toggleRoles({{ u.id }})">👤 Roles</button>
 {% if u.rol not in ['admin', 'socio'] %}
 <button type="button" class="btn btn-sm btn-outline-secondary btn-premium" onclick="togglePermisos({{ u.id }})">🔐 Permisos</button>
 {% endif %}
-<button type="button" class="btn btn-sm btn-outline-danger btn-premium" onclick="eliminarUsuario({{ u.id }}, '{{ u.nombre|replace("'", "\\'") }}')">🗑️</button>
+<button type="button" class="btn btn-sm btn-outline-danger btn-premium" aria-label="Eliminar a {{ u.nombre }}" title="Eliminar a {{ u.nombre }}" onclick="eliminarUsuario({{ u.id }}, '{{ u.nombre|replace("'", "\\'") }}', this)">🗑️</button>
 </td></tr>
 <tr id="roles-fila-{{ u.id }}" style="display:none;"><td colspan="5" class="bg-light">
     <div class="p-3">
@@ -54,7 +64,7 @@
             </div>
             {% endfor %}
         </div>
-        <button type="button" class="btn btn-sm btn-primary btn-premium mt-2" onclick="guardarRoles({{ u.id }})">💾 Guardar roles</button>
+        <button type="button" class="btn btn-sm btn-primary btn-premium mt-2" onclick="guardarRoles({{ u.id }}, this)">💾 Guardar roles</button>
         <span id="roles-msg-{{ u.id }}" class="ms-2 small"></span>
     </div>
 </td></tr>
@@ -73,7 +83,7 @@
             </div>
             {% endfor %}
         </div>
-        <button type="button" class="btn btn-sm btn-primary btn-premium mt-2" onclick="guardarPermisos({{ u.id }})">💾 Guardar permisos</button>
+        <button type="button" class="btn btn-sm btn-primary btn-premium mt-2" onclick="guardarPermisos({{ u.id }}, this)">💾 Guardar permisos</button>
         <span id="permisos-msg-{{ u.id }}" class="ms-2 small"></span>
     </div>
 </td></tr>
@@ -89,11 +99,13 @@ function toggleRoles(id){
     const fila = document.getElementById('roles-fila-' + id);
     fila.style.display = fila.style.display === 'none' ? '' : 'none';
 }
-async function guardarPermisos(id){
+async function guardarPermisos(id, btn){
+    if (btn.disabled) return;
     const checks = document.querySelectorAll('#permisos-checks-' + id + ' input[type=checkbox]:checked');
     const modulos = Array.from(checks).map(c => c.value);
     const msg = document.getElementById('permisos-msg-' + id);
     msg.textContent = 'Guardando...';
+    btn.disabled = true;
     try {
         const r = await fetch('/api/usuario/' + id + '/permisos', {
             method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -103,13 +115,17 @@ async function guardarPermisos(id){
         msg.textContent = j.success ? '✅ Guardado' : ('❌ ' + (j.error || 'Error'));
     } catch (e) {
         msg.textContent = '❌ Error de red';
+    } finally {
+        btn.disabled = false;
     }
 }
-async function guardarRoles(id){
+async function guardarRoles(id, btn){
+    if (btn.disabled) return;
     const checks = document.querySelectorAll('#roles-checks-' + id + ' input[type=checkbox]:checked');
     const roles = Array.from(checks).map(c => c.value);
     const msg = document.getElementById('roles-msg-' + id);
     msg.textContent = 'Guardando...';
+    btn.disabled = true;
     try {
         const r = await fetch('/api/usuario/' + id + '/roles', {
             method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -117,20 +133,24 @@ async function guardarRoles(id){
         });
         const j = await r.json();
         if (j.success) { msg.textContent = '✅ Guardado'; setTimeout(() => location.reload(), 600); }
-        else { msg.textContent = '❌ ' + (j.error || 'Error'); }
+        else { msg.textContent = '❌ ' + (j.error || 'Error'); btn.disabled = false; }
     } catch (e) {
         msg.textContent = '❌ Error de red';
+        btn.disabled = false;
     }
 }
-async function eliminarUsuario(id, nombre){
+async function eliminarUsuario(id, nombre, btn){
+    if (btn.disabled) return;
     if (!confirm('¿Eliminar definitivamente a ' + nombre + '? Esta acción no se puede deshacer.')) return;
+    btn.disabled = true;
     try {
         const r = await fetch('/api/usuario/' + id + '/eliminar', {method: 'POST'});
         const j = await r.json();
         if (j.success) location.reload();
-        else alert('❌ ' + (j.error || 'Error'));
+        else { alert('❌ ' + (j.error || 'Error')); btn.disabled = false; }
     } catch (e) {
         alert('❌ Error de red');
+        btn.disabled = false;
     }
 }
 </script>
