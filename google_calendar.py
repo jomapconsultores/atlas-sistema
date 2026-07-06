@@ -5,6 +5,8 @@ from googleapiclient.discovery import build
 
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 
+_calendar_service_cache = None
+
 def get_service_account_info():
     env_creds = os.environ.get('GOOGLE_SERVICE_ACCOUNT', '')
     if env_creds:
@@ -15,11 +17,15 @@ def get_service_account_info():
     return None
 
 def get_calendar_service():
+    global _calendar_service_cache
+    if _calendar_service_cache is not None:
+        return _calendar_service_cache
     info = get_service_account_info()
     if not info:
         return None
     creds = service_account.Credentials.from_service_account_info(info, scopes=SCOPES)
-    return build('calendar', 'v3', credentials=creds)
+    _calendar_service_cache = build('calendar', 'v3', credentials=creds)
+    return _calendar_service_cache
 
 def crear_o_actualizar_evento_calendar(datos, evento_id_existente=None):
     """Crea un nuevo evento o actualiza uno existente"""

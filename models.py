@@ -12,14 +12,13 @@ class Usuario:
     
     @staticmethod
     def get_by_id(user_id):
-        result = supabase.table('usuarios').select('*').eq('id', user_id).execute()
+        result = supabase.table('usuarios').select('id,nombre,email,rol,activo').eq('id', user_id).execute()
         if result.data:
             data = result.data[0]
             user = Usuario()
             user.id = data['id']
             user.nombre = data['nombre']
             user.email = data['email']
-            user.password_hash = data['password_hash']
             user.rol = data['rol']
             user.activo = data.get('activo', True)
             return user
