@@ -7,7 +7,7 @@ from config import Config
 from models import check_password, Usuario
 from supabase_client import supabase, SUPABASE_URL
 from google_calendar import crear_evento_calendar, eliminar_evento_calendar, crear_o_actualizar_evento_calendar
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from calendar import monthrange
 from functools import wraps
 import uuid
@@ -17,6 +17,12 @@ import hashlib
 import hmac
 import re
 import unicodedata
+
+# El servidor corre en UTC (Coolify); Ecuador no usa horario de verano, así
+# que un offset fijo de -5 es exacto para marcar hora de asistencia sin
+# depender de una base de datos de husos horarios (zoneinfo/tzdata) que
+# podría faltar en la imagen del contenedor.
+TZ_ECUADOR = timezone(timedelta(hours=-5))
 
 # Lectura de estados de cuenta. Se importan de forma opcional para no romper
 # el arranque si la dependencia no está instalada (el módulo avisa al usuario).
@@ -194,6 +200,8 @@ MODULOS_DISPONIBLES = [
     {'key': 'finanzas.reportes', 'label': 'Reportes ATLAS', 'grupo': 'Finanzas'},
     {'key': 'administracion.costos', 'label': 'Costos', 'grupo': 'Administración'},
     {'key': 'administracion.reporte_duplicados', 'label': 'Reporte duplicados', 'grupo': 'Administración'},
+    {'key': 'asistencia.marcar', 'label': 'Marcar ingreso/salida', 'grupo': 'Asistencia'},
+    {'key': 'administracion.marcaciones', 'label': 'Ver marcaciones de asistencia', 'grupo': 'Administración'},
 ]
 MODULOS_KEYS = {m['key'] for m in MODULOS_DISPONIBLES}
 
@@ -204,7 +212,12 @@ MODULOS_KEYS = {m['key'] for m in MODULOS_DISPONIBLES}
 # Default de un usuario 'secretaria' recién creado: Académico, Personas y
 # Pagos de estudiantes. Devoluciones queda AFUERA a propósito — requiere
 # autorización expresa de un socio/admin (se otorga aparte, individualmente).
-PERMISOS_DEFAULT_SECRETARIA = ['academico', 'personas', 'finanzas.pagos_estudiantes']
+PERMISOS_DEFAULT_SECRETARIA = ['academico', 'personas', 'finanzas.pagos_estudiantes', 'asistencia.marcar']
+
+# Psicólogo/profesor recién creados arrancan con el permiso de marcar su
+# propia asistencia; el admin lo puede revocar o volver a otorgar como a
+# cualquier otro módulo desde /usuarios.
+PERMISOS_DEFAULT_DOCENTE = ['asistencia.marcar']
 
 # Roles entre los que un usuario puede tener permitido cambiar (multi-rol).
 # usuarios.rol sigue siendo el rol ACTIVO en cada momento — esto es solo el
@@ -3556,13 +3569,17 @@ def gestion_usuarios():
                     }).execute()
                 except Exception:
                     pass
-                # Secretaría arranca con Académico, Personas y Pagos de estudiantes.
-                # Devoluciones queda afuera: requiere autorización expresa aparte.
-                if rol_nuevo == 'secretaria':
+                # Secretaría arranca con Académico, Personas, Pagos de
+                # estudiantes y marcar asistencia. Devoluciones queda afuera:
+                # requiere autorización expresa aparte. Profesor/psicologo
+                # arrancan solo con el permiso de marcar su propia asistencia.
+                permisos_default = PERMISOS_DEFAULT_SECRETARIA if rol_nuevo == 'secretaria' \
+                    else PERMISOS_DEFAULT_DOCENTE if rol_nuevo in ('profesor', 'psicologo') else []
+                if permisos_default:
                     try:
                         supabase.table('usuario_permisos').insert([
                             {'usuario_id': nuevo_id, 'modulo': m, 'otorgado_por': current_user.nombre}
-                            for m in PERMISOS_DEFAULT_SECRETARIA
+                            for m in permisos_default
                         ]).execute()
                     except Exception as e:
                         flash(f'⚠️ Usuario creado, pero no se pudieron asignar los permisos por defecto: {e}', 'warning')
@@ -3869,6 +3886,59 @@ def mi_reporte():
                          anticipos_aprobados=anticipos_aprobados,
                          neto_a_recibir=neto_a_recibir,
                          mes=mes, anio=anio)
+
+# ========== ASISTENCIA (marcación de ingreso/salida) ==========
+@app.route('/mi-asistencia', methods=['GET', 'POST'])
+@login_required
+@requiere_modulo('asistencia.marcar')
+def mi_asistencia():
+    ahora_ec = datetime.now(TZ_ECUADOR)
+    hoy = str(ahora_ec.date())
+    if request.method == 'POST':
+        accion = request.form.get('accion')
+        ahora = ahora_ec.strftime('%H:%M:%S')
+        fila = supabase.table('marcaciones').select('*').eq('usuario_id', current_user.id).eq('fecha', hoy).execute().data
+        if accion == 'ingreso':
+            if fila:
+                flash('⚠️ Ya marcaste tu ingreso hoy', 'error')
+            else:
+                try:
+                    supabase.table('marcaciones').insert({
+                        'usuario_id': current_user.id, 'fecha': hoy, 'hora_ingreso': ahora
+                    }).execute()
+                    flash(f'✅ Ingreso marcado a las {ahora[:5]}', 'success')
+                except Exception:
+                    flash('⚠️ Ya marcaste tu ingreso hoy', 'error')
+        elif accion == 'salida':
+            if not fila:
+                flash('⚠️ Primero debes marcar tu ingreso', 'error')
+            elif fila[0].get('hora_salida'):
+                flash('⚠️ Ya marcaste tu salida hoy', 'error')
+            else:
+                try:
+                    supabase.table('marcaciones').update({'hora_salida': ahora}).eq('id', fila[0]['id']).execute()
+                    flash(f'✅ Salida marcada a las {ahora[:5]}', 'success')
+                except Exception:
+                    flash('⚠️ No se pudo registrar la salida, intenta de nuevo', 'error')
+        return redirect(url_for('mi_asistencia'))
+
+    marcacion_hoy = supabase.table('marcaciones').select('*').eq('usuario_id', current_user.id).eq('fecha', hoy).execute().data
+    historial = (supabase.table('marcaciones').select('*')
+        .eq('usuario_id', current_user.id).order('fecha', desc=True).limit(14).execute().data or [])
+    return render_template('mi_asistencia.html',
+                          marcacion_hoy=marcacion_hoy[0] if marcacion_hoy else None,
+                          historial=historial)
+
+@app.route('/admin/marcaciones')
+@login_required
+@requiere_modulo('administracion.marcaciones')
+def admin_marcaciones():
+    mes, anio = _mes_anio_args()
+    ultimo_dia = monthrange(anio, mes)[1]
+    filas = (supabase.table('marcaciones').select('*, usuarios(nombre, rol)')
+        .gte('fecha', f"{anio}-{mes:02d}-01").lte('fecha', f"{anio}-{mes:02d}-{ultimo_dia}")
+        .order('fecha', desc=True).execute().data or [])
+    return render_template('admin_marcaciones.html', marcaciones=filas, mes=mes, anio=anio)
 
 # ========== EDITAR PERFIL ==========
 @app.route('/editar-perfil', methods=['GET', 'POST'])

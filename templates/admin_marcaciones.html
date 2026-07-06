@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Marcaciones - Atlas{% endblock %}
+{% block content %}
+<style>
+    .card-premium { border-radius: 20px; border: none; box-shadow: 0 4px 20px rgba(0,0,0,0.06); background: white; margin-bottom: 20px; overflow: hidden; }
+    .card-header-grad { padding: 14px 20px; color: white; font-weight: 700; font-size: 15px; }
+    .grad-dark { background: linear-gradient(135deg, #263238, #111); }
+    .table-premium { border-radius: 12px; overflow: hidden; border: none; margin: 0; }
+    .table-premium thead th { background: #1a1a2e; color: white; font-weight: 600; font-size: 11px; letter-spacing: 0.5px; border: none; padding: 10px 12px; text-transform: uppercase; }
+    .table-premium tbody td { padding: 8px 12px; font-size: 13px; border-bottom: 1px solid #f0f0f0; }
+    .badge-premium { padding: 4px 10px; border-radius: 10px; font-size: 10px; font-weight: 600; }
+    .bg-purple { background-color: #7c3aed; }
+</style>
+<div class="page-hero">
+    <h2>🕒 Marcaciones de Asistencia</h2>
+    <p>Ingreso y salida de psicólogos, profesores y secretaría.</p>
+</div>
+
+<form class="row g-2 mb-3">
+    <div class="col-auto">
+        <select name="mes" class="form-select" onchange="this.form.submit()">
+            {% for m in range(1,13) %}
+            <option value="{{ m }}" {{ 'selected' if m == mes }}>{{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][m-1] }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-auto">
+        <select name="anio" class="form-select" onchange="this.form.submit()">
+            {% for a in range(2025,2031) %}
+            <option value="{{ a }}" {{ 'selected' if a == anio }}>{{ a }}</option>
+            {% endfor %}
+        </select>
+    </div>
+</form>
+
+<div class="card-premium"><div class="card-header-grad grad-dark">📋 Registros del mes</div><div class="card-body p-0">
+<div class="table-responsive"><table class="table table-premium mb-0"><thead><tr><th>Fecha</th><th>Nombre</th><th>Rol</th><th>Ingreso</th><th>Salida</th></tr></thead><tbody>
+{% for m in marcaciones %}
+<tr>
+    <td>{{ m.fecha }}</td>
+    <td>{{ m.usuarios.nombre if m.usuarios else '—' }}</td>
+    <td><span class="badge-premium text-white bg-{{ 'warning' if m.usuarios and m.usuarios.rol=='secretaria' else 'success' if m.usuarios and m.usuarios.rol=='profesor' else 'purple' if m.usuarios and m.usuarios.rol=='psicologo' else 'info' }}">{{ m.usuarios.rol if m.usuarios else '—' }}</span></td>
+    <td>{{ m.hora_ingreso[:5] if m.hora_ingreso else '—' }}</td>
+    <td>{{ m.hora_salida[:5] if m.hora_salida else '—' }}</td>
+</tr>
+{% else %}
+<tr><td colspan="5" class="text-center text-muted py-3">Sin marcaciones en este período</td></tr>
+{% endfor %}
+</tbody></table></div></div></div>
+{% endblock %}
