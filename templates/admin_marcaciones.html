@@ -13,7 +13,11 @@
 </style>
 <div class="page-hero">
     <h2>🕒 Marcaciones de Asistencia</h2>
+    {% if solo_docentes %}
+    <p>Ingreso y salida de profesores y psicólogos.</p>
+    {% else %}
     <p>Ingreso y salida de psicólogos, profesores y secretaría.</p>
+    {% endif %}
 </div>
 
 <form class="row g-2 mb-3">

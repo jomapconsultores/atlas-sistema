@@ -197,22 +197,36 @@ MODULOS_DISPONIBLES = [
     {'key': 'finanzas.gastos', 'label': 'Gastos', 'grupo': 'Finanzas'},
     {'key': 'finanzas.liquidacion', 'label': 'Liquidación', 'grupo': 'Finanzas'},
     {'key': 'finanzas.movimientos', 'label': 'Movimientos en cuenta', 'grupo': 'Finanzas'},
+    {'key': 'finanzas.movimientos_eliminar', 'label': 'Eliminar movimientos y estados de cuenta', 'grupo': 'Finanzas'},
     {'key': 'finanzas.reportes', 'label': 'Reportes ATLAS', 'grupo': 'Finanzas'},
     {'key': 'administracion.costos', 'label': 'Costos', 'grupo': 'Administración'},
     {'key': 'administracion.reporte_duplicados', 'label': 'Reporte duplicados', 'grupo': 'Administración'},
-    {'key': 'asistencia.marcar', 'label': 'Marcar ingreso/salida', 'grupo': 'Asistencia'},
-    {'key': 'administracion.marcaciones', 'label': 'Ver marcaciones de asistencia', 'grupo': 'Administración'},
+    {'key': 'asistencia.marcar', 'label': 'Marcar ingreso/salida (propio)', 'grupo': 'Asistencia'},
+    {'key': 'asistencia.ver_docentes', 'label': 'Ver marcaciones de profesores y psicólogos', 'grupo': 'Asistencia'},
+    {'key': 'administracion.marcaciones', 'label': 'Ver todas las marcaciones', 'grupo': 'Administración'},
+    # Gestión de usuarios delegable de forma granular. Cada capacidad se otorga
+    # por separado; las salvaguardas anti-escalada viven en _puede_usuarios y en
+    # los endpoints (solo un admin estricto toca el rol 'admin').
+    {'key': 'usuarios.crear', 'label': 'Crear usuarios', 'grupo': 'Usuarios'},
+    {'key': 'usuarios.editar', 'label': 'Editar usuarios (datos y rol activo)', 'grupo': 'Usuarios'},
+    {'key': 'usuarios.eliminar', 'label': 'Eliminar usuarios', 'grupo': 'Usuarios'},
+    {'key': 'usuarios.roles', 'label': 'Otorgar roles', 'grupo': 'Usuarios'},
+    {'key': 'usuarios.permisos', 'label': 'Otorgar permisos', 'grupo': 'Usuarios'},
 ]
 MODULOS_KEYS = {m['key'] for m in MODULOS_DISPONIBLES}
 
-# 'Usuarios' (crear cuentas, asignar roles, otorgar permisos a otros) queda
-# a propósito FUERA de MODULOS_DISPONIBLES: es la única forma de evitar que
-# alguien se auto-otorgue ese poder desde el propio panel de permisos.
+# Antes 'Usuarios' quedaba FUERA de MODULOS_DISPONIBLES (nadie podía delegar la
+# gestión de cuentas). Ahora es delegable pero SOLO de forma granular y con
+# tope de escalada: ni con usuarios.roles/usuarios.permisos un delegado no-admin
+# puede crear/asignar/quitar el rol 'admin' ni reconfigurar a un admin
+# existente. El rol 'admin' sigue siendo intransferible salvo por otro admin
+# estricto. Ver _puede_usuarios(), _es_usuario_admin() y los endpoints.
 
 # Default de un usuario 'secretaria' recién creado: Académico, Personas y
 # Pagos de estudiantes. Devoluciones queda AFUERA a propósito — requiere
 # autorización expresa de un socio/admin (se otorga aparte, individualmente).
-PERMISOS_DEFAULT_SECRETARIA = ['academico', 'personas', 'finanzas.pagos_estudiantes', 'asistencia.marcar']
+PERMISOS_DEFAULT_SECRETARIA = ['academico', 'personas', 'finanzas.pagos_estudiantes',
+                               'asistencia.marcar', 'asistencia.ver_docentes']
 
 # Psicólogo/profesor recién creados arrancan con el permiso de marcar su
 # propia asistencia; el admin lo puede revocar o volver a otorgar como a
@@ -284,20 +298,86 @@ def requiere_modulo_api(modulo_key):
     return decorator
 
 def _puede_gestionar_sesion(sesion):
-    """Admin/socio gestionan cualquier sesión; profesor/psicologo solo la
-    propia (match exacto de nombre normalizado, no substring: evita que
-    'Ana' gestione sesiones de 'Mariana'). Otros roles activos (estudiante,
-    padre, secretaria, etc.) nunca gestionan sesiones por esta vía, aunque
-    su nombre coincida por casualidad con un profesor_terapeuta: el permiso
-    depende del ROL ACTIVO, no solo del nombre, para que cambiar de rol en
-    el selector revoque de inmediato los privilegios de gestión docente."""
+    """Admin/socio gestionan cualquier sesión; también cualquier usuario al que
+    se le haya otorgado el módulo 'academico' (ej. secretaría), para que
+    "modificar la planificación" sea un permiso realmente otorgable y no solo
+    de lectura. Profesor/psicologo SIN 'academico' solo gestionan la propia
+    (match exacto de nombre normalizado, no substring: evita que 'Ana'
+    gestione sesiones de 'Mariana'). Otros roles activos (estudiante, padre)
+    nunca gestionan sesiones por esta vía, aunque su nombre coincida por
+    casualidad con un profesor_terapeuta: el permiso depende del ROL ACTIVO o
+    de un permiso otorgado, no solo del nombre, para que cambiar de rol en el
+    selector revoque de inmediato los privilegios de gestión docente."""
     if current_user.rol in ('admin', 'socio'):
+        return True
+    if tiene_modulo('academico'):
         return True
     if current_user.rol not in ('profesor', 'psicologo'):
         return False
     nombre = norm_nombre(current_user.nombre).lower()
     profesor = norm_nombre(sesion.get('profesor_terapeuta') or '').lower()
     return bool(nombre) and nombre == profesor
+
+# ========== DELEGACIÓN GRANULAR DE GESTIÓN DE USUARIOS ==========
+# /usuarios era admin-only estricto. Ahora un admin puede delegar capacidades
+# puntuales (crear / editar / eliminar / otorgar roles / otorgar permisos) a
+# cualquier usuario vía los permisos usuarios.* . Salvaguardas anti-escalada:
+#  - Solo un admin ESTRICTO puede crear/asignar/quitar el rol 'admin'.
+#  - Un delegado no-admin no puede editar, eliminar ni reconfigurar los
+#    roles/permisos de un usuario que ya sea admin.
+#  - Socio NO entra por rol (igual que antes /usuarios era admin-only): necesita
+#    el permiso usuarios.* otorgado explícitamente. Por eso estos checks miran
+#    _permisos_usuario_actual() directo, no tiene_modulo() (que aprueba a socio).
+CAPS_USUARIOS = ('crear', 'editar', 'eliminar', 'roles', 'permisos')
+
+def _puede_usuarios(cap):
+    """True si el usuario logueado puede ejecutar la capacidad `cap`. Admin
+    estricto puede todo; cualquier otro necesita el permiso usuarios.<cap>
+    otorgado explícitamente (no basta el rol socio)."""
+    if current_user.rol == 'admin':
+        return True
+    return f'usuarios.{cap}' in _permisos_usuario_actual()
+
+def _puede_gestion_usuarios():
+    """True si puede ENTRAR al panel /usuarios: admin, o cualquiera con al
+    menos una capacidad usuarios.* otorgada."""
+    if current_user.rol == 'admin':
+        return True
+    perms = _permisos_usuario_actual()
+    return any(f'usuarios.{c}' in perms for c in CAPS_USUARIOS)
+
+def _es_usuario_admin(uid):
+    """True si el usuario objetivo es admin (rol activo o entre roles otorgados).
+    Un delegado no-admin nunca puede editar/eliminar/reconfigurar a un admin."""
+    try:
+        u = supabase.table('usuarios').select('rol').eq('id', uid).execute().data
+        if u and u[0].get('rol') == 'admin':
+            return True
+        filas = supabase.table('usuario_roles').select('rol').eq('usuario_id', uid).eq('rol', 'admin').execute().data or []
+        return bool(filas)
+    except Exception:
+        return False
+
+def requiere_usuarios_api(cap):
+    """Decorador JSON: exige la capacidad usuarios.<cap> para endpoints /api/*."""
+    def decorator(f):
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            if not _puede_usuarios(cap):
+                return jsonify({'success': False, 'error': 'Acceso restringido'}), 403
+            return f(*args, **kwargs)
+        return decorated
+    return decorator
+
+def _puede_eliminar_movimientos():
+    """Borrado de movimientos/estados de cuenta bancarios: era admin-only
+    estricto (destructivo e irreversible). Ahora el admin puede delegarlo
+    otorgando finanzas.movimientos_eliminar. Socio NO entra por rol (igual que
+    antes): necesita el permiso explícito — por eso se mira
+    _permisos_usuario_actual() directo, no tiene_modulo() (que aprueba socio)."""
+    if current_user.rol == 'admin':
+        return True
+    return 'finanzas.movimientos_eliminar' in _permisos_usuario_actual()
 
 # Inyecta contadores (anticipos pendientes y contactos nuevos) en TODAS las plantillas (badges del menú lateral).
 # Con caché de 30 s: antes eran 2 consultas a la BD en CADA página que se abría.
@@ -312,7 +392,19 @@ def inyectar_globales():
         mis_roles = sorted(_roles_disponibles_usuario_actual()) if current_user.is_authenticated else []
     except Exception:
         mis_roles = []
-    base = {'tiene_modulo': tiene_modulo, 'mis_roles': mis_roles}
+    # Se expone al nav: /usuarios ya no es admin-only, entra cualquiera con al
+    # menos una capacidad usuarios.* otorgada (socio NO entra por rol).
+    try:
+        puede_usuarios = _puede_gestion_usuarios() if current_user.is_authenticated else False
+    except Exception:
+        puede_usuarios = False
+    try:
+        puede_elim_mov = _puede_eliminar_movimientos() if current_user.is_authenticated else False
+    except Exception:
+        puede_elim_mov = False
+    base = {'tiene_modulo': tiene_modulo, 'mis_roles': mis_roles,
+            'puede_gestion_usuarios': puede_usuarios,
+            'puede_eliminar_movimientos': puede_elim_mov}
     try:
         if not (current_user.is_authenticated and getattr(current_user, 'rol', None) in ['admin', 'socio']):
             return {**base, 'solicitudes_pendientes': 0, 'contactos_nuevos': 0}
@@ -3515,17 +3607,29 @@ def eliminar_asignatura(id):
 # ========== USUARIOS ==========
 @app.route('/usuarios', methods=['GET', 'POST'])
 @login_required
-@admin_required
 def gestion_usuarios():
+    # Entra admin estricto o cualquier delegado con al menos una capacidad
+    # usuarios.* . Cada acción se re-valida abajo contra su capacidad puntual.
+    if not _puede_gestion_usuarios():
+        flash('❌ Acceso restringido', 'error')
+        return redirect(url_for('dashboard'))
     if request.method == 'POST':
         accion = request.form.get('accion')
         uid = int(request.form.get('usuario_id', 0))
         if accion == 'aprobar':
+            if not _puede_usuarios('editar'):
+                flash('❌ No tienes permiso para aprobar usuarios', 'error')
+                return redirect(url_for('gestion_usuarios'))
             # El rol lo decide el administrador en este momento, no el que
             # se auto-asignó en /registro: ese valor era solo una propuesta.
             rol_otorgado = request.form.get('rol')
             if rol_otorgado not in ROLES_DISPONIBLES:
                 flash('❌ Debes elegir un rol para aprobar al usuario', 'error')
+                return redirect(url_for('gestion_usuarios'))
+            # Solo un admin estricto puede aprobar a alguien COMO admin, o
+            # aprobar/reactivar a un usuario que ya sea admin.
+            if current_user.rol != 'admin' and (rol_otorgado == 'admin' or _es_usuario_admin(uid)):
+                flash('❌ Solo un administrador puede otorgar o gestionar el rol admin', 'error')
                 return redirect(url_for('gestion_usuarios'))
             supabase.table('usuarios').update({'activo': True, 'rol': rol_otorgado}).eq('id', uid).execute()
             try:
@@ -3537,6 +3641,12 @@ def gestion_usuarios():
                 pass
             flash('✅ Usuario aprobado', 'success')
         elif accion == 'rechazar':
+            if not _puede_usuarios('editar'):
+                flash('❌ No tienes permiso para desactivar usuarios', 'error')
+                return redirect(url_for('gestion_usuarios'))
+            if current_user.rol != 'admin' and _es_usuario_admin(uid):
+                flash('❌ Solo un administrador puede desactivar a otro administrador', 'error')
+                return redirect(url_for('gestion_usuarios'))
             if uid == current_user.id:
                 flash('❌ No podés desactivar tu propia cuenta', 'error')
                 return redirect(url_for('gestion_usuarios'))
@@ -3546,9 +3656,16 @@ def gestion_usuarios():
             supabase.table('usuarios').update({'activo': False}).eq('id', uid).execute()
             flash('❌ Usuario desactivado', 'info')
         elif accion == 'crear':
+            if not _puede_usuarios('crear'):
+                flash('❌ No tienes permiso para crear usuarios', 'error')
+                return redirect(url_for('gestion_usuarios'))
             rol_nuevo = request.form['rol']
             if rol_nuevo not in ROLES_DISPONIBLES:
                 flash('❌ Rol inválido', 'error')
+                return redirect(url_for('gestion_usuarios'))
+            # Un delegado no-admin no puede crear una cuenta admin.
+            if rol_nuevo == 'admin' and current_user.rol != 'admin':
+                flash('❌ Solo un administrador puede crear cuentas admin', 'error')
                 return redirect(url_for('gestion_usuarios'))
             try:
                 nuevo = supabase.table('usuarios').insert({
@@ -3585,10 +3702,18 @@ def gestion_usuarios():
                         flash(f'⚠️ Usuario creado, pero no se pudieron asignar los permisos por defecto: {e}', 'warning')
             flash('✅ Usuario creado', 'success')
         elif accion == 'editar':
+            if not _puede_usuarios('editar'):
+                flash('❌ No tienes permiso para editar usuarios', 'error')
+                return redirect(url_for('gestion_usuarios'))
             edit_id = int(request.form.get('edit_id'))
             rol_editado = request.form['rol']
             if rol_editado not in ROLES_DISPONIBLES:
                 flash('❌ Rol inválido', 'error')
+                return redirect(url_for('gestion_usuarios'))
+            # Un delegado no-admin no puede editar a un admin ni promover a
+            # nadie a admin (el rol admin solo lo mueve un admin estricto).
+            if current_user.rol != 'admin' and (rol_editado == 'admin' or _es_usuario_admin(edit_id)):
+                flash('❌ Solo un administrador puede editar o asignar el rol admin', 'error')
                 return redirect(url_for('gestion_usuarios'))
             # Mismo invariante que api_guardar_roles_usuario: este formulario
             # NO puede dejar el sistema sin ningún administrador (antes este
@@ -3650,18 +3775,25 @@ def gestion_usuarios():
                 roles_por_usuario.setdefault(f['usuario_id'], []).append(f['rol'])
     except Exception:
         pass
+    # Capacidades del usuario actual: el template muestra/oculta cada control
+    # (crear, aprobar/desactivar, roles, permisos, eliminar) según corresponda.
+    caps = {c: _puede_usuarios(c) for c in CAPS_USUARIOS}
     return render_template('usuarios.html', usuarios=usuarios_data,
                           modulos_disponibles=MODULOS_DISPONIBLES,
                           permisos_por_usuario=permisos_por_usuario,
                           roles_disponibles=ROLES_DISPONIBLES,
-                          roles_por_usuario=roles_por_usuario)
+                          roles_por_usuario=roles_por_usuario,
+                          caps=caps, es_admin=(current_user.rol == 'admin'))
 
 @app.route('/api/usuario/<int:id>/permisos', methods=['POST'])
 @login_required
-@api_admin_required
+@requiere_usuarios_api('permisos')
 def api_guardar_permisos_usuario(id):
     """Reemplaza el set COMPLETO de módulos otorgados a un usuario (los
     checkboxes marcados definen el 100% de su acceso, no es aditivo)."""
+    # Un delegado no-admin no puede tocar los permisos de un admin.
+    if current_user.rol != 'admin' and _es_usuario_admin(id):
+        return jsonify({'success': False, 'error': 'Solo un administrador puede modificar a otro administrador'}), 403
     data = request.get_json() or {}
     modulos_nuevos = set(m for m in (data.get('modulos') or []) if m in MODULOS_KEYS)
     try:
@@ -3706,7 +3838,7 @@ def _admins_disponibles(excluir_id=None):
 
 @app.route('/api/usuario/<int:id>/roles', methods=['POST'])
 @login_required
-@api_admin_required
+@requiere_usuarios_api('roles')
 def api_guardar_roles_usuario(id):
     """Reemplaza el set COMPLETO de roles disponibles para un usuario
     (multi-rol: puede tener varios y cambiar cuál tiene activo)."""
@@ -3714,6 +3846,11 @@ def api_guardar_roles_usuario(id):
     roles_nuevos = set(r for r in (data.get('roles') or []) if r in ROLES_DISPONIBLES)
     if not roles_nuevos:
         return jsonify({'success': False, 'error': 'Debe tener al menos un rol'}), 400
+    # Tope de escalada: un delegado no-admin no puede otorgar el rol 'admin'
+    # ni reconfigurar los roles de un usuario que ya sea admin (podría quitarle
+    # admin y romper el sistema, o dárselo a alguien).
+    if current_user.rol != 'admin' and ('admin' in roles_nuevos or _es_usuario_admin(id)):
+        return jsonify({'success': False, 'error': 'Solo un administrador puede otorgar o modificar el rol admin'}), 403
     if 'admin' not in roles_nuevos and not _admins_disponibles(excluir_id=id):
         return jsonify({'success': False, 'error': 'No se puede quitar admin: quedaría el sistema sin ningún administrador'}), 400
     if id == current_user.id and current_user.rol == 'admin' and 'admin' not in roles_nuevos:
@@ -3763,7 +3900,7 @@ def api_cambiar_rol():
 
 @app.route('/api/usuario/<int:id>/eliminar', methods=['POST'])
 @login_required
-@api_admin_required
+@requiere_usuarios_api('eliminar')
 def api_eliminar_usuario(id):
     """Elimina definitivamente un usuario. No se puede eliminar a sí mismo
     ni al último administrador del sistema."""
@@ -3775,6 +3912,9 @@ def api_eliminar_usuario(id):
     es_admin = objetivo[0]['rol'] == 'admin' or id in {
         f['usuario_id'] for f in (supabase.table('usuario_roles').select('usuario_id').eq('rol', 'admin').execute().data or [])
     }
+    # Un delegado no-admin no puede eliminar a un administrador.
+    if es_admin and current_user.rol != 'admin':
+        return jsonify({'success': False, 'error': 'Solo un administrador puede eliminar a otro administrador'}), 403
     if es_admin and not _admins_disponibles(excluir_id=id):
         return jsonify({'success': False, 'error': 'No se puede eliminar: quedaría el sistema sin ningún administrador'}), 400
     try:
@@ -3931,14 +4071,25 @@ def mi_asistencia():
 
 @app.route('/admin/marcaciones')
 @login_required
-@requiere_modulo('administracion.marcaciones')
 def admin_marcaciones():
+    # Dos niveles de acceso otorgables:
+    #  - administracion.marcaciones  -> ve TODAS las marcaciones.
+    #  - asistencia.ver_docentes     -> ve solo las de profesores y psicólogos.
+    ve_todas = tiene_modulo('administracion.marcaciones')
+    ve_docentes = ve_todas or tiene_modulo('asistencia.ver_docentes')
+    if not ve_docentes:
+        flash('❌ Acceso restringido', 'error')
+        return redirect(url_for('dashboard'))
     mes, anio = _mes_anio_args()
     ultimo_dia = monthrange(anio, mes)[1]
     filas = (supabase.table('marcaciones').select('*, usuarios(nombre, rol)')
         .gte('fecha', f"{anio}-{mes:02d}-01").lte('fecha', f"{anio}-{mes:02d}-{ultimo_dia}")
         .order('fecha', desc=True).execute().data or [])
-    return render_template('admin_marcaciones.html', marcaciones=filas, mes=mes, anio=anio)
+    # Sin el permiso amplio, se acota a marcaciones de profesores/psicólogos.
+    if not ve_todas:
+        filas = [f for f in filas if (f.get('usuarios') or {}).get('rol') in ('profesor', 'psicologo')]
+    return render_template('admin_marcaciones.html', marcaciones=filas, mes=mes, anio=anio,
+                          solo_docentes=(not ve_todas))
 
 # ========== EDITAR PERFIL ==========
 @app.route('/editar-perfil', methods=['GET', 'POST'])
@@ -5194,15 +5345,20 @@ def revertir_movimiento(id):
 
 @app.route('/api/movimiento/<int:id>/eliminar', methods=['POST'])
 @login_required
-@api_admin_required  # eliminar movimientos: SOLO administrador
 def eliminar_movimiento(id):
+    # Admin, o quien tenga finanzas.movimientos_eliminar otorgado.
+    if not _puede_eliminar_movimientos():
+        return jsonify({'success': False, 'error': 'Acceso restringido'}), 403
     supabase.table('movimientos_cuenta').delete().eq('id', id).execute()
     return jsonify({'success': True})
 
 @app.route('/movimientos-cuenta/lote/<lote_id>/eliminar', methods=['POST'])
 @login_required
-@admin_required  # eliminar el estado de cuenta completo: SOLO administrador
 def eliminar_lote_movimientos(lote_id):
+    # Admin, o quien tenga finanzas.movimientos_eliminar otorgado.
+    if not _puede_eliminar_movimientos():
+        flash('❌ Acceso restringido', 'error')
+        return redirect(url_for('movimientos_cuenta'))
     supabase.table('movimientos_cuenta').delete().eq('lote_id', lote_id).execute()
     flash('🗑️ Estado de cuenta eliminado', 'info')
     return redirect(url_for('movimientos_cuenta'))

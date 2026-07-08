@@ -850,9 +850,13 @@
     {% set puede_costos = es_admin_socio or tiene_modulo('administracion.costos') %}
     {% set puede_reporte_duplicados = es_admin_socio or tiene_modulo('administracion.reporte_duplicados') %}
     {% set puede_marcaciones = es_admin_socio or tiene_modulo('administracion.marcaciones') %}
+    {# Ver marcaciones acotado a profesores/psicólogos (permiso otorgable aparte) #}
+    {% set puede_marcaciones_docentes = puede_marcaciones or tiene_modulo('asistencia.ver_docentes') %}
     {% set puede_marcar_asistencia = tiene_modulo('asistencia.marcar') %}
-    {# 'Usuarios' queda SIEMPRE admin-only (rol=='admin' estricto, no es otorgable) #}
-    {% set puede_administracion = puede_costos or puede_reporte_duplicados or puede_marcaciones or rol=='admin' %}
+    {# 'Usuarios' ahora es delegable de forma granular: entra admin o cualquiera
+       con una capacidad usuarios.* otorgada (puede_gestion_usuarios lo calcula
+       el backend, con socio excluido salvo permiso explícito). #}
+    {% set puede_administracion = puede_costos or puede_reporte_duplicados or puede_marcaciones_docentes or puede_gestion_usuarios %}
     {% set puede_gestion = puede_academico or puede_personas or puede_psicologia or puede_finanzas or puede_administracion %}
     <aside class="app-sidebar" id="appSidebar">
         <a href="/dashboard" class="{% if p=='/dashboard' %}active{% endif %}"><span class="ico">🏠</span> Inicio</a>
@@ -977,9 +981,9 @@
             <button type="button" class="nav-group-toggle"><span class="ico">⚙️</span> Administración</button>
             <div class="nav-group-items">
                 {% if puede_costos %}<a href="/admin/costos" class="{% if p=='/admin/costos' %}active{% endif %}">Costos</a>{% endif %}
-                {% if rol=='admin' %}<a href="/usuarios" class="{% if p=='/usuarios' %}active{% endif %}">Usuarios</a>{% endif %}
+                {% if puede_gestion_usuarios %}<a href="/usuarios" class="{% if p=='/usuarios' %}active{% endif %}">Usuarios</a>{% endif %}
                 {% if puede_reporte_duplicados %}<a href="/reporte-duplicados" class="{% if p=='/reporte-duplicados' %}active{% endif %}">Reporte duplicados</a>{% endif %}
-                {% if puede_marcaciones %}<a href="/admin/marcaciones" class="{% if p=='/admin/marcaciones' %}active{% endif %}">Marcaciones de asistencia</a>{% endif %}
+                {% if puede_marcaciones_docentes %}<a href="/admin/marcaciones" class="{% if p=='/admin/marcaciones' %}active{% endif %}">Marcaciones de asistencia</a>{% endif %}
             </div>
         </div>
         {% endif %}

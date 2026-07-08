@@ -239,7 +239,7 @@
                             {% else %}
                                 <button class="btn btn-sm btn-outline-secondary" onclick="revertir({{ m.id }})">↺</button>
                             {% endif %}
-                            {% if current_user.rol == 'admin' %}
+                            {% if puede_eliminar_movimientos %}
                             <button class="btn btn-sm btn-outline-danger" onclick="eliminar({{ m.id }})">🗑️</button>
                             {% endif %}
                         </td>
@@ -253,10 +253,10 @@
     </div>
 </div>
 
-{% if current_user.rol == 'admin' and lotes %}
-<!-- Estados de cuenta subidos (lotes) — gestión SOLO administrador -->
+{% if puede_eliminar_movimientos and lotes %}
+<!-- Estados de cuenta subidos (lotes) — requiere permiso de eliminación otorgado -->
 <div class="card mt-4">
-    <div class="card-header bg-secondary">🗂️ Estados de cuenta subidos (solo administrador)</div>
+    <div class="card-header bg-secondary">🗂️ Estados de cuenta subidos</div>
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-sm mb-0">

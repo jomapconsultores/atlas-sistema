@@ -20,56 +20,71 @@
     <p>Administra las cuentas y roles del sistema.</p>
 </div>
 
+{% if caps.crear %}
 <div class="card-premium"><div class="card-header-grad grad-red">➕ Nuevo Usuario</div><div class="card-body">
 <form method="POST" class="row g-2">
     <input type="hidden" name="accion" value="crear">
     <div class="col-md-3"><input type="text" name="nombre" class="form-control form-control-premium" placeholder="Nombre" required></div>
     <div class="col-md-3"><input type="email" name="email" class="form-control form-control-premium" placeholder="Email" required></div>
     <div class="col-md-2"><input type="password" name="password" class="form-control form-control-premium" placeholder="Contraseña" required></div>
-    <div class="col-md-2"><select name="rol" class="form-select form-select-premium"><option value="admin">Admin</option><option value="socio">Socio</option><option value="secretaria">Secretaría</option><option value="profesor">Profesor</option><option value="psicologo">Psicólogo</option><option value="estudiante">Estudiante</option><option value="padre">Padre</option></select></div>
+    <div class="col-md-2"><select name="rol" class="form-select form-select-premium">{% if es_admin %}<option value="admin">Admin</option>{% endif %}<option value="socio">Socio</option><option value="secretaria">Secretaría</option><option value="profesor">Profesor</option><option value="psicologo">Psicólogo</option><option value="estudiante">Estudiante</option><option value="padre">Padre</option></select></div>
     <div class="col-md-2"><button type="submit" class="btn btn-danger btn-premium w-100">✅ Crear</button></div>
 </form></div></div>
+{% endif %}
 
 <div class="card-premium"><div class="card-header-grad grad-dark">📋 Usuarios Registrados</div><div class="card-body p-0">
 <div class="table-responsive"><table class="table table-premium mb-0"><thead><tr><th>Nombre</th><th>Email</th><th>Rol activo</th><th>Estado</th><th>Acción</th></tr></thead><tbody>
 {% for u in usuarios %}
+{# Objetivo admin: un delegado no-admin no puede tocarlo (solo un admin real) #}
+{% set objetivo_admin = (u.rol == 'admin') or ('admin' in roles_por_usuario.get(u.id, [])) %}
+{% set puede_tocar = es_admin or not objetivo_admin %}
 <tr><td>{{ u.nombre }}</td><td>{{ u.email }}</td><td><span class="badge-premium text-white bg-{{ 'dark' if u.rol=='admin' else 'primary' if u.rol=='socio' else 'warning' if u.rol=='secretaria' else 'success' if u.rol=='profesor' else 'purple' if u.rol=='psicologo' else 'info' }}">{{ u.rol }}</span></td><td><span class="badge-premium text-white bg-{{ 'success' if u.activo else 'danger' }}">{{ 'Activo' if u.activo else 'Inactivo' }}</span></td><td>
+{% if caps.editar and puede_tocar %}
 {% if u.activo %}
 <form method="POST" style="display:inline;"><input type="hidden" name="usuario_id" value="{{ u.id }}"><input type="hidden" name="accion" value="rechazar"><button type="submit" class="btn btn-sm btn-warning btn-premium">❌ Desactivar</button></form>
 {% else %}
 <form method="POST" style="display:inline;"><input type="hidden" name="usuario_id" value="{{ u.id }}"><input type="hidden" name="accion" value="aprobar">
     <select name="rol" class="form-select form-select-premium" style="display:inline-block; width:auto;" required>
         <option value="">Rol a otorgar...</option>
-        {% for r in roles_disponibles %}<option value="{{ r }}" {% if r == u.rol %}selected{% endif %}>{{ r }}</option>{% endfor %}
+        {% for r in roles_disponibles %}{% if es_admin or r != 'admin' %}<option value="{{ r }}" {% if r == u.rol %}selected{% endif %}>{{ r }}</option>{% endif %}{% endfor %}
     </select>
     <button type="submit" class="btn btn-sm btn-success btn-premium">✅ Aprobar</button>
 </form>
 {% endif %}
+{% endif %}
+{% if caps.roles and puede_tocar %}
 <button type="button" class="btn btn-sm btn-outline-dark btn-premium" onclick="toggleRoles({{ u.id }})">👤 Roles</button>
-{% if u.rol not in ['admin', 'socio'] %}
+{% endif %}
+{% if caps.permisos and u.rol not in ['admin', 'socio'] %}
 <button type="button" class="btn btn-sm btn-outline-secondary btn-premium" onclick="togglePermisos({{ u.id }})">🔐 Permisos</button>
 {% endif %}
+{% if caps.eliminar and puede_tocar %}
 <button type="button" class="btn btn-sm btn-outline-danger btn-premium" aria-label="Eliminar a {{ u.nombre }}" title="Eliminar a {{ u.nombre }}" onclick="eliminarUsuario({{ u.id }}, '{{ u.nombre|replace("'", "\\'") }}', this)">🗑️</button>
+{% endif %}
 </td></tr>
+{% if caps.roles and puede_tocar %}
 <tr id="roles-fila-{{ u.id }}" style="display:none;"><td colspan="5" class="bg-light">
     <div class="p-3">
         <strong>Roles habilitados para {{ u.nombre }}</strong> <small class="text-muted">(puede tener varios y cambiar cuál usa activo desde el selector de arriba)</small>
         <div class="row mt-2" id="roles-checks-{{ u.id }}">
             {% set roles_ot = roles_por_usuario.get(u.id, [u.rol]) %}
             {% for r in roles_disponibles %}
+            {% if es_admin or r != 'admin' %}
             <div class="col-md-3 col-6">
                 <div class="form-check">
                     <input class="form-check-input" type="checkbox" value="{{ r }}" id="rol-{{ u.id }}-{{ r }}" {% if r in roles_ot %}checked{% endif %}>
                     <label class="form-check-label" for="rol-{{ u.id }}-{{ r }}" style="font-size:12px;">{{ r }}</label>
                 </div>
             </div>
+            {% endif %}
             {% endfor %}
         </div>
         <button type="button" class="btn btn-sm btn-primary btn-premium mt-2" onclick="guardarRoles({{ u.id }}, this)">💾 Guardar roles</button>
         <span id="roles-msg-{{ u.id }}" class="ms-2 small"></span>
     </div>
 </td></tr>
-{% if u.rol not in ['admin', 'socio'] %}
+{% endif %}
+{% if caps.permisos and u.rol not in ['admin', 'socio'] %}
 <tr id="permisos-fila-{{ u.id }}" style="display:none;"><td colspan="5" class="bg-light">
     <div class="p-3">
         <strong>Módulos habilitados para {{ u.nombre }}:</strong>
