@@ -48,6 +48,18 @@ try:
 except Exception:
     WEBAUTHN_OK = False
 
+# Sentry (error-tracking). Solo se activa si SENTRY_DSN está definida; si no,
+# es un NO-OP total y la app arranca idéntica.
+import sentry_sdk
+_sentry_dsn = os.environ.get("SENTRY_DSN", "")
+if _sentry_dsn:
+    sentry_sdk.init(
+        dsn=_sentry_dsn,
+        environment=os.environ.get("FLASK_ENV", "production"),
+        traces_sample_rate=float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE", "0")),
+        send_default_pii=False,
+    )
+
 app = Flask(__name__)
 app.config.from_object(Config)
 # Coolify/Traefik hace de reverse proxy delante de la app: sin esto,
