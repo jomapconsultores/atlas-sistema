@@ -835,8 +835,19 @@
     {# Cada módulo/submódulo puede venir del rol (admin/socio, acceso total)
        o de un permiso individual otorgado desde /usuarios (ej. secretaría,
        o cualquier otro rol al que un admin le haya habilitado algo puntual). #}
-    {% set puede_academico = es_admin_socio or tiene_modulo('academico') %}
-    {% set puede_personas = es_admin_socio or tiene_modulo('personas') %}
+    {# Académico desglosado por submódulo (cada uno otorgable por separado) #}
+    {% set puede_planificacion = es_admin_socio or tiene_modulo('academico.planificacion') %}
+    {% set puede_proformas = es_admin_socio or tiene_modulo('academico.proformas') %}
+    {% set puede_calendario = es_admin_socio or tiene_modulo('academico.calendario') %}
+    {% set puede_asignaturas = es_admin_socio or tiene_modulo('academico.asignaturas') %}
+    {% set puede_reuniones = es_admin_socio or tiene_modulo('academico.reuniones') %}
+    {% set puede_academico = puede_planificacion or puede_proformas or puede_calendario or puede_asignaturas or puede_reuniones %}
+    {# Personas desglosado por submódulo #}
+    {% set puede_estudiantes = es_admin_socio or tiene_modulo('personas.estudiantes') %}
+    {% set puede_docentes = es_admin_socio or tiene_modulo('personas.docentes') %}
+    {% set puede_padres = es_admin_socio or tiene_modulo('personas.padres') %}
+    {% set puede_contactos = es_admin_socio or tiene_modulo('personas.contactos') %}
+    {% set puede_personas = puede_estudiantes or puede_docentes or puede_padres or puede_contactos %}
     {% set puede_psicologia = es_admin_socio or tiene_modulo('psicologia') %}
     {% set puede_pagos_estudiantes = es_admin_socio or tiene_modulo('finanzas.pagos_estudiantes') %}
     {% set puede_devoluciones = es_admin_socio or tiene_modulo('finanzas.devoluciones') %}
@@ -873,14 +884,18 @@
         <div class="nav-group {% if acad_active %}open{% endif %}">
             <button type="button" class="nav-group-toggle"><span class="ico">📚</span> Académico</button>
             <div class="nav-group-items">
+                {% if puede_planificacion %}
                 <a href="/modulo1" class="{% if p=='/modulo1' %}active{% endif %}">Nueva planificación</a>
                 <a href="/editar-planificaciones" class="{% if p=='/editar-planificaciones' %}active{% endif %}">Editar planificaciones</a>
                 <a href="/editar-planificacion-masiva" class="{% if p=='/editar-planificacion-masiva' %}active{% endif %}">Edición masiva</a>
-                <a href="/proformas" class="{% if p.startswith('/proformas') %}active{% endif %}">Proformas de clases</a>
+                {% endif %}
+                {% if puede_proformas %}<a href="/proformas" class="{% if p.startswith('/proformas') %}active{% endif %}">Proformas de clases</a>{% endif %}
+                {% if puede_calendario %}
                 <a href="/modulo2" class="{% if p=='/modulo2' %}active{% endif %}">Calendario diario</a>
                 <a href="/modulo4" class="{% if p=='/modulo4' %}active{% endif %}">Calendario general</a>
-                <a href="/asignaturas" class="{% if p=='/asignaturas' %}active{% endif %}">Asignaturas</a>
-                <a href="/modulo6" class="{% if p=='/modulo6' %}active{% endif %}">Reuniones internas</a>
+                {% endif %}
+                {% if puede_asignaturas %}<a href="/asignaturas" class="{% if p=='/asignaturas' %}active{% endif %}">Asignaturas</a>{% endif %}
+                {% if puede_reuniones %}<a href="/modulo6" class="{% if p=='/modulo6' %}active{% endif %}">Reuniones internas</a>{% endif %}
             </div>
         </div>
         {% endif %}
@@ -890,10 +905,10 @@
         <div class="nav-group {% if pers_active %}open{% endif %}">
             <button type="button" class="nav-group-toggle"><span class="ico">👥</span> Personas</button>
             <div class="nav-group-items">
-                <a href="/estudiantes" class="{% if p=='/estudiantes' %}active{% endif %}">Estudiantes</a>
-                <a href="/docentes" class="{% if p=='/docentes' %}active{% endif %}">Docentes</a>
-                <a href="/padres" class="{% if p=='/padres' %}active{% endif %}">Padres</a>
-                <a href="/contactos" class="{% if p=='/contactos' %}active{% endif %}">Contactos {% if contactos_nuevos and contactos_nuevos>0 %}<span class="side-badge">{{ contactos_nuevos }}</span>{% endif %}</a>
+                {% if puede_estudiantes %}<a href="/estudiantes" class="{% if p=='/estudiantes' %}active{% endif %}">Estudiantes</a>{% endif %}
+                {% if puede_docentes %}<a href="/docentes" class="{% if p=='/docentes' %}active{% endif %}">Docentes</a>{% endif %}
+                {% if puede_padres %}<a href="/padres" class="{% if p=='/padres' %}active{% endif %}">Padres</a>{% endif %}
+                {% if puede_contactos %}<a href="/contactos" class="{% if p=='/contactos' %}active{% endif %}">Contactos {% if contactos_nuevos and contactos_nuevos>0 %}<span class="side-badge">{{ contactos_nuevos }}</span>{% endif %}</a>{% endif %}
             </div>
         </div>
         {% endif %}

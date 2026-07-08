@@ -14,6 +14,9 @@
     .btn-premium { border-radius: 10px; font-weight: 600; font-size: 11px; padding: 6px 12px; }
     .badge-premium { padding: 4px 10px; border-radius: 10px; font-size: 10px; font-weight: 600; }
     .bg-purple { background-color: #7c3aed; }
+    .perm-grupo { border-left: 3px solid #e5e7eb; padding-left: 12px; }
+    .perm-grupo-titulo { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #374151; }
+    .perm-todos { font-size: 11px; text-decoration: none; }
 </style>
 <div class="page-hero">
     <h2>👤 Gestión de Usuarios</h2>
@@ -88,18 +91,32 @@
 <tr id="permisos-fila-{{ u.id }}" style="display:none;"><td colspan="5" class="bg-light">
     <div class="p-3">
         <strong>Módulos habilitados para {{ u.nombre }}:</strong>
-        <div class="row mt-2" id="permisos-checks-{{ u.id }}">
-            {% set otorgados = permisos_por_usuario.get(u.id, []) %}
-            {% for m in modulos_disponibles %}
-            <div class="col-md-3 col-6">
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" value="{{ m.key }}" id="perm-{{ u.id }}-{{ m.key }}" {% if m.key in otorgados %}checked{% endif %}>
-                    <label class="form-check-label" for="perm-{{ u.id }}-{{ m.key }}" style="font-size:12px;">{{ (m.grupo ~ ' › ') if m.grupo else '' }}{{ m.label }}</label>
+        {% set otorgados = permisos_por_usuario.get(u.id, []) %}
+        {# 'academico'/'personas' eran permisos paraguas: si el usuario todavía
+           los tiene, cada submódulo del grupo cuenta como otorgado. #}
+        {% set paraguas = otorgados | select('in', ['academico','personas']) | list %}
+        <div id="permisos-checks-{{ u.id }}">
+            {% for grupo, mods in modulos_agrupados %}
+            <div class="perm-grupo mt-3">
+                <div class="d-flex align-items-center mb-1">
+                    <span class="perm-grupo-titulo">{{ grupo }}</span>
+                    <button type="button" class="btn btn-link btn-sm p-0 ms-2 perm-todos" onclick="marcarGrupo({{ u.id }}, '{{ grupo|replace("'", "\\'") }}', this)">Todos</button>
+                </div>
+                <div class="row">
+                    {% for m in mods %}
+                    {% set heredado = (m.key.split('.')[0] in ['academico','personas']) and (m.key.split('.')[0] in paraguas) %}
+                    <div class="col-md-4 col-6">
+                        <div class="form-check">
+                            <input class="form-check-input perm-check" data-grupo="{{ grupo }}" type="checkbox" value="{{ m.key }}" id="perm-{{ u.id }}-{{ m.key }}" {% if m.key in otorgados or heredado %}checked{% endif %}>
+                            <label class="form-check-label" for="perm-{{ u.id }}-{{ m.key }}" style="font-size:12px;">{{ m.label }}</label>
+                        </div>
+                    </div>
+                    {% endfor %}
                 </div>
             </div>
             {% endfor %}
         </div>
-        <button type="button" class="btn btn-sm btn-primary btn-premium mt-2" onclick="guardarPermisos({{ u.id }}, this)">💾 Guardar permisos</button>
+        <button type="button" class="btn btn-sm btn-primary btn-premium mt-3" onclick="guardarPermisos({{ u.id }}, this)">💾 Guardar permisos</button>
         <span id="permisos-msg-{{ u.id }}" class="ms-2 small"></span>
     </div>
 </td></tr>
@@ -114,6 +131,11 @@ function togglePermisos(id){
 function toggleRoles(id){
     const fila = document.getElementById('roles-fila-' + id);
     fila.style.display = fila.style.display === 'none' ? '' : 'none';
+}
+function marcarGrupo(id, grupo, btn){
+    const checks = document.querySelectorAll('#permisos-checks-' + id + ' .perm-check[data-grupo="' + grupo + '"]');
+    const todos = Array.from(checks).every(c => c.checked);
+    checks.forEach(c => c.checked = !todos);  // si están todos, los desmarca; si no, los marca
 }
 async function guardarPermisos(id, btn){
     if (btn.disabled) return;
