@@ -532,7 +532,7 @@
         .page-hero .hero-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
         /* ── LAYOUT CON SIDEBAR ──────────────────────── */
-        :root { --nav-h: 84px; --sidebar-w: 268px; }
+        :root { --nav-h: 84px; --sidebar-w: 268px; --rail-w: 188px; --panel-w: 212px; }
 
         .navbar-premium { position: fixed; top: 0; left: 0; right: 0; height: var(--nav-h); z-index: 1060; }
         .navbar-premium > .container-fluid { height: 100%; padding-top: 0 !important; padding-bottom: 0 !important; }
@@ -626,6 +626,54 @@
         /* Empuje del contenido */
         body.has-sidebar .main-container { margin-left: var(--sidebar-w); margin-top: calc(var(--nav-h) + 26px); max-width: calc(1380px); }
         body.has-sidebar footer { margin-left: var(--sidebar-w); }
+
+        /* ── MENÚ EN DOS COLUMNAS (escritorio) ──────────────
+           Columna 1 = riel con los grupos; columna 2 = submenús del grupo
+           seleccionado. En móvil se conserva el acordeón desplegable. */
+        .sidebar-panel-bg { display: none; }
+
+        @media (min-width: 992px) {
+            :root { --sidebar-w: calc(var(--rail-w) + var(--panel-w)); }
+
+            .app-sidebar { width: var(--rail-w); }
+
+            /* Columna 2: position:fixed para escapar del scroll del riel */
+            .app-sidebar > .nav-group > .nav-group-items {
+                position: fixed;
+                left: var(--rail-w); top: var(--nav-h); bottom: 0;
+                width: var(--panel-w);
+                max-height: none; overflow-y: auto;
+                background: #ffffff;
+                border-right: 1px solid var(--atlas-border);
+                box-shadow: 2px 0 12px rgba(0,0,0,0.03);
+                padding: 16px 12px 28px;
+                display: none;
+                z-index: 1041;
+            }
+            .app-sidebar > .nav-group.open > .nav-group-items { display: block; }
+
+            /* Título del grupo activo dentro de la columna 2 */
+            .app-sidebar > .nav-group > .nav-group-items::before {
+                content: attr(data-titulo);
+                display: block;
+                font-size: 10px; font-weight: 800; text-transform: uppercase;
+                letter-spacing: 1.2px; color: #94a3b8; padding: 0 8px 10px;
+            }
+
+            /* Fondo permanente de la columna 2 (cuando no hay grupo abierto) */
+            .sidebar-panel-bg {
+                display: block;
+                position: fixed;
+                left: var(--rail-w); top: var(--nav-h); bottom: 0;
+                width: var(--panel-w);
+                background: #ffffff;
+                border-right: 1px solid var(--atlas-border);
+                box-shadow: 2px 0 12px rgba(0,0,0,0.03);
+                z-index: 1039;
+                padding: 20px 16px;
+            }
+            .sidebar-panel-bg .hint { font-size: 11.5px; color: #94a3b8; line-height: 1.6; }
+        }
 
         @media (max-width: 991px) {
             .app-sidebar { transform: translateX(-100%); width: 280px; }
@@ -1034,6 +1082,8 @@
         <a href="/editar-perfil" class="{% if p=='/editar-perfil' %}active{% endif %}"><span class="ico">✏️</span> Editar perfil</a>
         <a href="/logout"><span class="ico">🚪</span> Cerrar sesión</a>
     </aside>
+    {# Columna 2 del menú: fondo permanente; los submenús del grupo abierto se dibujan encima #}
+    <div class="sidebar-panel-bg"><div class="hint">Elige un módulo del menú para ver aquí sus opciones.</div></div>
     <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
     {% endif %}
 
@@ -1081,11 +1131,32 @@
     }
     // ── Sidebar: submenús colapsables + apertura en móvil ──
     (function () {
+        // Pasa el nombre del grupo a su panel (columna 2) para usarlo de título.
+        document.querySelectorAll('.app-sidebar > .nav-group').forEach(function (g) {
+            var t = g.querySelector(':scope > .nav-group-toggle');
+            var items = g.querySelector(':scope > .nav-group-items');
+            if (t && items) items.setAttribute('data-titulo', t.textContent.trim());
+        });
         document.querySelectorAll('.app-sidebar .nav-group-toggle').forEach(function (btn) {
             btn.addEventListener('click', function () {
-                btn.closest('.nav-group').classList.toggle('open');
+                var grupo = btn.closest('.nav-group');
+                var esPrincipal = grupo.parentElement.classList.contains('app-sidebar');
+                var vaAbrir = !grupo.classList.contains('open');
+                // En dos columnas (escritorio) solo un grupo principal abierto a la vez,
+                // si no se superpondrían dos paneles en la misma columna.
+                if (esPrincipal && window.innerWidth >= 992) {
+                    document.querySelectorAll('.app-sidebar > .nav-group.open').forEach(function (o) {
+                        if (o !== grupo) o.classList.remove('open');
+                    });
+                }
+                grupo.classList.toggle('open', vaAbrir);
             });
         });
+        // Al cargar en escritorio, deja abierto solo el primer grupo activo.
+        if (window.innerWidth >= 992) {
+            var abiertos = document.querySelectorAll('.app-sidebar > .nav-group.open');
+            for (var i = 1; i < abiertos.length; i++) abiertos[i].classList.remove('open');
+        }
         // Chevron de submenú anidado: despliega/colapsa sin navegar
         document.querySelectorAll('.app-sidebar .nav-chev').forEach(function (chev) {
             chev.addEventListener('click', function (e) {
