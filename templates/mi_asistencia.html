@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Mi Asistencia - Atlas{% endblock %}
+{% block content %}
+<style>
+    .card-premium { border-radius: 20px; border: none; box-shadow: 0 4px 20px rgba(0,0,0,0.06); background: white; margin-bottom: 20px; overflow: hidden; }
+    .card-header-grad { padding: 14px 20px; color: white; font-weight: 700; font-size: 15px; }
+    .grad-dark { background: linear-gradient(135deg, #263238, #111); }
+    .btn-marcar { border-radius: 14px; font-weight: 700; padding: 18px; font-size: 16px; width: 100%; }
+    .table-premium { border-radius: 12px; overflow: hidden; border: none; margin: 0; }
+    .table-premium thead th { background: #1a1a2e; color: white; font-weight: 600; font-size: 11px; letter-spacing: 0.5px; border: none; padding: 10px 12px; text-transform: uppercase; }
+    .table-premium tbody td { padding: 8px 12px; font-size: 13px; border-bottom: 1px solid #f0f0f0; }
+</style>
+<div class="page-hero">
+    <h2>🕒 Mi Asistencia</h2>
+    <p>Marca tu ingreso y salida del día.</p>
+</div>
+
+<div class="card-premium"><div class="card-body p-4">
+    <div class="row g-3 text-center">
+        <div class="col-md-6">
+            <div class="mb-2 text-muted">Ingreso de hoy</div>
+            <h3>{{ marcacion_hoy.hora_ingreso[:5] if marcacion_hoy and marcacion_hoy.hora_ingreso else '—' }}</h3>
+            {% if not marcacion_hoy %}
+            <form method="POST"><input type="hidden" name="accion" value="ingreso">
+                <button type="submit" class="btn btn-success btn-marcar">✅ Marcar ingreso</button>
+            </form>
+            {% endif %}
+        </div>
+        <div class="col-md-6">
+            <div class="mb-2 text-muted">Salida de hoy</div>
+            <h3>{{ marcacion_hoy.hora_salida[:5] if marcacion_hoy and marcacion_hoy.hora_salida else '—' }}</h3>
+            {% if marcacion_hoy and not marcacion_hoy.hora_salida %}
+            <form method="POST"><input type="hidden" name="accion" value="salida">
+                <button type="submit" class="btn btn-danger btn-marcar">🚪 Marcar salida</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+</div></div>
+
+<div class="card-premium"><div class="card-header-grad grad-dark">📅 Últimos 14 días</div><div class="card-body p-0">
+<div class="table-responsive"><table class="table table-premium mb-0"><thead><tr><th>Fecha</th><th>Ingreso</th><th>Salida</th></tr></thead><tbody>
+{% for m in historial %}
+<tr><td>{{ m.fecha }}</td><td>{{ m.hora_ingreso[:5] if m.hora_ingreso else '—' }}</td><td>{{ m.hora_salida[:5] if m.hora_salida else '—' }}</td></tr>
+{% else %}
+<tr><td colspan="3" class="text-center text-muted py-3">Todavía no tienes marcaciones</td></tr>
+{% endfor %}
+</tbody></table></div></div></div>
+{% endblock %}

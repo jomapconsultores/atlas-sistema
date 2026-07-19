@@ -198,7 +198,7 @@
         <a href="/psicologia-especial" class="quick-btn">🧠 Psicología Especial</a>
         <a href="/gestion-anticipos" class="quick-btn">💰 Anticipos {% if solicitudes_pendientes>0 %}<span class="badge bg-danger ms-1">{{ solicitudes_pendientes }}</span>{% endif %}</a>
         {% if current_user.rol in ['admin', 'socio'] %}<a href="/liquidacion" class="quick-btn">⚖️ Liquidación</a>{% endif %}
-        {% if current_user.rol=='admin' %}<a href="/usuarios" class="quick-btn">👥 Usuarios</a>{% endif %}
+        {% if puede_gestion_usuarios %}<a href="/usuarios" class="quick-btn">👥 Usuarios</a>{% endif %}
 {% if current_user.rol in ['admin','socio'] %}<a href="/admin/costos" class="quick-btn">⚙️ Costos</a>{% endif %}
     </div>
     {% elif current_user.rol=='profesor' %}

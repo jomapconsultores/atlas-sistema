@@ -9,7 +9,7 @@ servidor, **sin tocar el código de la app** (solo cambian 2 variables de entorn
 |---|---|---|
 | `db` | postgres:15 | Los datos |
 | `rest` | postgrest | API REST `/rest/v1/` (lo que usa `supabase.table()`) |
-| `adminer` | adminer | Panel web para ver/editar datos (`/adminer/`) |
+| `adminer` | adminer | Panel web para ver/editar datos (`/adminer/`, con Basic Auth — ver `ADMINER_AUTH_USER`/`ADMINER_AUTH_HASH`) |
 | `proxy` | caddy | Enruta `/rest/v1/*` y `/adminer/*`; HTTPS automático |
 
 La app sigue usando el cliente de Supabase: apunta `SUPABASE_URL` a este servidor
