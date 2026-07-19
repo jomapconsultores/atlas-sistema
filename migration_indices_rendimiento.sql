@@ -10,3 +10,4 @@ CREATE INDEX IF NOT EXISTS idx_devoluciones_estudiante ON devoluciones(estudiant
 CREATE INDEX IF NOT EXISTS idx_gastos_periodo ON gastos(anio_periodo, mes_periodo);
 CREATE INDEX IF NOT EXISTS idx_movs_fecha ON movimientos_cuenta(fecha);
 CREATE INDEX IF NOT EXISTS idx_anticipos_estado ON anticipos_solicitudes(estado);
+CREATE INDEX IF NOT EXISTS idx_sesiones_grupo ON sesiones(sesion_grupo_id);

@@ -17,6 +17,7 @@ import hashlib
 import hmac
 import re
 import unicodedata
+import concurrent.futures
 
 # El servidor corre en UTC (Coolify); Ecuador no usa horario de verano, así
 # que un offset fijo de -5 es exacto para marcar hora de asistencia sin
@@ -1214,13 +1215,27 @@ def _estudiantes_con_deuda():
     Misma lógica de saldo que el Módulo 3: saldo = cobrar - (pagado - devuelto).
     Devuelve [{'nombre', 'saldo'}] ordenado de mayor a menor deuda."""
     try:
-        estudiantes = supabase.table('estudiantes').select('id,nombres,apellidos').eq('activo', True).execute().data or []
-        ses_rows = _fetch_all(supabase.table('sesiones').select('estudiante_id,valor_total').in_('estado', ['Realizado', 'Cancelado-Pagado']))
-        pagos_rows = _fetch_all(supabase.table('pagos').select('estudiante_id,monto'))
-        try:
-            dev_rows = _fetch_all(supabase.table('devoluciones').select('estudiante_id,monto'))
-        except Exception:
-            dev_rows = []
+        # Las 4 consultas son independientes entre sí, así que se lanzan en
+        # paralelo en vez de una tras otra (esta función corre en cada carga
+        # del dashboard). 'devoluciones' sigue siendo opcional: si falla no
+        # rompe el cálculo del resto.
+        def _fetch_dev():
+            try:
+                return _fetch_all(supabase.table('devoluciones').select('estudiante_id,monto'))
+            except Exception:
+                return []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+            fut_estudiantes = executor.submit(
+                lambda: supabase.table('estudiantes').select('id,nombres,apellidos').eq('activo', True).execute().data or [])
+            fut_ses = executor.submit(
+                lambda: _fetch_all(supabase.table('sesiones').select('estudiante_id,valor_total').in_('estado', ['Realizado', 'Cancelado-Pagado'])))
+            fut_pagos = executor.submit(
+                lambda: _fetch_all(supabase.table('pagos').select('estudiante_id,monto')))
+            fut_dev = executor.submit(_fetch_dev)
+            estudiantes = fut_estudiantes.result()
+            ses_rows = fut_ses.result()
+            pagos_rows = fut_pagos.result()
+            dev_rows = fut_dev.result()
         def _num(v):
             try:
                 return float(v or 0)
@@ -1310,6 +1325,29 @@ def modulo1():
                 return redirect(url_for('modulo1'))
 
             # 2) Cada sesión: datos completos y horario coherente (sin horas en retroceso ni negativas)
+            # Pre-cálculo de los pares (profesor, fecha) distintos del envío para
+            # consultar 'sesiones' con un solo query por profesor (antes se hacía
+            # una consulta por cada línea del formulario, aunque compartieran profesor/fecha).
+            profesores_fechas = {}
+            for _sn in range(1, num_sesiones + 1):
+                _fecha_v = request.form.get(f'fecha_{_sn}')
+                _profesor_v0 = request.form.get(f'profesor_{_sn}', '')
+                _nuevo_prof_v0 = request.form.get(f'nuevo_profesor_{_sn}', '')
+                _prof_efectivo0 = _nuevo_prof_v0.strip() if (_profesor_v0 == 'nuevo' and _nuevo_prof_v0.strip()) else _profesor_v0
+                if _fecha_v and _prof_efectivo0 and _prof_efectivo0 != 'nuevo':
+                    profesores_fechas.setdefault(_prof_efectivo0, set()).add(_fecha_v)
+
+            ocupadas_existentes = {}
+            for _prof_nombre, _fechas_set in profesores_fechas.items():
+                try:
+                    _filas = supabase.table('sesiones').select('hora_inicio,hora_fin,estado,fecha').eq(
+                        'profesor_terapeuta', _prof_nombre).in_('fecha', list(_fechas_set)).neq(
+                        'estado', 'Cancelado').execute().data or []
+                except Exception:
+                    _filas = []
+                for _fila in _filas:
+                    ocupadas_existentes.setdefault((_prof_nombre, _fila.get('fecha')), []).append(_fila)
+
             # ocupadas_batch acumula las sesiones de este mismo envío por
             # (profesor, fecha): sin esto, dos sesiones que se cruzan dentro
             # del propio paquete no se detectaban porque ninguna existía aún
@@ -1349,11 +1387,7 @@ def modulo1():
                 # 3) El docente/psicólogo no puede tener otra sesión que se cruce en el mismo horario
                 prof_efectivo = nuevo_prof_v.strip() if (profesor_v == 'nuevo' and nuevo_prof_v.strip()) else profesor_v
                 if prof_efectivo and prof_efectivo != 'nuevo':
-                    try:
-                        ocupadas = supabase.table('sesiones').select('hora_inicio,hora_fin,estado').eq(
-                            'profesor_terapeuta', prof_efectivo).eq('fecha', fecha).neq('estado', 'Cancelado').execute().data or []
-                    except Exception:
-                        ocupadas = []
+                    ocupadas = list(ocupadas_existentes.get((prof_efectivo, fecha), []))
                     clave_batch = (prof_efectivo, fecha)
                     ocupadas = ocupadas + ocupadas_batch.get(clave_batch, [])
                     ni, nf = h_ini[:5], h_fin[:5]
@@ -1365,6 +1399,15 @@ def modulo1():
                                   f'No se puede agendar de {ni} a {nf} (sesión {sesion_num}).', 'error')
                             return redirect(url_for('modulo1'))
                     ocupadas_batch.setdefault(clave_batch, []).append({'hora_inicio': ni, 'hora_fin': nf})
+
+            # Nombres de los estudiantes validados: se obtienen una sola vez
+            # (antes se re-consultaba 'estudiantes' por cada combinación sesión x estudiante)
+            nombres_estudiantes_map = {}
+            if estudiantes_validos:
+                est_info_batch = supabase.table('estudiantes').select('id,apellidos,nombres').in_(
+                    'id', [int(e) for e in estudiantes_validos]).execute()
+                for e in (est_info_batch.data or []):
+                    nombres_estudiantes_map[e['id']] = f"{e['apellidos']} {e['nombres']}"
 
             for sesion_num in range(1, num_sesiones + 1):
                 fecha = request.form.get(f'fecha_{sesion_num}')
@@ -1423,9 +1466,8 @@ def modulo1():
                         except Exception:
                             datos_sesion.pop('sesion_grupo_id', None)
                             supabase.table('sesiones').insert(datos_sesion).execute()
-                        est_info = supabase.table('estudiantes').select('apellidos, nombres').eq('id', int(eid)).execute()
-                        if est_info.data:
-                            nombre_completo = f"{est_info.data[0]['apellidos']} {est_info.data[0]['nombres']}"
+                        nombre_completo = nombres_estudiantes_map.get(int(eid))
+                        if nombre_completo:
                             if nombre_completo not in estudiantes_nombres:
                                 estudiantes_nombres.append(nombre_completo)
                 
@@ -1439,10 +1481,13 @@ def modulo1():
                             'valor_total': valor_inicial
                         })
                         if evento_id:
+                            ids_evento = []
                             for est_num in range(1, num_estudiantes + 1):
                                 eid = request.form.get(f'estudiante_id_{est_num}', '')
                                 if eid and eid != 'nuevo':
-                                    supabase.table('sesiones').update({'evento_calendar_id': evento_id}).eq('estudiante_id', int(eid)).eq('fecha', fecha).eq('hora_inicio', h_ini).execute()
+                                    ids_evento.append(int(eid))
+                            if ids_evento:
+                                supabase.table('sesiones').update({'evento_calendar_id': evento_id}).eq('fecha', fecha).eq('hora_inicio', h_ini).in_('estudiante_id', ids_evento).execute()
                     except:
                         pass
             
@@ -2072,30 +2117,50 @@ def modulo3():
     filtro_estudiante = request.args.get('filtro_estudiante', '').strip()
     filtro_docente = request.args.get('filtro_docente', '').strip()
 
+    # Las 6 consultas son independientes entre sí, así que se lanzan en
+    # paralelo en vez de una tras otra (esta página se carga a diario).
+    def _fetch_dev_m3():
+        try:
+            return _fetch_all(supabase.table('devoluciones').select('estudiante_id,monto'))
+        except Exception:
+            return []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
+        fut_ses_dia = executor.submit(
+            lambda: supabase.table('sesiones').select(
+                '*, estudiantes(nombres,apellidos)'
+            ).eq('fecha', filtro_fecha).order('hora_inicio').execute())
+        fut_all_docs = executor.submit(
+            lambda: supabase.table('sesiones').select('profesor_terapeuta').in_(
+                'estado', ['Realizado', 'Cancelado-Pagado', 'Planificado']
+            ).execute())
+        fut_estudiantes = executor.submit(
+            lambda: supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute())
+        fut_ses_rows = executor.submit(
+            lambda: _fetch_all(supabase.table('sesiones').select(
+                'id,estudiante_id,fecha,asignatura,tema_terapia,tipo_sesion,horas,precio_hora,valor_total,estado'
+            ).in_('estado', ['Realizado', 'Cancelado-Pagado'])))
+        fut_pagos_rows = executor.submit(
+            lambda: _fetch_all(supabase.table('pagos').select(
+                'id,estudiante_id,monto,fecha_pago,tipo_pago,concepto'
+            ).order('fecha_pago', desc=True)))
+        fut_dev_rows = executor.submit(_fetch_dev_m3)
+        ses_dia_res = fut_ses_dia.result()
+        all_docs_res = fut_all_docs.result()
+        estudiantes = fut_estudiantes.result()
+        ses_rows_m3 = fut_ses_rows.result()
+        pagos_rows_m3 = fut_pagos_rows.result()
+        dev_rows_m3 = fut_dev_rows.result()
+
     # Sesiones del día para registro rápido
-    ses_dia_res = supabase.table('sesiones').select(
-        '*, estudiantes(nombres,apellidos)'
-    ).eq('fecha', filtro_fecha).order('hora_inicio').execute()
     sesiones_dia = ses_dia_res.data or []
     if filtro_docente:
         sesiones_dia = [s for s in sesiones_dia if filtro_docente.lower() in (s.get('profesor_terapeuta') or '').lower()]
 
     # Docentes disponibles para el filtro
-    all_docs_res = supabase.table('sesiones').select('profesor_terapeuta').in_(
-        'estado', ['Realizado', 'Cancelado-Pagado', 'Planificado']
-    ).execute()
     all_profesores = sorted(set(s['profesor_terapeuta'] for s in (all_docs_res.data or []) if s.get('profesor_terapeuta')))
-
-    estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
 
     # LOTE: sesiones, pagos y devoluciones de TODOS los estudiantes en 3
     # consultas, agrupadas en memoria (antes: 3 consultas por CADA estudiante)
-    ses_rows_m3 = _fetch_all(supabase.table('sesiones').select('*').in_('estado', ['Realizado', 'Cancelado-Pagado']))
-    pagos_rows_m3 = _fetch_all(supabase.table('pagos').select('*').order('fecha_pago', desc=True))
-    try:
-        dev_rows_m3 = _fetch_all(supabase.table('devoluciones').select('estudiante_id,monto'))
-    except Exception:
-        dev_rows_m3 = []
     ses_por_est_m3 = {}
     for s in ses_rows_m3:
         ses_por_est_m3.setdefault(s.get('estudiante_id'), []).append(s)
@@ -2142,11 +2207,20 @@ def modulo3():
 @login_required
 @requiere_modulo('academico.calendario')
 def modulo4():
-    sesiones = supabase.table('sesiones').select('*, estudiantes(*)').gte('fecha', str(date.today())).order('fecha').execute()
-    reuniones = []
-    if current_user.rol in ['admin', 'socio']:
-        reuniones = supabase.table('reuniones').select('*').gte('fecha', str(date.today())).order('fecha').execute()
-    estudiantes_lista = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute().data or []
+    # Las consultas son independientes entre sí, así que se lanzan en paralelo
+    # en vez de una tras otra ('reuniones' solo aplica para admin/socio).
+    es_admin_socio = current_user.rol in ['admin', 'socio']
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        fut_sesiones = executor.submit(
+            lambda: supabase.table('sesiones').select('*, estudiantes(*)').gte('fecha', str(date.today())).order('fecha').execute())
+        fut_reuniones = executor.submit(
+            lambda: supabase.table('reuniones').select('*').gte('fecha', str(date.today())).order('fecha').execute()
+        ) if es_admin_socio else None
+        fut_estudiantes = executor.submit(
+            lambda: supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute().data or [])
+        sesiones = fut_sesiones.result()
+        reuniones = fut_reuniones.result() if fut_reuniones else []
+        estudiantes_lista = fut_estudiantes.result()
     return render_template('modulo4.html', sesiones=sesiones.data or [], reuniones=reuniones.data if reuniones else [],
                          estudiantes=estudiantes_lista, profesores=cargar_profesores())
 
@@ -2739,8 +2813,32 @@ def crear_mi_cita():
 @requiere_modulo('finanzas.reportes')
 def reportes():
     mes, anio = _mes_anio_args()
-    estudiantes = supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute()
-    
+    _, dia_fin_mes = monthrange(anio, mes)
+    rango_ini, rango_fin = f"{anio}-{mes:02d}-01", f"{anio}-{mes:02d}-{dia_fin_mes}"
+
+    # Las 4 consultas (estudiantes, sesiones del mes, pagos del mes y gastos
+    # del mes) son independientes entre sí, así que se lanzan en paralelo en
+    # vez de una tras otra.
+    def _fetch_gastos_mes():
+        try:
+            return supabase.table('gastos').select('*').eq('mes_periodo', mes).eq('anio_periodo', anio).execute()
+        except Exception:
+            return supabase.table('gastos').select('*').eq('mes', mes).eq('anio', anio).execute()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+        fut_estudiantes = executor.submit(
+            lambda: supabase.table('estudiantes').select('*').eq('activo', True).order('apellidos').execute())
+        fut_ses_mes = executor.submit(
+            lambda: _fetch_all(supabase.table('sesiones').select('*').in_('estado', ['Realizado', 'Cancelado-Pagado'])
+                .gte('fecha', rango_ini).lte('fecha', rango_fin)))
+        fut_pagos_mes = executor.submit(
+            lambda: _fetch_all(supabase.table('pagos').select('*')
+                .gte('fecha_pago', rango_ini).lte('fecha_pago', rango_fin)))
+        fut_gastos_mes = executor.submit(_fetch_gastos_mes)
+        estudiantes = fut_estudiantes.result()
+        ses_mes_rows = fut_ses_mes.result()
+        pagos_mes_rows = fut_pagos_mes.result()
+        gastos_mes = fut_gastos_mes.result()
+
     datos_estudiantes = []
     datos_ingresos = []          # reporte de ingresos por estudiante
     counted_grupos_docente = set()  # dedup global de pagos a docente entre estudiantes
@@ -2763,14 +2861,8 @@ def reportes():
     gastos_por_categoria = {}
     total_gastos = 0
     
-    # LOTE: una consulta de sesiones y una de pagos para TODO el mes, agrupadas
-    # en memoria por estudiante (antes: 2 consultas a la BD por CADA estudiante)
-    _, dia_fin_mes = monthrange(anio, mes)
-    rango_ini, rango_fin = f"{anio}-{mes:02d}-01", f"{anio}-{mes:02d}-{dia_fin_mes}"
-    ses_mes_rows = _fetch_all(supabase.table('sesiones').select('*').in_('estado', ['Realizado', 'Cancelado-Pagado'])
-        .gte('fecha', rango_ini).lte('fecha', rango_fin))
-    pagos_mes_rows = _fetch_all(supabase.table('pagos').select('*')
-        .gte('fecha_pago', rango_ini).lte('fecha_pago', rango_fin))
+    # LOTE: sesiones y pagos de TODO el mes, agrupados en memoria por
+    # estudiante (antes: 2 consultas a la BD por CADA estudiante)
     ses_por_est = {}
     for s in ses_mes_rows:
         ses_por_est.setdefault(s.get('estudiante_id'), []).append(s)
@@ -2885,10 +2977,6 @@ def reportes():
     total_devoluciones = round(devoluciones_periodo(anio, mes), 2)
     total_ingresos = round(total_facturado - total_devoluciones, 2)
 
-    try:
-        gastos_mes = supabase.table('gastos').select('*').eq('mes_periodo', mes).eq('anio_periodo', anio).execute()
-    except Exception:
-        gastos_mes = supabase.table('gastos').select('*').eq('mes', mes).eq('anio', anio).execute()
     total_gastos = sum(g.get('monto', 0) or 0 for g in (gastos_mes.data or []))
     for g in (gastos_mes.data or []):
         cat = g.get('categoria', 'Sin categoría')
@@ -2905,25 +2993,22 @@ def reportes():
     horas_por_estudiante = {}
     cobrar_por_estudiante = {}
     
+    asignaturas_valores = {}
+    asignaturas_estudiantes = {}
     for e in (estudiantes.data or []):
         genero = (e.get('genero') or '').lower()
         if genero in ['m', 'masculino', 'hombre']:
             estudiantes_hombres += 1
         elif genero in ['f', 'femenino', 'mujer']:
             estudiantes_mujeres += 1
-        
+
         nombre_est = f"{e['apellidos']} {e['nombres']}"
         ses_est_data = ses_por_est.get(e['id'], [])  # ya consultado en lote arriba
         horas_est = sum(s.get('horas', 0) or 0 for s in ses_est_data)
         cobrar_est = sum(s.get('valor_total', 0) or 0 for s in ses_est_data)
         horas_por_estudiante[nombre_est] = horas_est
         cobrar_por_estudiante[nombre_est] = cobrar_est
-    
-    asignaturas_valores = {}
-    asignaturas_estudiantes = {}
-    for e in (estudiantes.data or []):
-        nombre_est = f"{e['apellidos']} {e['nombres']}"
-        ses_est_data = ses_por_est.get(e['id'], [])  # ya consultado en lote arriba
+
         for s in ses_est_data:
             asig = s.get('asignatura') or s.get('tema_terapia') or 'Sin registro'
             if asig not in asignaturas_valores:
@@ -2932,7 +3017,7 @@ def reportes():
             asignaturas_valores[asig]['horas'] += s.get('horas', 0) or 0
             asignaturas_valores[asig]['valor'] += s.get('valor_total', 0) or 0
             asignaturas_estudiantes[asig].add(nombre_est)
-    
+
     for asig in asignaturas_valores:
         asignaturas_valores[asig]['estudiantes'] = len(asignaturas_estudiantes.get(asig, set()))
     
@@ -5941,9 +6026,12 @@ def proforma_nueva():
                         raise
                     cab['numero'] = _proforma_numero()
             pid = r.data[0]['id']
+            items_rows = []
             for it in items:
                 it_row = dict(it); it_row['proforma_id'] = pid
-                supabase.table('proforma_items').insert(it_row).execute()
+                items_rows.append(it_row)
+            if items_rows:
+                supabase.table('proforma_items').insert(items_rows).execute()
 
             flash(f'✅ Proforma {cab["numero"]} creada por ${total:.2f}', 'success')
             return redirect(url_for('proforma_detalle', id=pid))
@@ -6113,6 +6201,7 @@ def proforma_incorporar(id):
 
     creadas = 0
     primera_fecha = None
+    datos_sesiones_todas = []
     for it in items:
         fecha = it.get('fecha'); h_ini = it.get('hora_inicio'); h_fin = it.get('hora_fin')
         if not (fecha and h_ini and h_fin):
@@ -6137,14 +6226,25 @@ def proforma_incorporar(id):
             'estudiante_id': int(p['estudiante_id']), 'usuario_id': int(current_user.id),
             'sesion_grupo_id': grupo_id,
         }
-        try:
-            supabase.table('sesiones').insert(datos_sesion).execute()
-        except Exception:
-            datos_sesion.pop('sesion_grupo_id', None)
-            supabase.table('sesiones').insert(datos_sesion).execute()
-        creadas += 1
+        datos_sesiones_todas.append(datos_sesion)
         if not primera_fecha:
             primera_fecha = fecha
+
+    if datos_sesiones_todas:
+        try:
+            supabase.table('sesiones').insert(datos_sesiones_todas).execute()
+            creadas = len(datos_sesiones_todas)
+        except Exception:
+            # Si el insert por lote falla, se recurre al insert individual
+            # (con el mismo fallback de siempre por si 'sesion_grupo_id' no existe aún).
+            creadas = 0
+            for datos_sesion in datos_sesiones_todas:
+                try:
+                    supabase.table('sesiones').insert(datos_sesion).execute()
+                except Exception:
+                    datos_sesion.pop('sesion_grupo_id', None)
+                    supabase.table('sesiones').insert(datos_sesion).execute()
+                creadas += 1
 
     flash(f'✅ {creadas} sesión(es) incorporadas a la planificación desde la proforma {p.get("numero") or ""}', 'success')
     return redirect(url_for('modulo2', fecha=primera_fecha or str(date.today())))
