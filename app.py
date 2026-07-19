@@ -3481,10 +3481,12 @@ def sync_padres_familia(nombres_completos):
     if not candidatos:
         return 0
     try:
-        existentes = supabase.table('padres_familia').select('nombres,apellidos').eq('activo', True).execute().data or []
+        existentes = supabase.table('padres_familia').select('nombres,apellidos,activo').execute().data or []
     except Exception:
         return 0
-    vistos = {_clave_padre(f"{p.get('nombres','')} {p.get('apellidos','')}") for p in existentes}
+    # Deduplica contra activos y heredados (activo NULL); ignora los dados de baja.
+    vistos = {_clave_padre(f"{p.get('nombres','')} {p.get('apellidos','')}")
+              for p in existentes if p.get('activo') is not False}
     a_insertar = []
     for nom in candidatos:
         clave = _clave_padre(nom)
@@ -3591,13 +3593,16 @@ def eliminar_estudiante(id):
 def gestion_padres():
     if request.method == 'POST':
         supabase.table('padres_familia').insert({
-            'nombres': request.form['nombres'], 'apellidos': request.form['apellidos'],
-            'telefono': request.form.get('telefono', '')
+            'nombres': request.form['nombres'], 'apellidos': request.form.get('apellidos', ''),
+            'telefono': request.form.get('telefono', ''), 'activo': True
         }).execute()
         flash('✅ Padre registrado', 'success')
         return redirect(url_for('gestion_padres'))
-    padres = supabase.table('padres_familia').select('*').eq('activo', True).order('apellidos').execute()
-    return render_template('padres.html', padres=padres.data or [])
+    # Muestra activos y también los heredados con activo NULL (el alta manual
+    # antigua no guardaba 'activo'); solo se ocultan los dados de baja (False).
+    resp = supabase.table('padres_familia').select('*').order('apellidos').execute()
+    padres = [p for p in (resp.data or []) if p.get('activo') is not False]
+    return render_template('padres.html', padres=padres)
 
 @app.route('/api/crear_padre', methods=['POST'])
 @login_required
