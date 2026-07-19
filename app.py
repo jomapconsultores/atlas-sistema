@@ -3628,7 +3628,8 @@ def gestion_padres():
         return redirect(url_for('gestion_padres'))
     # Muestra activos y también los heredados con activo NULL (el alta manual
     # antigua no guardaba 'activo'); solo se ocultan los dados de baja (False).
-    resp = supabase.table('padres_familia').select('*').order('apellidos').execute()
+    # Ordena por nombre (el apellido ya no se usa en esta sección).
+    resp = supabase.table('padres_familia').select('*').order('nombres').execute()
     padres = [p for p in (resp.data or []) if p.get('activo') is not False]
     return render_template('padres.html', padres=padres)
 

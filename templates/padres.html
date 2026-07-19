@@ -24,10 +24,9 @@
 
 <div class="card-premium"><div class="card-header-grad grad-green">➕ Nuevo Padre</div><div class="card-body">
 <form method="POST" class="row g-2">
-    <div class="col-md-3"><input type="text" name="nombres" class="form-control form-control-premium" placeholder="Nombres" required></div>
-    <div class="col-md-3"><input type="text" name="apellidos" class="form-control form-control-premium" placeholder="Apellidos"></div>
+    <div class="col-md-5"><input type="text" name="nombres" class="form-control form-control-premium" placeholder="Nombre del padre / madre" required></div>
     <div class="col-md-2"><input type="text" name="telefono" class="form-control form-control-premium" placeholder="Teléfono"></div>
-    <div class="col-md-2"><input type="text" name="estudiante" class="form-control form-control-premium" placeholder="Estudiante (hijo/a)"></div>
+    <div class="col-md-3"><input type="text" name="estudiante" class="form-control form-control-premium" placeholder="Estudiante (hijo/a)"></div>
     <div class="col-md-2"><button type="submit" class="btn btn-success btn-premium w-100">✅ Registrar</button></div>
 </form>
 {% if puede_editar %}
@@ -41,17 +40,16 @@
 
 <div class="card-premium"><div class="card-header-grad" style="background:linear-gradient(135deg,#263238,#111);">📋 Lista de Padres</div><div class="card-body p-0">
 <div class="table-responsive"><table class="table table-premium mb-0"><thead><tr>
-    <th>Apellidos</th><th>Nombres</th><th>Teléfono</th><th>Estudiante (hijo/a)</th>{% if puede_editar %}<th class="text-center">Acciones</th>{% endif %}
+    <th>Nombre del padre / madre</th><th>Teléfono</th><th>Estudiante (hijo/a)</th>{% if puede_editar %}<th class="text-center">Acciones</th>{% endif %}
 </tr></thead><tbody id="tbody-padres">
 {% for p in padres %}<tr id="fila-padre-{{ p.id }}">
     {% if puede_editar %}
-    <td><span class="celda-edit" onclick="editarCeldaPadre(this, {{ p.id }}, 'apellidos')">{{ p.apellidos or '—' }}</span></td>
     <td><span class="celda-edit" onclick="editarCeldaPadre(this, {{ p.id }}, 'nombres')">{{ p.nombres or '—' }}</span></td>
     <td><span class="celda-edit" onclick="editarCeldaPadre(this, {{ p.id }}, 'telefono')">{{ p.get('telefono','') or '—' }}</span></td>
     <td><span class="celda-edit" onclick="editarCeldaPadre(this, {{ p.id }}, 'estudiante')">{{ p.get('estudiante','') or '—' }}</span></td>
     <td class="text-center"><button class="btn btn-outline-danger btn-sm border-0 py-0" onclick="eliminarPadre({{ p.id }})" title="Eliminar">🗑️</button></td>
     {% else %}
-    <td>{{ p.apellidos or '—' }}</td><td>{{ p.nombres or '—' }}</td><td>{{ p.get('telefono','') or '—' }}</td><td>{{ p.get('estudiante','') or '—' }}</td>
+    <td>{{ p.nombres or '—' }}</td><td>{{ p.get('telefono','') or '—' }}</td><td>{{ p.get('estudiante','') or '—' }}</td>
     {% endif %}
 </tr>{% endfor %}
 </tbody></table></div>
