@@ -790,7 +790,7 @@
                 <div style="text-align: right;">
                     <div style="color: white; font-weight: 600; font-size: 13px;">{{ current_user.nombre }}</div>
                     {% if mis_roles and mis_roles|length > 1 %}
-                    <select id="selectorRolActivo" onchange="cambiarRolActivo(this.value)"
+                    <select id="selectorRolActivo" aria-label="Rol activo" onchange="cambiarRolActivo(this.value)"
                         style="background:rgba(255,255,255,0.12); color:#fff; border:1px solid rgba(255,255,255,0.25); border-radius:6px; font-size:11px; text-transform:uppercase; letter-spacing:1px; padding:2px 6px; margin-top:2px;">
                         {% for r in mis_roles %}<option value="{{ r }}" {% if r == current_user.rol %}selected{% endif %}>{{ r }}</option>{% endfor %}
                     </select>
@@ -835,8 +835,19 @@
     {# Cada módulo/submódulo puede venir del rol (admin/socio, acceso total)
        o de un permiso individual otorgado desde /usuarios (ej. secretaría,
        o cualquier otro rol al que un admin le haya habilitado algo puntual). #}
-    {% set puede_academico = es_admin_socio or tiene_modulo('academico') %}
-    {% set puede_personas = es_admin_socio or tiene_modulo('personas') %}
+    {# Académico desglosado por submódulo (cada uno otorgable por separado) #}
+    {% set puede_planificacion = es_admin_socio or tiene_modulo('academico.planificacion') %}
+    {% set puede_proformas = es_admin_socio or tiene_modulo('academico.proformas') %}
+    {% set puede_calendario = es_admin_socio or tiene_modulo('academico.calendario') %}
+    {% set puede_asignaturas = es_admin_socio or tiene_modulo('academico.asignaturas') %}
+    {% set puede_reuniones = es_admin_socio or tiene_modulo('academico.reuniones') %}
+    {% set puede_academico = puede_planificacion or puede_proformas or puede_calendario or puede_asignaturas or puede_reuniones %}
+    {# Personas desglosado por submódulo #}
+    {% set puede_estudiantes = es_admin_socio or tiene_modulo('personas.estudiantes') %}
+    {% set puede_docentes = es_admin_socio or tiene_modulo('personas.docentes') %}
+    {% set puede_padres = es_admin_socio or tiene_modulo('personas.padres') %}
+    {% set puede_contactos = es_admin_socio or tiene_modulo('personas.contactos') %}
+    {% set puede_personas = puede_estudiantes or puede_docentes or puede_padres or puede_contactos %}
     {% set puede_psicologia = es_admin_socio or tiene_modulo('psicologia') %}
     {% set puede_pagos_estudiantes = es_admin_socio or tiene_modulo('finanzas.pagos_estudiantes') %}
     {% set puede_devoluciones = es_admin_socio or tiene_modulo('finanzas.devoluciones') %}
@@ -849,11 +860,21 @@
     {% set puede_finanzas = puede_pagos_estudiantes or puede_devoluciones or puede_pagos_docentes or puede_anticipos_fin or puede_gastos_fin or puede_liquidacion or puede_movimientos or puede_reportes_fin %}
     {% set puede_costos = es_admin_socio or tiene_modulo('administracion.costos') %}
     {% set puede_reporte_duplicados = es_admin_socio or tiene_modulo('administracion.reporte_duplicados') %}
-    {# 'Usuarios' queda SIEMPRE admin-only (rol=='admin' estricto, no es otorgable) #}
-    {% set puede_administracion = puede_costos or puede_reporte_duplicados or rol=='admin' %}
+    {% set puede_marcaciones = es_admin_socio or tiene_modulo('administracion.marcaciones') %}
+    {# Ver marcaciones acotado a profesores/psicólogos (permiso otorgable aparte) #}
+    {% set puede_marcaciones_docentes = puede_marcaciones or tiene_modulo('asistencia.ver_docentes') %}
+    {% set puede_marcar_asistencia = tiene_modulo('asistencia.marcar') %}
+    {# 'Usuarios' ahora es delegable de forma granular: entra admin o cualquiera
+       con una capacidad usuarios.* otorgada (puede_gestion_usuarios lo calcula
+       el backend, con socio excluido salvo permiso explícito). #}
+    {% set puede_administracion = puede_costos or puede_reporte_duplicados or puede_marcaciones_docentes or puede_gestion_usuarios %}
     {% set puede_gestion = puede_academico or puede_personas or puede_psicologia or puede_finanzas or puede_administracion %}
     <aside class="app-sidebar" id="appSidebar">
         <a href="/dashboard" class="{% if p=='/dashboard' %}active{% endif %}"><span class="ico">🏠</span> Inicio</a>
+
+        {% if puede_marcar_asistencia %}
+        <a href="/mi-asistencia" class="{% if p=='/mi-asistencia' %}active{% endif %}"><span class="ico">🕒</span> Marcar asistencia</a>
+        {% endif %}
 
         {% if puede_gestion %}
         <div class="side-section">Gestión</div>
@@ -863,14 +884,18 @@
         <div class="nav-group {% if acad_active %}open{% endif %}">
             <button type="button" class="nav-group-toggle"><span class="ico">📚</span> Académico</button>
             <div class="nav-group-items">
+                {% if puede_planificacion %}
                 <a href="/modulo1" class="{% if p=='/modulo1' %}active{% endif %}">Nueva planificación</a>
                 <a href="/editar-planificaciones" class="{% if p=='/editar-planificaciones' %}active{% endif %}">Editar planificaciones</a>
                 <a href="/editar-planificacion-masiva" class="{% if p=='/editar-planificacion-masiva' %}active{% endif %}">Edición masiva</a>
-                <a href="/proformas" class="{% if p.startswith('/proformas') %}active{% endif %}">Proformas de clases</a>
+                {% endif %}
+                {% if puede_proformas %}<a href="/proformas" class="{% if p.startswith('/proformas') %}active{% endif %}">Proformas de clases</a>{% endif %}
+                {% if puede_calendario %}
                 <a href="/modulo2" class="{% if p=='/modulo2' %}active{% endif %}">Calendario diario</a>
                 <a href="/modulo4" class="{% if p=='/modulo4' %}active{% endif %}">Calendario general</a>
-                <a href="/asignaturas" class="{% if p=='/asignaturas' %}active{% endif %}">Asignaturas</a>
-                <a href="/modulo6" class="{% if p=='/modulo6' %}active{% endif %}">Reuniones internas</a>
+                {% endif %}
+                {% if puede_asignaturas %}<a href="/asignaturas" class="{% if p=='/asignaturas' %}active{% endif %}">Asignaturas</a>{% endif %}
+                {% if puede_reuniones %}<a href="/modulo6" class="{% if p=='/modulo6' %}active{% endif %}">Reuniones internas</a>{% endif %}
             </div>
         </div>
         {% endif %}
@@ -880,10 +905,10 @@
         <div class="nav-group {% if pers_active %}open{% endif %}">
             <button type="button" class="nav-group-toggle"><span class="ico">👥</span> Personas</button>
             <div class="nav-group-items">
-                <a href="/estudiantes" class="{% if p=='/estudiantes' %}active{% endif %}">Estudiantes</a>
-                <a href="/docentes" class="{% if p=='/docentes' %}active{% endif %}">Docentes</a>
-                <a href="/padres" class="{% if p=='/padres' %}active{% endif %}">Padres</a>
-                <a href="/contactos" class="{% if p=='/contactos' %}active{% endif %}">Contactos {% if contactos_nuevos and contactos_nuevos>0 %}<span class="side-badge">{{ contactos_nuevos }}</span>{% endif %}</a>
+                {% if puede_estudiantes %}<a href="/estudiantes" class="{% if p=='/estudiantes' %}active{% endif %}">Estudiantes</a>{% endif %}
+                {% if puede_docentes %}<a href="/docentes" class="{% if p=='/docentes' %}active{% endif %}">Docentes</a>{% endif %}
+                {% if puede_padres %}<a href="/padres" class="{% if p=='/padres' %}active{% endif %}">Padres</a>{% endif %}
+                {% if puede_contactos %}<a href="/contactos" class="{% if p=='/contactos' %}active{% endif %}">Contactos {% if contactos_nuevos and contactos_nuevos>0 %}<span class="side-badge">{{ contactos_nuevos }}</span>{% endif %}</a>{% endif %}
             </div>
         </div>
         {% endif %}
@@ -966,13 +991,14 @@
         {% endif %}
 
         {% if puede_administracion %}
-        {% set adm_active = p in ['/admin/costos','/usuarios','/reporte-duplicados'] %}
+        {% set adm_active = p in ['/admin/costos','/usuarios','/reporte-duplicados','/admin/marcaciones'] %}
         <div class="nav-group {% if adm_active %}open{% endif %}">
             <button type="button" class="nav-group-toggle"><span class="ico">⚙️</span> Administración</button>
             <div class="nav-group-items">
                 {% if puede_costos %}<a href="/admin/costos" class="{% if p=='/admin/costos' %}active{% endif %}">Costos</a>{% endif %}
-                {% if rol=='admin' %}<a href="/usuarios" class="{% if p=='/usuarios' %}active{% endif %}">Usuarios</a>{% endif %}
+                {% if puede_gestion_usuarios %}<a href="/usuarios" class="{% if p=='/usuarios' %}active{% endif %}">Usuarios</a>{% endif %}
                 {% if puede_reporte_duplicados %}<a href="/reporte-duplicados" class="{% if p=='/reporte-duplicados' %}active{% endif %}">Reporte duplicados</a>{% endif %}
+                {% if puede_marcaciones_docentes %}<a href="/admin/marcaciones" class="{% if p=='/admin/marcaciones' %}active{% endif %}">Marcaciones de asistencia</a>{% endif %}
             </div>
         </div>
         {% endif %}
@@ -983,7 +1009,7 @@
         <a href="/modulo2" class="{% if p=='/modulo2' %}active{% endif %}"><span class="ico">📅</span> Mis clases</a>
         <a href="/mi-reporte" class="{% if p=='/mi-reporte' %}active{% endif %}"><span class="ico">📊</span> Mi reporte</a>
         <a href="/mis-anticipos" class="{% if p=='/mis-anticipos' %}active{% endif %}"><span class="ico">🏦</span> Mis anticipos</a>
-        <a href="/gastos" class="{% if p=='/gastos' %}active{% endif %}"><span class="ico">📉</span> Gastos</a>
+        {% if puede_gastos_fin %}<a href="/gastos" class="{% if p=='/gastos' %}active{% endif %}"><span class="ico">📉</span> Gastos</a>{% endif %}
 
         {% elif rol=='psicologo' %}
         <div class="side-section">Mi trabajo</div>
@@ -991,7 +1017,7 @@
         <a href="/mi-reporte" class="{% if p=='/mi-reporte' %}active{% endif %}"><span class="ico">📊</span> Mi reporte</a>
         <a href="/mis-clientes" class="{% if p=='/mis-clientes' %}active{% endif %}"><span class="ico">🧠</span> Mis clientes</a>
         <a href="/mis-anticipos" class="{% if p=='/mis-anticipos' %}active{% endif %}"><span class="ico">🏦</span> Mis anticipos</a>
-        <a href="/gastos" class="{% if p=='/gastos' %}active{% endif %}"><span class="ico">📉</span> Gastos</a>
+        {% if puede_gastos_fin %}<a href="/gastos" class="{% if p=='/gastos' %}active{% endif %}"><span class="ico">📉</span> Gastos</a>{% endif %}
 
         {% elif rol=='estudiante' %}
         <div class="side-section">Mi cuenta</div>
@@ -1050,6 +1076,7 @@
             else { alert('❌ ' + (j.error || 'No se pudo cambiar de rol')); location.reload(); }
         } catch (e) {
             alert('❌ Error de red al cambiar de rol');
+            location.reload();
         }
     }
     // ── Sidebar: submenús colapsables + apertura en móvil ──
@@ -1203,5 +1230,31 @@
         });
     }
     </script>
+    {% if current_user.is_authenticated %}
+    <script>
+    // Cierre de sesión automático tras 30 minutos de inactividad.
+    // El contador se reinicia con cualquier actividad del usuario y se
+    // sincroniza entre pestañas abiertas del sistema (localStorage 'storage').
+    (function () {
+        var IDLE_MS = 30 * 60 * 1000;
+        var SYNC_KEY = '__idle_last_activity';
+        var EVENTS = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click', 'wheel'];
+        var timer, lastSync = 0;
+        function logout() { window.location.href = '/logout'; }
+        function reset() { clearTimeout(timer); timer = setTimeout(logout, IDLE_MS); }
+        function onActivity() {
+            reset();
+            var now = Date.now();
+            if (now - lastSync > 5000) {
+                lastSync = now;
+                try { localStorage.setItem(SYNC_KEY, String(now)); } catch (e) {}
+            }
+        }
+        EVENTS.forEach(function (ev) { window.addEventListener(ev, onActivity, { passive: true }); });
+        window.addEventListener('storage', function (e) { if (e.key === SYNC_KEY) reset(); });
+        reset();
+    })();
+    </script>
+    {% endif %}
 </body>
 </html>

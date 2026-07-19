@@ -7,24 +7,114 @@
     .grad-green { background: linear-gradient(135deg, #0f9d58, #00695c); }
     .table-premium { border-radius: 12px; overflow: hidden; border: none; margin: 0; }
     .table-premium thead th { background: #1a1a2e; color: white; font-weight: 600; font-size: 11px; letter-spacing: 0.5px; border: none; padding: 10px 12px; text-transform: uppercase; }
-    .table-premium tbody td { padding: 8px 12px; font-size: 13px; border-bottom: 1px solid #f0f0f0; }
+    .table-premium tbody td { padding: 8px 12px; font-size: 13px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
     .form-control-premium { border-radius: 10px; border: 2px solid #e0e0e0; padding: 10px 14px; font-size: 13px; }
     .btn-premium { border-radius: 10px; font-weight: 600; font-size: 11px; padding: 8px 14px; }
+    .celda-edit{cursor:pointer;border-radius:6px;padding:2px 6px;transition:background 0.15s;}
+    .celda-edit:hover{background:#e8f0fe;}
+    .inline-input{width:100%;border:1px solid #1a73e8;border-radius:6px;padding:3px 7px;font-size:12px;outline:none;}
+    tr.saving{opacity:.5;}
 </style>
 <div class="page-hero">
     <h2>👨‍👩‍👧 Padres de Familia</h2>
     <p>Gestión de los padres de familia y sus estudiantes.</p>
 </div>
 
+{% set puede_editar = tiene_modulo('personas.padres') %}
+
 <div class="card-premium"><div class="card-header-grad grad-green">➕ Nuevo Padre</div><div class="card-body">
 <form method="POST" class="row g-2">
-    <div class="col-md-5"><input type="text" name="nombres" class="form-control form-control-premium" placeholder="Nombres" required></div>
-    <div class="col-md-5"><input type="text" name="apellidos" class="form-control form-control-premium" placeholder="Apellidos" required></div>
+    <div class="col-md-5"><input type="text" name="nombres" class="form-control form-control-premium" placeholder="Nombre del padre / madre" required></div>
+    <div class="col-md-2"><input type="text" name="telefono" class="form-control form-control-premium" placeholder="Teléfono"></div>
+    <div class="col-md-3"><input type="text" name="estudiante" class="form-control form-control-premium" placeholder="Estudiante (hijo/a)"></div>
     <div class="col-md-2"><button type="submit" class="btn btn-success btn-premium w-100">✅ Registrar</button></div>
-</form></div></div>
+</form>
+{% if puede_editar %}
+<hr class="my-3">
+<div class="d-flex align-items-center gap-2 flex-wrap">
+    <button type="button" class="btn btn-outline-success btn-premium" onclick="importarDesdeEstudiantes(this)">🔄 Importar padres desde estudiantes</button>
+    <small class="text-muted">Copia a esta lista los padres y madres ya registrados en las fichas de estudiantes (sin duplicar).</small>
+</div>
+{% endif %}
+</div></div>
 
 <div class="card-premium"><div class="card-header-grad" style="background:linear-gradient(135deg,#263238,#111);">📋 Lista de Padres</div><div class="card-body p-0">
-<div class="table-responsive"><table class="table table-premium mb-0"><thead><tr><th>Apellidos</th><th>Nombres</th><th>Teléfono</th></tr></thead><tbody>
-{% for p in padres %}<tr><td>{{ p.apellidos }}</td><td>{{ p.nombres }}</td><td>{{ p.get('telefono','') }}</td></tr>{% endfor %}
-</tbody></table></div></div></div>
+<div class="table-responsive"><table class="table table-premium mb-0"><thead><tr>
+    <th>Nombre del padre / madre</th><th>Teléfono</th><th>Estudiante (hijo/a)</th>{% if puede_editar %}<th class="text-center">Acciones</th>{% endif %}
+</tr></thead><tbody id="tbody-padres">
+{% for p in padres %}<tr id="fila-padre-{{ p.id }}">
+    {% if puede_editar %}
+    <td><span class="celda-edit" onclick="editarCeldaPadre(this, {{ p.id }}, 'nombres')">{{ p.nombres or '—' }}</span></td>
+    <td><span class="celda-edit" onclick="editarCeldaPadre(this, {{ p.id }}, 'telefono')">{{ p.get('telefono','') or '—' }}</span></td>
+    <td><span class="celda-edit" onclick="editarCeldaPadre(this, {{ p.id }}, 'estudiante')">{{ p.get('estudiante','') or '—' }}</span></td>
+    <td class="text-center"><button class="btn btn-outline-danger btn-sm border-0 py-0" onclick="eliminarPadre({{ p.id }})" title="Eliminar">🗑️</button></td>
+    {% else %}
+    <td>{{ p.nombres or '—' }}</td><td>{{ p.get('telefono','') or '—' }}</td><td>{{ p.get('estudiante','') or '—' }}</td>
+    {% endif %}
+</tr>{% endfor %}
+</tbody></table></div>
+{% if not padres %}<div class="p-3 text-muted small">No hay padres registrados todavía.</div>{% endif %}
+</div></div>
+
+{% if puede_editar %}
+<script>
+async function guardarCampoPadre(id, campo, valor) {
+    const fila = document.getElementById('fila-padre-' + id);
+    if (fila) fila.classList.add('saving');
+    try {
+        const r = await fetch('/api/padre/' + id + '/editar', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({campo, valor})
+        });
+        const res = await r.json();
+        if (!res.success) alert('⚠️ ' + (res.error || 'No se pudo guardar'));
+        return res;
+    } catch(e) { return {success:false, error:e.message}; }
+    finally { if (fila) fila.classList.remove('saving'); }
+}
+
+function editarCeldaPadre(span, id, campo) {
+    const valorActual = span.innerText === '—' ? '' : span.innerText;
+    const input = document.createElement('input');
+    input.type = 'text'; input.value = valorActual; input.className = 'inline-input';
+    span.replaceWith(input); input.focus();
+    let guardado = false;
+    const guardar = async () => {
+        if (guardado) return; guardado = true;
+        const nv = input.value.trim();
+        const res = await guardarCampoPadre(id, campo, nv);
+        const s2 = document.createElement('span');
+        s2.className = 'celda-edit';
+        s2.innerText = (res && res.success ? (res.valor || nv) : valorActual) || '—';
+        s2.onclick = () => editarCeldaPadre(s2, id, campo);
+        input.replaceWith(s2);
+    };
+    input.addEventListener('blur', guardar);
+    input.addEventListener('keydown', e => { if (e.key==='Enter') input.blur(); if (e.key==='Escape'){input.value=valorActual; input.blur();} });
+}
+
+async function eliminarPadre(id) {
+    if (!confirm('¿Eliminar este padre de la lista?')) return;
+    const r = await fetch('/api/padre/' + id + '/eliminar', {method:'POST'});
+    const res = await r.json();
+    if (res.success) { const f = document.getElementById('fila-padre-' + id); if (f) f.remove(); }
+    else alert('⚠️ ' + (res.error || 'No se pudo eliminar'));
+}
+
+async function importarDesdeEstudiantes(btn) {
+    btn.disabled = true; const txt = btn.innerText; btn.innerText = '⏳ Importando...';
+    try {
+        const r = await fetch('/api/padres/importar_estudiantes', {method:'POST'});
+        const res = await r.json();
+        if (res.success) {
+            alert('✅ Importados ' + res.creados + ' padre(s)/madre(s) nuevos.');
+            if (res.creados > 0) location.reload();
+        } else {
+            alert('⚠️ ' + (res.error || 'No se pudo importar'));
+        }
+    } catch(e) { alert('⚠️ ' + e.message); }
+    finally { btn.disabled = false; btn.innerText = txt; }
+}
+</script>
+{% endif %}
 {% endblock %}

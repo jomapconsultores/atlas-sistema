@@ -13,67 +13,110 @@
     .form-select-premium { border-radius: 10px; border: 2px solid #e0e0e0; padding: 8px 12px; font-size: 12px; }
     .btn-premium { border-radius: 10px; font-weight: 600; font-size: 11px; padding: 6px 12px; }
     .badge-premium { padding: 4px 10px; border-radius: 10px; font-size: 10px; font-weight: 600; }
+    .bg-purple { background-color: #7c3aed; }
+    .perm-grupo { border-left: 3px solid #e5e7eb; padding-left: 12px; }
+    .perm-grupo-titulo { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #374151; }
+    .perm-todos { font-size: 11px; text-decoration: none; }
 </style>
 <div class="page-hero">
     <h2>👤 Gestión de Usuarios</h2>
     <p>Administra las cuentas y roles del sistema.</p>
 </div>
 
+{% if caps.crear %}
 <div class="card-premium"><div class="card-header-grad grad-red">➕ Nuevo Usuario</div><div class="card-body">
 <form method="POST" class="row g-2">
     <input type="hidden" name="accion" value="crear">
     <div class="col-md-3"><input type="text" name="nombre" class="form-control form-control-premium" placeholder="Nombre" required></div>
     <div class="col-md-3"><input type="email" name="email" class="form-control form-control-premium" placeholder="Email" required></div>
     <div class="col-md-2"><input type="password" name="password" class="form-control form-control-premium" placeholder="Contraseña" required></div>
-    <div class="col-md-2"><select name="rol" class="form-select form-select-premium"><option value="admin">Admin</option><option value="socio">Socio</option><option value="secretaria">Secretaría</option><option value="profesor">Profesor</option><option value="psicologo">Psicólogo</option><option value="estudiante">Estudiante</option><option value="padre">Padre</option></select></div>
+    <div class="col-md-2"><select name="rol" class="form-select form-select-premium">{% if es_admin %}<option value="admin">Admin</option>{% endif %}<option value="socio">Socio</option><option value="secretaria">Secretaría</option><option value="profesor">Profesor</option><option value="psicologo">Psicólogo</option><option value="estudiante">Estudiante</option><option value="padre">Padre</option></select></div>
     <div class="col-md-2"><button type="submit" class="btn btn-danger btn-premium w-100">✅ Crear</button></div>
 </form></div></div>
+{% endif %}
 
 <div class="card-premium"><div class="card-header-grad grad-dark">📋 Usuarios Registrados</div><div class="card-body p-0">
 <div class="table-responsive"><table class="table table-premium mb-0"><thead><tr><th>Nombre</th><th>Email</th><th>Rol activo</th><th>Estado</th><th>Acción</th></tr></thead><tbody>
 {% for u in usuarios %}
+{# Objetivo admin: un delegado no-admin no puede tocarlo (solo un admin real) #}
+{% set objetivo_admin = (u.rol == 'admin') or ('admin' in roles_por_usuario.get(u.id, [])) %}
+{% set puede_tocar = es_admin or not objetivo_admin %}
 <tr><td>{{ u.nombre }}</td><td>{{ u.email }}</td><td><span class="badge-premium text-white bg-{{ 'dark' if u.rol=='admin' else 'primary' if u.rol=='socio' else 'warning' if u.rol=='secretaria' else 'success' if u.rol=='profesor' else 'purple' if u.rol=='psicologo' else 'info' }}">{{ u.rol }}</span></td><td><span class="badge-premium text-white bg-{{ 'success' if u.activo else 'danger' }}">{{ 'Activo' if u.activo else 'Inactivo' }}</span></td><td>
-<form method="POST" style="display:inline;"><input type="hidden" name="usuario_id" value="{{ u.id }}"><input type="hidden" name="accion" value="{{ 'rechazar' if u.activo else 'aprobar' }}"><button type="submit" class="btn btn-sm btn-{{ 'warning' if u.activo else 'success' }} btn-premium">{{ '❌ Desactivar' if u.activo else '✅ Aprobar' }}</button></form>
+{% if caps.editar and puede_tocar %}
+{% if u.activo %}
+<form method="POST" style="display:inline;"><input type="hidden" name="usuario_id" value="{{ u.id }}"><input type="hidden" name="accion" value="rechazar"><button type="submit" class="btn btn-sm btn-warning btn-premium">❌ Desactivar</button></form>
+{% else %}
+<form method="POST" style="display:inline;"><input type="hidden" name="usuario_id" value="{{ u.id }}"><input type="hidden" name="accion" value="aprobar">
+    <select name="rol" class="form-select form-select-premium" style="display:inline-block; width:auto;" required>
+        <option value="">Rol a otorgar...</option>
+        {% for r in roles_disponibles %}{% if es_admin or r != 'admin' %}<option value="{{ r }}" {% if r == u.rol %}selected{% endif %}>{{ r }}</option>{% endif %}{% endfor %}
+    </select>
+    <button type="submit" class="btn btn-sm btn-success btn-premium">✅ Aprobar</button>
+</form>
+{% endif %}
+{% endif %}
+{% if caps.roles and puede_tocar %}
 <button type="button" class="btn btn-sm btn-outline-dark btn-premium" onclick="toggleRoles({{ u.id }})">👤 Roles</button>
-{% if u.rol not in ['admin', 'socio'] %}
+{% endif %}
+{% if caps.permisos and u.rol not in ['admin', 'socio'] %}
 <button type="button" class="btn btn-sm btn-outline-secondary btn-premium" onclick="togglePermisos({{ u.id }})">🔐 Permisos</button>
 {% endif %}
-<button type="button" class="btn btn-sm btn-outline-danger btn-premium" onclick="eliminarUsuario({{ u.id }}, '{{ u.nombre|replace("'", "\\'") }}')">🗑️</button>
+{% if caps.eliminar and puede_tocar %}
+<button type="button" class="btn btn-sm btn-outline-danger btn-premium" aria-label="Eliminar a {{ u.nombre }}" title="Eliminar a {{ u.nombre }}" onclick="eliminarUsuario({{ u.id }}, '{{ u.nombre|replace("'", "\\'") }}', this)">🗑️</button>
+{% endif %}
 </td></tr>
+{% if caps.roles and puede_tocar %}
 <tr id="roles-fila-{{ u.id }}" style="display:none;"><td colspan="5" class="bg-light">
     <div class="p-3">
         <strong>Roles habilitados para {{ u.nombre }}</strong> <small class="text-muted">(puede tener varios y cambiar cuál usa activo desde el selector de arriba)</small>
         <div class="row mt-2" id="roles-checks-{{ u.id }}">
             {% set roles_ot = roles_por_usuario.get(u.id, [u.rol]) %}
             {% for r in roles_disponibles %}
+            {% if es_admin or r != 'admin' %}
             <div class="col-md-3 col-6">
                 <div class="form-check">
                     <input class="form-check-input" type="checkbox" value="{{ r }}" id="rol-{{ u.id }}-{{ r }}" {% if r in roles_ot %}checked{% endif %}>
                     <label class="form-check-label" for="rol-{{ u.id }}-{{ r }}" style="font-size:12px;">{{ r }}</label>
                 </div>
             </div>
+            {% endif %}
             {% endfor %}
         </div>
-        <button type="button" class="btn btn-sm btn-primary btn-premium mt-2" onclick="guardarRoles({{ u.id }})">💾 Guardar roles</button>
+        <button type="button" class="btn btn-sm btn-primary btn-premium mt-2" onclick="guardarRoles({{ u.id }}, this)">💾 Guardar roles</button>
         <span id="roles-msg-{{ u.id }}" class="ms-2 small"></span>
     </div>
 </td></tr>
-{% if u.rol not in ['admin', 'socio'] %}
+{% endif %}
+{% if caps.permisos and u.rol not in ['admin', 'socio'] %}
 <tr id="permisos-fila-{{ u.id }}" style="display:none;"><td colspan="5" class="bg-light">
     <div class="p-3">
         <strong>Módulos habilitados para {{ u.nombre }}:</strong>
-        <div class="row mt-2" id="permisos-checks-{{ u.id }}">
-            {% set otorgados = permisos_por_usuario.get(u.id, []) %}
-            {% for m in modulos_disponibles %}
-            <div class="col-md-3 col-6">
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" value="{{ m.key }}" id="perm-{{ u.id }}-{{ m.key }}" {% if m.key in otorgados %}checked{% endif %}>
-                    <label class="form-check-label" for="perm-{{ u.id }}-{{ m.key }}" style="font-size:12px;">{{ (m.grupo ~ ' › ') if m.grupo else '' }}{{ m.label }}</label>
+        {% set otorgados = permisos_por_usuario.get(u.id, []) %}
+        {# 'academico'/'personas' eran permisos paraguas: si el usuario todavía
+           los tiene, cada submódulo del grupo cuenta como otorgado. #}
+        {% set paraguas = otorgados | select('in', ['academico','personas']) | list %}
+        <div id="permisos-checks-{{ u.id }}">
+            {% for grupo, mods in modulos_agrupados %}
+            <div class="perm-grupo mt-3">
+                <div class="d-flex align-items-center mb-1">
+                    <span class="perm-grupo-titulo">{{ grupo }}</span>
+                    <button type="button" class="btn btn-link btn-sm p-0 ms-2 perm-todos" onclick="marcarGrupo({{ u.id }}, '{{ grupo|replace("'", "\\'") }}', this)">Todos</button>
+                </div>
+                <div class="row">
+                    {% for m in mods %}
+                    {% set heredado = (m.key.split('.')[0] in ['academico','personas']) and (m.key.split('.')[0] in paraguas) %}
+                    <div class="col-md-4 col-6">
+                        <div class="form-check">
+                            <input class="form-check-input perm-check" data-grupo="{{ grupo }}" type="checkbox" value="{{ m.key }}" id="perm-{{ u.id }}-{{ m.key }}" {% if m.key in otorgados or heredado %}checked{% endif %}>
+                            <label class="form-check-label" for="perm-{{ u.id }}-{{ m.key }}" style="font-size:12px;">{{ m.label }}</label>
+                        </div>
+                    </div>
+                    {% endfor %}
                 </div>
             </div>
             {% endfor %}
         </div>
-        <button type="button" class="btn btn-sm btn-primary btn-premium mt-2" onclick="guardarPermisos({{ u.id }})">💾 Guardar permisos</button>
+        <button type="button" class="btn btn-sm btn-primary btn-premium mt-3" onclick="guardarPermisos({{ u.id }}, this)">💾 Guardar permisos</button>
         <span id="permisos-msg-{{ u.id }}" class="ms-2 small"></span>
     </div>
 </td></tr>
@@ -89,11 +132,18 @@ function toggleRoles(id){
     const fila = document.getElementById('roles-fila-' + id);
     fila.style.display = fila.style.display === 'none' ? '' : 'none';
 }
-async function guardarPermisos(id){
+function marcarGrupo(id, grupo, btn){
+    const checks = document.querySelectorAll('#permisos-checks-' + id + ' .perm-check[data-grupo="' + grupo + '"]');
+    const todos = Array.from(checks).every(c => c.checked);
+    checks.forEach(c => c.checked = !todos);  // si están todos, los desmarca; si no, los marca
+}
+async function guardarPermisos(id, btn){
+    if (btn.disabled) return;
     const checks = document.querySelectorAll('#permisos-checks-' + id + ' input[type=checkbox]:checked');
     const modulos = Array.from(checks).map(c => c.value);
     const msg = document.getElementById('permisos-msg-' + id);
     msg.textContent = 'Guardando...';
+    btn.disabled = true;
     try {
         const r = await fetch('/api/usuario/' + id + '/permisos', {
             method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -103,13 +153,17 @@ async function guardarPermisos(id){
         msg.textContent = j.success ? '✅ Guardado' : ('❌ ' + (j.error || 'Error'));
     } catch (e) {
         msg.textContent = '❌ Error de red';
+    } finally {
+        btn.disabled = false;
     }
 }
-async function guardarRoles(id){
+async function guardarRoles(id, btn){
+    if (btn.disabled) return;
     const checks = document.querySelectorAll('#roles-checks-' + id + ' input[type=checkbox]:checked');
     const roles = Array.from(checks).map(c => c.value);
     const msg = document.getElementById('roles-msg-' + id);
     msg.textContent = 'Guardando...';
+    btn.disabled = true;
     try {
         const r = await fetch('/api/usuario/' + id + '/roles', {
             method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -117,20 +171,24 @@ async function guardarRoles(id){
         });
         const j = await r.json();
         if (j.success) { msg.textContent = '✅ Guardado'; setTimeout(() => location.reload(), 600); }
-        else { msg.textContent = '❌ ' + (j.error || 'Error'); }
+        else { msg.textContent = '❌ ' + (j.error || 'Error'); btn.disabled = false; }
     } catch (e) {
         msg.textContent = '❌ Error de red';
+        btn.disabled = false;
     }
 }
-async function eliminarUsuario(id, nombre){
+async function eliminarUsuario(id, nombre, btn){
+    if (btn.disabled) return;
     if (!confirm('¿Eliminar definitivamente a ' + nombre + '? Esta acción no se puede deshacer.')) return;
+    btn.disabled = true;
     try {
         const r = await fetch('/api/usuario/' + id + '/eliminar', {method: 'POST'});
         const j = await r.json();
         if (j.success) location.reload();
-        else alert('❌ ' + (j.error || 'Error'));
+        else { alert('❌ ' + (j.error || 'Error')); btn.disabled = false; }
     } catch (e) {
         alert('❌ Error de red');
+        btn.disabled = false;
     }
 }
 </script>
