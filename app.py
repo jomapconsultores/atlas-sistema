@@ -3465,41 +3465,62 @@ def _clave_padre(nombre_completo):
     """Clave de deduplicación: nombre sin título, sin acentos y en minúsculas."""
     return _sin_acentos(limpiar_nombre_persona(nombre_completo)).lower()
 
-def sync_padres_familia(nombres_completos):
-    """Copia a la tabla padres_familia los nombres de padre/madre capturados en
-    la ficha del estudiante (texto plano). Recorta títulos honoríficos y guarda
-    el nombre en 'nombres' (apellidos vacío, se completa luego editando en la
-    sección Padres). Evita duplicados comparando el nombre sin título, sin
-    acentos y sin distinguir mayúsculas/espacios contra los padres ya activos.
-    Devuelve cuántos insertó. Nunca lanza: si la sincronización falla no debe
-    tumbar la creación ni la edición del estudiante."""
-    candidatos = []
-    for n in (nombres_completos or []):
-        limpio = limpiar_nombre_persona(n)
-        if limpio:
-            candidatos.append(limpio)
-    if not candidatos:
+def sync_padres_familia(pares):
+    """Copia a la tabla padres_familia los padres/madres capturados en las fichas
+    de estudiantes. `pares` es una lista de tuplas (nombre_padre, nombre_estudiante).
+    Recorta títulos honoríficos y guarda el nombre en 'nombres' (apellidos vacío,
+    se completa luego editando). Guarda en 'estudiante' el/los hijo(s) para poder
+    identificar al padre. Evita duplicados comparando el nombre sin título, sin
+    acentos y sin distinguir mayúsculas/espacios; si el mismo padre aparece para
+    varios hijos, acumula los nombres de los hijos separados por coma. Devuelve
+    cuántos insertó. Nunca lanza: si falla no debe tumbar la creación/edición del
+    estudiante."""
+    limpios = []
+    for nombre, estudiante in (pares or []):
+        n = limpiar_nombre_persona(nombre)
+        if n:
+            limpios.append((n, norm_nombre(estudiante or '')))
+    if not limpios:
         return 0
     try:
-        existentes = supabase.table('padres_familia').select('nombres,apellidos,activo').execute().data or []
+        existentes = supabase.table('padres_familia').select('id,nombres,apellidos,estudiante,activo').execute().data or []
     except Exception:
         return 0
-    # Deduplica contra activos y heredados (activo NULL); ignora los dados de baja.
-    vistos = {_clave_padre(f"{p.get('nombres','')} {p.get('apellidos','')}")
-              for p in existentes if p.get('activo') is not False}
+    # Índice de padres ya existentes (activos o heredados con activo NULL) por clave.
+    por_clave = {}
+    for p in existentes:
+        if p.get('activo') is not False:
+            por_clave.setdefault(_clave_padre(f"{p.get('nombres','')} {p.get('apellidos','')}"), p)
     a_insertar = []
-    for nom in candidatos:
+    creados = 0
+    for nom, estud in limpios:
         clave = _clave_padre(nom)
-        if not clave or clave in vistos:
+        if not clave:
             continue
-        vistos.add(clave)
-        a_insertar.append({'nombres': nom, 'apellidos': '', 'telefono': '', 'activo': True})
+        if clave in por_clave:
+            # Ya existe: si es un hijo nuevo, lo agrego a la lista de estudiantes.
+            p = por_clave[clave]
+            hijos = [h.strip() for h in (p.get('estudiante') or '').split(',') if h.strip()]
+            if estud and estud not in hijos:
+                hijos.append(estud)
+                p['estudiante'] = ', '.join(hijos)
+                if p.get('id'):
+                    try:
+                        supabase.table('padres_familia').update({'estudiante': p['estudiante']}).eq('id', p['id']).execute()
+                    except Exception:
+                        pass
+        else:
+            nuevo = {'nombres': nom, 'apellidos': '', 'telefono': '',
+                     'estudiante': estud, 'activo': True}
+            a_insertar.append(nuevo)
+            por_clave[clave] = nuevo   # para acumular hijos del mismo padre dentro del lote
+            creados += 1
     if a_insertar:
         try:
             supabase.table('padres_familia').insert(a_insertar).execute()
         except Exception:
             return 0
-    return len(a_insertar)
+    return creados
 
 @app.route('/estudiantes', methods=['GET', 'POST'])
 @login_required
@@ -3532,7 +3553,9 @@ def api_crear_estudiante():
         'activo': True, 'usuario_id': current_user.id
     }).execute()
     # Copia padre/madre a la sección Padres (automático al crear el estudiante).
-    sync_padres_familia([data.get('padre_nombre', ''), data.get('madre_nombre', '')])
+    est_nombre = f"{apellidos} {nombres}".strip()
+    sync_padres_familia([(data.get('padre_nombre', ''), est_nombre),
+                         (data.get('madre_nombre', ''), est_nombre)])
     return jsonify({'success': True, 'id': result.data[0]['id'], 'nombre': f"{result.data[0]['apellidos']} {result.data[0]['nombres']}"})
 
 @app.route('/api/crear_estudiante_form', methods=['POST'])
@@ -3551,7 +3574,9 @@ def crear_estudiante_form():
         'activo': True, 'usuario_id': current_user.id
     }).execute()
     # Copia padre/madre a la sección Padres (automático al crear el estudiante).
-    sync_padres_familia([request.form.get('padre_nombre', ''), request.form.get('madre_nombre', '')])
+    est_nombre = f"{request.form['apellidos']} {request.form['nombres']}".strip()
+    sync_padres_familia([(request.form.get('padre_nombre', ''), est_nombre),
+                         (request.form.get('madre_nombre', ''), est_nombre)])
     flash('✅ Estudiante creado', 'success')
     return redirect(url_for('gestion_estudiantes'))
 
@@ -3573,7 +3598,9 @@ def api_editar_estudiante(id):
         supabase.table('estudiantes').update({campo: valor or None}).eq('id', id).execute()
         # Si editaron el nombre del padre/madre, replica el cambio a la sección Padres.
         if campo in ('padre_nombre', 'madre_nombre') and valor:
-            sync_padres_familia([valor])
+            est = supabase.table('estudiantes').select('nombres,apellidos').eq('id', id).execute().data
+            est_nombre = f"{est[0].get('apellidos','')} {est[0].get('nombres','')}".strip() if est else ''
+            sync_padres_familia([(valor, est_nombre)])
         return jsonify({'success': True, 'valor': valor})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
@@ -3594,7 +3621,8 @@ def gestion_padres():
     if request.method == 'POST':
         supabase.table('padres_familia').insert({
             'nombres': request.form['nombres'], 'apellidos': request.form.get('apellidos', ''),
-            'telefono': request.form.get('telefono', ''), 'activo': True
+            'telefono': request.form.get('telefono', ''),
+            'estudiante': request.form.get('estudiante', ''), 'activo': True
         }).execute()
         flash('✅ Padre registrado', 'success')
         return redirect(url_for('gestion_padres'))
@@ -3631,16 +3659,18 @@ def api_crear_padre():
 @requiere_modulo_api('personas.padres')
 def api_importar_padres_estudiantes():
     """Copia a Padres el histórico de padres/madres ya registrados en las fichas
-    de estudiantes (campos padre_nombre / madre_nombre). Sin duplicar."""
+    de estudiantes (campos padre_nombre / madre_nombre), guardando el nombre del
+    hijo para identificarlos. Sin duplicar."""
     try:
-        ests = supabase.table('estudiantes').select('padre_nombre,madre_nombre').eq('activo', True).execute().data or []
+        ests = supabase.table('estudiantes').select('padre_nombre,madre_nombre,nombres,apellidos').eq('activo', True).execute().data or []
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
-    nombres = []
+    pares = []
     for e in ests:
-        nombres.append(e.get('padre_nombre', ''))
-        nombres.append(e.get('madre_nombre', ''))
-    creados = sync_padres_familia(nombres)
+        est_nombre = f"{e.get('apellidos','')} {e.get('nombres','')}".strip()
+        pares.append((e.get('padre_nombre', ''), est_nombre))
+        pares.append((e.get('madre_nombre', ''), est_nombre))
+    creados = sync_padres_familia(pares)
     return jsonify({'success': True, 'creados': creados})
 
 @app.route('/api/padre/<int:id>/editar', methods=['POST'])
@@ -3650,7 +3680,7 @@ def api_editar_padre(id):
     data = request.get_json() or {}
     campo = data.get('campo')
     valor = (data.get('valor') or '').strip()
-    if campo not in ('nombres', 'apellidos', 'telefono'):
+    if campo not in ('nombres', 'apellidos', 'telefono', 'estudiante'):
         return jsonify({'success': False, 'error': 'Campo no permitido'})
     try:
         supabase.table('padres_familia').update({campo: valor or None}).eq('id', id).execute()
