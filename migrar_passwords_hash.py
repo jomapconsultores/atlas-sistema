@@ -1,3 +1,6 @@
+# ------------------------------------------------------------
+# Desarrollado por Marco Antonio Posligua San Martín
+# ------------------------------------------------------------
 """Migración de seguridad: convierte a hash (werkzeug/pbkdf2) las contraseñas
 almacenadas en texto plano en la tabla usuarios. Ejecutar UNA vez. Idempotente:
 los registros que ya están hasheados no se tocan."""

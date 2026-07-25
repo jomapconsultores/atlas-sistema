@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# ------------------------------------------------------------
+# Desarrollado por Marco Antonio Posligua San Martín
+# ------------------------------------------------------------
 """Borra de Google Calendar los eventos de sesiones que ya están en estado 'Cancelado'
 en la base de datos. Limpia también el campo evento_calendar_id en Supabase.
 

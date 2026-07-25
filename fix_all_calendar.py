@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# ------------------------------------------------------------
+# Desarrollado por Marco Antonio Posligua San Martín
+# ------------------------------------------------------------
 """Script para corregir TODAS las sesiones en Google Calendar"""
 from supabase_client import supabase
 from google_calendar import crear_o_actualizar_evento_calendar

@@ -1,3 +1,6 @@
+# ------------------------------------------------------------
+# Desarrollado por Marco Antonio Posligua San Martín
+# ------------------------------------------------------------
 import os
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session, g
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user

@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+# ------------------------------------------------------------
+# Desarrollado por Marco Antonio Posligua San Martín
+# ------------------------------------------------------------
 """Pruebas del saldo bancario: el saldo de la cuenta de ahorros (Liquidacion)
 debe coincidir con el saldo final del modulo de Movimientos.
 

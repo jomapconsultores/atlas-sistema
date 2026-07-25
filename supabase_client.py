@@ -1,3 +1,6 @@
+# ------------------------------------------------------------
+# Desarrollado por Marco Antonio Posligua San Martín
+# ------------------------------------------------------------
 import os
 from supabase import create_client, Client
 

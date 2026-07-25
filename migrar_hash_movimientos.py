@@ -1,3 +1,6 @@
+# ------------------------------------------------------------
+# Desarrollado por Marco Antonio Posligua San Martín
+# ------------------------------------------------------------
 """Migración puntual: recalcula hash_mov de movimientos_cuenta con la nueva
 fórmula (que incluye el saldo) para que la deduplicación siga funcionando con
 los movimientos ya guardados. Ejecutar UNA vez tras desplegar el cambio:

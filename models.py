@@ -1,3 +1,6 @@
+# ------------------------------------------------------------
+# Desarrollado por Marco Antonio Posligua San Martín
+# ------------------------------------------------------------
 from werkzeug.security import check_password_hash
 from supabase_client import supabase
 
