@@ -939,6 +939,13 @@ def login():
             return render_template('login.html')
         result = supabase.table('usuarios').select('*').eq('email', request.form['email']).execute()
         if result.data and result.data[0].get('activo') and check_password(result.data[0]['password_hash'], request.form['password']):
+            # Una clave temporal caducada no sirve: hay que pedir al
+            # administrador que la restablezca de nuevo.
+            if _clave_temporal_vencida(result.data[0]):
+                _registrar_intento_fallido(clave)
+                flash('⛔ La clave temporal que te entregó el administrador ya caducó. '
+                      'Pídele que la restablezca nuevamente.', 'error')
+                return render_template('login.html')
             login_user(Usuario.get_by_id(result.data[0]['id']))
             session['mostrar_cobros'] = True  # recordatorio de cobros: una vez por inicio de sesión
             _resetear_intentos(clave)
@@ -3901,6 +3908,32 @@ def gestion_usuarios():
                     except Exception as e:
                         flash(f'⚠️ Usuario creado, pero no se pudieron asignar los permisos por defecto: {e}', 'warning')
             flash('✅ Usuario creado', 'success')
+        elif accion == 'resetear_clave':
+            # Recuperación de clave olvidada: el administrador genera una clave
+            # temporal de un solo uso. Se muestra UNA vez (no queda en claro en
+            # ninguna parte) y caduca a las 72 h.
+            if not _puede_usuarios('editar'):
+                flash('❌ No tienes permiso para restablecer claves', 'error')
+                return redirect(url_for('gestion_usuarios'))
+            reset_id = int(request.form.get('reset_id'))
+            if current_user.rol != 'admin' and _es_usuario_admin(reset_id):
+                flash('❌ Solo un administrador puede restablecer la clave de otro admin', 'error')
+                return redirect(url_for('gestion_usuarios'))
+            fila = supabase.table('usuarios').select('nombre,email').eq('id', reset_id).execute().data
+            if not fila:
+                flash('❌ Usuario no encontrado', 'error')
+                return redirect(url_for('gestion_usuarios'))
+            from datetime import datetime, timedelta, timezone
+            temporal = _generar_clave_temporal()
+            supabase.table('usuarios').update({
+                'password_hash': generate_password_hash(temporal),
+                'debe_cambiar_clave': True,
+                'clave_temporal_expira': (datetime.now(timezone.utc) + timedelta(hours=72)).isoformat(),
+                'clave_reseteada_por': current_user.id,
+            }).eq('id', reset_id).execute()
+            _registrar_clave_log(reset_id, 'reset_admin', current_user.id)
+            flash(f'🔑 Clave temporal de {fila[0]["nombre"]}: {temporal} — entrégasela en persona. '
+                  f'Caduca en 72 horas y deberá cambiarla al entrar. No se volverá a mostrar.', 'success')
         elif accion == 'editar':
             if not _puede_usuarios('editar'):
                 flash('❌ No tienes permiso para editar usuarios', 'error')
@@ -4311,15 +4344,120 @@ def editar_perfil():
         if not nombre_nuevo:
             flash('⚠️ El nombre no puede quedar vacío', 'error')
             return render_template('editar_perfil.html')
-        updates = {'nombre': nombre_nuevo, 'email': request.form['email']}
-        if request.form.get('password'):
-            updates['password_hash'] = generate_password_hash(request.form['password'])
-        supabase.table('usuarios').update(updates).eq('id', current_user.id).execute()
+        email_nuevo = (request.form.get('email') or '').strip().lower()
+        updates = {
+            'nombre': nombre_nuevo,
+            'telefono': (request.form.get('telefono') or '').strip(),
+            'cargo': (request.form.get('cargo') or '').strip(),
+        }
+        # El email es la credencial de acceso: cambiarlo exige confirmar la clave
+        # actual. Antes este formulario también cambiaba la contraseña sin pedir
+        # la anterior; eso ahora vive en /cambiar-clave, que sí la verifica.
+        if email_nuevo and email_nuevo != (current_user.email or '').lower():
+            if not check_password(current_user.password_hash, request.form.get('clave_actual', '')):
+                flash('❌ Para cambiar tu email debes confirmar tu clave actual', 'error')
+                return render_template('editar_perfil.html')
+            updates['email'] = email_nuevo
+        try:
+            supabase.table('usuarios').update(updates).eq('id', current_user.id).execute()
+        except Exception:
+            flash('❌ No se pudo actualizar (¿el email ya está registrado?)', 'error')
+            return render_template('editar_perfil.html')
         if current_user.rol in ['profesor', 'psicologo']:
             supabase.table('sesiones').update({'profesor_terapeuta': nombre_nuevo}).eq('profesor_terapeuta', current_user.nombre).execute()
         flash('✅ Perfil actualizado', 'success')
-        return redirect(url_for('dashboard'))
+        return redirect(url_for('editar_perfil'))
     return render_template('editar_perfil.html')
+
+
+# ========== MI CLAVE: cambio con verificación de la anterior ==========
+MIN_CLAVE = 8
+# Rutas que un usuario con clave temporal SÍ puede visitar (si no, quedaría
+# encerrado sin poder cambiarla ni salir).
+_RUTAS_LIBRES_CLAVE = ('/cambiar-clave', '/logout', '/login', '/static/', '/sw.js', '/manifest.json')
+
+
+def _generar_clave_temporal(largo=12):
+    """Clave temporal legible: sin caracteres ambiguos (0/O, 1/l/I) para poder
+    dictarla por teléfono sin errores. Aleatoriedad criptográfica."""
+    import secrets
+    alfabeto = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'
+    return ''.join(secrets.choice(alfabeto) for _ in range(largo))
+
+
+def _clave_temporal_vencida(fila):
+    """True si el usuario arrastra una clave temporal ya caducada."""
+    if not fila or not fila.get('debe_cambiar_clave'):
+        return False
+    exp = fila.get('clave_temporal_expira')
+    if not exp:
+        return False
+    try:
+        from datetime import datetime, timezone
+        return datetime.fromisoformat(str(exp).replace('Z', '+00:00')) < datetime.now(timezone.utc)
+    except ValueError:
+        return False
+
+
+def _registrar_clave_log(usuario_id, accion, ejecutado_por=None):
+    """Bitácora de cambios de clave. Nunca guarda la clave, solo el hecho."""
+    try:
+        supabase.table('usuarios_clave_log').insert({
+            'usuario_id': usuario_id, 'accion': accion,
+            'ejecutado_por': ejecutado_por, 'ip': _ip_cliente(),
+        }).execute()
+    except Exception:
+        # Auxiliar: si la tabla aún no está migrada no debe frenar el cambio.
+        pass
+
+
+@app.before_request
+def _forzar_cambio_clave():
+    """Mientras el usuario arrastre una clave temporal del administrador, no
+    puede usar el sistema: solo cambiarla o cerrar sesión."""
+    if not current_user.is_authenticated:
+        return None
+    path = request.path or ''
+    if path.startswith(_RUTAS_LIBRES_CLAVE):
+        return None
+    if not getattr(current_user, 'debe_cambiar_clave', False):
+        return None
+    if request.path.startswith('/api/'):
+        return jsonify({'success': False, 'error': 'Debes definir una nueva clave',
+                        'redirect': url_for('cambiar_clave')}), 403
+    flash('🔐 Tu clave fue restablecida por el administrador. Define una nueva para continuar.', 'warning')
+    return redirect(url_for('cambiar_clave'))
+
+
+@app.route('/cambiar-clave', methods=['GET', 'POST'])
+@login_required
+def cambiar_clave():
+    obligatorio = bool(getattr(current_user, 'debe_cambiar_clave', False))
+    if request.method == 'POST':
+        actual = request.form.get('actual', '')
+        nueva = request.form.get('nueva', '')
+        confirmar = request.form.get('confirmar', '')
+        if not check_password(current_user.password_hash, actual):
+            flash('❌ La clave actual no es correcta', 'error')
+        elif len(nueva) < MIN_CLAVE:
+            flash(f'❌ La nueva clave debe tener al menos {MIN_CLAVE} caracteres', 'error')
+        elif nueva != confirmar:
+            flash('❌ La nueva clave y su confirmación no coinciden', 'error')
+        elif check_password(current_user.password_hash, nueva):
+            flash('❌ La nueva clave debe ser distinta de la anterior', 'error')
+        else:
+            from datetime import datetime, timezone
+            supabase.table('usuarios').update({
+                'password_hash': generate_password_hash(nueva),
+                'debe_cambiar_clave': False,
+                'clave_temporal_expira': None,
+                'clave_actualizada_en': datetime.now(timezone.utc).isoformat(),
+            }).eq('id', current_user.id).execute()
+            _registrar_clave_log(current_user.id, 'cambio_propio', current_user.id)
+            current_user.debe_cambiar_clave = False
+            flash('✅ Clave actualizada correctamente', 'success')
+            return redirect(url_for('dashboard'))
+    return render_template('cambiar_clave.html', obligatorio=obligatorio, min_clave=MIN_CLAVE)
 
 # ========== API GENERAL ==========
 @app.route('/api/estudiante/<int:id>')

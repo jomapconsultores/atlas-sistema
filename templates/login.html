@@ -237,6 +237,17 @@
             </button>
             <p class="login-hint" id="pk-estado"></p>
 
+            <p class="login-hint" style="margin-top:14px;">
+                <a href="#" onclick="var o=document.getElementById('olvide-clave');o.style.display=o.style.display==='none'?'block':'none';return false;"
+                   style="color:inherit;text-decoration:underline;">¿Olvidaste tu contraseña?</a>
+            </p>
+            <div id="olvide-clave" style="display:none;font-size:12px;line-height:1.5;text-align:left;background:rgba(0,0,0,.04);border-radius:10px;padding:10px 12px;margin-bottom:10px;">
+                Por seguridad, Atlas no envía claves por correo. Pide al
+                <strong>administrador</strong> que entre en <em>Usuarios</em> y use
+                <em>Restablecer clave</em>: te entregará una clave temporal de un solo uso,
+                válida 72 horas, que deberás cambiar apenas ingreses.
+            </div>
+
             <a href="/" class="back-link">← Volver al inicio</a>
 
             <p class="login-hint" style="margin-top:18px;">Desarrollado por Marco Antonio Posligua San Martín</p>

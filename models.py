@@ -12,7 +12,12 @@ class Usuario:
         self.password_hash = None
         self.rol = None
         self.activo = True
-    
+        self.telefono = ''
+        self.cargo = ''
+        # True mientras arrastre una clave temporal puesta por el administrador.
+        self.debe_cambiar_clave = False
+        self.clave_actualizada_en = None
+
     @staticmethod
     def get_by_id(user_id):
         result = supabase.table('usuarios').select('*').eq('id', user_id).execute()
@@ -25,6 +30,12 @@ class Usuario:
             user.password_hash = data['password_hash']
             user.rol = data['rol']
             user.activo = data.get('activo', True)
+            # Campos del módulo de cuenta. Se leen con .get para que la app siga
+            # funcionando si migration_cuenta_autoservicio.sql aún no se aplicó.
+            user.telefono = data.get('telefono') or ''
+            user.cargo = data.get('cargo') or ''
+            user.debe_cambiar_clave = bool(data.get('debe_cambiar_clave'))
+            user.clave_actualizada_en = data.get('clave_actualizada_en')
             return user
         return None
     

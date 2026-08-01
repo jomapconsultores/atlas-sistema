@@ -61,6 +61,15 @@
 {% if caps.permisos and u.rol not in ['admin', 'socio'] %}
 <button type="button" class="btn btn-sm btn-outline-secondary btn-premium" onclick="togglePermisos({{ u.id }})">🔐 Permisos</button>
 {% endif %}
+{% if caps.editar and puede_tocar %}
+{# Recuperación de clave olvidada: genera una clave temporal de un solo uso #}
+<form method="POST" style="display:inline;" onsubmit="return confirm('¿Restablecer la clave de {{ u.nombre|replace("'", "\\'") }}?\n\nSe generará una clave temporal de un solo uso que deberás entregarle. Su clave actual dejará de funcionar.');">
+    <input type="hidden" name="accion" value="resetear_clave">
+    <input type="hidden" name="reset_id" value="{{ u.id }}">
+    <button type="submit" class="btn btn-sm btn-outline-warning btn-premium" title="Olvidó su clave">🔑 Restablecer clave</button>
+</form>
+{% if u.debe_cambiar_clave %}<span class="badge-premium text-dark bg-warning" title="Tiene una clave temporal sin cambiar">Temporal</span>{% endif %}
+{% endif %}
 {% if caps.eliminar and puede_tocar %}
 <button type="button" class="btn btn-sm btn-outline-danger btn-premium" aria-label="Eliminar a {{ u.nombre }}" title="Eliminar a {{ u.nombre }}" onclick="eliminarUsuario({{ u.id }}, '{{ u.nombre|replace("'", "\\'") }}', this)">🗑️</button>
 {% endif %}
