@@ -4348,10 +4348,14 @@ def mi_asistencia():
     resumen = _resumen_asistencia(del_mes, jornadas,
         [{'id': current_user.id, 'nombre': current_user.nombre, 'rol': current_user.rol}])
     mi_resumen = next((r for r in resumen if r['usuario_id'] == current_user.id), None)
+    # El sueldo solo se muestra si quien administra lo autorizó a mano para esta
+    # persona (casilla en la jornada). Por defecto NO: es dato sensible.
+    ver_sueldo = bool((mi_jornada or {}).get('ver_sueldo'))
     return render_template('mi_asistencia.html',
                           marcacion_hoy=marcacion_hoy[0] if marcacion_hoy else None,
                           historial=historial, mi_resumen=mi_resumen,
                           tiene_jornada=bool(mi_jornada), mes=mes_actual, anio=anio_actual,
+                          ver_sueldo=ver_sueldo,
                           sbu=SBU_ECUADOR, sbu_anio=SBU_ANIO, horas_mes_legal=HORAS_MES_LEGAL)
 
 # --- Marco legal ecuatoriano (Código del Trabajo) ------------------------
@@ -4527,6 +4531,8 @@ def _resumen_asistencia(filas, jornadas, personas_base=None):
         r['horas_dia'], r['dias_mes'] = horas_dia, dias_mes
         r['horas_jornada_completa'], r['sueldo_tiempo_completo'] = h_completa, sueldo_tc
         r['recargo_hora_extra'] = recargo
+        # ¿Se le autorizó ver su propio sueldo en «Mi asistencia»?
+        r['ver_sueldo'] = bool(j.get('ver_sueldo'))
         r['horas_trabajadas'] = round(r['horas_trabajadas'], 2)
         r['horas_extra'] = round(r['horas_extra'], 2)
 
@@ -4756,6 +4762,7 @@ def api_guardar_jornada(usuario_id):
         recargo = round(float(data.get('recargo_hora_extra') or 1.5), 2)
     except (TypeError, ValueError):
         return jsonify({'success': False, 'error': 'Datos incompletos o no numéricos'}), 400
+    ver_sueldo = bool(data.get('ver_sueldo'))
     if not (0 < horas_dia <= 24) or not (0 < dias_mes <= 31) or not (0 < h_completa <= 24):
         return jsonify({'success': False, 'error': 'Horas por día (1-24), días del mes (1-31) y jornada completa (1-24) fuera de rango'}), 400
     if horas_dia > h_completa:
@@ -4777,7 +4784,7 @@ def api_guardar_jornada(usuario_id):
 
     valores = {'usuario_id': usuario_id, 'horas_dia': horas_dia, 'dias_mes': dias_mes,
                'horas_jornada_completa': h_completa, 'sueldo_tiempo_completo': sueldo,
-               'recargo_hora_extra': recargo}
+               'recargo_hora_extra': recargo, 'ver_sueldo': ver_sueldo}
     try:
         existe = supabase.table('jornadas_laborales').select('id').eq('usuario_id', usuario_id).execute().data
         if existe:

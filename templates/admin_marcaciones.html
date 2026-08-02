@@ -131,11 +131,12 @@
                 <strong>{{ r.nombre }}</strong>
                 {% if puede_jornada %}
                 <button class="btn btn-sm btn-outline-dark py-0 px-1 ms-1" title="Configurar jornada y sueldo"
-                        onclick='abrirJornada({{ r.usuario_id }}, {{ r.nombre|tojson }}, {{ r.horas_dia }}, {{ r.dias_mes }}, {{ r.horas_jornada_completa }}, {{ r.sueldo_tiempo_completo }}, {{ r.recargo_hora_extra }})'>⚙️</button>
+                        onclick='abrirJornada({{ r.usuario_id }}, {{ r.nombre|tojson }}, {{ r.horas_dia }}, {{ r.dias_mes }}, {{ r.horas_jornada_completa }}, {{ r.sueldo_tiempo_completo }}, {{ r.recargo_hora_extra }}, {{ (r.ver_sueldo or False)|tojson }})'>⚙️</button>
                 {% endif %}
                 <br>
                 <span class="badge-premium text-white bg-{{ 'warning' if r.rol=='secretaria' else 'success' if r.rol=='profesor' else 'purple' if r.rol=='psicologo' else 'info' }}">{{ r.rol }}</span>
                 {% if not r.tiene_jornada %}<br><span class="badge-premium bg-light text-dark border" title="Se calcula con la jornada por defecto y sueldo 0">⚠️ sin jornada configurada</span>{% endif %}
+                {% if r.ver_sueldo %}<br><span class="badge-premium bg-success text-white" title="Esta persona ve su sueldo en «Mi asistencia»">💵 ve su sueldo</span>{% endif %}
             </td>
             <td class="text-center col-jornada">
                 {{ r.horas_dia|horas }} h/día × {{ r.dias_mes }} días<br>
@@ -362,7 +363,8 @@
                         data-dias-mes="{{ jornadas.get(p.id, {}).get('dias_mes', jornada_defecto.dias_mes) }}"
                         data-horas-completa="{{ jornadas.get(p.id, {}).get('horas_jornada_completa', jornada_defecto.horas_jornada_completa) }}"
                         data-sueldo="{{ jornadas.get(p.id, {}).get('sueldo_tiempo_completo', jornada_defecto.sueldo_tiempo_completo) }}"
-                        data-recargo="{{ jornadas.get(p.id, {}).get('recargo_hora_extra', jornada_defecto.recargo_hora_extra) }}">
+                        data-recargo="{{ jornadas.get(p.id, {}).get('recargo_hora_extra', jornada_defecto.recargo_hora_extra) }}"
+                        data-ver-sueldo="{{ 1 if jornadas.get(p.id, {}).get('ver_sueldo') else 0 }}">
                     {{ p.nombre }} ({{ p.rol }}){{ ' — sin jornada' if p.id not in jornadas else '' }}
                 </option>
                 {% endfor %}
@@ -396,6 +398,16 @@
               <button type="button" class="btn btn-outline-secondary" onclick="ponerSBU()" title="Usar el Salario Básico Unificado {{ sbu_anio }}">SBU {{ sbu_anio }} (${{ "%.2f"|format(sbu) }})</button>
             </div>
             <small class="text-muted">Lo que se pagaría por el mes completo a jornada completa. El sistema calcula el proporcional.</small>
+          </div>
+        </div>
+        <div class="form-check form-switch mt-3">
+          <input class="form-check-input" type="checkbox" id="jornadaVerSueldo">
+          <label class="form-check-label fw-bold" for="jornadaVerSueldo">
+            💵 Dejar que esta persona vea su sueldo
+          </label>
+          <div class="small text-muted">
+            Si lo activas, en «Mi asistencia» verá lo que se le pagará este mes: el proporcional
+            por sus horas, las extra y el total. Desactivado, solo ve sus horas y días.
           </div>
         </div>
         <div class="alert alert-info mt-3 mb-0 small" id="jornadaPreview"></div>
@@ -501,13 +513,14 @@ async function guardarPermiso() {
 }
 
 {% if puede_jornada %}
-function abrirJornada(uid, nombre, horasDia, diasMes, horasCompleta, sueldo, recargo) {
+function abrirJornada(uid, nombre, horasDia, diasMes, horasCompleta, sueldo, recargo, verSueldo) {
     document.getElementById('jornadaUsuarioId').value = uid;
     document.getElementById('jornadaHorasDia').value = horasDia;
     document.getElementById('jornadaDiasMes').value = diasMes;
     document.getElementById('jornadaHorasCompleta').value = horasCompleta;
     document.getElementById('jornadaSueldo').value = sueldo;
     document.getElementById('jornadaRecargo').value = recargo;
+    document.getElementById('jornadaVerSueldo').checked = !!verSueldo;
     document.getElementById('jornadaSelectorPersona').style.display = 'none';
     document.getElementById('jornadaContexto').innerHTML = 'Jornada y sueldo de <strong>' + nombre + '</strong>';
     actualizarPreviewJornada();
@@ -525,6 +538,7 @@ function abrirJornadaNueva() {
     document.getElementById('jornadaHorasCompleta').value = {{ jornada_defecto.horas_jornada_completa }};
     document.getElementById('jornadaSueldo').value = '';
     document.getElementById('jornadaRecargo').value = {{ jornada_defecto.recargo_hora_extra }};
+    document.getElementById('jornadaVerSueldo').checked = false;
     actualizarPreviewJornada();
     new bootstrap.Modal(document.getElementById('modalJornada')).show();
 }
@@ -539,6 +553,7 @@ function cargarJornadaPersona() {
     document.getElementById('jornadaHorasCompleta').value = op.dataset.horasCompleta;
     document.getElementById('jornadaSueldo').value = op.dataset.sueldo;
     document.getElementById('jornadaRecargo').value = op.dataset.recargo;
+    document.getElementById('jornadaVerSueldo').checked = op.dataset.verSueldo === '1';
     actualizarPreviewJornada();
 }
 
@@ -587,7 +602,8 @@ async function guardarJornada() {
         dias_mes: document.getElementById('jornadaDiasMes').value,
         horas_jornada_completa: document.getElementById('jornadaHorasCompleta').value,
         sueldo_tiempo_completo: document.getElementById('jornadaSueldo').value,
-        recargo_hora_extra: document.getElementById('jornadaRecargo').value
+        recargo_hora_extra: document.getElementById('jornadaRecargo').value,
+        ver_sueldo: document.getElementById('jornadaVerSueldo').checked
     };
     if (!payload.horas_dia || !payload.dias_mes) { alert('Horas por día y días del mes son obligatorios'); return; }
     const r = await fetch('/api/jornada/' + uid, {

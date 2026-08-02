@@ -70,11 +70,40 @@
             ({{ 'tiempo completo' if mi_resumen.es_tiempo_completo else (mi_resumen.factor_jornada * 100)|round(0)|int ~ '% de jornada' }}).
             {% if mi_resumen.cumple_jornada %}✅ Ya cumpliste la jornada del mes.
             {% else %}Te faltan <strong>{{ (-mi_resumen.diferencia_horas)|horas }} h</strong>{% if mi_resumen.dias_faltantes %} y {{ mi_resumen.dias_faltantes }} día(s){% endif %} para completarla.{% endif %}
-            {% if mi_resumen.sueldo_tiempo_completo %}
-            <br>Proporcional del mes según lo trabajado: <strong>${{ "%.2f"|format(mi_resumen.sueldo_proporcional) }}</strong>{% if mi_resumen.pago_horas_extra %} + <strong>${{ "%.2f"|format(mi_resumen.pago_horas_extra) }}</strong> de horas extra = <strong>${{ "%.2f"|format(mi_resumen.total_a_pagar) }}</strong>{% endif %}.
-            <br>Valor hora: <strong>${{ "%.4f"|format(mi_resumen.valor_hora) }}</strong> (remuneración ÷ {{ mi_resumen.horas_mes_legal|horas }} h = 30 días × {{ mi_resumen.horas_dia|horas }} h, Art. 47/55). SBU {{ sbu_anio }}: ${{ "%.2f"|format(sbu) }}.
-            {% endif %}
         </div>
+        {% if ver_sueldo and mi_resumen.sueldo_tiempo_completo %}
+        <div class="card mt-3 border-0" style="background:#e8f5e9; border-radius:14px;">
+            <div class="card-body py-3">
+                <div class="text-muted small text-uppercase mb-2">💵 Lo que se te pagará este mes</div>
+                <div class="row g-2 align-items-end">
+                    <div class="col-6 col-md-3">
+                        <div class="small text-muted">Por las horas trabajadas</div>
+                        <strong>${{ "%.2f"|format(mi_resumen.sueldo_proporcional) }}</strong>
+                        <div class="small text-muted">{{ mi_resumen.horas_pagables|horas }} de {{ mi_resumen.horas_esperadas_mes|horas }} h</div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="small text-muted">Horas extra</div>
+                        <strong>${{ "%.2f"|format(mi_resumen.pago_horas_extra) }}</strong>
+                        {% if mi_resumen.horas_extra %}<div class="small text-muted">{{ mi_resumen.horas_extra|horas }} h con recargo</div>{% endif %}
+                    </div>
+                    <div class="col-12 col-md-3">
+                        <div class="small text-muted">Total a recibir</div>
+                        <span class="fs-4 fw-bold text-success">${{ "%.2f"|format(mi_resumen.total_a_pagar) }}</span>
+                    </div>
+                    <div class="col-12 col-md-3">
+                        <div class="small text-muted">Tu valor hora</div>
+                        <strong>${{ "%.4f"|format(mi_resumen.valor_hora) }}</strong>
+                        <div class="small text-muted">SBU {{ sbu_anio }}: ${{ "%.2f"|format(sbu) }}</div>
+                    </div>
+                </div>
+                <div class="small text-muted mt-2">
+                    Sale de tu sueldo por esta jornada (${{ "%.2f"|format(mi_resumen.sueldo_jornada) }} al mes completo)
+                    ajustado por las horas que trabajaste{% if mi_resumen.horas_permiso %}, contando las {{ mi_resumen.horas_permiso|horas }} h repuestas por permiso{% endif %}.
+                    Es un cálculo del sistema sobre tus marcaciones, no un comprobante de pago.
+                </div>
+            </div>
+        </div>
+        {% endif %}
         {% else %}
         <hr><div class="small text-muted">Todavía no tienes una jornada configurada; se muestran solo tus horas y días.</div>
         {% endif %}
