@@ -146,16 +146,18 @@ distinguir «el código no funciona» de «el código no está desplegado» — 
 lo que pasó en julio de 2026, cuando el servidor estuvo 13 días sirviendo un
 commit viejo sin que nadie lo notara.
 
-## El despliegue automático necesita un webhook manual
+## El despliegue automático va por un webhook manual
 
 El origen configurado en Coolify es la fuente genérica **«Public GitHub»**: no
 hay una GitHub App instalada (`app_id` e `installation_id` vienen vacíos). Esa
 fuente sabe **clonar** el repositorio —que es público, así que no hacen falta
-credenciales— pero **no recibe avisos de push**. Sin nada más, cada despliegue
-hay que lanzarlo a mano.
+credenciales— pero **no recibe avisos de push** por sí sola. Durante meses no
+hubo auto-deploy por esto: no es que se rompiera, es que nunca estuvo conectado.
 
-Para que un push a `main` despliegue solo, hay que añadir un webhook en GitHub
-(*Settings → Webhooks → Add webhook*) apuntando al endpoint manual de Coolify:
+Desde agosto de 2026 hay un webhook de `push` en el repositorio que apunta al
+endpoint manual de Coolify. **Si algún día deja de desplegarse solo, revísalo
+primero** (*Settings → Webhooks*): mira si las entregas recientes salen en rojo
+y qué respondió Coolify. Para recrearlo:
 
 | Campo | Valor |
 |---|---|
