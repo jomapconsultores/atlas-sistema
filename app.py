@@ -4624,7 +4624,7 @@ def api_marcacion_horas_extra(id):
         }).eq('id', id).execute()
         return jsonify({'success': True, 'horas': horas, 'aviso': aviso})
     except Exception as e:
-        return jsonify({'success': False, 'error': 'No se pudo guardar. ¿Ejecutaste migration_jornadas_asistencia.sql? ' + str(e)})
+        return jsonify({'success': False, 'error': 'No se pudo guardar. ¿Aplicaste migrations/0002_jornadas_asistencia.sql? ' + str(e)})
 
 @app.route('/api/jornada/<int:usuario_id>', methods=['POST'])
 @login_required
@@ -4672,7 +4672,7 @@ def api_guardar_jornada(usuario_id):
             supabase.table('jornadas_laborales').insert(valores).execute()
         return jsonify({'success': True, 'avisos': avisos})
     except Exception as e:
-        return jsonify({'success': False, 'error': 'No se pudo guardar. ¿Ejecutaste migration_jornadas_asistencia.sql? ' + str(e)})
+        return jsonify({'success': False, 'error': 'No se pudo guardar. ¿Aplicaste migrations/0002_jornadas_asistencia.sql? ' + str(e)})
 
 # ========== EDITAR PERFIL ==========
 @app.route('/editar-perfil', methods=['GET', 'POST'])
