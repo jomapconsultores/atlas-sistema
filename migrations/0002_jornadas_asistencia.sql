@@ -1,5 +1,7 @@
 -- 0002 — Jornada, horas extra y sueldo proporcional sobre las marcaciones
--- Se aplica con:  DATABASE_URL="..." python deploy/migrate.py  (túnel SSH)
+-- Aplicar en el SQL Editor del proyecto Supabase de Atlas (el archivo entero
+-- de una vez). Cuando la base pase al Postgres auto-alojado, deploy/migrate.py
+-- la toma desde aquí sin cambios.
 
 -- 1) Horas extra por día. Se guardan en la propia marcación para que el
 --    recálculo del mes sea la simple suma de la columna (sin tabla aparte).
