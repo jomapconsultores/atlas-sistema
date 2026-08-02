@@ -31,6 +31,13 @@
     .col-cumpl { min-width: 150px; }
     .col-extra { min-width: 130px; }
     .col-dinero { min-width: 118px; white-space: nowrap; }
+    /* Registros del mes: en «Horas» caben las insignias «🪪 con permiso +1 h»,
+       «sobre 8 h» y «sin salida», y en «Extra» el nombre del recargo. Con el
+       ancho por defecto se partían letra a letra. */
+    .col-horas-dia  { min-width: 148px; }
+    .col-extra-dia  { min-width: 158px; }
+    .col-totaldia   { min-width: 92px; white-space: nowrap; }
+    .col-horas-dia .badge-premium, .col-extra-dia .badge-premium { white-space: nowrap; }
     /* Con 11 columnas, «Total a pagar» —lo que de verdad se viene a mirar—
        quedaba fuera de pantalla y había que arrastrar la tabla. Se fijan la
        primera columna (de quién es la fila) y la última (cuánto), así el resto
@@ -227,7 +234,7 @@
 <!-- ===== REGISTROS DÍA A DÍA ===== -->
 <div class="card-premium"><div class="card-header-grad grad-dark">📋 Registros del mes — horas por día</div><div class="card-body p-0">
 <div class="table-responsive"><table class="table table-premium mb-0">
-<thead><tr><th class="col-fecha">Fecha</th><th>Nombre</th><th>Rol</th><th>Ingreso</th><th>Salida</th><th class="text-center">Horas</th><th class="text-center">Extra</th><th class="text-center">Total día</th><th></th></tr></thead><tbody>
+<thead><tr><th class="col-fecha">Fecha</th><th>Nombre</th><th>Rol</th><th>Ingreso</th><th>Salida</th><th class="text-center col-horas-dia">Horas</th><th class="text-center col-extra-dia">Extra</th><th class="text-center col-totaldia">Total día</th><th></th></tr></thead><tbody>
 {% for m in marcaciones %}
 <tr id="fila-marcacion-{{ m.id }}">
     <td class="col-fecha">
@@ -238,7 +245,7 @@
     <td><span class="badge-premium text-white bg-{{ 'warning' if m.usuarios and m.usuarios.rol=='secretaria' else 'success' if m.usuarios and m.usuarios.rol=='profesor' else 'purple' if m.usuarios and m.usuarios.rol=='psicologo' else 'info' }}">{{ m.usuarios.rol if m.usuarios else '—' }}</span></td>
     <td>{{ m.hora_ingreso[:5] if m.hora_ingreso else '—' }}</td>
     <td>{{ m.hora_salida[:5] if m.hora_salida else '—' }}</td>
-    <td class="text-center">
+    <td class="text-center col-horas-dia">
         {% if m._horas %}<strong>{{ m._horas|horas }}</strong>
         {% if m._sobre_jornada_legal %}<br><span class="badge-premium bg-danger text-white" title="Más de {{ jornada_max_diaria }} h en el día: el excedente debería ir como hora suplementaria o extraordinaria (Art. 47)">sobre {{ jornada_max_diaria }} h</span>{% endif %}
         {% elif m.hora_ingreso %}<span class="badge-premium bg-warning text-dark" title="Falta marcar la salida">sin salida</span>
@@ -246,12 +253,12 @@
         {% if m._con_permiso %}<br><span class="badge-premium bg-info text-white" {% if m.motivo_permiso %}title="{{ m.motivo_permiso }}"{% endif %}>🪪 con permiso{% if m._horas_repuestas %} +{{ m._horas_repuestas|horas }} h{% endif %}</span>
         {% elif m._horas and m._horas_repuestas %}<br><small class="text-muted" title="Jornada pactada: {{ m._horas_jornada|horas }} h">faltan {{ m._horas_repuestas|horas }} h</small>{% endif %}
     </td>
-    <td class="text-center" id="extra-marcacion-{{ m.id }}">
+    <td class="text-center col-extra-dia" id="extra-marcacion-{{ m.id }}">
         {% if m._horas_extra %}<span class="badge-premium bg-warning text-dark" {% if m.nota_extra %}title="{{ m.nota_extra }}"{% endif %}>+{{ m._horas_extra|horas }} h</span>
         <br><small class="text-muted" title="{{ m._recargo.detalle }}">{{ m._recargo.label }}</small>
         {% else %}<span class="text-muted">—</span>{% endif %}
     </td>
-    <td class="text-center"><strong>{{ m._total_dia|horas }}</strong></td>
+    <td class="text-center col-totaldia"><strong>{{ m._total_dia|horas }}</strong></td>
     <td class="text-end" style="white-space:nowrap;">
         <button class="btn btn-sm btn-outline-warning" title="Registrar horas extra de este día"
                 onclick='abrirHorasExtra({{ m.id }}, {{ (m.usuarios.nombre if m.usuarios else "—")|tojson }}, {{ m.fecha|tojson }}, {{ m._horas_extra|default(0, true) }}, {{ (m.nota_extra or "")|tojson }}, {{ (m._tipo_extra or "suplementaria")|tojson }})'>⏱ Extra</button>
