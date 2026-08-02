@@ -94,12 +94,15 @@
     <div class="col-6 col-lg-3"><div class="kpi kpi-1"><div class="l">Días trabajados</div><div class="v">{{ totales.dias }}</div></div></div>
     <div class="col-6 col-lg-3"><div class="kpi kpi-2"><div class="l">Horas trabajadas</div><div class="v">{{ totales.horas|horas }}</div></div></div>
     <div class="col-6 col-lg-3"><div class="kpi kpi-3"><div class="l">Horas extra</div><div class="v">{{ totales.horas_extra|horas }}</div></div></div>
+    {% if ve_dinero %}
     <div class="col-6 col-lg-3"><div class="kpi kpi-4"><div class="l">Total a pagar</div><div class="v">${{ "%.2f"|format(totales.a_pagar) }}</div></div></div>
+    {% endif %}
 </div>
 
 <!-- ===== REPORTE FINAL POR PERSONA ===== -->
 <div class="card-premium">
     <div class="card-header-grad grad-teal">📊 Reporte del período — jornada, horas y sueldo proporcional</div>
+    {% if ve_dinero %}
     <div class="px-3 pt-3">
         <div class="alert alert-secondary mb-0 py-2 small">
             🇪🇨 <strong>Referencias legales {{ sbu_anio }} (Ecuador):</strong>
@@ -109,6 +112,7 @@
             recargos: suplementaria <strong>+50%</strong>, extraordinaria <strong>+100%</strong>, nocturna <strong>+25%</strong> (Art. 55 y 49).
         </div>
     </div>
+    {% endif %}
     <div class="card-body p-0">
     <div class="table-responsive"><table class="table table-premium mb-0">
         <thead><tr>
@@ -117,12 +121,14 @@
             <th class="text-center col-dias">Días<br>trab. / exig.</th>
             <th class="text-center col-horas">Horas<br>trab. / exig.</th>
             <th class="text-center col-cumpl">Cumplimiento</th>
-            <th class="text-center col-extra">Horas<br>extra</th>
+            <th class="text-center col-extra{{ ' col-total' if not ve_dinero }}">Horas<br>extra</th>
+            {% if ve_dinero %}
             <th class="text-end col-dinero">Sueldo<br>tiempo completo</th>
             <th class="text-end col-dinero">Proporcional<br>jornada</th>
             <th class="text-end col-dinero">Proporcional<br>horas trabajadas</th>
             <th class="text-end col-dinero">Pago<br>horas extra</th>
             <th class="text-end col-total">Total<br>a pagar</th>
+            {% endif %}
         </tr></thead>
         <tbody>
         {% for r in resumen %}
@@ -136,7 +142,7 @@
                 <br>
                 <span class="badge-premium text-white bg-{{ 'warning' if r.rol=='secretaria' else 'success' if r.rol=='profesor' else 'purple' if r.rol=='psicologo' else 'info' }}">{{ r.rol }}</span>
                 {% if not r.tiene_jornada %}<br><span class="badge-premium bg-light text-dark border" title="Se calcula con la jornada por defecto y sueldo 0">⚠️ sin jornada configurada</span>{% endif %}
-                {% if r.ver_sueldo %}<br><span class="badge-premium bg-success text-white" title="Esta persona ve su sueldo en «Mi asistencia»">💵 ve su sueldo</span>{% endif %}
+                {% if ve_dinero and r.ver_sueldo %}<br><span class="badge-premium bg-success text-white" title="Esta persona ve su sueldo en «Mi asistencia»">💵 ve su sueldo</span>{% endif %}
             </td>
             <td class="text-center col-jornada">
                 {{ r.horas_dia|horas }} h/día × {{ r.dias_mes }} días<br>
@@ -167,7 +173,7 @@
                 </small>
                 {% if r.dias_trabajados %}<small class="text-muted d-block">En los días trabajados: {{ "%.1f"|format(r.cumplimiento_dias) }}%</small>{% endif %}
             </td>
-            <td class="text-center col-extra">
+            <td class="text-center col-extra{{ ' col-total' if not ve_dinero }}">
                 {% if r.horas_extra %}<span class="badge-premium bg-warning text-dark">{{ r.horas_extra|horas }} h</span>
                 {% for tipo, h in r.extra_por_tipo.items() %}
                 <br><small class="text-muted" title="{{ recargos[tipo].detalle }}">{{ h|horas }} h {{ recargos[tipo].label }}</small>
@@ -176,6 +182,7 @@
                 {% if r.dias_extra_sobre_tope %}<br><span class="badge-premium bg-danger text-white" title="El Art. 55 permite hasta {{ max_suplementarias }} horas suplementarias al día">⚠️ {{ r.dias_extra_sobre_tope }} día(s) sobre el tope</span>{% endif %}
                 {% else %}<span class="text-muted">—</span>{% endif %}
             </td>
+            {% if ve_dinero %}
             <td class="text-end col-dinero">
                 ${{ "%.2f"|format(r.sueldo_tiempo_completo) }}
                 {% if r.bajo_sbu %}<br><span class="badge-premium bg-danger text-white" title="Mínimo legal para esta jornada: ${{ "%.2f"|format(r.minimo_legal) }} (SBU {{ r.sbu_anio }} ${{ "%.2f"|format(r.sbu_vigente) }}, Art. 82)">⚠️ bajo el SBU</span>{% endif %}
@@ -194,9 +201,10 @@
                 {% else %}<span class="text-muted">—</span>{% endif %}
             </td>
             <td class="text-end col-total"><strong class="text-success fs-6">${{ "%.2f"|format(r.total_a_pagar) }}</strong></td>
+            {% endif %}
         </tr>
         {% else %}
-        <tr><td colspan="11" class="text-center text-muted py-3">Sin marcaciones en este período</td></tr>
+        <tr><td colspan="{{ 11 if ve_dinero else 6 }}" class="text-center text-muted py-3">Sin marcaciones en este período</td></tr>
         {% endfor %}
         </tbody>
         {% if resumen %}
@@ -207,10 +215,12 @@
                 <td class="text-center">{{ totales.dias }}</td>
                 <td class="text-center">{{ totales.horas|horas }}</td>
                 <td></td>
-                <td class="text-center">{{ totales.horas_extra|horas }}</td>
+                <td class="text-center{{ ' col-total' if not ve_dinero }}">{{ totales.horas_extra|horas }}</td>
+                {% if ve_dinero %}
                 <td colspan="3"></td>
                 <td class="text-end">${{ "%.2f"|format(resumen|sum(attribute='pago_horas_extra')) }}</td>
                 <td class="text-end text-success col-total">${{ "%.2f"|format(totales.a_pagar) }}</td>
+                {% endif %}
             </tr>
         </tfoot>
         {% endif %}

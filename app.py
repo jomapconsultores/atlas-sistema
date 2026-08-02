@@ -4660,8 +4660,25 @@ def admin_marcaciones():
         'horas_extra': round(sum(r['horas_extra'] for r in resumen), 2),
         'a_pagar': round(sum(r['total_a_pagar'] for r in resumen), 2),
     }
-    # Configurar jornada/sueldo es información salarial: permiso aparte.
-    puede_jornada = tiene_modulo('asistencia.jornada_sueldo') or ve_todas
+    # Información salarial: solo admin/socio o quien tenga el permiso explícito
+    # de jornada y sueldo. 'administracion.marcaciones' NO alcanza: ese permiso
+    # es para consultar asistencia, no para ver lo que cobra cada persona.
+    es_admin_socio = current_user.rol in ('admin', 'socio')
+    ve_dinero = es_admin_socio or tiene_modulo('asistencia.jornada_sueldo')
+    puede_jornada = ve_dinero
+    # Sin permiso salarial, los importes no llegan siquiera a la plantilla:
+    # ocultar columnas dejando el dato en el HTML sería una protección de
+    # mentira (basta con mirar el código fuente de la página).
+    if not ve_dinero:
+        SALARIALES = ('sueldo_tiempo_completo', 'sueldo_jornada', 'sueldo_proporcional',
+                      'pago_horas_extra', 'total_a_pagar', 'valor_hora',
+                      'valor_hora_completa', 'minimo_legal', 'sbu_vigente',
+                      'bajo_sbu', 'ver_sueldo', 'recargo_hora_extra')
+        for r in resumen:
+            for k in SALARIALES:
+                r.pop(k, None)
+        totales.pop('a_pagar', None)
+
     # Personal al que se le puede fijar jornada (incluye a quien todavía no
     # marcó nunca; si no, no habría forma de configurarlo desde aquí).
     personal = []
@@ -4673,10 +4690,11 @@ def admin_marcaciones():
     return render_template('admin_marcaciones.html', marcaciones=filas, mes=mes, anio=anio,
                           solo_docentes=(not ve_todas), resumen=resumen, totales=totales,
                           jornadas=jornadas, puede_jornada=puede_jornada, personal=personal,
-                          # El desglose de cómo se calcula el sueldo es solo
-                          # para quien decide la nómina, no para quien consulta
-                          # asistencia (p. ej. secretaría con ver_docentes).
-                          es_admin_socio=(current_user.rol in ('admin', 'socio')),
+                          # Las columnas de dinero y el desglose del cálculo son
+                          # solo para quien decide la nómina, no para quien
+                          # consulta asistencia (p. ej. secretaría con
+                          # ver_docentes, que ve días, horas y cumplimiento).
+                          es_admin_socio=es_admin_socio, ve_dinero=ve_dinero,
                           jornada_defecto=JORNADA_DEFECTO, recargos=RECARGOS_EXTRA,
                           sbu=SBU_ECUADOR, sbu_anio=SBU_ANIO, horas_mes_legal=HORAS_MES_LEGAL,
                           jornada_max_diaria=JORNADA_MAX_DIARIA, jornada_max_semanal=JORNADA_MAX_SEMANAL,
