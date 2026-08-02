@@ -4333,6 +4333,7 @@ def mi_asistencia():
         m['_total_dia'] = round(m['_horas'] + m['_horas_extra'], 2)
         m['_recargo'] = RECARGOS_EXTRA.get(m.get('tipo_extra') or 'suplementaria', {}) if m['_horas_extra'] else {}
         m['_dia'], m['_es_finde'] = _dia_semana(m.get('fecha'))
+        m['_con_permiso'] = bool(m.get('con_permiso'))
 
     # Resumen del mes en curso frente a la jornada pactada (si la tiene).
     mes_actual, anio_actual = ahora_ec.month, ahora_ec.year
@@ -4378,6 +4379,10 @@ RECARGOS_EXTRA = {
                        'detalle': 'Entre 24h00 y 06h00, o en sábados, domingos y feriados.'},
     'nocturna': {'factor': 1.25, 'label': 'Recargo nocturno +25%',
                  'detalle': 'Jornada cumplida entre las 19h00 y las 06h00.'},
+    # Sin recargo: horas fuera de jornada que se pagan al valor hora a secas
+    # (acuerdo interno, compensación de tiempo). No es una figura del Art. 55.
+    'normal': {'factor': 1.0, 'label': 'Normal (sin recargo)',
+               'detalle': 'Se paga al valor hora, sin recargo. Para acuerdos internos o compensaciones.'},
 }
 MAX_SUPLEMENTARIAS_DIA = 4      # Art. 55: tope diario de horas suplementarias
 
@@ -4430,10 +4435,14 @@ def _resumen_asistencia(filas, jornadas, personas_base=None):
 
     El sueldo sale de DOS proporcionales encadenados sobre el sueldo a tiempo
     completo, que es lo que se pidió distinguir:
-      1) por JORNADA  -> horas_dia / horas_jornada_completa  (medio tiempo = 0.5)
-      2) por DÍAS      -> días efectivamente trabajados / días exigidos del mes
-    El proporcional por días se topa en 1: trabajar más días que los exigidos no
-    sube el sueldo base, se paga como hora extra.
+      1) por JORNADA -> horas_dia / horas_jornada_completa  (medio tiempo = 0.5)
+      2) por HORAS   -> horas efectivamente trabajadas / horas exigidas del mes
+    El segundo proporcional se topa en 1: trabajar de más no sube el sueldo
+    base, se paga como hora extra.
+
+    Un día marcado CON PERMISO se paga como jornada completa aunque se haya
+    salido antes: las horas que falten se reponen. Sin eso, una salida
+    autorizada le descontaría dinero a la persona.
 
     Las horas extra se pagan aparte y siguen el Código del Trabajo ecuatoriano:
     valor hora = remuneración mensual / 240 (Art. 47/55, mes de 30 días × 8 h),
@@ -4444,7 +4453,10 @@ def _resumen_asistencia(filas, jornadas, personas_base=None):
         return {'usuario_id': uid, 'nombre': nombre or '—', 'rol': rol or '—',
                 'dias_trabajados': 0, 'dias_sin_cerrar': 0, 'horas_trabajadas': 0.0,
                 'horas_extra': 0.0, 'horas_extra_ponderadas': 0.0, 'extra_por_tipo': {},
-                'dias_extra_sobre_tope': 0}
+                'dias_extra_sobre_tope': 0, 'dias_con_permiso': 0,
+                # horas de cada día con permiso; lo que falte para la jornada se
+                # repone abajo, cuando ya se sabe cuántas horas debía cumplir.
+                '_horas_dias_permiso': []}
 
     resumen = {}
     # Quien tiene jornada pactada aparece aunque no haya marcado nada en el mes:
@@ -4458,11 +4470,20 @@ def _resumen_asistencia(filas, jornadas, personas_base=None):
         if u.get('nombre'):
             r['nombre'], r['rol'] = u.get('nombre'), u.get('rol') or r['rol']
         horas = _horas_del_dia(f)
+        permiso = bool(f.get('con_permiso'))
         if horas > 0:
             r['dias_trabajados'] += 1
             r['horas_trabajadas'] += horas
         elif f.get('hora_ingreso'):
-            r['dias_sin_cerrar'] += 1
+            # Con permiso, un día sin salida marcada sigue contando como día:
+            # la ausencia está justificada, no es un olvido de fichar.
+            if permiso:
+                r['dias_trabajados'] += 1
+            else:
+                r['dias_sin_cerrar'] += 1
+        if permiso:
+            r['dias_con_permiso'] += 1
+            r['_horas_dias_permiso'].append(horas)
         # Horas extra del día con SU tipo de recargo (Art. 55). Las filas
         # anteriores a esta función no tienen tipo: se toman como suplementarias.
         extra = _num(f.get('horas_extra'))
@@ -4490,24 +4511,41 @@ def _resumen_asistencia(filas, jornadas, personas_base=None):
         r['horas_trabajadas'] = round(r['horas_trabajadas'], 2)
         r['horas_extra'] = round(r['horas_extra'], 2)
 
+        # Horas repuestas por permiso: lo que le faltó para completar la jornada
+        # en cada día autorizado. Nunca resta (max con 0) ni repone de más.
+        r['horas_permiso'] = round(sum(max(horas_dia - h, 0) for h in r.pop('_horas_dias_permiso')), 2)
+        # Lo que se paga: lo trabajado más lo repuesto por permiso.
+        r['horas_pagables'] = round(r['horas_trabajadas'] + r['horas_permiso'], 2)
+
         # Jornada exigida: del mes completo y la que correspondía a los días
         # que sí trabajó (para saber si en esos días cumplió el horario).
         r['horas_esperadas_mes'] = round(horas_dia * dias_mes, 2)
         r['horas_esperadas_dias'] = round(horas_dia * r['dias_trabajados'], 2)
-        r['cumplimiento_mes'] = round(r['horas_trabajadas'] / r['horas_esperadas_mes'] * 100, 1) if r['horas_esperadas_mes'] else 0
-        r['cumplimiento_dias'] = round(r['horas_trabajadas'] / r['horas_esperadas_dias'] * 100, 1) if r['horas_esperadas_dias'] else 0
-        r['diferencia_horas'] = round(r['horas_trabajadas'] - r['horas_esperadas_mes'], 2)
-        r['cumple_jornada'] = r['horas_trabajadas'] >= r['horas_esperadas_mes']
+        # El cumplimiento se mide sobre lo PAGABLE: un día con permiso no puede
+        # aparecer como incumplimiento, que es justo lo que el permiso resuelve.
+        r['cumplimiento_mes'] = round(r['horas_pagables'] / r['horas_esperadas_mes'] * 100, 1) if r['horas_esperadas_mes'] else 0
+        r['cumplimiento_dias'] = round(r['horas_pagables'] / r['horas_esperadas_dias'] * 100, 1) if r['horas_esperadas_dias'] else 0
+        r['diferencia_horas'] = round(r['horas_pagables'] - r['horas_esperadas_mes'], 2)
+        r['cumple_jornada'] = r['horas_pagables'] >= r['horas_esperadas_mes']
         r['dias_faltantes'] = max(dias_mes - r['dias_trabajados'], 0)
 
+        # Los dos factores se redondean SOLO para mostrarlos; el dinero se
+        # calcula con la proporción exacta y se redondea una única vez al
+        # final. Redondear el factor antes de multiplicar perdía un centavo.
         # 1) proporcional por jornada (tiempo completo / medio tiempo / etc.)
-        r['factor_jornada'] = round(horas_dia / h_completa, 4) if h_completa else 1
-        r['es_tiempo_completo'] = abs(r['factor_jornada'] - 1) < 0.001
-        r['sueldo_jornada'] = round(sueldo_tc * r['factor_jornada'], 2)
-        # 2) proporcional por días efectivamente trabajados (tope: la jornada completa del mes)
-        r['factor_dias'] = round(min(r['dias_trabajados'] / dias_mes, 1), 4) if dias_mes else 0
+        ratio_jornada = (horas_dia / h_completa) if h_completa else 1
+        r['factor_jornada'] = round(ratio_jornada, 4)
+        r['es_tiempo_completo'] = abs(ratio_jornada - 1) < 0.001
+        exacto_jornada = sueldo_tc * ratio_jornada
+        r['sueldo_jornada'] = round(exacto_jornada, 2)
+        # 2) proporcional por HORAS efectivamente trabajadas —más las repuestas
+        #    por permiso— con tope en la jornada completa del mes: trabajar de
+        #    más no sube el sueldo base, eso se paga como hora extra.
+        ratio_horas = min(r['horas_pagables'] / r['horas_esperadas_mes'], 1) if r['horas_esperadas_mes'] else 0
+        r['factor_horas'] = round(ratio_horas, 4)
+        r['horas_sobre_jornada'] = round(max(r['horas_pagables'] - r['horas_esperadas_mes'], 0), 2)
         r['dias_sobre_jornada'] = max(r['dias_trabajados'] - dias_mes, 0)
-        r['sueldo_proporcional'] = round(r['sueldo_jornada'] * r['factor_dias'], 2)
+        r['sueldo_proporcional'] = round(exacto_jornada * ratio_horas, 2)
 
         # Valor hora LEGAL: remuneración mensual / horas de un mes de 30 días a
         # SU jornada (Art. 47/55). A tiempo completo es el clásico /240. En
@@ -4563,6 +4601,7 @@ def admin_marcaciones():
     if not ve_todas:
         filas = [f for f in filas if (f.get('usuarios') or {}).get('rol') in ('profesor', 'psicologo')]
 
+    jornadas = _jornadas_por_usuario()
     # Horas de cada día para la tabla de registros (contabilización diaria).
     for f in filas:
         f['_horas'] = _horas_del_dia(f)
@@ -4572,8 +4611,12 @@ def admin_marcaciones():
         f['_recargo'] = RECARGOS_EXTRA.get(f['_tipo_extra'], {})
         f['_sobre_jornada_legal'] = f['_horas'] > JORNADA_MAX_DIARIA
         f['_dia'], f['_es_finde'] = _dia_semana(f.get('fecha'))
-
-    jornadas = _jornadas_por_usuario()
+        # Jornada del día para el modal de permiso: cuánto debía cumplir y
+        # cuánto se le repondría si se autoriza la salida.
+        j = jornadas.get(f.get('usuario_id')) or {}
+        f['_horas_jornada'] = _num(j.get('horas_dia'), JORNADA_DEFECTO['horas_dia'])
+        f['_con_permiso'] = bool(f.get('con_permiso'))
+        f['_horas_repuestas'] = round(max(f['_horas_jornada'] - f['_horas'], 0), 2)
     # Personal con jornada pactada y activo: entra al reporte aunque no tenga
     # marcaciones (así se ve el incumplimiento, no una fila ausente).
     personas_base = []
@@ -4652,6 +4695,27 @@ def api_marcacion_horas_extra(id):
         return jsonify({'success': True, 'horas': horas, 'aviso': aviso})
     except Exception as e:
         return jsonify({'success': False, 'error': 'No se pudo guardar. ¿Aplicaste migrations/0002_jornadas_asistencia.sql? ' + str(e)})
+
+@app.route('/api/marcacion/<int:id>/permiso', methods=['POST'])
+@login_required
+def api_marcacion_permiso(id):
+    """Marca (o desmarca) el día como salida autorizada. Con permiso, las horas
+    que falten para completar la jornada se reponen y se pagan igual."""
+    data = request.get_json() or {}
+    con_permiso = bool(data.get('con_permiso'))
+    fila = supabase.table('marcaciones').select('*').eq('id', id).execute().data
+    if not fila:
+        return jsonify({'success': False, 'error': 'Marcación no encontrada'}), 404
+    if not _puede_editar_marcacion(fila[0]):
+        return jsonify({'success': False, 'error': 'Acceso restringido'}), 403
+    try:
+        supabase.table('marcaciones').update({
+            'con_permiso': con_permiso,
+            'motivo_permiso': ((data.get('motivo') or '').strip() or None) if con_permiso else None,
+        }).eq('id', id).execute()
+        return jsonify({'success': True, 'con_permiso': con_permiso})
+    except Exception as e:
+        return jsonify({'success': False, 'error': 'No se pudo guardar. ¿Aplicaste migrations/0003_permiso_y_hora_normal.sql? ' + str(e)})
 
 @app.route('/api/jornada/<int:usuario_id>', methods=['POST'])
 @login_required

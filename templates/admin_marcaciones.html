@@ -106,7 +106,7 @@
             <th class="text-center">Horas<br>extra</th>
             <th class="text-end">Sueldo<br>tiempo completo</th>
             <th class="text-end">Proporcional<br>jornada</th>
-            <th class="text-end">Proporcional<br>días trabajados</th>
+            <th class="text-end">Proporcional<br>horas trabajadas</th>
             <th class="text-end">Pago<br>horas extra</th>
             <th class="text-end col-total">Total<br>a pagar</th>
         </tr></thead>
@@ -139,6 +139,7 @@
             </td>
             <td class="text-center">
                 <strong>{{ "%.2f"|format(r.horas_trabajadas) }}</strong> / {{ "%.2f"|format(r.horas_esperadas_mes) }}
+                {% if r.horas_permiso %}<br><small class="text-info" title="Horas repuestas por salidas autorizadas">🪪 +{{ "%.2f"|format(r.horas_permiso) }} = {{ "%.2f"|format(r.horas_pagables) }}</small>{% endif %}
                 <br><small class="text-{{ 'success' if r.diferencia_horas >= 0 else 'danger' }}">{{ '+' if r.diferencia_horas >= 0 else '' }}{{ "%.2f"|format(r.diferencia_horas) }} h</small>
             </td>
             <td class="text-center">
@@ -170,7 +171,8 @@
             </td>
             <td class="text-end">
                 ${{ "%.2f"|format(r.sueldo_proporcional) }}
-                <br><small class="text-muted">{{ r.dias_trabajados }}/{{ r.dias_mes }} días</small>
+                <br><small class="text-muted">{{ "%.2f"|format(r.horas_pagables) }}/{{ "%.2f"|format(r.horas_esperadas_mes) }} h</small>
+                {% if r.horas_permiso %}<br><small class="text-info" title="{{ r.dias_con_permiso }} día(s) con salida autorizada: se paga la jornada completa">🪪 +{{ "%.2f"|format(r.horas_permiso) }} h por permiso</small>{% endif %}
             </td>
             <td class="text-end">
                 {% if r.pago_horas_extra %}${{ "%.2f"|format(r.pago_horas_extra) }}<br><small class="text-muted" title="Valor hora legal: ${{ "%.2f"|format(r.sueldo_jornada) }} ÷ {{ "%g"|format(r.horas_mes_legal) }} h (30 días × {{ "%g"|format(r.horas_dia) }} h)">${{ "%.4f"|format(r.valor_hora) }}/h</small>
@@ -202,8 +204,10 @@
     <div class="card-footer bg-light">
         <small class="text-muted">
             💡 <strong>Cómo se calcula:</strong> el sueldo a tiempo completo se ajusta primero por la <strong>jornada</strong>
-            (horas por día ÷ jornada completa de referencia: medio tiempo = 50%) y luego por los
-            <strong>días efectivamente trabajados</strong> (días marcados ÷ días exigidos del mes, con tope 100%).
+            (horas por día ÷ jornada completa de referencia: medio tiempo = 50%) y luego por las
+            <strong>horas efectivamente trabajadas</strong> (horas marcadas ÷ horas exigidas del mes, con tope 100%).
+            Un día marcado <strong>🪪 con permiso</strong> se paga como jornada completa: las horas que falten se reponen
+            y ese día deja de contar como incumplimiento.
             Las <strong>horas extra</strong> se pagan aparte con el criterio ecuatoriano: <strong>valor hora = remuneración mensual ÷ (30 días × horas de su jornada)</strong>
             — el clásico ÷{{ horas_mes_legal }} a tiempo completo (Art. 47/55) — multiplicado por el recargo del tipo de hora de cada día.
             A media jornada bajan sueldo y divisor en la misma proporción, así que la hora vale lo mismo que a tiempo completo (Art. 82).
@@ -232,6 +236,8 @@
         {% if m._sobre_jornada_legal %}<br><span class="badge-premium bg-danger text-white" title="Más de {{ jornada_max_diaria }} h en el día: el excedente debería ir como hora suplementaria o extraordinaria (Art. 47)">sobre {{ jornada_max_diaria }} h</span>{% endif %}
         {% elif m.hora_ingreso %}<span class="badge-premium bg-warning text-dark" title="Falta marcar la salida">sin salida</span>
         {% else %}—{% endif %}
+        {% if m._con_permiso %}<br><span class="badge-premium bg-info text-white" {% if m.motivo_permiso %}title="{{ m.motivo_permiso }}"{% endif %}>🪪 con permiso{% if m._horas_repuestas %} +{{ "%.2f"|format(m._horas_repuestas) }} h{% endif %}</span>
+        {% elif m._horas and m._horas_repuestas %}<br><small class="text-muted" title="Jornada pactada: {{ "%g"|format(m._horas_jornada) }} h">faltan {{ "%.2f"|format(m._horas_repuestas) }} h</small>{% endif %}
     </td>
     <td class="text-center" id="extra-marcacion-{{ m.id }}">
         {% if m._horas_extra %}<span class="badge-premium bg-warning text-dark" {% if m.nota_extra %}title="{{ m.nota_extra }}"{% endif %}>+{{ "%.2f"|format(m._horas_extra) }} h</span>
@@ -239,9 +245,11 @@
         {% else %}<span class="text-muted">—</span>{% endif %}
     </td>
     <td class="text-center"><strong>{{ "%.2f"|format(m._total_dia) }}</strong></td>
-    <td class="text-end">
+    <td class="text-end" style="white-space:nowrap;">
         <button class="btn btn-sm btn-outline-warning" title="Registrar horas extra de este día"
-                onclick='abrirHorasExtra({{ m.id }}, {{ (m.usuarios.nombre if m.usuarios else "—")|tojson }}, {{ m.fecha|tojson }}, {{ m._horas_extra }}, {{ (m.nota_extra or "")|tojson }}, {{ (m._tipo_extra or "suplementaria")|tojson }})'>⏱ Hora extra</button>
+                onclick='abrirHorasExtra({{ m.id }}, {{ (m.usuarios.nombre if m.usuarios else "—")|tojson }}, {{ m.fecha|tojson }}, {{ m._horas_extra|default(0, true) }}, {{ (m.nota_extra or "")|tojson }}, {{ (m._tipo_extra or "suplementaria")|tojson }})'>⏱ Extra</button>
+        <button class="btn btn-sm {{ 'btn-info text-white' if m._con_permiso else 'btn-outline-info' }}" title="Salida autorizada: pagar la jornada completa de este día"
+                onclick='abrirPermiso({{ m.id }}, {{ (m.usuarios.nombre if m.usuarios else "—")|tojson }}, {{ m.fecha|tojson }}, {{ m._horas|default(0, true) }}, {{ m._horas_jornada|default(0, true) }}, {{ m._horas_repuestas|default(0, true) }}, {{ (m._con_permiso or False)|tojson }}, {{ (m.motivo_permiso or "")|tojson }})'>🪪 Permiso</button>
     </td>
 </tr>
 {% else %}
@@ -283,6 +291,35 @@
       <div class="modal-footer">
         <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
         <button class="btn btn-warning" onclick="guardarHorasExtra()">Guardar y recalcular</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL PERMISO DEL DÍA ===== -->
+<div class="modal fade" id="modalPermiso" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content" style="border-radius:16px;">
+      <div class="modal-header"><h5 class="modal-title">🪪 Permiso del día</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <p class="text-muted mb-3" id="permisoContexto"></p>
+        <input type="hidden" id="permisoId">
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input" type="checkbox" id="permisoActivo" onchange="previewPermiso()">
+          <label class="form-check-label fw-bold" for="permisoActivo">
+            Salió antes con permiso — pagarle la jornada completa
+          </label>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-bold">Motivo</label>
+          <input type="text" id="permisoMotivo" class="form-control" placeholder="Ej: cita médica, trámite personal, permiso institucional">
+        </div>
+        <div class="alert alert-light border mb-0 small" id="permisoPreview"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-info text-white" onclick="guardarPermiso()">Guardar y recalcular</button>
       </div>
     </div>
   </div>
@@ -403,6 +440,50 @@ async function guardarHorasExtra() {
         if (d.aviso) alert('⚠️ ' + d.aviso);
         location.reload();   // recarga: el reporte del mes se recalcula en el servidor
     } else alert('❌ ' + (d.error || 'No se pudo guardar'));
+}
+
+// --- Permiso del día -----------------------------------------------------
+let permisoDatos = {horas: 0, jornada: 0, repuestas: 0};
+
+function abrirPermiso(id, nombre, fecha, horas, jornada, repuestas, activo, motivo) {
+    document.getElementById('permisoId').value = id;
+    document.getElementById('permisoActivo').checked = !!activo;
+    document.getElementById('permisoMotivo').value = motivo || '';
+    document.getElementById('permisoContexto').innerHTML =
+        '<strong>' + nombre + '</strong> — ' + fecha + '<br>Trabajó <strong>' + horas.toFixed(2) +
+        ' h</strong> de <strong>' + jornada.toFixed(2) + ' h</strong> pactadas.';
+    permisoDatos = {horas: horas, jornada: jornada, repuestas: repuestas};
+    previewPermiso();
+    new bootstrap.Modal(document.getElementById('modalPermiso')).show();
+}
+
+function previewPermiso() {
+    const activo = document.getElementById('permisoActivo').checked;
+    const box = document.getElementById('permisoPreview');
+    if (!activo) {
+        box.innerHTML = permisoDatos.repuestas > 0
+            ? 'Sin permiso, ese día cuenta con <strong>' + permisoDatos.horas.toFixed(2) +
+              ' h</strong> y las <strong>' + permisoDatos.repuestas.toFixed(2) +
+              ' h</strong> que faltan reducen su proporcional del mes.'
+            : 'Ese día ya cubre la jornada completa: el permiso no cambiaría el pago.';
+        return;
+    }
+    box.innerHTML = permisoDatos.repuestas > 0
+        ? 'Se le repondrán <strong>' + permisoDatos.repuestas.toFixed(2) + ' h</strong> hasta completar la jornada de ' +
+          permisoDatos.jornada.toFixed(2) + ' h, y el día dejará de contar como incumplimiento.'
+        : 'Ese día ya cubre la jornada completa, así que no hay horas que reponer. El permiso queda solo como constancia.';
+}
+
+async function guardarPermiso() {
+    const id = document.getElementById('permisoId').value;
+    const activo = document.getElementById('permisoActivo').checked;
+    const r = await fetch('/api/marcacion/' + id + '/permiso', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({con_permiso: activo, motivo: document.getElementById('permisoMotivo').value})
+    });
+    const d = await r.json();
+    if (d.success) location.reload();
+    else alert('❌ ' + (d.error || 'No se pudo guardar'));
 }
 
 {% if puede_jornada %}

@@ -92,7 +92,7 @@
     </td>
     <td>{{ m.hora_ingreso[:5] if m.hora_ingreso else '—' }}</td>
     <td>{{ m.hora_salida[:5] if m.hora_salida else '—' }}</td>
-    <td class="text-center">{% if m._horas %}<strong>{{ "%.2f"|format(m._horas) }}</strong>{% elif m.hora_ingreso %}<span class="text-warning">sin salida</span>{% else %}—{% endif %}</td>
+    <td class="text-center">{% if m._horas %}<strong>{{ "%.2f"|format(m._horas) }}</strong>{% elif m.hora_ingreso %}<span class="text-warning">sin salida</span>{% else %}—{% endif %}{% if m._con_permiso %}<br><small class="text-info" {% if m.motivo_permiso %}title="{{ m.motivo_permiso }}"{% endif %}>🪪 con permiso</small>{% endif %}</td>
     <td class="text-center">{% if m._horas_extra %}+{{ "%.2f"|format(m._horas_extra) }}{% if m._recargo %}<br><small class="text-muted" title="{{ m._recargo.detalle }}">{{ m._recargo.label }}</small>{% endif %}{% else %}—{% endif %}</td>
     <td class="text-center"><strong>{{ "%.2f"|format(m._total_dia) }}</strong></td>
 </tr>
