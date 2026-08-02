@@ -11,16 +11,22 @@
   "lang": "es",
   "icons": [
     {
-      "src": "/static/img/logo_atlas_redondo.png",
+      "src": "/static/img/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/static/img/logo_atlas_redondo.png",
+      "src": "/static/img/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/static/img/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
   "shortcuts": [
@@ -28,19 +34,19 @@
       "name": "Calendario",
       "short_name": "Calendario",
       "url": "/modulo2",
-      "icons": [{ "src": "/static/img/favicon.png", "sizes": "96x96" }]
+      "icons": [{ "src": "/static/img/icon-96.png", "sizes": "96x96" }]
     },
     {
       "name": "Planificación",
       "short_name": "Planificar",
       "url": "/modulo1",
-      "icons": [{ "src": "/static/img/favicon.png", "sizes": "96x96" }]
+      "icons": [{ "src": "/static/img/icon-96.png", "sizes": "96x96" }]
     },
     {
       "name": "Finanzas",
       "short_name": "Finanzas",
       "url": "/modulo3",
-      "icons": [{ "src": "/static/img/favicon.png", "sizes": "96x96" }]
+      "icons": [{ "src": "/static/img/icon-96.png", "sizes": "96x96" }]
     }
   ],
   "categories": ["education", "productivity", "business"],

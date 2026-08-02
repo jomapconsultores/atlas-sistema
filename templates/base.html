@@ -2,15 +2,44 @@
 <html lang="es" data-bs-theme="light">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {# viewport-fit=cover deja que el contenido llegue al borde en pantallas con
+       muesca; el hueco real se respeta con env(safe-area-inset-*) en el CSS. #}
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#0f172a">
     <link rel="icon" type="image/png" href="/static/img/favicon.png?v=1">
-    <link rel="apple-touch-icon" href="/static/img/logo_atlas_redondo.png">
+    <link rel="apple-touch-icon" href="/static/img/apple-touch-icon.png">
     <link rel="manifest" href="/manifest.json">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Atlas">
     <meta name="mobile-web-app-capable" content="yes">
+    {# Pantallas de arranque de iPhone. Android saca la suya del manifiesto;
+       Safari exige una imagen por resolución exacta y, si no la encuentra,
+       muestra un rectángulo en blanco mientras carga. #}
+    <link rel="apple-touch-startup-image" media="(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"
+          href="/static/img/splash/splash-320x568@2x.png">
+    <link rel="apple-touch-startup-image" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"
+          href="/static/img/splash/splash-375x667@2x.png">
+    <link rel="apple-touch-startup-image" media="(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
+          href="/static/img/splash/splash-414x736@3x.png">
+    <link rel="apple-touch-startup-image" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
+          href="/static/img/splash/splash-375x812@3x.png">
+    <link rel="apple-touch-startup-image" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"
+          href="/static/img/splash/splash-414x896@2x.png">
+    <link rel="apple-touch-startup-image" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
+          href="/static/img/splash/splash-414x896@3x.png">
+    <link rel="apple-touch-startup-image" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
+          href="/static/img/splash/splash-390x844@3x.png">
+    <link rel="apple-touch-startup-image" media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
+          href="/static/img/splash/splash-428x926@3x.png">
+    <link rel="apple-touch-startup-image" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
+          href="/static/img/splash/splash-393x852@3x.png">
+    <link rel="apple-touch-startup-image" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
+          href="/static/img/splash/splash-430x932@3x.png">
+    <link rel="apple-touch-startup-image" media="(device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
+          href="/static/img/splash/splash-402x874@3x.png">
+    <link rel="apple-touch-startup-image" media="(device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
+          href="/static/img/splash/splash-440x956@3x.png">
     <title>{% block title %}Atlas{% endblock %}</title>
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -817,6 +846,285 @@
             background-size: 15px 11px !important;
             text-overflow: ellipsis;
         }
+
+        /* ══════════════════════════════════════════════════════════════════
+           ACABADO DE APLICACIÓN MÓVIL
+           ------------------------------------------------------------------
+           Atlas se instala en el teléfono (PWA) y se abre sin barra de
+           direcciones. En ese contexto un menú lateral de escritorio es el
+           gesto equivocado: obliga a estirar el pulgar hasta la esquina
+           superior izquierda para todo. Debajo de 992 px la navegación pasa a
+           una barra inferior con las secciones reales, y los submódulos se
+           despliegan en una hoja que sube desde abajo, SIN sacar al usuario de
+           donde está.
+           ══════════════════════════════════════════════════════════════════ */
+
+        :root {
+            /* Alto de la barra inferior + el hueco que reserva el teléfono para
+               su propia barra de gestos. Sin esto, en un iPhone la última fila
+               de botones queda debajo del indicador de inicio. */
+            --tabbar-h: 58px;
+            --safe-b: env(safe-area-inset-bottom, 0px);
+            --safe-t: env(safe-area-inset-top, 0px);
+            --safe-l: env(safe-area-inset-left, 0px);
+            --safe-r: env(safe-area-inset-right, 0px);
+        }
+
+        /* ── Ergonomía táctil ─────────────────────────────────────────── */
+        @media (hover: none) and (pointer: coarse) {
+            /* El resalte azul de Android delata que esto es un navegador. */
+            a, button, .btn, [role="button"] { -webkit-tap-highlight-color: transparent; }
+            /* Objetivo mínimo cómodo: 44 px es la medida que usan tanto Apple
+               como Google en sus guías. Se aplica al calzado, no al texto, para
+               no deformar la tipografía. */
+            .app-tabbar a, .sheet-item, .nav-buttons .btn { min-height: 44px; }
+        }
+        /* Que el rebote del scroll no arrastre la página entera detrás de un
+           panel abierto. */
+        body { overscroll-behavior-y: none; }
+
+        /* ── Transiciones entre pantallas ─────────────────────────────────
+           Atlas es multipágina (Flask devuelve HTML completo). Estas dos reglas
+           hacen que el navegador funda una pantalla con la siguiente en vez de
+           parpadear en blanco: es lo que más separa «una web» de «una app».
+           Los navegadores que no la soportan simplemente la ignoran. */
+        @view-transition { navigation: auto; }
+        ::view-transition-old(root) { animation: atlas-salida .18s ease both; }
+        ::view-transition-new(root) { animation: atlas-entrada .22s ease both; }
+        @keyframes atlas-salida  { to   { opacity: 0; transform: translateY(-6px); } }
+        @keyframes atlas-entrada { from { opacity: 0; transform: translateY(8px); } }
+        /* La barra inferior no debe viajar con la página: se queda fija. */
+        .app-tabbar { view-transition-name: atlas-tabbar; }
+
+        /* ── Barra inferior de secciones (solo móvil) ─────────────────── */
+        .app-tabbar { display: none; }
+
+        @media (max-width: 991px) {
+            .app-tabbar {
+                display: grid;
+                grid-auto-flow: column;
+                grid-auto-columns: 1fr;
+                position: fixed;
+                z-index: 1045;
+                left: 0; right: 0; bottom: 0;
+                padding: 4px var(--safe-r) var(--safe-b) var(--safe-l);
+                background: color-mix(in srgb, var(--atlas-card) 88%, transparent);
+                -webkit-backdrop-filter: saturate(180%) blur(18px);
+                backdrop-filter: saturate(180%) blur(18px);
+                border-top: 1px solid var(--atlas-border);
+                box-shadow: 0 -1px 12px rgba(15, 23, 42, .07);
+            }
+            .app-tabbar a {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                gap: 2px;
+                padding: 6px 2px 7px;
+                text-decoration: none;
+                color: var(--atlas-muted);
+                font-size: 10.5px;
+                font-weight: 600;
+                letter-spacing: .005em;
+                border-radius: 12px;
+                transition: color .15s;
+                position: relative;
+            }
+            .app-tabbar .tab-ico { font-size: 20px; line-height: 1; }
+            .app-tabbar a.active { color: var(--atlas-accent2); }
+            /* Un punto marca la sección actual: el color por sí solo no basta
+               para quien no lo distingue. */
+            .app-tabbar a.active::after {
+                content: "";
+                position: absolute;
+                top: 2px;
+                width: 4px; height: 4px;
+                border-radius: 50%;
+                background: var(--atlas-accent2);
+            }
+            .app-tabbar a:active { transform: scale(.94); }
+            .app-tabbar .tab-badge {
+                position: absolute;
+                top: 3px;
+                left: 50%;
+                margin-left: 6px;
+                background: var(--atlas-danger);
+                color: #fff;
+                font-size: 9px;
+                font-weight: 800;
+                line-height: 1;
+                padding: 2px 5px;
+                border-radius: 9px;
+            }
+
+            /* El contenido deja sitio a la barra para que el último botón de
+               cada pantalla no quede tapado. */
+            body.has-sidebar { padding-bottom: calc(var(--tabbar-h) + var(--safe-b) + 12px); }
+            body.has-sidebar footer { margin-bottom: calc(var(--tabbar-h) + var(--safe-b)); }
+
+            /* El menú lateral y su botón dejan de ser la vía principal: la barra
+               inferior los sustituye. Se conservan en el DOM para escritorio. */
+            .sidebar-toggle { display: none !important; }
+            .app-sidebar, .sidebar-backdrop, .sidebar-panel-bg { display: none !important; }
+        }
+
+        /* ── Hoja de submódulos ───────────────────────────────────────── */
+        .sheet-backdrop {
+            position: fixed; inset: 0; z-index: 1050;
+            background: rgba(15, 23, 42, .42);
+            opacity: 0; pointer-events: none;
+            transition: opacity .22s ease;
+        }
+        .sheet-backdrop.show { opacity: 1; pointer-events: auto; }
+
+        .sheet {
+            position: fixed; z-index: 1051;
+            left: 0; right: 0; bottom: 0;
+            max-height: min(72vh, 560px);
+            display: flex; flex-direction: column;
+            background: var(--atlas-card);
+            border-radius: 20px 20px 0 0;
+            box-shadow: 0 -8px 40px rgba(15, 23, 42, .22);
+            padding-bottom: calc(var(--safe-b) + 8px);
+            transform: translateY(101%);
+            transition: transform .26s cubic-bezier(.32, .72, 0, 1);
+        }
+        .sheet.show { transform: translateY(0); }
+
+        .sheet-grab {
+            width: 38px; height: 4px; border-radius: 2px;
+            background: var(--atlas-border);
+            margin: 10px auto 2px;
+            flex: none;
+        }
+        .sheet-head {
+            display: flex; align-items: center; gap: 10px;
+            padding: 6px 20px 12px;
+            border-bottom: 1px solid var(--atlas-border);
+            flex: none;
+        }
+        .sheet-head .sheet-ico { font-size: 20px; }
+        .sheet-head h6 {
+            margin: 0; font-size: 15.5px; font-weight: 800;
+            color: var(--atlas-text); letter-spacing: -.01em;
+        }
+        .sheet-body { overflow-y: auto; overscroll-behavior: contain; padding: 8px 12px 4px; }
+
+        .sheet-item {
+            display: flex; align-items: center; gap: 12px;
+            padding: 12px 12px;
+            border-radius: 12px;
+            text-decoration: none;
+            color: var(--atlas-text);
+            font-size: 14.5px; font-weight: 600;
+        }
+        .sheet-item:active { background: var(--atlas-bg); }
+        .sheet-item.active { background: #eff6ff; color: #1d4ed8; }
+        .sheet-item .si-ico { font-size: 17px; width: 22px; text-align: center; flex: none; }
+        .sheet-item .si-badge {
+            margin-left: auto;
+            background: var(--atlas-danger); color: #fff;
+            font-size: 10px; font-weight: 800;
+            padding: 2px 7px; border-radius: 10px;
+        }
+        .sheet-item.active .si-check { margin-left: auto; color: #1d4ed8; }
+        /* Separador entre el módulo padre y sus submódulos */
+        .sheet-sep {
+            font-size: 10.5px; font-weight: 800; letter-spacing: .09em;
+            text-transform: uppercase; color: var(--atlas-muted);
+            padding: 12px 14px 4px;
+        }
+
+        /* ── Invitación a instalar y aviso de versión nueva ────────────────
+           Dos avisos que aparecen sobre la barra inferior. Se apilan con flex
+           para que, si coinciden, no se tapen entre ellos. */
+        .app-avisos {
+            position: fixed;
+            z-index: 1046;
+            left: 10px; right: 10px;
+            bottom: calc(var(--safe-b) + 10px);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            pointer-events: none;
+        }
+        @media (max-width: 991px) {
+            /* En móvil van por encima de la barra de secciones. */
+            .app-avisos { bottom: calc(var(--tabbar-h) + var(--safe-b) + 10px); }
+        }
+        @media (min-width: 992px) {
+            .app-avisos { left: auto; right: 18px; max-width: 380px; }
+            body.has-sidebar .app-avisos { right: 18px; }
+        }
+
+        .aviso {
+            pointer-events: auto;
+            display: none;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 14px;
+            border-radius: 16px;
+            background: var(--atlas-card);
+            border: 1px solid var(--atlas-border);
+            box-shadow: 0 8px 30px rgba(15, 23, 42, .18);
+            animation: aviso-entra .28s cubic-bezier(.32, .72, 0, 1) both;
+        }
+        .aviso.show { display: flex; }
+        @keyframes aviso-entra { from { opacity: 0; transform: translateY(14px); } }
+
+        .aviso img, .aviso .aviso-ico {
+            width: 38px; height: 38px;
+            border-radius: 11px;
+            flex: none;
+            display: grid; place-items: center;
+            font-size: 20px;
+        }
+        .aviso .aviso-txt { flex: 1; min-width: 0; }
+        .aviso .aviso-t {
+            font-size: 13.5px; font-weight: 800;
+            color: var(--atlas-text); line-height: 1.25;
+        }
+        .aviso .aviso-d {
+            font-size: 11.5px; color: var(--atlas-muted);
+            line-height: 1.4; margin-top: 2px;
+        }
+        .aviso .aviso-btn {
+            flex: none;
+            min-height: 38px;
+            border: none;
+            border-radius: 11px;
+            padding: 9px 15px;
+            background: var(--atlas-accent2);
+            color: #fff;
+            font-family: inherit;
+            font-size: 12.5px; font-weight: 800;
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .aviso .aviso-btn:active { transform: scale(.96); }
+        .aviso .aviso-x {
+            flex: none;
+            background: none; border: none;
+            color: var(--atlas-muted);
+            font-size: 19px; line-height: 1;
+            padding: 6px 4px; cursor: pointer;
+        }
+        /* La versión nueva se anuncia en ámbar: es información, no una alarma. */
+        .aviso.es-actualizacion .aviso-ico { background: #fef3c7; }
+        .aviso.es-actualizacion .aviso-btn { background: var(--atlas-accent); color: #1e3a5f; }
+        /* Las instrucciones de iPhone no llevan botón: se explican y ya. */
+        .aviso.es-ios .aviso-d strong { color: var(--atlas-text); }
+
+        /* ── Quien pidió menos movimiento, recibe menos movimiento ─────── */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: .01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: .01ms !important;
+            }
+            @view-transition { navigation: none; }
+            .sheet { transition: none; }
+        }
     </style>
     <script src="/static/feriados.js?v=3"></script>
 </head>
@@ -917,6 +1225,102 @@
        el backend, con socio excluido salvo permiso explícito). #}
     {% set puede_administracion = puede_costos or puede_reporte_duplicados or puede_marcaciones_docentes or puede_gestion_usuarios %}
     {% set puede_gestion = puede_academico or puede_personas or puede_psicologia or puede_finanzas or puede_administracion %}
+
+    {# ══════════════════════════════════════════════════════════════════════
+       SECCIONES DE LA NAVEGACIÓN
+       ----------------------------------------------------------------------
+       Una sola descripción de la estructura, en datos, que alimenta la barra
+       inferior del teléfono. Antes la estructura vivía duplicada en el marcado
+       del menú lateral, y cada permiso nuevo había que recordarlo en dos
+       sitios. Cada sección declara su página de entrada (`inicio`) y sus
+       submódulos: al tocarla se ENTRA en ella y se despliegan sus opciones,
+       que es justo lo que faltaba.
+       ══════════════════════════════════════════════════════════════════════ #}
+    {% set ns = namespace(secciones=[]) %}
+
+    {% macro _item(url, label, ico, badge=0) %}{% endmacro %}
+
+    {% if puede_academico %}
+      {% set items = [] %}
+      {% if puede_planificacion %}
+        {% set _ = items.append({'url':'/modulo1', 'label':'Nueva planificación', 'ico':'📝'}) %}
+        {% set _ = items.append({'url':'/editar-planificaciones', 'label':'Editar planificaciones', 'ico':'✏️'}) %}
+        {% set _ = items.append({'url':'/editar-planificacion-masiva', 'label':'Edición masiva', 'ico':'🗂️'}) %}
+      {% endif %}
+      {% if puede_proformas %}{% set _ = items.append({'url':'/proformas', 'label':'Proformas de clases', 'ico':'🧾'}) %}{% endif %}
+      {% if puede_calendario %}
+        {% set _ = items.append({'url':'/modulo2', 'label':'Calendario diario', 'ico':'📅'}) %}
+        {% set _ = items.append({'url':'/modulo4', 'label':'Calendario general', 'ico':'🗓️'}) %}
+      {% endif %}
+      {% if puede_asignaturas %}{% set _ = items.append({'url':'/asignaturas', 'label':'Asignaturas', 'ico':'📖'}) %}{% endif %}
+      {% if puede_reuniones %}{% set _ = items.append({'url':'/modulo6', 'label':'Reuniones internas', 'ico':'🤝'}) %}{% endif %}
+      {% set _ = ns.secciones.append({'key':'academico', 'label':'Académico', 'ico':'📚', 'items':items}) %}
+    {% endif %}
+
+    {% if puede_personas %}
+      {% set items = [] %}
+      {% if puede_estudiantes %}{% set _ = items.append({'url':'/estudiantes', 'label':'Estudiantes', 'ico':'👩‍🎓'}) %}{% endif %}
+      {% if puede_docentes %}{% set _ = items.append({'url':'/docentes', 'label':'Docentes', 'ico':'👨‍🏫'}) %}{% endif %}
+      {% if puede_padres %}{% set _ = items.append({'url':'/padres', 'label':'Padres', 'ico':'👪'}) %}{% endif %}
+      {% if puede_contactos %}{% set _ = items.append({'url':'/contactos', 'label':'Contactos', 'ico':'📇', 'badge':contactos_nuevos or 0}) %}{% endif %}
+      {% set _ = ns.secciones.append({'key':'personas', 'label':'Personas', 'ico':'👥', 'items':items}) %}
+    {% endif %}
+
+    {% if puede_finanzas %}
+      {% set items = [] %}
+      {% if puede_pagos_estudiantes %}{% set _ = items.append({'url':'/modulo3', 'label':'Pagos de estudiantes', 'ico':'💵'}) %}{% endif %}
+      {% if puede_devoluciones %}{% set _ = items.append({'url':'/devoluciones', 'label':'Devoluciones', 'ico':'↩️'}) %}{% endif %}
+      {% if puede_pagos_docentes %}{% set _ = items.append({'url':'/modulo5', 'label':'Pagos a docentes', 'ico':'💳'}) %}{% endif %}
+      {% if puede_anticipos_fin %}{% set _ = items.append({'url':'/gestion-anticipos', 'label':'Anticipos', 'ico':'🏦', 'badge':solicitudes_pendientes or 0}) %}{% endif %}
+      {% if puede_gastos_fin %}{% set _ = items.append({'url':'/gastos', 'label':'Gastos', 'ico':'📉'}) %}{% endif %}
+      {% if puede_liquidacion %}{% set _ = items.append({'url':'/liquidacion', 'label':'Liquidación', 'ico':'⚖️'}) %}{% endif %}
+      {% if puede_movimientos %}{% set _ = items.append({'url':'/movimientos-cuenta', 'label':'Movimientos en cuenta', 'ico':'🏧'}) %}{% endif %}
+      {% if puede_reportes_fin %}{% set _ = items.append({'url':'/reportes', 'label':'Reportes ATLAS', 'ico':'📊'}) %}{% endif %}
+      {% set _ = ns.secciones.append({'key':'finanzas', 'label':'Finanzas', 'ico':'💰', 'items':items}) %}
+    {% endif %}
+
+    {% if puede_psicologia %}
+      {% set _ = ns.secciones.append({'key':'psicologia', 'label':'Psicología', 'ico':'🧠',
+          'items':[{'url':'/psicologia-especial', 'label':'Psicología especial', 'ico':'🧠'}]}) %}
+    {% endif %}
+
+    {% if puede_administracion %}
+      {% set items = [] %}
+      {% if puede_costos %}{% set _ = items.append({'url':'/admin/costos', 'label':'Costos', 'ico':'🏷️'}) %}{% endif %}
+      {% if puede_gestion_usuarios %}{% set _ = items.append({'url':'/usuarios', 'label':'Usuarios', 'ico':'🧑‍💼'}) %}{% endif %}
+      {% if puede_reporte_duplicados %}{% set _ = items.append({'url':'/reporte-duplicados', 'label':'Reporte duplicados', 'ico':'🔍'}) %}{% endif %}
+      {% if puede_marcaciones_docentes %}{% set _ = items.append({'url':'/admin/marcaciones', 'label':'Marcaciones de asistencia', 'ico':'🕒'}) %}{% endif %}
+      {% set _ = ns.secciones.append({'key':'administracion', 'label':'Administración', 'ico':'⚙️', 'items':items}) %}
+    {% endif %}
+
+    {# Secciones propias de quien no gestiona el centro sino su propio trabajo. #}
+    {% if rol in ['profesor','psicologo'] %}
+      {% set items = [{'url':'/modulo2', 'label':'Mis clases' if rol=='profesor' else 'Mis sesiones', 'ico':'📅'},
+                      {'url':'/mi-reporte', 'label':'Mi reporte', 'ico':'📊'},
+                      {'url':'/mis-anticipos', 'label':'Mis anticipos', 'ico':'🏦'}] %}
+      {% if rol=='psicologo' %}{% set _ = items.append({'url':'/mis-clientes', 'label':'Mis clientes', 'ico':'🧠'}) %}{% endif %}
+      {% if puede_gastos_fin %}{% set _ = items.append({'url':'/gastos', 'label':'Gastos', 'ico':'📉'}) %}{% endif %}
+      {% set _ = ns.secciones.append({'key':'mi-trabajo', 'label':'Mi trabajo', 'ico':'💼', 'items':items}) %}
+    {% elif rol in ['estudiante','padre'] %}
+      {% set _ = ns.secciones.append({'key':'mi-trabajo', 'label':'Mis clases' if rol=='estudiante' else 'Mis hijos', 'ico':'📅',
+          'items':[{'url':'/modulo2', 'label':'Clases' if rol=='estudiante' else 'Clases de mis hijos', 'ico':'📅'},
+                   {'url':'/mi-reporte', 'label':'Mi reporte' if rol=='estudiante' else 'Reporte de mis hijos', 'ico':'📊'}]}) %}
+    {% endif %}
+
+    {# La cuenta siempre existe: datos, clave y salida. #}
+    {% set cuenta_items = [{'url':'/editar-perfil', 'label':'Mis datos', 'ico':'✏️'},
+                           {'url':'/cambiar-clave', 'label':'Cambiar mi clave', 'ico':'🔑'}] %}
+    {% if puede_marcar_asistencia %}{% set _ = cuenta_items.insert(0, {'url':'/mi-asistencia', 'label':'Marcar asistencia', 'ico':'🕒'}) %}{% endif %}
+    {% set _ = cuenta_items.append({'url':'/logout', 'label':'Cerrar sesión', 'ico':'🚪'}) %}
+    {% set _ = ns.secciones.append({'key':'cuenta', 'label':'Cuenta', 'ico':'👤', 'items':cuenta_items}) %}
+
+    {# Se descartan las secciones que quedaron sin ninguna opción permitida. #}
+    {% set secciones = ns.secciones | selectattr('items') | list %}
+    {# En la barra caben 5 destinos cómodos: Inicio + 3 secciones + «Más».
+       Si hay 4 o menos secciones, todas van directas y no hace falta «Más». #}
+    {% set directas = secciones if secciones|length <= 4 else secciones[:3] %}
+    {% set en_mas = [] if secciones|length <= 4 else secciones[3:] %}
+
     <aside class="app-sidebar" id="appSidebar">
         <a href="/dashboard" class="{% if p=='/dashboard' %}active{% endif %}"><span class="ico">🏠</span> Inicio</a>
 
@@ -1085,6 +1489,92 @@
     {# Columna 2 del menú: fondo permanente; los submenús del grupo abierto se dibujan encima #}
     <div class="sidebar-panel-bg"><div class="hint">Elige un módulo del menú para ver aquí sus opciones.</div></div>
     <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+    {# ── Barra inferior + hoja de submódulos (solo se ve en móvil) ────────
+       Tocar una sección NO navega a ciegas: abre su hoja con las opciones a
+       las que esa persona tiene acceso, y desde ahí se elige. Así se entra en
+       el módulo y se ven sus submódulos en el mismo gesto. #}
+    {% set badges_totales = (contactos_nuevos or 0) + (solicitudes_pendientes or 0) %}
+    <nav class="app-tabbar" id="appTabbar" aria-label="Secciones">
+        <a href="/dashboard" class="{% if p=='/dashboard' %}active{% endif %}">
+            <span class="tab-ico">🏠</span><span>Inicio</span>
+        </a>
+        {% for s in directas %}
+        {% set activa = s['items'] | selectattr('url', 'equalto', p) | list | length > 0 %}
+        {# Solo algunos submódulos llevan contador (contactos, anticipos): se
+           filtran los que lo declaran antes de sumar, porque sum(attribute=…)
+           sobre un elemento sin esa clave levanta UndefinedError. #}
+        {% set b = s['items'] | selectattr('badge', 'defined') | sum(attribute='badge') %}
+        <a href="#seccion-{{ s['key'] }}" data-seccion="{{ s['key'] }}"
+           class="{% if activa %}active{% endif %}">
+            <span class="tab-ico">{{ s['ico'] }}</span><span>{{ s['label'] }}</span>
+            {% if b %}<span class="tab-badge">{{ b }}</span>{% endif %}
+        </a>
+        {% endfor %}
+        {% if en_mas %}
+        {% set mas_activa = en_mas | map(attribute='items') | sum(start=[]) | selectattr('url', 'equalto', p) | list | length > 0 %}
+        <a href="#seccion-mas" data-seccion="mas" class="{% if mas_activa %}active{% endif %}">
+            <span class="tab-ico">⋯</span><span>Más</span>
+        </a>
+        {% endif %}
+    </nav>
+
+    {# ── Avisos de la aplicación instalable ──────────────────────────────
+       Instalar en Android se resuelve con un botón, porque Chrome nos deja
+       lanzar su diálogo. En iPhone no existe esa API: Safari solo lo permite
+       desde su propio menú Compartir, así que ahí lo único honesto es
+       enseñar dónde está. #}
+    <div class="app-avisos" id="appAvisos">
+        <div class="aviso es-instalar" id="avisoInstalar">
+            <img src="/static/img/icon-192.png" alt="">
+            <div class="aviso-txt">
+                <div class="aviso-t">Instalar Atlas</div>
+                <div class="aviso-d">Ábrelo desde tu pantalla de inicio, como una aplicación.</div>
+            </div>
+            <button type="button" class="aviso-btn" id="btnInstalar">Instalar</button>
+            <button type="button" class="aviso-x" id="btnInstalarNo" aria-label="Ahora no">&times;</button>
+        </div>
+
+        <div class="aviso es-ios" id="avisoIOS">
+            <img src="/static/img/icon-192.png" alt="">
+            <div class="aviso-txt">
+                <div class="aviso-t">Instalar Atlas en tu iPhone</div>
+                <div class="aviso-d">
+                    Toca <strong>Compartir</strong> abajo y luego
+                    <strong>Añadir a pantalla de inicio</strong>.
+                </div>
+            </div>
+            <button type="button" class="aviso-x" id="btnIOSNo" aria-label="Ahora no">&times;</button>
+        </div>
+
+        <div class="aviso es-actualizacion" id="avisoActualizar">
+            <span class="aviso-ico">✨</span>
+            <div class="aviso-txt">
+                <div class="aviso-t">Hay una versión nueva</div>
+                <div class="aviso-d">Actualiza para tener los últimos cambios.</div>
+            </div>
+            <button type="button" class="aviso-btn" id="btnActualizar">Actualizar</button>
+            <button type="button" class="aviso-x" id="btnActualizarNo" aria-label="Más tarde">&times;</button>
+        </div>
+    </div>
+
+    <div class="sheet-backdrop" id="sheetBackdrop"></div>
+    <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitulo" hidden>
+        <div class="sheet-grab"></div>
+        <div class="sheet-head">
+            <span class="sheet-ico" id="sheetIco">📚</span>
+            <h6 id="sheetTitulo">Sección</h6>
+        </div>
+        <div class="sheet-body" id="sheetBody"></div>
+    </div>
+
+    {# Estructura para la barra inferior, sin duplicar la lógica de permisos. #}
+    <script type="application/json" id="atlasSecciones">
+        {{ (directas + en_mas) | tojson }}
+    </script>
+    {% if en_mas %}
+    <script type="application/json" id="atlasMas">{{ en_mas | map(attribute='key') | list | tojson }}</script>
+    {% endif %}
     {% endif %}
 
     <div class="main-container">
@@ -1141,7 +1631,8 @@
             btn.addEventListener('click', function () {
                 var grupo = btn.closest('.nav-group');
                 var esPrincipal = grupo.parentElement.classList.contains('app-sidebar');
-                var vaAbrir = !grupo.classList.contains('open');
+                var estabaAbierto = grupo.classList.contains('open');
+
                 // En dos columnas (escritorio) solo un grupo principal abierto a la vez,
                 // si no se superpondrían dos paneles en la misma columna.
                 if (esPrincipal && window.innerWidth >= 992) {
@@ -1149,13 +1640,32 @@
                         if (o !== grupo) o.classList.remove('open');
                     });
                 }
-                grupo.classList.toggle('open', vaAbrir);
+                grupo.classList.toggle('open', !estabaAbierto);
+
+                // Pulsar un módulo debe METER en el módulo, no solo desplegar una
+                // lista y dejar al usuario donde estaba. Si no está ya dentro, se
+                // navega a su primera pantalla permitida; al recargar, el propio
+                // servidor marca el grupo como activo y sus submódulos quedan a la
+                // vista. Antes había que pulsar dos veces —una para abrir y otra
+                // para entrar— y el grupo se cerraba por el camino.
+                if (!estabaAbierto && esPrincipal) {
+                    var destino = grupo.querySelector(':scope > .nav-group-items a[href]');
+                    var yaDentro = grupo.querySelector(':scope > .nav-group-items a.active');
+                    if (destino && !yaDentro) {
+                        // Un respiro para que se vea el despliegue antes de navegar.
+                        setTimeout(function () { window.location.href = destino.getAttribute('href'); }, 130);
+                    }
+                }
             });
         });
-        // Al cargar en escritorio, deja abierto solo el primer grupo activo.
+        // Al cargar, el grupo de la pantalla actual queda desplegado. Si ninguno
+        // corresponde a la ruta (p. ej. el panel de inicio), se dejan cerrados en
+        // vez de abrir el primero de la lista, que confundía sobre dónde se está.
         if (window.innerWidth >= 992) {
-            var abiertos = document.querySelectorAll('.app-sidebar > .nav-group.open');
-            for (var i = 1; i < abiertos.length; i++) abiertos[i].classList.remove('open');
+            var conActivo = document.querySelector('.app-sidebar > .nav-group:has(a.active)');
+            document.querySelectorAll('.app-sidebar > .nav-group.open').forEach(function (g) {
+                if (conActivo && g !== conActivo) g.classList.remove('open');
+            });
         }
         // Chevron de submenú anidado: despliega/colapsa sin navegar
         document.querySelectorAll('.app-sidebar .nav-chev').forEach(function (chev) {
@@ -1177,6 +1687,113 @@
         document.querySelectorAll('.app-sidebar a').forEach(function (a) {
             a.addEventListener('click', function () { if (window.innerWidth < 992) cerrar(); });
         });
+    })();
+
+    // ── Barra inferior: hoja de submódulos ─────────────────────────────
+    // Tocar una sección abre una hoja con SUS opciones. El usuario no sale de
+    // la pantalla en la que está hasta que elige una: si se arrepiente, cierra
+    // y sigue donde estaba.
+    (function () {
+        var datos = document.getElementById('atlasSecciones');
+        var hoja = document.getElementById('sheet');
+        var fondo = document.getElementById('sheetBackdrop');
+        if (!datos || !hoja || !fondo) return;
+
+        var secciones;
+        try { secciones = JSON.parse(datos.textContent); } catch (e) { return; }
+        var masKeys = [];
+        var elMas = document.getElementById('atlasMas');
+        if (elMas) { try { masKeys = JSON.parse(elMas.textContent); } catch (e) {} }
+
+        var cuerpo = document.getElementById('sheetBody');
+        var titulo = document.getElementById('sheetTitulo');
+        var icono = document.getElementById('sheetIco');
+        var rutaActual = window.location.pathname;
+        var ultimoFoco = null;
+
+        function esc(t) {
+            return String(t == null ? '' : t)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function fila(it) {
+            var activo = it.url === rutaActual;
+            return '<a class="sheet-item' + (activo ? ' active' : '') + '" href="' + esc(it.url) + '">' +
+                   '<span class="si-ico">' + esc(it.ico || '') + '</span>' +
+                   '<span>' + esc(it.label) + '</span>' +
+                   (it.badge ? '<span class="si-badge">' + esc(it.badge) + '</span>' : '') +
+                   (activo ? '<span class="si-check">✓</span>' : '') +
+                   '</a>';
+        }
+
+        function abrir(clave) {
+            var html = '';
+            if (clave === 'mas') {
+                titulo.textContent = 'Más secciones';
+                icono.textContent = '⋯';
+                // Cada sección con su encabezado, para que se lea a qué pertenece cada opción.
+                secciones.filter(function (s) { return masKeys.indexOf(s.key) !== -1; })
+                    .forEach(function (s) {
+                        html += '<div class="sheet-sep">' + esc(s.ico) + ' ' + esc(s.label) + '</div>';
+                        s.items.forEach(function (it) { html += fila(it); });
+                    });
+            } else {
+                var s = secciones.filter(function (x) { return x.key === clave; })[0];
+                if (!s) return;
+                titulo.textContent = s.label;
+                icono.textContent = s.ico;
+                s.items.forEach(function (it) { html += fila(it); });
+            }
+            cuerpo.innerHTML = html;
+            cuerpo.scrollTop = 0;
+
+            ultimoFoco = document.activeElement;
+            hoja.hidden = false;
+            // Un fotograma de margen: sin él el navegador no anima la entrada,
+            // porque aplica el estado inicial y el final en el mismo repintado.
+            requestAnimationFrame(function () {
+                hoja.classList.add('show');
+                fondo.classList.add('show');
+            });
+            document.body.style.overflow = 'hidden';
+            var primero = cuerpo.querySelector('.sheet-item');
+            if (primero) primero.focus({ preventScroll: true });
+        }
+
+        function cerrarHoja() {
+            hoja.classList.remove('show');
+            fondo.classList.remove('show');
+            document.body.style.overflow = '';
+            if (ultimoFoco && ultimoFoco.focus) ultimoFoco.focus({ preventScroll: true });
+            // Se oculta al terminar la animación para que no quede alcanzable
+            // con el tabulador estando invisible.
+            setTimeout(function () { if (!hoja.classList.contains('show')) hoja.hidden = true; }, 300);
+        }
+
+        document.querySelectorAll('.app-tabbar a[data-seccion]').forEach(function (a) {
+            a.addEventListener('click', function (e) {
+                e.preventDefault();
+                abrir(a.getAttribute('data-seccion'));
+            });
+        });
+
+        fondo.addEventListener('click', cerrarHoja);
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && hoja.classList.contains('show')) cerrarHoja();
+        });
+        // Gesto natural: arrastrar la hoja hacia abajo la cierra.
+        (function () {
+            var y0 = null;
+            hoja.addEventListener('touchstart', function (e) { y0 = e.touches[0].clientY; }, { passive: true });
+            hoja.addEventListener('touchmove', function (e) {
+                if (y0 === null) return;
+                var d = e.touches[0].clientY - y0;
+                // Solo si la lista ya está arriba del todo: si no, el gesto es scroll.
+                if (d > 70 && cuerpo.scrollTop <= 0) { y0 = null; cerrarHoja(); }
+            }, { passive: true });
+            hoja.addEventListener('touchend', function () { y0 = null; }, { passive: true });
+        })();
     })();
 
     // ── GUÍA DE PASOS ──────────────────────────────────────
@@ -1295,19 +1912,160 @@
     })();
     </script>
     <script>
-    if('serviceWorker' in navigator){
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('/sw.js').catch(() => {});
+    /* ══════════════════════════════════════════════════════════════════
+       APLICACIÓN INSTALABLE (PWA)
+       ------------------------------------------------------------------
+       Registra el service worker, ofrece instalar, avisa cuando hay versión
+       nueva y borra la caché al cerrar sesión.
+       ══════════════════════════════════════════════════════════════════ */
+    (function () {
+        if (!('serviceWorker' in navigator)) return;
+
+        var CLAVE_INSTALAR = 'atlas_instalar_pospuesto';
+        var $ = function (id) { return document.getElementById(id); };
+        var mostrar = function (el) { if (el) el.classList.add('show'); };
+        var ocultar = function (el) { if (el) el.classList.remove('show'); };
+
+        /* ¿Ya se está ejecutando instalada? Entonces no hay nada que ofrecer. */
+        function yaInstalada() {
+            return window.matchMedia('(display-mode: standalone)').matches
+                || window.matchMedia('(display-mode: fullscreen)').matches
+                || navigator.standalone === true;
+        }
+
+        /* Se pospone durante dos semanas, no para siempre: si alguien lo cierra
+           sin pensar, no pierde la opción; y si la rechaza de verdad, no se le
+           insiste cada vez que entra. */
+        function pospuesto() {
+            try {
+                var t = parseInt(localStorage.getItem(CLAVE_INSTALAR) || '0', 10);
+                return t && (Date.now() - t) < 14 * 24 * 3600 * 1000;
+            } catch (e) { return false; }
+        }
+        function posponer() {
+            try { localStorage.setItem(CLAVE_INSTALAR, String(Date.now())); } catch (e) {}
+        }
+
+        // ── 1. Registro y detección de versión nueva ──────────────────────
+        var registro = null;
+        var recargando = false;
+
+        window.addEventListener('load', function () {
+            navigator.serviceWorker.register('/sw.js').then(function (reg) {
+                registro = reg;
+
+                // Ya había una versión esperando de una visita anterior.
+                if (reg.waiting && navigator.serviceWorker.controller) avisarActualizacion();
+
+                reg.addEventListener('updatefound', function () {
+                    var nuevo = reg.installing;
+                    if (!nuevo) return;
+                    nuevo.addEventListener('statechange', function () {
+                        // `controller` distingue una actualización de la primera
+                        // instalación: en la primera no hay nada que avisar.
+                        if (nuevo.state === 'installed' && navigator.serviceWorker.controller) {
+                            avisarActualizacion();
+                        }
+                    });
+                });
+            }).catch(function () { /* sin service worker la app sigue funcionando */ });
+
+            // Cuando el nuevo toma el control, se recarga una sola vez.
+            navigator.serviceWorker.addEventListener('controllerchange', function () {
+                if (recargando) return;
+                recargando = true;
+                window.location.reload();
+            });
         });
-    }
+
+        function avisarActualizacion() {
+            var caja = $('avisoActualizar');
+            mostrar(caja);
+            var btn = $('btnActualizar');
+            if (btn) btn.onclick = function () {
+                btn.disabled = true;
+                btn.textContent = 'Actualizando…';
+                if (registro && registro.waiting) {
+                    registro.waiting.postMessage({ tipo: 'ACTIVAR_YA' });
+                } else {
+                    window.location.reload();
+                }
+            };
+            var no = $('btnActualizarNo');
+            if (no) no.onclick = function () { ocultar(caja); };
+        }
+
+        // ── 2. Instalación en Android ─────────────────────────────────────
+        var eventoInstalar = null;
+
+        window.addEventListener('beforeinstallprompt', function (e) {
+            // Se retiene el evento para lanzarlo cuando el usuario lo pida, en
+            // vez de dejar que el navegador decida el momento.
+            e.preventDefault();
+            eventoInstalar = e;
+            if (yaInstalada() || pospuesto()) return;
+
+            var caja = $('avisoInstalar');
+            mostrar(caja);
+
+            var btn = $('btnInstalar');
+            if (btn) btn.onclick = function () {
+                ocultar(caja);
+                if (!eventoInstalar) return;
+                eventoInstalar.prompt();
+                eventoInstalar.userChoice.then(function (r) {
+                    if (r && r.outcome !== 'accepted') posponer();
+                    eventoInstalar = null;
+                });
+            };
+            var no = $('btnInstalarNo');
+            if (no) no.onclick = function () { posponer(); ocultar(caja); };
+        });
+
+        window.addEventListener('appinstalled', function () {
+            ocultar($('avisoInstalar'));
+            ocultar($('avisoIOS'));
+            eventoInstalar = null;
+        });
+
+        // ── 3. Instalación en iPhone ──────────────────────────────────────
+        // Safari no expone `beforeinstallprompt`: hay que explicar el gesto.
+        (function () {
+            var ua = navigator.userAgent;
+            var esIOS = /iPad|iPhone|iPod/.test(ua)
+                // iPadOS se presenta como Mac; se distingue porque tiene táctil.
+                || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            var esSafari = /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS/.test(ua);
+            if (!esIOS || !esSafari || yaInstalada() || pospuesto()) return;
+
+            var caja = $('avisoIOS');
+            // Un respiro antes de aparecer: interrumpir nada más abrir molesta.
+            setTimeout(function () { mostrar(caja); }, 2500);
+            var no = $('btnIOSNo');
+            if (no) no.onclick = function () { posponer(); ocultar(caja); };
+        })();
+
+        // ── 4. Al cerrar sesión, no dejar nada en el teléfono ─────────────
+        document.querySelectorAll('a[href="/logout"], a[href^="/logout"]').forEach(function (a) {
+            a.addEventListener('click', function () {
+                if (navigator.serviceWorker.controller) {
+                    navigator.serviceWorker.controller.postMessage({ tipo: 'LIMPIAR' });
+                }
+            });
+        });
+    })();
     </script>
     {% if current_user.is_authenticated %}
     <script>
-    // Cierre de sesión automático tras 30 minutos de inactividad.
+    // Cierre de sesión automático tras 20 minutos de inactividad.
     // El contador se reinicia con cualquier actividad del usuario y se
     // sincroniza entre pestañas abiertas del sistema (localStorage 'storage').
+    //
+    // Debe coincidir con PERMANENT_SESSION_LIFETIME de config.py, que es el
+    // corte de verdad: este temporizador solo adelanta la salida en pantalla y
+    // no protege por sí solo (basta recargar para reiniciarlo).
     (function () {
-        var IDLE_MS = 30 * 60 * 1000;
+        var IDLE_MS = 20 * 60 * 1000;
         var SYNC_KEY = '__idle_last_activity';
         var EVENTS = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click', 'wheel'];
         var timer, lastSync = 0;

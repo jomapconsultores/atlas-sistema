@@ -5,11 +5,21 @@
     .card-premium { border-radius: 20px; border: none; box-shadow: 0 4px 20px rgba(0,0,0,0.06); background: white; margin-bottom: 20px; overflow: hidden; }
     .card-header-grad { padding: 14px 20px; color: white; font-weight: 700; font-size: 15px; }
     .grad-dark { background: linear-gradient(135deg, #263238, #111); }
+    .grad-teal { background: linear-gradient(135deg, #0f766e, #0d9488); }
     .table-premium { border-radius: 12px; overflow: hidden; border: none; margin: 0; }
     .table-premium thead th { background: #1a1a2e; color: white; font-weight: 600; font-size: 11px; letter-spacing: 0.5px; border: none; padding: 10px 12px; text-transform: uppercase; }
     .table-premium tbody td { padding: 8px 12px; font-size: 13px; border-bottom: 1px solid #f0f0f0; }
     .badge-premium { padding: 4px 10px; border-radius: 10px; font-size: 10px; font-weight: 600; }
     .bg-purple { background-color: #7c3aed; }
+    .kpi { border-radius: 16px; padding: 14px 18px; color: white; height: 100%; }
+    .kpi .v { font-size: 22px; font-weight: 800; line-height: 1.1; }
+    .kpi .l { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; opacity: .9; }
+    .kpi-1 { background: linear-gradient(135deg, #1e3a8a, #3b82f6); }
+    .kpi-2 { background: linear-gradient(135deg, #0f766e, #14b8a6); }
+    .kpi-3 { background: linear-gradient(135deg, #92400e, #f59e0b); }
+    .kpi-4 { background: linear-gradient(135deg, #14532d, #16a34a); }
+    .barra { height: 6px; border-radius: 4px; background: #eceff1; overflow: hidden; margin-top: 4px; }
+    .barra > span { display: block; height: 100%; border-radius: 4px; }
 </style>
 <div class="page-hero">
     <h2>🕒 Marcaciones de Asistencia</h2>
@@ -35,20 +45,435 @@
             {% endfor %}
         </select>
     </div>
+    {% if puede_jornada %}
+    <div class="col-auto ms-auto">
+        <button type="button" class="btn btn-outline-dark" onclick="abrirJornadaNueva()">⚙️ Jornada y sueldo del personal</button>
+    </div>
+    {% endif %}
 </form>
 
-<div class="card-premium"><div class="card-header-grad grad-dark">📋 Registros del mes</div><div class="card-body p-0">
-<div class="table-responsive"><table class="table table-premium mb-0"><thead><tr><th>Fecha</th><th>Nombre</th><th>Rol</th><th>Ingreso</th><th>Salida</th></tr></thead><tbody>
+<!-- ===== KPIs DEL PERÍODO ===== -->
+<div class="row g-2 mb-3">
+    <div class="col-6 col-lg-3"><div class="kpi kpi-1"><div class="l">Días trabajados</div><div class="v">{{ totales.dias }}</div></div></div>
+    <div class="col-6 col-lg-3"><div class="kpi kpi-2"><div class="l">Horas trabajadas</div><div class="v">{{ "%.2f"|format(totales.horas) }}</div></div></div>
+    <div class="col-6 col-lg-3"><div class="kpi kpi-3"><div class="l">Horas extra</div><div class="v">{{ "%.2f"|format(totales.horas_extra) }}</div></div></div>
+    <div class="col-6 col-lg-3"><div class="kpi kpi-4"><div class="l">Total a pagar</div><div class="v">${{ "%.2f"|format(totales.a_pagar) }}</div></div></div>
+</div>
+
+<!-- ===== REPORTE FINAL POR PERSONA ===== -->
+<div class="card-premium">
+    <div class="card-header-grad grad-teal">📊 Reporte del período — jornada, horas y sueldo proporcional</div>
+    <div class="px-3 pt-3">
+        <div class="alert alert-secondary mb-0 py-2 small">
+            🇪🇨 <strong>Referencias legales {{ sbu_anio }} (Ecuador):</strong>
+            SBU <strong>${{ "%.2f"|format(sbu) }}</strong> ·
+            jornada máxima <strong>{{ jornada_max_diaria }} h/día</strong> y <strong>{{ jornada_max_semanal }} h/semana</strong> (Art. 47) ·
+            valor hora = remuneración ÷ (30 días × horas de la jornada), <strong>{{ horas_mes_legal }}</strong> a tiempo completo (${{ "%.4f"|format(sbu / horas_mes_legal) }}/h con el SBU) ·
+            recargos: suplementaria <strong>+50%</strong>, extraordinaria <strong>+100%</strong>, nocturna <strong>+25%</strong> (Art. 55 y 49).
+        </div>
+    </div>
+    <div class="card-body p-0">
+    <div class="table-responsive"><table class="table table-premium mb-0">
+        <thead><tr>
+            <th>Persona</th>
+            <th class="text-center">Jornada pactada</th>
+            <th class="text-center">Días<br>trab. / exig.</th>
+            <th class="text-center">Horas<br>trab. / exig.</th>
+            <th class="text-center">Cumplimiento</th>
+            <th class="text-center">Horas<br>extra</th>
+            <th class="text-end">Sueldo<br>tiempo completo</th>
+            <th class="text-end">Proporcional<br>jornada</th>
+            <th class="text-end">Proporcional<br>días trabajados</th>
+            <th class="text-end">Pago<br>horas extra</th>
+            <th class="text-end">Total<br>a pagar</th>
+            {% if puede_jornada %}<th></th>{% endif %}
+        </tr></thead>
+        <tbody>
+        {% for r in resumen %}
+        <tr>
+            <td>
+                <strong>{{ r.nombre }}</strong><br>
+                <span class="badge-premium text-white bg-{{ 'warning' if r.rol=='secretaria' else 'success' if r.rol=='profesor' else 'purple' if r.rol=='psicologo' else 'info' }}">{{ r.rol }}</span>
+                {% if not r.tiene_jornada %}<br><span class="badge-premium bg-light text-dark border" title="Se calcula con la jornada por defecto y sueldo 0">⚠️ sin jornada configurada</span>{% endif %}
+            </td>
+            <td class="text-center">
+                {{ "%.1f"|format(r.horas_dia) }} h/día × {{ r.dias_mes }} días<br>
+                <span class="badge-premium {{ 'bg-primary' if r.es_tiempo_completo else 'bg-secondary' }} text-white">
+                    {{ 'Tiempo completo' if r.es_tiempo_completo else (r.factor_jornada * 100)|round(0)|int ~ '% de jornada' }}
+                </span>
+                {% if r.excede_jornada_diaria or r.excede_jornada_semanal %}
+                <br><span class="badge-premium bg-danger text-white" title="Supera la jornada ordinaria máxima del Art. 47 ({{ jornada_max_diaria }} h/día, {{ jornada_max_semanal }} h/semana)">⚠️ sobre la jornada legal</span>
+                {% endif %}
+            </td>
+            <td class="text-center">
+                <strong>{{ r.dias_trabajados }}</strong> / {{ r.dias_mes }}
+                {% if r.dias_sin_cerrar %}<br><span class="badge-premium bg-warning text-dark" title="Días con ingreso pero sin salida marcada: no cuentan horas">{{ r.dias_sin_cerrar }} sin cerrar</span>{% endif %}
+                {% if r.dias_sobre_jornada %}<br><span class="badge-premium bg-info text-white" title="Trabajó más días que los exigidos; el sueldo base no sube (tope 100%)">+{{ r.dias_sobre_jornada }} sobre lo exigido</span>{% endif %}
+            </td>
+            <td class="text-center">
+                <strong>{{ "%.2f"|format(r.horas_trabajadas) }}</strong> / {{ "%.2f"|format(r.horas_esperadas_mes) }}
+                <br><small class="text-{{ 'success' if r.diferencia_horas >= 0 else 'danger' }}">{{ '+' if r.diferencia_horas >= 0 else '' }}{{ "%.2f"|format(r.diferencia_horas) }} h</small>
+            </td>
+            <td class="text-center">
+                {% set pct = r.cumplimiento_mes %}
+                <strong class="text-{{ 'success' if r.cumple_jornada else 'warning' if pct >= 80 else 'danger' }}">{{ "%.1f"|format(pct) }}%</strong>
+                <div class="barra"><span style="width: {{ [pct, 100]|min }}%; background: {{ '#16a34a' if r.cumple_jornada else '#f59e0b' if pct >= 80 else '#dc3545' }};"></span></div>
+                <small class="text-muted d-block mt-1">
+                    {% if r.cumple_jornada %}✅ cumple la jornada
+                    {% else %}⚠️ faltan {{ "%.2f"|format(-r.diferencia_horas) }} h{% if r.dias_faltantes %} y {{ r.dias_faltantes }} día(s){% endif %}{% endif %}
+                </small>
+                {% if r.dias_trabajados %}<small class="text-muted d-block">En los días trabajados: {{ "%.1f"|format(r.cumplimiento_dias) }}%</small>{% endif %}
+            </td>
+            <td class="text-center">
+                {% if r.horas_extra %}<span class="badge-premium bg-warning text-dark">{{ "%.2f"|format(r.horas_extra) }} h</span>
+                {% for tipo, h in r.extra_por_tipo.items() %}
+                <br><small class="text-muted" title="{{ recargos[tipo].detalle }}">{{ "%.2f"|format(h) }} h {{ recargos[tipo].label }}</small>
+                {% endfor %}
+                <br><small class="text-muted">= {{ "%.2f"|format(r.horas_extra_ponderadas) }} h con recargo</small>
+                {% if r.dias_extra_sobre_tope %}<br><span class="badge-premium bg-danger text-white" title="El Art. 55 permite hasta {{ max_suplementarias }} horas suplementarias al día">⚠️ {{ r.dias_extra_sobre_tope }} día(s) sobre el tope</span>{% endif %}
+                {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+            <td class="text-end">
+                ${{ "%.2f"|format(r.sueldo_tiempo_completo) }}
+                {% if r.bajo_sbu %}<br><span class="badge-premium bg-danger text-white" title="Mínimo legal para esta jornada: ${{ "%.2f"|format(r.minimo_legal) }} (SBU {{ r.sbu_anio }} ${{ "%.2f"|format(r.sbu_vigente) }}, Art. 82)">⚠️ bajo el SBU</span>{% endif %}
+            </td>
+            <td class="text-end">
+                ${{ "%.2f"|format(r.sueldo_jornada) }}
+                <br><small class="text-muted">×{{ "%.2f"|format(r.factor_jornada) }}</small>
+            </td>
+            <td class="text-end">
+                ${{ "%.2f"|format(r.sueldo_proporcional) }}
+                <br><small class="text-muted">{{ r.dias_trabajados }}/{{ r.dias_mes }} días</small>
+            </td>
+            <td class="text-end">
+                {% if r.pago_horas_extra %}${{ "%.2f"|format(r.pago_horas_extra) }}<br><small class="text-muted" title="Valor hora legal: ${{ "%.2f"|format(r.sueldo_jornada) }} ÷ {{ "%g"|format(r.horas_mes_legal) }} h (30 días × {{ "%g"|format(r.horas_dia) }} h)">${{ "%.4f"|format(r.valor_hora) }}/h</small>
+                {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+            <td class="text-end"><strong class="text-success fs-6">${{ "%.2f"|format(r.total_a_pagar) }}</strong></td>
+            {% if puede_jornada %}
+            <td class="text-end">
+                <button class="btn btn-sm btn-outline-dark" title="Configurar jornada y sueldo"
+                        onclick='abrirJornada({{ r.usuario_id }}, {{ r.nombre|tojson }}, {{ r.horas_dia }}, {{ r.dias_mes }}, {{ r.horas_jornada_completa }}, {{ r.sueldo_tiempo_completo }}, {{ r.recargo_hora_extra }})'>⚙️</button>
+            </td>
+            {% endif %}
+        </tr>
+        {% else %}
+        <tr><td colspan="{{ 12 if puede_jornada else 11 }}" class="text-center text-muted py-3">Sin marcaciones en este período</td></tr>
+        {% endfor %}
+        </tbody>
+        {% if resumen %}
+        <tfoot class="table-light fw-bold">
+            <tr>
+                <td colspan="2">TOTALES</td>
+                <td class="text-center">{{ totales.dias }}</td>
+                <td class="text-center">{{ "%.2f"|format(totales.horas) }}</td>
+                <td></td>
+                <td class="text-center">{{ "%.2f"|format(totales.horas_extra) }}</td>
+                <td colspan="3"></td>
+                <td class="text-end">${{ "%.2f"|format(resumen|sum(attribute='pago_horas_extra')) }}</td>
+                <td class="text-end text-success">${{ "%.2f"|format(totales.a_pagar) }}</td>
+                {% if puede_jornada %}<td></td>{% endif %}
+            </tr>
+        </tfoot>
+        {% endif %}
+    </table></div>
+    </div>
+    <div class="card-footer bg-light">
+        <small class="text-muted">
+            💡 <strong>Cómo se calcula:</strong> el sueldo a tiempo completo se ajusta primero por la <strong>jornada</strong>
+            (horas por día ÷ jornada completa de referencia: medio tiempo = 50%) y luego por los
+            <strong>días efectivamente trabajados</strong> (días marcados ÷ días exigidos del mes, con tope 100%).
+            Las <strong>horas extra</strong> se pagan aparte con el criterio ecuatoriano: <strong>valor hora = remuneración mensual ÷ (30 días × horas de su jornada)</strong>
+            — el clásico ÷{{ horas_mes_legal }} a tiempo completo (Art. 47/55) — multiplicado por el recargo del tipo de hora de cada día.
+            A media jornada bajan sueldo y divisor en la misma proporción, así que la hora vale lo mismo que a tiempo completo (Art. 82).
+            El divisor legal no es el de las horas exigidas del mes: esas miden cumplimiento, no valoran la hora.
+            {% if puede_jornada %}Usa ⚙️ para fijar la jornada y el sueldo de cada persona.{% endif %}
+        </small>
+    </div>
+</div>
+
+<!-- ===== REGISTROS DÍA A DÍA ===== -->
+<div class="card-premium"><div class="card-header-grad grad-dark">📋 Registros del mes — horas por día</div><div class="card-body p-0">
+<div class="table-responsive"><table class="table table-premium mb-0">
+<thead><tr><th>Fecha</th><th>Nombre</th><th>Rol</th><th>Ingreso</th><th>Salida</th><th class="text-center">Horas</th><th class="text-center">Extra</th><th class="text-center">Total día</th><th></th></tr></thead><tbody>
 {% for m in marcaciones %}
-<tr>
+<tr id="fila-marcacion-{{ m.id }}">
     <td>{{ m.fecha }}</td>
     <td>{{ m.usuarios.nombre if m.usuarios else '—' }}</td>
     <td><span class="badge-premium text-white bg-{{ 'warning' if m.usuarios and m.usuarios.rol=='secretaria' else 'success' if m.usuarios and m.usuarios.rol=='profesor' else 'purple' if m.usuarios and m.usuarios.rol=='psicologo' else 'info' }}">{{ m.usuarios.rol if m.usuarios else '—' }}</span></td>
     <td>{{ m.hora_ingreso[:5] if m.hora_ingreso else '—' }}</td>
     <td>{{ m.hora_salida[:5] if m.hora_salida else '—' }}</td>
+    <td class="text-center">
+        {% if m._horas %}<strong>{{ "%.2f"|format(m._horas) }}</strong>
+        {% if m._sobre_jornada_legal %}<br><span class="badge-premium bg-danger text-white" title="Más de {{ jornada_max_diaria }} h en el día: el excedente debería ir como hora suplementaria o extraordinaria (Art. 47)">sobre {{ jornada_max_diaria }} h</span>{% endif %}
+        {% elif m.hora_ingreso %}<span class="badge-premium bg-warning text-dark" title="Falta marcar la salida">sin salida</span>
+        {% else %}—{% endif %}
+    </td>
+    <td class="text-center" id="extra-marcacion-{{ m.id }}">
+        {% if m._horas_extra %}<span class="badge-premium bg-warning text-dark" {% if m.nota_extra %}title="{{ m.nota_extra }}"{% endif %}>+{{ "%.2f"|format(m._horas_extra) }} h</span>
+        <br><small class="text-muted" title="{{ m._recargo.detalle }}">{{ m._recargo.label }}</small>
+        {% else %}<span class="text-muted">—</span>{% endif %}
+    </td>
+    <td class="text-center"><strong>{{ "%.2f"|format(m._total_dia) }}</strong></td>
+    <td class="text-end">
+        <button class="btn btn-sm btn-outline-warning" title="Registrar horas extra de este día"
+                onclick='abrirHorasExtra({{ m.id }}, {{ (m.usuarios.nombre if m.usuarios else "—")|tojson }}, {{ m.fecha|tojson }}, {{ m._horas_extra }}, {{ (m.nota_extra or "")|tojson }}, {{ (m._tipo_extra or "suplementaria")|tojson }})'>⏱ Hora extra</button>
+    </td>
 </tr>
 {% else %}
-<tr><td colspan="5" class="text-center text-muted py-3">Sin marcaciones en este período</td></tr>
+<tr><td colspan="9" class="text-center text-muted py-3">Sin marcaciones en este período</td></tr>
 {% endfor %}
 </tbody></table></div></div></div>
+
+<!-- ===== MODAL HORAS EXTRA ===== -->
+<div class="modal fade" id="modalHorasExtra" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="border-radius:16px;">
+      <div class="modal-header"><h5 class="modal-title">⏱ Horas extra del día</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <p class="text-muted mb-3" id="extraContexto"></p>
+        <input type="hidden" id="extraId">
+        <div class="mb-3">
+          <label class="form-label fw-bold">Horas extra</label>
+          <input type="number" id="extraHoras" class="form-control" step="0.25" min="0" max="12" oninput="previewExtra()">
+          <small class="text-muted">En horas (ej: 1.5 = una hora y media). Poner 0 elimina las horas extra del día.</small>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-bold">Tipo de hora (Código del Trabajo)</label>
+          <select id="extraTipo" class="form-select" onchange="previewExtra()">
+            {% for clave, r in recargos.items() %}
+            <option value="{{ clave }}" data-factor="{{ r.factor }}" title="{{ r.detalle }}">{{ r.label }} — {{ r.detalle }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-bold">Motivo (opcional)</label>
+          <input type="text" id="extraNota" class="form-control" placeholder="Ej: reunión con padres fuera de horario">
+        </div>
+        <div class="alert alert-light border mb-0 small" id="extraPreview"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-warning" onclick="guardarHorasExtra()">Guardar y recalcular</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if puede_jornada %}
+<!-- ===== MODAL JORNADA Y SUELDO ===== -->
+<div class="modal fade" id="modalJornada" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="border-radius:16px;">
+      <div class="modal-header"><h5 class="modal-title">⚙️ Jornada y sueldo</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <p class="text-muted mb-3" id="jornadaContexto"></p>
+        <input type="hidden" id="jornadaUsuarioId">
+        <div class="mb-3" id="jornadaSelectorPersona" style="display:none;">
+            <label class="form-label fw-bold">Persona *</label>
+            <select id="jornadaPersona" class="form-select" onchange="cargarJornadaPersona()">
+                <option value="">Seleccionar...</option>
+                {% for p in personal %}
+                <option value="{{ p.id }}"
+                        data-horas-dia="{{ jornadas.get(p.id, {}).get('horas_dia', jornada_defecto.horas_dia) }}"
+                        data-dias-mes="{{ jornadas.get(p.id, {}).get('dias_mes', jornada_defecto.dias_mes) }}"
+                        data-horas-completa="{{ jornadas.get(p.id, {}).get('horas_jornada_completa', jornada_defecto.horas_jornada_completa) }}"
+                        data-sueldo="{{ jornadas.get(p.id, {}).get('sueldo_tiempo_completo', jornada_defecto.sueldo_tiempo_completo) }}"
+                        data-recargo="{{ jornadas.get(p.id, {}).get('recargo_hora_extra', jornada_defecto.recargo_hora_extra) }}">
+                    {{ p.nombre }} ({{ p.rol }}){{ ' — sin jornada' if p.id not in jornadas else '' }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="row g-2">
+          <div class="col-6">
+            <label class="form-label fw-bold">Horas por día *</label>
+            <input type="number" id="jornadaHorasDia" class="form-control" step="0.5" min="0.5" max="24">
+            <small class="text-muted">Jornada que debe cumplir. Máximo legal: {{ jornada_max_diaria }}.</small>
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold">Días del mes *</label>
+            <input type="number" id="jornadaDiasMes" class="form-control" step="1" min="1" max="31">
+            <small class="text-muted">Días laborables exigidos.</small>
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold">Jornada completa (ref.)</label>
+            <input type="number" id="jornadaHorasCompleta" class="form-control" step="0.5" min="1" max="24">
+            <small class="text-muted">Horas/día del tiempo completo.</small>
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold">Recargo por defecto</label>
+            <input type="number" id="jornadaRecargo" class="form-control" step="0.05" min="1" max="3">
+            <small class="text-muted">Solo para días sin tipo asignado. Cada día usa su propio recargo.</small>
+          </div>
+          <div class="col-12">
+            <label class="form-label fw-bold">Sueldo a tiempo completo *</label>
+            <div class="input-group"><span class="input-group-text">$</span>
+              <input type="number" id="jornadaSueldo" class="form-control" step="0.01" min="0">
+              <button type="button" class="btn btn-outline-secondary" onclick="ponerSBU()" title="Usar el Salario Básico Unificado {{ sbu_anio }}">SBU {{ sbu_anio }} (${{ "%.2f"|format(sbu) }})</button>
+            </div>
+            <small class="text-muted">Lo que se pagaría por el mes completo a jornada completa. El sistema calcula el proporcional.</small>
+          </div>
+        </div>
+        <div class="alert alert-info mt-3 mb-0 small" id="jornadaPreview"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-success" onclick="guardarJornada()">Guardar y recalcular</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<script>
+const MAX_SUPLEMENTARIAS = {{ max_suplementarias }};
+
+function abrirHorasExtra(id, nombre, fecha, horas, nota, tipo) {
+    document.getElementById('extraId').value = id;
+    document.getElementById('extraHoras').value = horas || '';
+    document.getElementById('extraNota').value = nota || '';
+    document.getElementById('extraTipo').value = tipo || 'suplementaria';
+    document.getElementById('extraContexto').innerHTML = '<strong>' + nombre + '</strong> — ' + fecha;
+    previewExtra();
+    new bootstrap.Modal(document.getElementById('modalHorasExtra')).show();
+}
+
+// Aviso en vivo del recargo aplicado y del tope legal de suplementarias.
+function previewExtra() {
+    const horas = parseFloat(document.getElementById('extraHoras').value || 0);
+    const sel = document.getElementById('extraTipo');
+    const factor = parseFloat(sel.options[sel.selectedIndex].dataset.factor);
+    const box = document.getElementById('extraPreview');
+    let txt = 'Al guardar se recalculan las horas del mes y el pago de la persona.';
+    if (horas > 0) {
+        txt = '<strong>' + horas.toFixed(2) + ' h</strong> × recargo <strong>' + factor.toFixed(2) + '</strong> = ' +
+              '<strong>' + (horas * factor).toFixed(2) + ' h</strong> a pagar al valor hora legal.';
+        if (sel.value === 'suplementaria' && horas > MAX_SUPLEMENTARIAS) {
+            txt += '<br><span class="text-danger">⚠️ El Art. 55 permite hasta ' + MAX_SUPLEMENTARIAS +
+                   ' horas suplementarias al día (12 a la semana). Si fue de noche, sábado, domingo o feriado, corresponde «extraordinaria».</span>';
+        }
+    }
+    box.innerHTML = txt;
+}
+
+async function guardarHorasExtra() {
+    const id = document.getElementById('extraId').value;
+    const horas = parseFloat(document.getElementById('extraHoras').value || 0);
+    if (isNaN(horas) || horas < 0 || horas > 12) { alert('Las horas extra deben estar entre 0 y 12'); return; }
+    const r = await fetch('/api/marcacion/' + id + '/horas-extra', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({horas: horas, tipo: document.getElementById('extraTipo').value,
+                              nota: document.getElementById('extraNota').value})
+    });
+    const d = await r.json();
+    if (d.success) {
+        if (d.aviso) alert('⚠️ ' + d.aviso);
+        location.reload();   // recarga: el reporte del mes se recalcula en el servidor
+    } else alert('❌ ' + (d.error || 'No se pudo guardar'));
+}
+
+{% if puede_jornada %}
+function abrirJornada(uid, nombre, horasDia, diasMes, horasCompleta, sueldo, recargo) {
+    document.getElementById('jornadaUsuarioId').value = uid;
+    document.getElementById('jornadaHorasDia').value = horasDia;
+    document.getElementById('jornadaDiasMes').value = diasMes;
+    document.getElementById('jornadaHorasCompleta').value = horasCompleta;
+    document.getElementById('jornadaSueldo').value = sueldo;
+    document.getElementById('jornadaRecargo').value = recargo;
+    document.getElementById('jornadaSelectorPersona').style.display = 'none';
+    document.getElementById('jornadaContexto').innerHTML = 'Jornada y sueldo de <strong>' + nombre + '</strong>';
+    actualizarPreviewJornada();
+    new bootstrap.Modal(document.getElementById('modalJornada')).show();
+}
+
+// Configurar a alguien que aún no aparece en el reporte (nunca marcó).
+function abrirJornadaNueva() {
+    document.getElementById('jornadaUsuarioId').value = '';
+    document.getElementById('jornadaPersona').value = '';
+    document.getElementById('jornadaSelectorPersona').style.display = 'block';
+    document.getElementById('jornadaContexto').innerText = 'Elige a la persona y define la jornada que debe cumplir y su sueldo a tiempo completo.';
+    document.getElementById('jornadaHorasDia').value = {{ jornada_defecto.horas_dia }};
+    document.getElementById('jornadaDiasMes').value = {{ jornada_defecto.dias_mes }};
+    document.getElementById('jornadaHorasCompleta').value = {{ jornada_defecto.horas_jornada_completa }};
+    document.getElementById('jornadaSueldo').value = '';
+    document.getElementById('jornadaRecargo').value = {{ jornada_defecto.recargo_hora_extra }};
+    actualizarPreviewJornada();
+    new bootstrap.Modal(document.getElementById('modalJornada')).show();
+}
+
+function cargarJornadaPersona() {
+    const sel = document.getElementById('jornadaPersona');
+    const op = sel.options[sel.selectedIndex];
+    document.getElementById('jornadaUsuarioId').value = sel.value;
+    if (!sel.value) return;
+    document.getElementById('jornadaHorasDia').value = op.dataset.horasDia;
+    document.getElementById('jornadaDiasMes').value = op.dataset.diasMes;
+    document.getElementById('jornadaHorasCompleta').value = op.dataset.horasCompleta;
+    document.getElementById('jornadaSueldo').value = op.dataset.sueldo;
+    document.getElementById('jornadaRecargo').value = op.dataset.recargo;
+    actualizarPreviewJornada();
+}
+
+const SBU = {{ sbu }}, HORAS_MES_LEGAL = {{ horas_mes_legal }},
+      MAX_DIA = {{ jornada_max_diaria }}, MAX_SEMANA = {{ jornada_max_semanal }};
+
+function ponerSBU() {
+    document.getElementById('jornadaSueldo').value = SBU.toFixed(2);
+    actualizarPreviewJornada();
+}
+
+// Muestra en vivo el proporcional que resultará y los avisos legales.
+function actualizarPreviewJornada() {
+    const hd = parseFloat(document.getElementById('jornadaHorasDia').value || 0);
+    const dm = parseFloat(document.getElementById('jornadaDiasMes').value || 0);
+    const hc = parseFloat(document.getElementById('jornadaHorasCompleta').value || 0);
+    const su = parseFloat(document.getElementById('jornadaSueldo').value || 0);
+    const box = document.getElementById('jornadaPreview');
+    if (!hd || !dm || !hc) { box.innerText = 'Completa horas por día, días del mes y jornada completa.'; return; }
+    const factor = hd / hc;
+    const sueldoJornada = su * factor;
+    const horasMes = hd * dm;
+    const minimo = SBU * factor;
+    let html = 'Jornada: <strong>' + (factor * 100).toFixed(0) + '%</strong> del tiempo completo · ' +
+        '<strong>' + horasMes.toFixed(2) + ' h</strong> exigidas al mes<br>' +
+        'Sueldo por esta jornada (mes completo): <strong>$' + sueldoJornada.toFixed(2) + '</strong>' +
+        ' · valor hora legal (÷ 30 × ' + hd + ' = ' + (30 * hd) + ' h): <strong>$' + (sueldoJornada / (30 * hd)).toFixed(4) + '</strong><br>' +
+        'Mínimo legal para esta jornada: <strong>$' + minimo.toFixed(2) + '</strong> (SBU {{ sbu_anio }} $' + SBU.toFixed(2) + ')';
+    const alertas = [];
+    if (hd > MAX_DIA) alertas.push('La jornada ordinaria máxima es de ' + MAX_DIA + ' h diarias (Art. 47).');
+    if (hd * 5 > MAX_SEMANA) alertas.push('Con ' + hd + ' h/día en 5 días se superan las ' + MAX_SEMANA + ' h semanales de ley.');
+    if (su && sueldoJornada < minimo - 0.005) alertas.push('El sueldo queda bajo el mínimo legal proporcional (Art. 82).');
+    if (alertas.length) html += '<br><span class="text-danger">⚠️ ' + alertas.join(' ') + '</span>';
+    box.innerHTML = html;
+}
+['jornadaHorasDia','jornadaDiasMes','jornadaHorasCompleta','jornadaSueldo'].forEach(function(id) {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', actualizarPreviewJornada);
+});
+
+async function guardarJornada() {
+    const uid = document.getElementById('jornadaUsuarioId').value;
+    if (!uid) { alert('Selecciona a la persona'); return; }
+    const payload = {
+        horas_dia: document.getElementById('jornadaHorasDia').value,
+        dias_mes: document.getElementById('jornadaDiasMes').value,
+        horas_jornada_completa: document.getElementById('jornadaHorasCompleta').value,
+        sueldo_tiempo_completo: document.getElementById('jornadaSueldo').value,
+        recargo_hora_extra: document.getElementById('jornadaRecargo').value
+    };
+    if (!payload.horas_dia || !payload.dias_mes) { alert('Horas por día y días del mes son obligatorios'); return; }
+    const r = await fetch('/api/jornada/' + uid, {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
+    });
+    const d = await r.json();
+    if (d.success) {
+        if (d.avisos && d.avisos.length) alert('⚠️ Guardado, con observaciones legales:\n\n• ' + d.avisos.join('\n• '));
+        location.reload();
+    } else alert('❌ ' + (d.error || 'No se pudo guardar'));
+}
+{% endif %}
+</script>
 {% endblock %}
