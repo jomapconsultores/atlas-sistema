@@ -24,6 +24,13 @@
        en varias líneas y quedaba ilegible. Ancho propio y sin cortes. */
     .col-jornada { min-width: 190px; white-space: nowrap; }
     .col-jornada .badge-premium { white-space: nowrap; }
+    /* «20 / 22» y «76 / 88  -12 h» se partían en tres líneas y no se leían.
+       Cada columna de cifras lleva su ancho para que el dato entre entero. */
+    .col-dias  { min-width: 92px;  white-space: nowrap; }
+    .col-horas { min-width: 118px; white-space: nowrap; }
+    .col-cumpl { min-width: 150px; }
+    .col-extra { min-width: 130px; }
+    .col-dinero { min-width: 118px; white-space: nowrap; }
     /* Con 11 columnas, «Total a pagar» —lo que de verdad se viene a mirar—
        quedaba fuera de pantalla y había que arrastrar la tabla. Se fijan la
        primera columna (de quién es la fila) y la última (cuánto), así el resto
@@ -100,14 +107,14 @@
         <thead><tr>
             <th class="col-persona">Persona</th>
             <th class="text-center col-jornada">Jornada pactada</th>
-            <th class="text-center">Días<br>trab. / exig.</th>
-            <th class="text-center">Horas<br>trab. / exig.</th>
-            <th class="text-center">Cumplimiento</th>
-            <th class="text-center">Horas<br>extra</th>
-            <th class="text-end">Sueldo<br>tiempo completo</th>
-            <th class="text-end">Proporcional<br>jornada</th>
-            <th class="text-end">Proporcional<br>horas trabajadas</th>
-            <th class="text-end">Pago<br>horas extra</th>
+            <th class="text-center col-dias">Días<br>trab. / exig.</th>
+            <th class="text-center col-horas">Horas<br>trab. / exig.</th>
+            <th class="text-center col-cumpl">Cumplimiento</th>
+            <th class="text-center col-extra">Horas<br>extra</th>
+            <th class="text-end col-dinero">Sueldo<br>tiempo completo</th>
+            <th class="text-end col-dinero">Proporcional<br>jornada</th>
+            <th class="text-end col-dinero">Proporcional<br>horas trabajadas</th>
+            <th class="text-end col-dinero">Pago<br>horas extra</th>
             <th class="text-end col-total">Total<br>a pagar</th>
         </tr></thead>
         <tbody>
@@ -132,17 +139,17 @@
                 <br><span class="badge-premium bg-danger text-white" title="Supera la jornada ordinaria máxima del Art. 47 ({{ jornada_max_diaria }} h/día, {{ jornada_max_semanal }} h/semana)">⚠️ sobre la jornada legal</span>
                 {% endif %}
             </td>
-            <td class="text-center">
+            <td class="text-center col-dias">
                 <strong>{{ r.dias_trabajados }}</strong> / {{ r.dias_mes }}
                 {% if r.dias_sin_cerrar %}<br><span class="badge-premium bg-warning text-dark" title="Días con ingreso pero sin salida marcada: no cuentan horas">{{ r.dias_sin_cerrar }} sin cerrar</span>{% endif %}
                 {% if r.dias_sobre_jornada %}<br><span class="badge-premium bg-info text-white" title="Trabajó más días que los exigidos; el sueldo base no sube (tope 100%)">+{{ r.dias_sobre_jornada }} sobre lo exigido</span>{% endif %}
             </td>
-            <td class="text-center">
+            <td class="text-center col-horas">
                 <strong>{{ r.horas_trabajadas|horas }}</strong> / {{ r.horas_esperadas_mes|horas }}
                 {% if r.horas_permiso %}<br><small class="text-info" title="Horas repuestas por salidas autorizadas">🪪 +{{ r.horas_permiso|horas }} = {{ r.horas_pagables|horas }}</small>{% endif %}
                 <br><small class="text-{{ 'success' if r.diferencia_horas >= 0 else 'danger' }}">{{ '+' if r.diferencia_horas >= 0 else '' }}{{ r.diferencia_horas|horas }} h</small>
             </td>
-            <td class="text-center">
+            <td class="text-center col-cumpl">
                 {% set pct = r.cumplimiento_mes %}
                 <strong class="text-{{ 'success' if r.cumple_jornada else 'warning' if pct >= 80 else 'danger' }}">{{ "%.1f"|format(pct) }}%</strong>
                 <div class="barra"><span style="width: {{ [pct, 100]|min }}%; background: {{ '#16a34a' if r.cumple_jornada else '#f59e0b' if pct >= 80 else '#dc3545' }};"></span></div>
@@ -152,7 +159,7 @@
                 </small>
                 {% if r.dias_trabajados %}<small class="text-muted d-block">En los días trabajados: {{ "%.1f"|format(r.cumplimiento_dias) }}%</small>{% endif %}
             </td>
-            <td class="text-center">
+            <td class="text-center col-extra">
                 {% if r.horas_extra %}<span class="badge-premium bg-warning text-dark">{{ r.horas_extra|horas }} h</span>
                 {% for tipo, h in r.extra_por_tipo.items() %}
                 <br><small class="text-muted" title="{{ recargos[tipo].detalle }}">{{ h|horas }} h {{ recargos[tipo].label }}</small>
@@ -161,20 +168,20 @@
                 {% if r.dias_extra_sobre_tope %}<br><span class="badge-premium bg-danger text-white" title="El Art. 55 permite hasta {{ max_suplementarias }} horas suplementarias al día">⚠️ {{ r.dias_extra_sobre_tope }} día(s) sobre el tope</span>{% endif %}
                 {% else %}<span class="text-muted">—</span>{% endif %}
             </td>
-            <td class="text-end">
+            <td class="text-end col-dinero">
                 ${{ "%.2f"|format(r.sueldo_tiempo_completo) }}
                 {% if r.bajo_sbu %}<br><span class="badge-premium bg-danger text-white" title="Mínimo legal para esta jornada: ${{ "%.2f"|format(r.minimo_legal) }} (SBU {{ r.sbu_anio }} ${{ "%.2f"|format(r.sbu_vigente) }}, Art. 82)">⚠️ bajo el SBU</span>{% endif %}
             </td>
-            <td class="text-end">
+            <td class="text-end col-dinero">
                 ${{ "%.2f"|format(r.sueldo_jornada) }}
                 <br><small class="text-muted">×{{ "%.2f"|format(r.factor_jornada) }}</small>
             </td>
-            <td class="text-end">
+            <td class="text-end col-dinero">
                 ${{ "%.2f"|format(r.sueldo_proporcional) }}
                 <br><small class="text-muted">{{ r.horas_pagables|horas }}/{{ r.horas_esperadas_mes|horas }} h</small>
                 {% if r.horas_permiso %}<br><small class="text-info" title="{{ r.dias_con_permiso }} día(s) con salida autorizada: se paga la jornada completa">🪪 +{{ r.horas_permiso|horas }} h por permiso</small>{% endif %}
             </td>
-            <td class="text-end">
+            <td class="text-end col-dinero">
                 {% if r.pago_horas_extra %}${{ "%.2f"|format(r.pago_horas_extra) }}<br><small class="text-muted" title="Valor hora legal: ${{ "%.2f"|format(r.sueldo_jornada) }} ÷ {{ r.horas_mes_legal|horas }} h (30 días × {{ r.horas_dia|horas }} h)">${{ "%.4f"|format(r.valor_hora) }}/h</small>
                 {% else %}<span class="text-muted">—</span>{% endif %}
             </td>

@@ -4625,7 +4625,6 @@ def admin_marcaciones():
     for f in filas:
         f['_horas'] = _horas_del_dia(f)
         f['_horas_extra'] = _num(f.get('horas_extra'))
-        f['_total_dia'] = round(f['_horas'] + f['_horas_extra'], 2)
         f['_tipo_extra'] = f.get('tipo_extra') or ('suplementaria' if f['_horas_extra'] else '')
         f['_recargo'] = RECARGOS_EXTRA.get(f['_tipo_extra'], {})
         f['_sobre_jornada_legal'] = f['_horas'] > JORNADA_MAX_DIARIA
@@ -4636,6 +4635,11 @@ def admin_marcaciones():
         f['_horas_jornada'] = _num(j.get('horas_dia'), JORNADA_DEFECTO['horas_dia'])
         f['_con_permiso'] = bool(f.get('con_permiso'))
         f['_horas_repuestas'] = round(max(f['_horas_jornada'] - f['_horas'], 0), 2)
+        # Total del día = lo que se le paga por ese día. Con permiso incluye las
+        # horas repuestas: un jueves de 3 h con permiso sobre una jornada de 4
+        # totaliza 4, no 3, que es lo que acaba en el proporcional del mes.
+        f['_horas_pagadas'] = f['_horas'] + (f['_horas_repuestas'] if f['_con_permiso'] else 0)
+        f['_total_dia'] = round(f['_horas_pagadas'] + f['_horas_extra'], 2)
     # Personal con jornada pactada y activo: entra al reporte aunque no tenga
     # marcaciones (así se ve el incumplimiento, no una fila ausente).
     personas_base = []
