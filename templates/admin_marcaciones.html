@@ -24,6 +24,21 @@
        en varias líneas y quedaba ilegible. Ancho propio y sin cortes. */
     .col-jornada { min-width: 190px; white-space: nowrap; }
     .col-jornada .badge-premium { white-space: nowrap; }
+    /* Con 11 columnas, «Total a pagar» —lo que de verdad se viene a mirar—
+       quedaba fuera de pantalla y había que arrastrar la tabla. Se fijan la
+       primera columna (de quién es la fila) y la última (cuánto), así el resto
+       se desplaza por debajo sin perder el contexto ni el resultado. */
+    .col-persona { position: sticky; left: 0; z-index: 2; background: #fff; min-width: 170px; }
+    .col-total   { position: sticky; right: 0; z-index: 2; background: #fff; min-width: 110px; }
+    thead .col-persona, thead .col-total { z-index: 3; background: #1a1a2e; }
+    tfoot .col-persona, tfoot .col-total { background: #f8f9fa; }
+    /* Sombra que insinúa que hay más columnas debajo de las fijas. */
+    .col-persona { box-shadow: 2px 0 4px -2px rgba(0,0,0,.18); }
+    .col-total   { box-shadow: -2px 0 4px -2px rgba(0,0,0,.18); }
+    /* En móvil no hay sitio para fijar dos columnas: se desactiva. */
+    @media (max-width: 640px) {
+        .col-persona, .col-total { position: static; box-shadow: none; }
+    }
     /* Fecha + día de la semana en una sola línea. */
     .col-fecha { min-width: 132px; white-space: nowrap; }
     .dia-semana { font-size: 11px; color: #78909c; text-transform: capitalize; }
@@ -83,7 +98,7 @@
     <div class="card-body p-0">
     <div class="table-responsive"><table class="table table-premium mb-0">
         <thead><tr>
-            <th>Persona</th>
+            <th class="col-persona">Persona</th>
             <th class="text-center col-jornada">Jornada pactada</th>
             <th class="text-center">Días<br>trab. / exig.</th>
             <th class="text-center">Horas<br>trab. / exig.</th>
@@ -93,14 +108,18 @@
             <th class="text-end">Proporcional<br>jornada</th>
             <th class="text-end">Proporcional<br>días trabajados</th>
             <th class="text-end">Pago<br>horas extra</th>
-            <th class="text-end">Total<br>a pagar</th>
-            {% if puede_jornada %}<th></th>{% endif %}
+            <th class="text-end col-total">Total<br>a pagar</th>
         </tr></thead>
         <tbody>
         {% for r in resumen %}
         <tr>
-            <td>
-                <strong>{{ r.nombre }}</strong><br>
+            <td class="col-persona">
+                <strong>{{ r.nombre }}</strong>
+                {% if puede_jornada %}
+                <button class="btn btn-sm btn-outline-dark py-0 px-1 ms-1" title="Configurar jornada y sueldo"
+                        onclick='abrirJornada({{ r.usuario_id }}, {{ r.nombre|tojson }}, {{ r.horas_dia }}, {{ r.dias_mes }}, {{ r.horas_jornada_completa }}, {{ r.sueldo_tiempo_completo }}, {{ r.recargo_hora_extra }})'>⚙️</button>
+                {% endif %}
+                <br>
                 <span class="badge-premium text-white bg-{{ 'warning' if r.rol=='secretaria' else 'success' if r.rol=='profesor' else 'purple' if r.rol=='psicologo' else 'info' }}">{{ r.rol }}</span>
                 {% if not r.tiene_jornada %}<br><span class="badge-premium bg-light text-dark border" title="Se calcula con la jornada por defecto y sueldo 0">⚠️ sin jornada configurada</span>{% endif %}
             </td>
@@ -157,30 +176,24 @@
                 {% if r.pago_horas_extra %}${{ "%.2f"|format(r.pago_horas_extra) }}<br><small class="text-muted" title="Valor hora legal: ${{ "%.2f"|format(r.sueldo_jornada) }} ÷ {{ "%g"|format(r.horas_mes_legal) }} h (30 días × {{ "%g"|format(r.horas_dia) }} h)">${{ "%.4f"|format(r.valor_hora) }}/h</small>
                 {% else %}<span class="text-muted">—</span>{% endif %}
             </td>
-            <td class="text-end"><strong class="text-success fs-6">${{ "%.2f"|format(r.total_a_pagar) }}</strong></td>
-            {% if puede_jornada %}
-            <td class="text-end">
-                <button class="btn btn-sm btn-outline-dark" title="Configurar jornada y sueldo"
-                        onclick='abrirJornada({{ r.usuario_id }}, {{ r.nombre|tojson }}, {{ r.horas_dia }}, {{ r.dias_mes }}, {{ r.horas_jornada_completa }}, {{ r.sueldo_tiempo_completo }}, {{ r.recargo_hora_extra }})'>⚙️</button>
-            </td>
-            {% endif %}
+            <td class="text-end col-total"><strong class="text-success fs-6">${{ "%.2f"|format(r.total_a_pagar) }}</strong></td>
         </tr>
         {% else %}
-        <tr><td colspan="{{ 12 if puede_jornada else 11 }}" class="text-center text-muted py-3">Sin marcaciones en este período</td></tr>
+        <tr><td colspan="11" class="text-center text-muted py-3">Sin marcaciones en este período</td></tr>
         {% endfor %}
         </tbody>
         {% if resumen %}
         <tfoot class="table-light fw-bold">
             <tr>
-                <td colspan="2">TOTALES</td>
+                <td class="col-persona">TOTALES</td>
+                <td></td>
                 <td class="text-center">{{ totales.dias }}</td>
                 <td class="text-center">{{ "%.2f"|format(totales.horas) }}</td>
                 <td></td>
                 <td class="text-center">{{ "%.2f"|format(totales.horas_extra) }}</td>
                 <td colspan="3"></td>
                 <td class="text-end">${{ "%.2f"|format(resumen|sum(attribute='pago_horas_extra')) }}</td>
-                <td class="text-end text-success">${{ "%.2f"|format(totales.a_pagar) }}</td>
-                {% if puede_jornada %}<td></td>{% endif %}
+                <td class="text-end text-success col-total">${{ "%.2f"|format(totales.a_pagar) }}</td>
             </tr>
         </tfoot>
         {% endif %}
@@ -238,7 +251,10 @@
 
 <!-- ===== MODAL HORAS EXTRA ===== -->
 <div class="modal fade" id="modalHorasExtra" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered">
+  <!-- scrollable: sin esto el modal es mas alto que la ventana, se desborda por
+       arriba y su cabecera (titulo y boton de cerrar) queda tapada por la barra
+       superior fija. Asi el contenido scrollea DENTRO y la cabecera no se mueve. -->
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content" style="border-radius:16px;">
       <div class="modal-header"><h5 class="modal-title">⏱ Horas extra del día</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
@@ -275,7 +291,10 @@
 {% if puede_jornada %}
 <!-- ===== MODAL JORNADA Y SUELDO ===== -->
 <div class="modal fade" id="modalJornada" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered">
+  <!-- scrollable: sin esto el modal es mas alto que la ventana, se desborda por
+       arriba y su cabecera (titulo y boton de cerrar) queda tapada por la barra
+       superior fija. Asi el contenido scrollea DENTRO y la cabecera no se mueve. -->
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content" style="border-radius:16px;">
       <div class="modal-header"><h5 class="modal-title">⚙️ Jornada y sueldo</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
