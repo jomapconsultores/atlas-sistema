@@ -228,6 +228,7 @@ MODULOS_DISPONIBLES = [
     {'key': 'administracion.reporte_duplicados', 'label': 'Reporte duplicados', 'grupo': 'Administración'},
     {'key': 'asistencia.marcar', 'label': 'Marcar ingreso/salida (propio)', 'grupo': 'Asistencia'},
     {'key': 'asistencia.ver_docentes', 'label': 'Ver marcaciones de profesores y psicólogos', 'grupo': 'Asistencia'},
+    {'key': 'asistencia.jornada_sueldo', 'label': 'Configurar jornada y sueldo del personal', 'grupo': 'Asistencia'},
     {'key': 'administracion.marcaciones', 'label': 'Ver todas las marcaciones', 'grupo': 'Administración'},
     # Gestión de usuarios delegable de forma granular. Cada capacidad se otorga
     # por separado; las salvaguardas anti-escalada viven en _puede_usuarios y en
@@ -956,7 +957,12 @@ def login():
 
 @app.route('/logout')
 def logout():
+    # logout_user() solo quita las claves de flask_login; el resto de la sesión
+    # (retos de passkey, banderas de la interfaz) seguía viajando en la cookie.
+    # Se vacía entera para no dejar nada del usuario anterior en el dispositivo,
+    # que importa especialmente en equipos compartidos.
     logout_user()
+    session.clear()
     return redirect(url_for('inicio'))
 
 @app.route('/manifest.json')
@@ -4309,9 +4315,207 @@ def mi_asistencia():
     marcacion_hoy = supabase.table('marcaciones').select('*').eq('usuario_id', current_user.id).eq('fecha', hoy).execute().data
     historial = (supabase.table('marcaciones').select('*')
         .eq('usuario_id', current_user.id).order('fecha', desc=True).limit(14).execute().data or [])
+    for m in historial:
+        m['_horas'] = _horas_del_dia(m)
+        m['_horas_extra'] = _num(m.get('horas_extra'))
+        m['_total_dia'] = round(m['_horas'] + m['_horas_extra'], 2)
+        m['_recargo'] = RECARGOS_EXTRA.get(m.get('tipo_extra') or 'suplementaria', {}) if m['_horas_extra'] else {}
+
+    # Resumen del mes en curso frente a la jornada pactada (si la tiene).
+    mes_actual, anio_actual = ahora_ec.month, ahora_ec.year
+    ultimo = monthrange(anio_actual, mes_actual)[1]
+    del_mes = _fetch_all(supabase.table('marcaciones').select('*')
+        .eq('usuario_id', current_user.id)
+        .gte('fecha', f"{anio_actual}-{mes_actual:02d}-01")
+        .lte('fecha', f"{anio_actual}-{mes_actual:02d}-{ultimo}"))
+    jornadas = _jornadas_por_usuario()
+    mi_jornada = jornadas.get(current_user.id)
+    resumen = _resumen_asistencia(del_mes, jornadas,
+        [{'id': current_user.id, 'nombre': current_user.nombre, 'rol': current_user.rol}])
+    mi_resumen = next((r for r in resumen if r['usuario_id'] == current_user.id), None)
     return render_template('mi_asistencia.html',
                           marcacion_hoy=marcacion_hoy[0] if marcacion_hoy else None,
-                          historial=historial)
+                          historial=historial, mi_resumen=mi_resumen,
+                          tiene_jornada=bool(mi_jornada), mes=mes_actual, anio=anio_actual,
+                          sbu=SBU_ECUADOR, sbu_anio=SBU_ANIO, horas_mes_legal=HORAS_MES_LEGAL)
+
+# --- Marco legal ecuatoriano (Código del Trabajo) ------------------------
+# Salario Básico Unificado vigente. 2026: USD 482 (Acuerdo Ministerial
+# MDT-2025-195, rige desde el 1 de enero de 2026; subió 12 USD frente a los
+# 470 de 2025). Al cambiar de año basta actualizar estas dos constantes.
+SBU_ANIO = 2026
+SBU_ECUADOR = 482.00
+# Jornada máxima ordinaria: 8 horas diarias y 40 semanales (Art. 47).
+JORNADA_MAX_DIARIA = 8
+JORNADA_MAX_SEMANAL = 40
+# Divisor legal del valor hora: la remuneración mensual se divide para las
+# horas de un MES DE 30 DÍAS a la jornada de la persona. A tiempo completo son
+# 30 × 8 = 240 y la hora vale 482/240 = 2.0083 con el SBU 2026. En jornada
+# parcial el divisor baja en la misma proporción que el sueldo (30 × 4 = 120 a
+# medio tiempo), así que la hora vale lo mismo: 241/120 = 2.0083 (Art. 82).
+# Ojo: NO se divide para las horas exigidas del mes (22 días), que sirven para
+# medir cumplimiento, no para valorar la hora.
+DIAS_MES_LEGAL = 30
+HORAS_MES_LEGAL = DIAS_MES_LEGAL * 8      # 240, jornada completa
+# Recargos del Art. 55 y de la jornada nocturna (Art. 49).
+RECARGOS_EXTRA = {
+    'suplementaria': {'factor': 1.5,  'label': 'Suplementaria +50%',
+                      'detalle': 'Fuera de jornada entre 06h00 y 24h00. Máximo 4 al día y 12 a la semana.'},
+    'extraordinaria': {'factor': 2.0, 'label': 'Extraordinaria +100%',
+                       'detalle': 'Entre 24h00 y 06h00, o en sábados, domingos y feriados.'},
+    'nocturna': {'factor': 1.25, 'label': 'Recargo nocturno +25%',
+                 'detalle': 'Jornada cumplida entre las 19h00 y las 06h00.'},
+}
+MAX_SUPLEMENTARIAS_DIA = 4      # Art. 55: tope diario de horas suplementarias
+
+# --- Jornada, horas y sueldo proporcional -------------------------------
+# Defecto para quien todavía no tiene jornada configurada: la jornada legal
+# completa (8 h × 22 días laborables) y el SBU del año como sueldo de
+# referencia, que es el piso que la ley permite pagar a tiempo completo.
+JORNADA_DEFECTO = {'horas_dia': JORNADA_MAX_DIARIA, 'dias_mes': 22,
+                   'horas_jornada_completa': JORNADA_MAX_DIARIA,
+                   'sueldo_tiempo_completo': SBU_ECUADOR, 'recargo_hora_extra': 1.5}
+
+def _horas_del_dia(m):
+    """Horas efectivas de una marcación: salida - ingreso. Sin salida marcada
+    devuelve 0 (el día queda contado como 'sin cerrar', no como jornada)."""
+    ini, fin = m.get('hora_ingreso'), m.get('hora_salida')
+    if not ini or not fin:
+        return 0.0
+    try:
+        h1 = datetime.strptime(str(ini)[:8], '%H:%M:%S')
+        h2 = datetime.strptime(str(fin)[:8], '%H:%M:%S')
+    except ValueError:
+        return 0.0
+    seg = (h2 - h1).total_seconds()
+    if seg < 0:      # salida al día siguiente (turno cruzado)
+        seg += 24 * 3600
+    return round(seg / 3600, 2)
+
+def _num(v, defecto=0.0):
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return defecto
+
+def _resumen_asistencia(filas, jornadas, personas_base=None):
+    """Reporte final por persona del período: días y horas trabajadas, horas
+    extra, cumplimiento de la jornada pactada y sueldo a pagar.
+
+    El sueldo sale de DOS proporcionales encadenados sobre el sueldo a tiempo
+    completo, que es lo que se pidió distinguir:
+      1) por JORNADA  -> horas_dia / horas_jornada_completa  (medio tiempo = 0.5)
+      2) por DÍAS      -> días efectivamente trabajados / días exigidos del mes
+    El proporcional por días se topa en 1: trabajar más días que los exigidos no
+    sube el sueldo base, se paga como hora extra.
+
+    Las horas extra se pagan aparte y siguen el Código del Trabajo ecuatoriano:
+    valor hora = remuneración mensual / 240 (Art. 47/55, mes de 30 días × 8 h),
+    NO dividida para las horas exigidas del mes. Cada día lleva su propio tipo
+    de recargo (suplementaria +50%, extraordinaria +100%, nocturna +25%).
+    """
+    def _vacio(uid, nombre, rol):
+        return {'usuario_id': uid, 'nombre': nombre or '—', 'rol': rol or '—',
+                'dias_trabajados': 0, 'dias_sin_cerrar': 0, 'horas_trabajadas': 0.0,
+                'horas_extra': 0.0, 'horas_extra_ponderadas': 0.0, 'extra_por_tipo': {},
+                'dias_extra_sobre_tope': 0}
+
+    resumen = {}
+    # Quien tiene jornada pactada aparece aunque no haya marcado nada en el mes:
+    # un mes sin marcaciones es justamente lo que hay que ver en el reporte.
+    for p in (personas_base or []):
+        resumen[p['id']] = _vacio(p['id'], p.get('nombre'), p.get('rol'))
+    for f in filas:
+        uid = f.get('usuario_id')
+        u = f.get('usuarios') or {}
+        r = resumen.setdefault(uid, _vacio(uid, u.get('nombre'), u.get('rol')))
+        if u.get('nombre'):
+            r['nombre'], r['rol'] = u.get('nombre'), u.get('rol') or r['rol']
+        horas = _horas_del_dia(f)
+        if horas > 0:
+            r['dias_trabajados'] += 1
+            r['horas_trabajadas'] += horas
+        elif f.get('hora_ingreso'):
+            r['dias_sin_cerrar'] += 1
+        # Horas extra del día con SU tipo de recargo (Art. 55). Las filas
+        # anteriores a esta función no tienen tipo: se toman como suplementarias.
+        extra = _num(f.get('horas_extra'))
+        if extra:
+            tipo = f.get('tipo_extra') or 'suplementaria'
+            factor = RECARGOS_EXTRA.get(tipo, RECARGOS_EXTRA['suplementaria'])['factor']
+            r['horas_extra'] += extra
+            r['horas_extra_ponderadas'] += extra * factor
+            r['extra_por_tipo'][tipo] = round(r['extra_por_tipo'].get(tipo, 0) + extra, 2)
+            if tipo == 'suplementaria' and extra > MAX_SUPLEMENTARIAS_DIA:
+                r['dias_extra_sobre_tope'] += 1
+
+    for uid, r in resumen.items():
+        j = jornadas.get(uid) or {}
+        r['tiene_jornada'] = bool(j)
+        horas_dia = _num(j.get('horas_dia'), JORNADA_DEFECTO['horas_dia']) or JORNADA_DEFECTO['horas_dia']
+        dias_mes = int(_num(j.get('dias_mes'), JORNADA_DEFECTO['dias_mes'])) or JORNADA_DEFECTO['dias_mes']
+        h_completa = _num(j.get('horas_jornada_completa'), JORNADA_DEFECTO['horas_jornada_completa']) or JORNADA_DEFECTO['horas_jornada_completa']
+        sueldo_tc = _num(j.get('sueldo_tiempo_completo'))
+        recargo = _num(j.get('recargo_hora_extra'), JORNADA_DEFECTO['recargo_hora_extra'])
+
+        r['horas_dia'], r['dias_mes'] = horas_dia, dias_mes
+        r['horas_jornada_completa'], r['sueldo_tiempo_completo'] = h_completa, sueldo_tc
+        r['recargo_hora_extra'] = recargo
+        r['horas_trabajadas'] = round(r['horas_trabajadas'], 2)
+        r['horas_extra'] = round(r['horas_extra'], 2)
+
+        # Jornada exigida: del mes completo y la que correspondía a los días
+        # que sí trabajó (para saber si en esos días cumplió el horario).
+        r['horas_esperadas_mes'] = round(horas_dia * dias_mes, 2)
+        r['horas_esperadas_dias'] = round(horas_dia * r['dias_trabajados'], 2)
+        r['cumplimiento_mes'] = round(r['horas_trabajadas'] / r['horas_esperadas_mes'] * 100, 1) if r['horas_esperadas_mes'] else 0
+        r['cumplimiento_dias'] = round(r['horas_trabajadas'] / r['horas_esperadas_dias'] * 100, 1) if r['horas_esperadas_dias'] else 0
+        r['diferencia_horas'] = round(r['horas_trabajadas'] - r['horas_esperadas_mes'], 2)
+        r['cumple_jornada'] = r['horas_trabajadas'] >= r['horas_esperadas_mes']
+        r['dias_faltantes'] = max(dias_mes - r['dias_trabajados'], 0)
+
+        # 1) proporcional por jornada (tiempo completo / medio tiempo / etc.)
+        r['factor_jornada'] = round(horas_dia / h_completa, 4) if h_completa else 1
+        r['es_tiempo_completo'] = abs(r['factor_jornada'] - 1) < 0.001
+        r['sueldo_jornada'] = round(sueldo_tc * r['factor_jornada'], 2)
+        # 2) proporcional por días efectivamente trabajados (tope: la jornada completa del mes)
+        r['factor_dias'] = round(min(r['dias_trabajados'] / dias_mes, 1), 4) if dias_mes else 0
+        r['dias_sobre_jornada'] = max(r['dias_trabajados'] - dias_mes, 0)
+        r['sueldo_proporcional'] = round(r['sueldo_jornada'] * r['factor_dias'], 2)
+
+        # Valor hora LEGAL: remuneración mensual / horas de un mes de 30 días a
+        # SU jornada (Art. 47/55). A tiempo completo es el clásico /240. En
+        # jornada parcial bajan sueldo y divisor en la misma proporción, así que
+        # la hora vale igual que a tiempo completo — dividir el sueldo parcial
+        # para 240 la dejaría a la mitad y subvaloraría cada hora extra.
+        r['horas_mes_legal'] = round(DIAS_MES_LEGAL * horas_dia, 2)
+        r['valor_hora'] = round(r['sueldo_jornada'] / r['horas_mes_legal'], 4) if r['horas_mes_legal'] else 0
+        r['valor_hora_completa'] = round(sueldo_tc / HORAS_MES_LEGAL, 4)
+        r['pago_horas_extra'] = round(r['horas_extra_ponderadas'] * r['valor_hora'], 2)
+        r['horas_extra_ponderadas'] = round(r['horas_extra_ponderadas'], 2)
+        r['total_a_pagar'] = round(r['sueldo_proporcional'] + r['pago_horas_extra'], 2)
+
+        # --- Controles legales (Ecuador) ---------------------------------
+        # Piso salarial: el SBU a tiempo completo y su proporcional en jornada
+        # parcial (Art. 82: no puede ser inferior a la parte proporcional).
+        r['sbu_vigente'] = SBU_ECUADOR
+        r['sbu_anio'] = SBU_ANIO
+        r['minimo_legal'] = round(SBU_ECUADOR * r['factor_jornada'], 2)
+        r['bajo_sbu'] = bool(sueldo_tc) and r['sueldo_jornada'] < r['minimo_legal'] - 0.005
+        r['excede_jornada_diaria'] = horas_dia > JORNADA_MAX_DIARIA
+        r['excede_jornada_semanal'] = round(horas_dia * 5, 2) > JORNADA_MAX_SEMANAL
+        r['alerta_legal'] = r['bajo_sbu'] or r['excede_jornada_diaria'] or r['excede_jornada_semanal'] or bool(r['dias_extra_sobre_tope'])
+
+    return sorted(resumen.values(), key=lambda r: r['nombre'])
+
+def _jornadas_por_usuario():
+    """{usuario_id: jornada}. Si la tabla aún no existe (migración pendiente)
+    devuelve {} y el módulo sigue funcionando solo con horas y días."""
+    try:
+        filas = supabase.table('jornadas_laborales').select('*').execute().data or []
+    except Exception:
+        return {}
+    return {f['usuario_id']: f for f in filas}
 
 @app.route('/admin/marcaciones')
 @login_required
@@ -4326,14 +4530,149 @@ def admin_marcaciones():
         return redirect(url_for('dashboard'))
     mes, anio = _mes_anio_args()
     ultimo_dia = monthrange(anio, mes)[1]
-    filas = (supabase.table('marcaciones').select('*, usuarios(nombre, rol)')
+    filas = _fetch_all(supabase.table('marcaciones').select('*, usuarios(nombre, rol)')
         .gte('fecha', f"{anio}-{mes:02d}-01").lte('fecha', f"{anio}-{mes:02d}-{ultimo_dia}")
-        .order('fecha', desc=True).execute().data or [])
+        .order('fecha', desc=True))
     # Sin el permiso amplio, se acota a marcaciones de profesores/psicólogos.
     if not ve_todas:
         filas = [f for f in filas if (f.get('usuarios') or {}).get('rol') in ('profesor', 'psicologo')]
+
+    # Horas de cada día para la tabla de registros (contabilización diaria).
+    for f in filas:
+        f['_horas'] = _horas_del_dia(f)
+        f['_horas_extra'] = _num(f.get('horas_extra'))
+        f['_total_dia'] = round(f['_horas'] + f['_horas_extra'], 2)
+        f['_tipo_extra'] = f.get('tipo_extra') or ('suplementaria' if f['_horas_extra'] else '')
+        f['_recargo'] = RECARGOS_EXTRA.get(f['_tipo_extra'], {})
+        f['_sobre_jornada_legal'] = f['_horas'] > JORNADA_MAX_DIARIA
+
+    jornadas = _jornadas_por_usuario()
+    # Personal con jornada pactada y activo: entra al reporte aunque no tenga
+    # marcaciones (así se ve el incumplimiento, no una fila ausente).
+    personas_base = []
+    if jornadas:
+        us = (supabase.table('usuarios').select('id,nombre,rol')
+              .in_('id', list(jornadas.keys())).eq('activo', True).execute().data or [])
+        personas_base = [u for u in us if ve_todas or u.get('rol') in ('profesor', 'psicologo')]
+    resumen = _resumen_asistencia(filas, jornadas, personas_base)
+    totales = {
+        'dias': sum(r['dias_trabajados'] for r in resumen),
+        'horas': round(sum(r['horas_trabajadas'] for r in resumen), 2),
+        'horas_extra': round(sum(r['horas_extra'] for r in resumen), 2),
+        'a_pagar': round(sum(r['total_a_pagar'] for r in resumen), 2),
+    }
+    # Configurar jornada/sueldo es información salarial: permiso aparte.
+    puede_jornada = tiene_modulo('asistencia.jornada_sueldo') or ve_todas
+    # Personal al que se le puede fijar jornada (incluye a quien todavía no
+    # marcó nunca; si no, no habría forma de configurarlo desde aquí).
+    personal = []
+    if puede_jornada:
+        roles = ('profesor', 'psicologo') if not ve_todas else ('profesor', 'psicologo', 'secretaria', 'admin', 'socio')
+        personal = [u for u in (supabase.table('usuarios').select('id,nombre,rol')
+                                .eq('activo', True).order('nombre').execute().data or [])
+                    if u.get('rol') in roles]
     return render_template('admin_marcaciones.html', marcaciones=filas, mes=mes, anio=anio,
-                          solo_docentes=(not ve_todas))
+                          solo_docentes=(not ve_todas), resumen=resumen, totales=totales,
+                          jornadas=jornadas, puede_jornada=puede_jornada, personal=personal,
+                          jornada_defecto=JORNADA_DEFECTO, recargos=RECARGOS_EXTRA,
+                          sbu=SBU_ECUADOR, sbu_anio=SBU_ANIO, horas_mes_legal=HORAS_MES_LEGAL,
+                          jornada_max_diaria=JORNADA_MAX_DIARIA, jornada_max_semanal=JORNADA_MAX_SEMANAL,
+                          max_suplementarias=MAX_SUPLEMENTARIAS_DIA)
+
+def _puede_editar_marcacion(fila):
+    """Quien ve todas las marcaciones edita cualquiera; quien solo tiene
+    asistencia.ver_docentes queda limitado a profesores/psicólogos."""
+    if tiene_modulo('administracion.marcaciones'):
+        return True
+    if not tiene_modulo('asistencia.ver_docentes'):
+        return False
+    u = supabase.table('usuarios').select('rol').eq('id', fila.get('usuario_id')).execute().data
+    return bool(u) and u[0].get('rol') in ('profesor', 'psicologo')
+
+@app.route('/api/marcacion/<int:id>/horas-extra', methods=['POST'])
+@login_required
+def api_marcacion_horas_extra(id):
+    """Registra (o borra, con 0) las horas extra de un día. El total del mes y
+    el sueldo se recalculan solos al recargar: salen de esta columna."""
+    data = request.get_json() or {}
+    try:
+        horas = round(float(data.get('horas') or 0), 2)
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': 'Horas no válidas'}), 400
+    if horas < 0 or horas > 12:
+        return jsonify({'success': False, 'error': 'Las horas extra deben estar entre 0 y 12'}), 400
+    tipo = data.get('tipo') or 'suplementaria'
+    if tipo not in RECARGOS_EXTRA:
+        return jsonify({'success': False, 'error': 'Tipo de recargo no válido'}), 400
+    fila = supabase.table('marcaciones').select('*').eq('id', id).execute().data
+    if not fila:
+        return jsonify({'success': False, 'error': 'Marcación no encontrada'}), 404
+    if not _puede_editar_marcacion(fila[0]):
+        return jsonify({'success': False, 'error': 'Acceso restringido'}), 403
+    # Art. 55: las suplementarias tienen tope de 4 al día. No se bloquea (el
+    # exceso puede ser extraordinaria mal tipificada), pero se avisa y queda
+    # marcado en el reporte.
+    aviso = None
+    if tipo == 'suplementaria' and horas > MAX_SUPLEMENTARIAS_DIA:
+        aviso = (f'Registraste {horas} h suplementarias: el Código del Trabajo (Art. 55) permite '
+                 f'un máximo de {MAX_SUPLEMENTARIAS_DIA} al día y 12 a la semana. '
+                 'Si fue en la noche, sábado, domingo o feriado corresponde "extraordinaria".')
+    try:
+        supabase.table('marcaciones').update({
+            'horas_extra': horas, 'tipo_extra': tipo if horas else None,
+            'nota_extra': (data.get('nota') or '').strip() or None
+        }).eq('id', id).execute()
+        return jsonify({'success': True, 'horas': horas, 'aviso': aviso})
+    except Exception as e:
+        return jsonify({'success': False, 'error': 'No se pudo guardar. ¿Ejecutaste migration_jornadas_asistencia.sql? ' + str(e)})
+
+@app.route('/api/jornada/<int:usuario_id>', methods=['POST'])
+@login_required
+def api_guardar_jornada(usuario_id):
+    """Jornada pactada y sueldo a tiempo completo de una persona (uno por
+    usuario: se inserta o se actualiza el existente)."""
+    if not (tiene_modulo('asistencia.jornada_sueldo') or tiene_modulo('administracion.marcaciones')):
+        return jsonify({'success': False, 'error': 'Acceso restringido'}), 403
+    data = request.get_json() or {}
+    try:
+        horas_dia = round(float(data.get('horas_dia')), 2)
+        dias_mes = int(data.get('dias_mes'))
+        h_completa = round(float(data.get('horas_jornada_completa') or 8), 2)
+        sueldo = round(float(data.get('sueldo_tiempo_completo') or 0), 2)
+        recargo = round(float(data.get('recargo_hora_extra') or 1.5), 2)
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': 'Datos incompletos o no numéricos'}), 400
+    if not (0 < horas_dia <= 24) or not (0 < dias_mes <= 31) or not (0 < h_completa <= 24):
+        return jsonify({'success': False, 'error': 'Horas por día (1-24), días del mes (1-31) y jornada completa (1-24) fuera de rango'}), 400
+    if horas_dia > h_completa:
+        return jsonify({'success': False, 'error': 'La jornada diaria no puede superar la jornada completa de referencia'}), 400
+    if sueldo < 0 or not (1 <= recargo <= 3):
+        return jsonify({'success': False, 'error': 'Sueldo no puede ser negativo y el recargo debe estar entre 1 y 3'}), 400
+    # Avisos legales (Ecuador). No bloquean el guardado —puede haber jornadas
+    # especiales autorizadas— pero quedan visibles aquí y en el reporte.
+    avisos = []
+    if horas_dia > JORNADA_MAX_DIARIA:
+        avisos.append(f'La jornada ordinaria máxima es de {JORNADA_MAX_DIARIA} horas diarias (Art. 47). '
+                      'Lo que exceda debería registrarse como hora suplementaria o extraordinaria.')
+    if horas_dia * 5 > JORNADA_MAX_SEMANAL:
+        avisos.append(f'Con {horas_dia} h/día en 5 días se superan las {JORNADA_MAX_SEMANAL} horas semanales de ley.')
+    minimo = round(SBU_ECUADOR * (horas_dia / h_completa), 2)
+    if sueldo and round(sueldo * (horas_dia / h_completa), 2) < minimo - 0.005:
+        avisos.append(f'El sueldo de esta jornada queda bajo el mínimo legal: el SBU {SBU_ANIO} es '
+                      f'${SBU_ECUADOR:.2f} y su parte proporcional para esta jornada es ${minimo:.2f} (Art. 82).')
+
+    valores = {'usuario_id': usuario_id, 'horas_dia': horas_dia, 'dias_mes': dias_mes,
+               'horas_jornada_completa': h_completa, 'sueldo_tiempo_completo': sueldo,
+               'recargo_hora_extra': recargo}
+    try:
+        existe = supabase.table('jornadas_laborales').select('id').eq('usuario_id', usuario_id).execute().data
+        if existe:
+            supabase.table('jornadas_laborales').update(valores).eq('usuario_id', usuario_id).execute()
+        else:
+            supabase.table('jornadas_laborales').insert(valores).execute()
+        return jsonify({'success': True, 'avisos': avisos})
+    except Exception as e:
+        return jsonify({'success': False, 'error': 'No se pudo guardar. ¿Ejecutaste migration_jornadas_asistencia.sql? ' + str(e)})
 
 # ========== EDITAR PERFIL ==========
 @app.route('/editar-perfil', methods=['GET', 'POST'])
@@ -4409,6 +4748,23 @@ def _registrar_clave_log(usuario_id, accion, ejecutado_por=None):
     except Exception:
         # Auxiliar: si la tabla aún no está migrada no debe frenar el cambio.
         pass
+
+
+@app.before_request
+def _sesion_deslizante():
+    """Marca la sesión como permanente para que Flask le aplique el plazo de
+    inactividad de config.py (PERMANENT_SESSION_LIFETIME = 20 min).
+
+    Sin esto la constante se ignora en la práctica: Flask solo reemite la cookie
+    —y con ella renueva la marca de tiempo— cuando la sesión es permanente. El
+    resultado sería una sesión que muere 20 minutos después de entrar, esté el
+    usuario trabajando o no.
+
+    Se comprueba antes de asignar para no marcar la sesión como modificada en
+    cada petición: de la renovación ya se encarga SESSION_REFRESH_EACH_REQUEST.
+    """
+    if current_user.is_authenticated and not session.permanent:
+        session.permanent = True
 
 
 @app.before_request
@@ -4503,7 +4859,23 @@ def api_editar_gasto(id):
     try:
         if campo == 'monto':
             valor = float(valor)
-        supabase.table('gastos').update({campo: valor}).eq('id', id).execute()
+        update = {campo: valor}
+        if campo == 'fecha':
+            # El mes/año se guardan desnormalizados y son los que filtran la vista:
+            # sin actualizarlos, cambiar la fecha a julio dejaba el gasto listado
+            # en junio. El período considerado (mes_periodo) solo se arrastra si
+            # seguía a la fecha anterior; si estaba puesto a mano, se respeta.
+            f = datetime.strptime(valor, '%Y-%m-%d')
+            actual = supabase.table('gastos').select('*').eq('id', id).execute()
+            g = (actual.data or [{}])[0]
+            update['mes'], update['anio'] = f.month, f.year
+            seguia_a_la_fecha = (
+                (g.get('mes_periodo') is None or g.get('mes_periodo') == g.get('mes'))
+                and (g.get('anio_periodo') is None or g.get('anio_periodo') == g.get('anio'))
+            )
+            if seguia_a_la_fecha and g.get('mes_periodo') is not None:
+                update['mes_periodo'], update['anio_periodo'] = f.month, f.year
+        supabase.table('gastos').update(update).eq('id', id).execute()
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})

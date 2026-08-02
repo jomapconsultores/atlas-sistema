@@ -139,27 +139,27 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-bold">Fecha *</label>
-                        <input type="date" name="fecha" class="form-control border-0 shadow-sm" value="{{ today }}" required>
+                        <input type="date" name="fecha" id="gastoFecha" class="form-control border-0 shadow-sm" value="{{ today }}" required onchange="sincronizarPeriodoGasto()">
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-bold">Período al que corresponde</label>
                         <div class="row g-1">
                             <div class="col-6">
-                                <select name="mes_periodo" class="form-select form-select-sm border-0 shadow-sm">
+                                <select name="mes_periodo" id="gastoMesPeriodo" class="form-select form-select-sm border-0 shadow-sm" onchange="marcarPeriodoManual()">
                                     {% for m in range(1,13) %}
-                                    <option value="{{ m }}" {{ 'selected' if m == mes }}>{{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][m-1] }}</option>
+                                    <option value="{{ m }}" {{ 'selected' if m == today.month }}>{{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][m-1] }}</option>
                                     {% endfor %}
                                 </select>
                             </div>
                             <div class="col-6">
-                                <select name="anio_periodo" class="form-select form-select-sm border-0 shadow-sm">
+                                <select name="anio_periodo" id="gastoAnioPeriodo" class="form-select form-select-sm border-0 shadow-sm" onchange="marcarPeriodoManual()">
                                     {% for a in range(2025, 2031) %}
-                                    <option value="{{ a }}" {{ 'selected' if a == anio }}>{{ a }}</option>
+                                    <option value="{{ a }}" {{ 'selected' if a == today.year }}>{{ a }}</option>
                                     {% endfor %}
                                 </select>
                             </div>
                         </div>
-                        <small class="text-muted">Ej: arriendo de mayo pagado en junio → seleccionar Mayo</small>
+                        <small class="text-muted">Sigue a la fecha del gasto. Cámbialo solo si corresponde a otro mes (ej: arriendo de mayo pagado en junio → seleccionar Mayo).</small>
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-bold">Categoría</label>
@@ -570,6 +570,25 @@
 function toggleReembolso() {
     document.getElementById('divReembolsado').style.display = document.getElementById('reembolso').checked ? 'block' : 'none';
 }
+
+// El período considerado sigue a la fecha del gasto (antes quedaba fijo en el mes
+// que se estaba viendo, así que un gasto con fecha de julio caía en junio).
+// Si el usuario elige el período a mano, se respeta y ya no se auto-ajusta.
+let periodoGastoManual = false;
+function marcarPeriodoManual() { periodoGastoManual = true; }
+function sincronizarPeriodoGasto() {
+    if (periodoGastoManual) return;
+    const f = document.getElementById('gastoFecha').value;   // yyyy-mm-dd
+    if (!f) return;
+    const [anio, mes] = f.split('-');
+    const selMes = document.getElementById('gastoMesPeriodo');
+    const selAnio = document.getElementById('gastoAnioPeriodo');
+    selMes.value = String(parseInt(mes, 10));
+    if ([...selAnio.options].some(o => o.value === String(parseInt(anio, 10)))) {
+        selAnio.value = String(parseInt(anio, 10));
+    }
+}
+document.addEventListener('DOMContentLoaded', sincronizarPeriodoGasto);
 
 async function eliminarGasto(id) {
     if (!confirm('¿Eliminar este gasto?')) return;
