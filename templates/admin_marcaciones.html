@@ -78,8 +78,8 @@
 <!-- ===== KPIs DEL PERÍODO ===== -->
 <div class="row g-2 mb-3">
     <div class="col-6 col-lg-3"><div class="kpi kpi-1"><div class="l">Días trabajados</div><div class="v">{{ totales.dias }}</div></div></div>
-    <div class="col-6 col-lg-3"><div class="kpi kpi-2"><div class="l">Horas trabajadas</div><div class="v">{{ "%.2f"|format(totales.horas) }}</div></div></div>
-    <div class="col-6 col-lg-3"><div class="kpi kpi-3"><div class="l">Horas extra</div><div class="v">{{ "%.2f"|format(totales.horas_extra) }}</div></div></div>
+    <div class="col-6 col-lg-3"><div class="kpi kpi-2"><div class="l">Horas trabajadas</div><div class="v">{{ totales.horas|horas }}</div></div></div>
+    <div class="col-6 col-lg-3"><div class="kpi kpi-3"><div class="l">Horas extra</div><div class="v">{{ totales.horas_extra|horas }}</div></div></div>
     <div class="col-6 col-lg-3"><div class="kpi kpi-4"><div class="l">Total a pagar</div><div class="v">${{ "%.2f"|format(totales.a_pagar) }}</div></div></div>
 </div>
 
@@ -124,7 +124,7 @@
                 {% if not r.tiene_jornada %}<br><span class="badge-premium bg-light text-dark border" title="Se calcula con la jornada por defecto y sueldo 0">⚠️ sin jornada configurada</span>{% endif %}
             </td>
             <td class="text-center col-jornada">
-                {{ "%.1f"|format(r.horas_dia) }} h/día × {{ r.dias_mes }} días<br>
+                {{ r.horas_dia|horas }} h/día × {{ r.dias_mes }} días<br>
                 <span class="badge-premium {{ 'bg-primary' if r.es_tiempo_completo else 'bg-secondary' }} text-white">
                     {{ 'Tiempo completo' if r.es_tiempo_completo else (r.factor_jornada * 100)|round(0)|int ~ '% de jornada' }}
                 </span>
@@ -138,9 +138,9 @@
                 {% if r.dias_sobre_jornada %}<br><span class="badge-premium bg-info text-white" title="Trabajó más días que los exigidos; el sueldo base no sube (tope 100%)">+{{ r.dias_sobre_jornada }} sobre lo exigido</span>{% endif %}
             </td>
             <td class="text-center">
-                <strong>{{ "%.2f"|format(r.horas_trabajadas) }}</strong> / {{ "%.2f"|format(r.horas_esperadas_mes) }}
-                {% if r.horas_permiso %}<br><small class="text-info" title="Horas repuestas por salidas autorizadas">🪪 +{{ "%.2f"|format(r.horas_permiso) }} = {{ "%.2f"|format(r.horas_pagables) }}</small>{% endif %}
-                <br><small class="text-{{ 'success' if r.diferencia_horas >= 0 else 'danger' }}">{{ '+' if r.diferencia_horas >= 0 else '' }}{{ "%.2f"|format(r.diferencia_horas) }} h</small>
+                <strong>{{ r.horas_trabajadas|horas }}</strong> / {{ r.horas_esperadas_mes|horas }}
+                {% if r.horas_permiso %}<br><small class="text-info" title="Horas repuestas por salidas autorizadas">🪪 +{{ r.horas_permiso|horas }} = {{ r.horas_pagables|horas }}</small>{% endif %}
+                <br><small class="text-{{ 'success' if r.diferencia_horas >= 0 else 'danger' }}">{{ '+' if r.diferencia_horas >= 0 else '' }}{{ r.diferencia_horas|horas }} h</small>
             </td>
             <td class="text-center">
                 {% set pct = r.cumplimiento_mes %}
@@ -148,16 +148,16 @@
                 <div class="barra"><span style="width: {{ [pct, 100]|min }}%; background: {{ '#16a34a' if r.cumple_jornada else '#f59e0b' if pct >= 80 else '#dc3545' }};"></span></div>
                 <small class="text-muted d-block mt-1">
                     {% if r.cumple_jornada %}✅ cumple la jornada
-                    {% else %}⚠️ faltan {{ "%.2f"|format(-r.diferencia_horas) }} h{% if r.dias_faltantes %} y {{ r.dias_faltantes }} día(s){% endif %}{% endif %}
+                    {% else %}⚠️ faltan {{ (-r.diferencia_horas)|horas }} h{% if r.dias_faltantes %} y {{ r.dias_faltantes }} día(s){% endif %}{% endif %}
                 </small>
                 {% if r.dias_trabajados %}<small class="text-muted d-block">En los días trabajados: {{ "%.1f"|format(r.cumplimiento_dias) }}%</small>{% endif %}
             </td>
             <td class="text-center">
-                {% if r.horas_extra %}<span class="badge-premium bg-warning text-dark">{{ "%.2f"|format(r.horas_extra) }} h</span>
+                {% if r.horas_extra %}<span class="badge-premium bg-warning text-dark">{{ r.horas_extra|horas }} h</span>
                 {% for tipo, h in r.extra_por_tipo.items() %}
-                <br><small class="text-muted" title="{{ recargos[tipo].detalle }}">{{ "%.2f"|format(h) }} h {{ recargos[tipo].label }}</small>
+                <br><small class="text-muted" title="{{ recargos[tipo].detalle }}">{{ h|horas }} h {{ recargos[tipo].label }}</small>
                 {% endfor %}
-                <br><small class="text-muted">= {{ "%.2f"|format(r.horas_extra_ponderadas) }} h con recargo</small>
+                <br><small class="text-muted">= {{ r.horas_extra_ponderadas|horas }} h con recargo</small>
                 {% if r.dias_extra_sobre_tope %}<br><span class="badge-premium bg-danger text-white" title="El Art. 55 permite hasta {{ max_suplementarias }} horas suplementarias al día">⚠️ {{ r.dias_extra_sobre_tope }} día(s) sobre el tope</span>{% endif %}
                 {% else %}<span class="text-muted">—</span>{% endif %}
             </td>
@@ -171,11 +171,11 @@
             </td>
             <td class="text-end">
                 ${{ "%.2f"|format(r.sueldo_proporcional) }}
-                <br><small class="text-muted">{{ "%.2f"|format(r.horas_pagables) }}/{{ "%.2f"|format(r.horas_esperadas_mes) }} h</small>
-                {% if r.horas_permiso %}<br><small class="text-info" title="{{ r.dias_con_permiso }} día(s) con salida autorizada: se paga la jornada completa">🪪 +{{ "%.2f"|format(r.horas_permiso) }} h por permiso</small>{% endif %}
+                <br><small class="text-muted">{{ r.horas_pagables|horas }}/{{ r.horas_esperadas_mes|horas }} h</small>
+                {% if r.horas_permiso %}<br><small class="text-info" title="{{ r.dias_con_permiso }} día(s) con salida autorizada: se paga la jornada completa">🪪 +{{ r.horas_permiso|horas }} h por permiso</small>{% endif %}
             </td>
             <td class="text-end">
-                {% if r.pago_horas_extra %}${{ "%.2f"|format(r.pago_horas_extra) }}<br><small class="text-muted" title="Valor hora legal: ${{ "%.2f"|format(r.sueldo_jornada) }} ÷ {{ "%g"|format(r.horas_mes_legal) }} h (30 días × {{ "%g"|format(r.horas_dia) }} h)">${{ "%.4f"|format(r.valor_hora) }}/h</small>
+                {% if r.pago_horas_extra %}${{ "%.2f"|format(r.pago_horas_extra) }}<br><small class="text-muted" title="Valor hora legal: ${{ "%.2f"|format(r.sueldo_jornada) }} ÷ {{ r.horas_mes_legal|horas }} h (30 días × {{ r.horas_dia|horas }} h)">${{ "%.4f"|format(r.valor_hora) }}/h</small>
                 {% else %}<span class="text-muted">—</span>{% endif %}
             </td>
             <td class="text-end col-total"><strong class="text-success fs-6">${{ "%.2f"|format(r.total_a_pagar) }}</strong></td>
@@ -190,9 +190,9 @@
                 <td class="col-persona">TOTALES</td>
                 <td></td>
                 <td class="text-center">{{ totales.dias }}</td>
-                <td class="text-center">{{ "%.2f"|format(totales.horas) }}</td>
+                <td class="text-center">{{ totales.horas|horas }}</td>
                 <td></td>
-                <td class="text-center">{{ "%.2f"|format(totales.horas_extra) }}</td>
+                <td class="text-center">{{ totales.horas_extra|horas }}</td>
                 <td colspan="3"></td>
                 <td class="text-end">${{ "%.2f"|format(resumen|sum(attribute='pago_horas_extra')) }}</td>
                 <td class="text-end text-success col-total">${{ "%.2f"|format(totales.a_pagar) }}</td>
@@ -232,19 +232,19 @@
     <td>{{ m.hora_ingreso[:5] if m.hora_ingreso else '—' }}</td>
     <td>{{ m.hora_salida[:5] if m.hora_salida else '—' }}</td>
     <td class="text-center">
-        {% if m._horas %}<strong>{{ "%.2f"|format(m._horas) }}</strong>
+        {% if m._horas %}<strong>{{ m._horas|horas }}</strong>
         {% if m._sobre_jornada_legal %}<br><span class="badge-premium bg-danger text-white" title="Más de {{ jornada_max_diaria }} h en el día: el excedente debería ir como hora suplementaria o extraordinaria (Art. 47)">sobre {{ jornada_max_diaria }} h</span>{% endif %}
         {% elif m.hora_ingreso %}<span class="badge-premium bg-warning text-dark" title="Falta marcar la salida">sin salida</span>
         {% else %}—{% endif %}
-        {% if m._con_permiso %}<br><span class="badge-premium bg-info text-white" {% if m.motivo_permiso %}title="{{ m.motivo_permiso }}"{% endif %}>🪪 con permiso{% if m._horas_repuestas %} +{{ "%.2f"|format(m._horas_repuestas) }} h{% endif %}</span>
-        {% elif m._horas and m._horas_repuestas %}<br><small class="text-muted" title="Jornada pactada: {{ "%g"|format(m._horas_jornada) }} h">faltan {{ "%.2f"|format(m._horas_repuestas) }} h</small>{% endif %}
+        {% if m._con_permiso %}<br><span class="badge-premium bg-info text-white" {% if m.motivo_permiso %}title="{{ m.motivo_permiso }}"{% endif %}>🪪 con permiso{% if m._horas_repuestas %} +{{ m._horas_repuestas|horas }} h{% endif %}</span>
+        {% elif m._horas and m._horas_repuestas %}<br><small class="text-muted" title="Jornada pactada: {{ m._horas_jornada|horas }} h">faltan {{ m._horas_repuestas|horas }} h</small>{% endif %}
     </td>
     <td class="text-center" id="extra-marcacion-{{ m.id }}">
-        {% if m._horas_extra %}<span class="badge-premium bg-warning text-dark" {% if m.nota_extra %}title="{{ m.nota_extra }}"{% endif %}>+{{ "%.2f"|format(m._horas_extra) }} h</span>
+        {% if m._horas_extra %}<span class="badge-premium bg-warning text-dark" {% if m.nota_extra %}title="{{ m.nota_extra }}"{% endif %}>+{{ m._horas_extra|horas }} h</span>
         <br><small class="text-muted" title="{{ m._recargo.detalle }}">{{ m._recargo.label }}</small>
         {% else %}<span class="text-muted">—</span>{% endif %}
     </td>
-    <td class="text-center"><strong>{{ "%.2f"|format(m._total_dia) }}</strong></td>
+    <td class="text-center"><strong>{{ m._total_dia|horas }}</strong></td>
     <td class="text-end" style="white-space:nowrap;">
         <button class="btn btn-sm btn-outline-warning" title="Registrar horas extra de este día"
                 onclick='abrirHorasExtra({{ m.id }}, {{ (m.usuarios.nombre if m.usuarios else "—")|tojson }}, {{ m.fecha|tojson }}, {{ m._horas_extra|default(0, true) }}, {{ (m.nota_extra or "")|tojson }}, {{ (m._tipo_extra or "suplementaria")|tojson }})'>⏱ Extra</button>

@@ -2,6 +2,7 @@
 # Desarrollado por Marco Antonio Posligua San Martín
 # ------------------------------------------------------------
 import os
+import math
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session, g
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash
@@ -4395,26 +4396,44 @@ JORNADA_DEFECTO = {'horas_dia': JORNADA_MAX_DIARIA, 'dias_mes': 22,
                    'sueldo_tiempo_completo': SBU_ECUADOR, 'recargo_hora_extra': 1.5}
 
 def _horas_del_dia(m):
-    """Horas efectivas de una marcación: salida - ingreso. Sin salida marcada
-    devuelve 0 (el día queda contado como 'sin cerrar', no como jornada)."""
+    """Horas efectivas de una marcación: salida - ingreso, en HORAS ENTERAS.
+
+    El reloj da minutos y segundos (08:58 a 12:06 son 3.14 h), pero la jornada
+    se cuenta en horas enteras: ese día son 3 y uno de 2:58 son 3. Se redondea
+    al entero más cercano con medio hacia ARRIBA; round() de Python redondea el
+    medio al par (round(4.5) == 4), que aquí sorprendería.
+
+    Sin salida marcada devuelve 0: el día queda 'sin cerrar', no como jornada.
+    """
     ini, fin = m.get('hora_ingreso'), m.get('hora_salida')
     if not ini or not fin:
-        return 0.0
+        return 0
     try:
         h1 = datetime.strptime(str(ini)[:8], '%H:%M:%S')
         h2 = datetime.strptime(str(fin)[:8], '%H:%M:%S')
     except ValueError:
-        return 0.0
+        return 0
     seg = (h2 - h1).total_seconds()
     if seg < 0:      # salida al día siguiente (turno cruzado)
         seg += 24 * 3600
-    return round(seg / 3600, 2)
+    return int(math.floor(seg / 3600 + 0.5))
 
 def _num(v, defecto=0.0):
     try:
         return float(v)
     except (TypeError, ValueError):
         return defecto
+
+@app.template_filter('horas')
+def _filtro_horas(v):
+    """Formatea horas sin decimales cuando el valor es entero, que es lo normal
+    desde que la jornada se cuenta en horas enteras. Deja el decimal solo si de
+    verdad lo hay (una jornada pactada de 4.5 h, por ejemplo)."""
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return v
+    return str(int(f)) if abs(f - round(f)) < 0.005 else ('%.2f' % f)
 
 # Nombre del día en español. Se resuelve aquí y no con strftime('%A') porque
 # ese depende del locale del servidor, que en el contenedor es inglés.

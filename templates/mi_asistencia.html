@@ -52,11 +52,11 @@
             </div>
             <div class="col-6 col-md-3">
                 <div class="text-muted small text-uppercase">Horas trabajadas</div>
-                <h4 class="mb-0">{{ "%.2f"|format(mi_resumen.horas_trabajadas) }}{% if tiene_jornada %} <small class="text-muted">/ {{ "%.2f"|format(mi_resumen.horas_esperadas_mes) }}</small>{% endif %}</h4>
+                <h4 class="mb-0">{{ mi_resumen.horas_trabajadas|horas }}{% if tiene_jornada %} <small class="text-muted">/ {{ mi_resumen.horas_esperadas_mes|horas }}</small>{% endif %}</h4>
             </div>
             <div class="col-6 col-md-3">
                 <div class="text-muted small text-uppercase">Horas extra</div>
-                <h4 class="mb-0">{{ "%.2f"|format(mi_resumen.horas_extra) }}</h4>
+                <h4 class="mb-0">{{ mi_resumen.horas_extra|horas }}</h4>
             </div>
             <div class="col-6 col-md-3">
                 <div class="text-muted small text-uppercase">Cumplimiento</div>
@@ -66,13 +66,13 @@
         {% if tiene_jornada %}
         <hr>
         <div class="small text-muted">
-            Jornada pactada: <strong>{{ "%.1f"|format(mi_resumen.horas_dia) }} h/día × {{ mi_resumen.dias_mes }} días</strong>
+            Jornada pactada: <strong>{{ mi_resumen.horas_dia|horas }} h/día × {{ mi_resumen.dias_mes }} días</strong>
             ({{ 'tiempo completo' if mi_resumen.es_tiempo_completo else (mi_resumen.factor_jornada * 100)|round(0)|int ~ '% de jornada' }}).
             {% if mi_resumen.cumple_jornada %}✅ Ya cumpliste la jornada del mes.
-            {% else %}Te faltan <strong>{{ "%.2f"|format(-mi_resumen.diferencia_horas) }} h</strong>{% if mi_resumen.dias_faltantes %} y {{ mi_resumen.dias_faltantes }} día(s){% endif %} para completarla.{% endif %}
+            {% else %}Te faltan <strong>{{ (-mi_resumen.diferencia_horas)|horas }} h</strong>{% if mi_resumen.dias_faltantes %} y {{ mi_resumen.dias_faltantes }} día(s){% endif %} para completarla.{% endif %}
             {% if mi_resumen.sueldo_tiempo_completo %}
             <br>Proporcional del mes según lo trabajado: <strong>${{ "%.2f"|format(mi_resumen.sueldo_proporcional) }}</strong>{% if mi_resumen.pago_horas_extra %} + <strong>${{ "%.2f"|format(mi_resumen.pago_horas_extra) }}</strong> de horas extra = <strong>${{ "%.2f"|format(mi_resumen.total_a_pagar) }}</strong>{% endif %}.
-            <br>Valor hora: <strong>${{ "%.4f"|format(mi_resumen.valor_hora) }}</strong> (remuneración ÷ {{ "%g"|format(mi_resumen.horas_mes_legal) }} h = 30 días × {{ "%g"|format(mi_resumen.horas_dia) }} h, Art. 47/55). SBU {{ sbu_anio }}: ${{ "%.2f"|format(sbu) }}.
+            <br>Valor hora: <strong>${{ "%.4f"|format(mi_resumen.valor_hora) }}</strong> (remuneración ÷ {{ mi_resumen.horas_mes_legal|horas }} h = 30 días × {{ mi_resumen.horas_dia|horas }} h, Art. 47/55). SBU {{ sbu_anio }}: ${{ "%.2f"|format(sbu) }}.
             {% endif %}
         </div>
         {% else %}
@@ -92,9 +92,9 @@
     </td>
     <td>{{ m.hora_ingreso[:5] if m.hora_ingreso else '—' }}</td>
     <td>{{ m.hora_salida[:5] if m.hora_salida else '—' }}</td>
-    <td class="text-center">{% if m._horas %}<strong>{{ "%.2f"|format(m._horas) }}</strong>{% elif m.hora_ingreso %}<span class="text-warning">sin salida</span>{% else %}—{% endif %}{% if m._con_permiso %}<br><small class="text-info" {% if m.motivo_permiso %}title="{{ m.motivo_permiso }}"{% endif %}>🪪 con permiso</small>{% endif %}</td>
-    <td class="text-center">{% if m._horas_extra %}+{{ "%.2f"|format(m._horas_extra) }}{% if m._recargo %}<br><small class="text-muted" title="{{ m._recargo.detalle }}">{{ m._recargo.label }}</small>{% endif %}{% else %}—{% endif %}</td>
-    <td class="text-center"><strong>{{ "%.2f"|format(m._total_dia) }}</strong></td>
+    <td class="text-center">{% if m._horas %}<strong>{{ m._horas|horas }}</strong>{% elif m.hora_ingreso %}<span class="text-warning">sin salida</span>{% else %}—{% endif %}{% if m._con_permiso %}<br><small class="text-info" {% if m.motivo_permiso %}title="{{ m.motivo_permiso }}"{% endif %}>🪪 con permiso</small>{% endif %}</td>
+    <td class="text-center">{% if m._horas_extra %}+{{ m._horas_extra|horas }}{% if m._recargo %}<br><small class="text-muted" title="{{ m._recargo.detalle }}">{{ m._recargo.label }}</small>{% endif %}{% else %}—{% endif %}</td>
+    <td class="text-center"><strong>{{ m._total_dia|horas }}</strong></td>
 </tr>
 {% else %}
 <tr><td colspan="6" class="text-center text-muted py-3">Todavía no tienes marcaciones</td></tr>
