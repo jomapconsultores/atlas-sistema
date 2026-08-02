@@ -4673,6 +4673,10 @@ def admin_marcaciones():
     return render_template('admin_marcaciones.html', marcaciones=filas, mes=mes, anio=anio,
                           solo_docentes=(not ve_todas), resumen=resumen, totales=totales,
                           jornadas=jornadas, puede_jornada=puede_jornada, personal=personal,
+                          # El desglose de cómo se calcula el sueldo es solo
+                          # para quien decide la nómina, no para quien consulta
+                          # asistencia (p. ej. secretaría con ver_docentes).
+                          es_admin_socio=(current_user.rol in ('admin', 'socio')),
                           jornada_defecto=JORNADA_DEFECTO, recargos=RECARGOS_EXTRA,
                           sbu=SBU_ECUADOR, sbu_anio=SBU_ANIO, horas_mes_legal=HORAS_MES_LEGAL,
                           jornada_max_diaria=JORNADA_MAX_DIARIA, jornada_max_semanal=JORNADA_MAX_SEMANAL,

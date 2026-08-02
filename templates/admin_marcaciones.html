@@ -216,20 +216,39 @@
         {% endif %}
     </table></div>
     </div>
+    {% if es_admin_socio %}
     <div class="card-footer bg-light">
-        <small class="text-muted">
-            💡 <strong>Cómo se calcula:</strong> el sueldo a tiempo completo se ajusta primero por la <strong>jornada</strong>
-            (horas por día ÷ jornada completa de referencia: medio tiempo = 50%) y luego por las
-            <strong>horas efectivamente trabajadas</strong> (horas marcadas ÷ horas exigidas del mes, con tope 100%).
-            Un día marcado <strong>🪪 con permiso</strong> se paga como jornada completa: las horas que falten se reponen
-            y ese día deja de contar como incumplimiento.
-            Las <strong>horas extra</strong> se pagan aparte con el criterio ecuatoriano: <strong>valor hora = remuneración mensual ÷ (30 días × horas de su jornada)</strong>
-            — el clásico ÷{{ horas_mes_legal }} a tiempo completo (Art. 47/55) — multiplicado por el recargo del tipo de hora de cada día.
-            A media jornada bajan sueldo y divisor en la misma proporción, así que la hora vale lo mismo que a tiempo completo (Art. 82).
-            El divisor legal no es el de las horas exigidas del mes: esas miden cumplimiento, no valoran la hora.
-            {% if puede_jornada %}Usa ⚙️ para fijar la jornada y el sueldo de cada persona.{% endif %}
-        </small>
+        <details>
+            <summary class="small fw-bold text-muted" style="cursor:pointer;">💡 Cómo se calcula el sueldo</summary>
+            <div class="small text-muted mt-2" style="line-height:1.7;">
+                <div class="mb-2">
+                    <strong>1. Proporcional por jornada.</strong>
+                    Sobre el sueldo a tiempo completo: horas por día ÷ jornada completa de referencia.
+                    Medio tiempo = 50%.
+                </div>
+                <div class="mb-2">
+                    <strong>2. Proporcional por horas trabajadas.</strong>
+                    Horas marcadas ÷ horas exigidas del mes, con tope del 100%: trabajar de más no sube
+                    el sueldo base, se paga como hora extra.
+                </div>
+                <div class="mb-2">
+                    <strong>3. Permiso.</strong>
+                    Un día marcado 🪪 con permiso se paga como jornada completa: las horas que falten se
+                    reponen y ese día deja de contar como incumplimiento.
+                </div>
+                <div class="mb-2">
+                    <strong>4. Horas extra</strong>, con el criterio ecuatoriano.
+                    Valor hora = remuneración mensual ÷ (30 días × horas de su jornada), el clásico
+                    ÷{{ horas_mes_legal }} a tiempo completo (Art. 47/55), por el recargo del tipo de hora de cada día.
+                    A media jornada bajan sueldo y divisor en la misma proporción, así que la hora vale
+                    lo mismo que a tiempo completo (Art. 82). El divisor legal no es el de las horas
+                    exigidas del mes: esas miden cumplimiento, no valoran la hora.
+                </div>
+                {% if puede_jornada %}<div>Usa ⚙️ para fijar la jornada y el sueldo de cada persona.</div>{% endif %}
+            </div>
+        </details>
     </div>
+    {% endif %}
 </div>
 
 <!-- ===== REGISTROS DÍA A DÍA ===== -->
