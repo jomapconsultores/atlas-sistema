@@ -1,5 +1,11 @@
 # Atlas — Base de datos auto-alojada (Hetzner)
 
+> **Estado a agosto de 2026: esto todavía NO está en uso.** La app sigue
+> apuntando a la Supabase en la nube (`naubddczohedvtywmmmy`). Todo lo que
+> sigue describe la mudanza **planificada**, no la realidad actual. Para saber
+> cómo está desplegada la app hoy y cómo se aplican las migraciones ahora mismo,
+> ve a [Cómo está desplegado hoy](#cómo-está-desplegado-hoy-agosto-2026), al final.
+
 Reemplaza la dependencia de la Supabase en la nube por un stack propio en tu
 servidor, **sin tocar el código de la app** (solo cambian 2 variables de entorno).
 
@@ -84,6 +90,11 @@ Nada más. El resto del código es idéntico.
 
 ## Migraciones a futuro (adiós al copiar/pegar SQL)
 
+> Mientras la base siga en la nube, `migrate.py` **no se usa**: los archivos de
+> `migrations/` se pegan en el editor SQL de Supabase. Lo de abajo aplica el día
+> que se complete la mudanza. Escribir las migraciones en `migrations/000X_*.sql`
+> vale para las dos épocas, así que se hace así desde ya.
+
 Las migraciones viven versionadas en `../migrations/*.sql` y se aplican con
 `../deploy/migrate.py` por el **túnel SSH**:
 
@@ -105,3 +116,97 @@ Con esto, cuando yo (Claude) necesite crear/alterar tablas, agrego un archivo
   túnel SSH. No queda expuesto a internet.
 - Solo el proxy (80/443) mira a internet. Usa un dominio para que Caddy ponga HTTPS.
 - Rota el `JWT_SECRET` y las contraseñas si alguna vez se filtran.
+
+---
+
+# Cómo está desplegado hoy (agosto 2026)
+
+Esto es lo que hay **en producción ahora**, a diferencia del stack de arriba,
+que sigue siendo un plan.
+
+| Pieza | Dónde |
+|---|---|
+| App | Coolify, aplicación «ATLAS sistema», build pack `nixpacks` |
+| Dominio | https://atlas.pensamiento-libre.org |
+| Origen del código | GitHub `jomapconsultores/atlas-sistema`, rama **`main`** |
+| Base de datos | Supabase **en la nube** (proyecto `naubddczohedvtywmmmy`) |
+
+**Se despliega lo que hay en `main`.** Trabajar en una rama y empujarla no
+publica nada: hay que fusionar a `main`.
+
+## Qué versión está corriendo
+
+```
+https://atlas.pensamiento-libre.org/version
+```
+
+Devuelve el commit que el servidor tiene cargado (lo inyecta Coolify en
+`SOURCE_COMMIT`) y desde cuándo lleva ese proceso en marcha. Es la forma de
+distinguir «el código no funciona» de «el código no está desplegado» — que es
+lo que pasó en julio de 2026, cuando el servidor estuvo 13 días sirviendo un
+commit viejo sin que nadie lo notara.
+
+## El despliegue automático necesita un webhook manual
+
+El origen configurado en Coolify es la fuente genérica **«Public GitHub»**: no
+hay una GitHub App instalada (`app_id` e `installation_id` vienen vacíos). Esa
+fuente sabe **clonar** el repositorio —que es público, así que no hacen falta
+credenciales— pero **no recibe avisos de push**. Sin nada más, cada despliegue
+hay que lanzarlo a mano.
+
+Para que un push a `main` despliegue solo, hay que añadir un webhook en GitHub
+(*Settings → Webhooks → Add webhook*) apuntando al endpoint manual de Coolify:
+
+| Campo | Valor |
+|---|---|
+| Payload URL | `http://TU_COOLIFY:8000/webhooks/source/github/events/manual` |
+| Content type | `application/json` |
+| Secret | el `manual_webhook_secret_github` de la aplicación en Coolify |
+| Events | *Just the push event* |
+
+El secreto **no se guarda en este repositorio** (es público): se lee en Coolify,
+en la configuración de la aplicación. Coolify cruza el aviso contra
+`git_repository` + `git_branch`, así que el webhook vale para toda la app sin
+más parámetros.
+
+> GitHub avisará de que la URL no es HTTPS. El secreto firma el payload (HMAC),
+> así que nadie puede falsificar un despliegue, pero el contenido viaja en claro
+> y el panel de Coolify está expuesto por HTTP. Ponerle un dominio con HTTPS al
+> propio Coolify es la asignatura pendiente.
+
+## Desplegar a mano
+
+Desde la interfaz: proyecto → **Deploy**. O por API, con un token de Coolify
+(*Keys & Tokens → API tokens*), que **no se guarda aquí**:
+
+```bash
+# Encolar el despliegue (el uuid de la app se ve en su URL en Coolify)
+curl -X GET "http://TU_COOLIFY:8000/api/v1/deploy?uuid=UUID_DE_LA_APP" \
+     -H "Authorization: Bearer $COOLIFY_TOKEN"
+
+# Seguir el estado hasta 'finished'
+curl "http://TU_COOLIFY:8000/api/v1/deployments/UUID_DEL_DESPLIEGUE" \
+     -H "Authorization: Bearer $COOLIFY_TOKEN"
+```
+
+Un despliegue completo tarda entre 45 segundos y 2 minutos y medio. Después,
+comprueba `/version`: si el commit no cambió, el despliegue no surtió efecto.
+
+## Migraciones, mientras la base siga en la nube
+
+1. Escribe el archivo en `migrations/000X_descripcion.sql` (idempotente:
+   `IF NOT EXISTS` en todo lo que se pueda).
+2. Pégalo entero en el **editor SQL** del proyecto Supabase.
+3. Si creaste o alteraste tablas, refresca el caché de la API o el cliente
+   seguirá diciendo que no existen:
+   ```sql
+   NOTIFY pgrst, 'reload schema';
+   ```
+4. **Aplica la migración ANTES de desplegar** el código que la necesita.
+   Si no, la app arranca contra columnas que no existen. En julio de 2026 se
+   estuvo a punto de publicar el módulo de cuenta sin su migración: el login
+   aguantaba (lee con `.get()`), pero editar perfil y cambiar clave habrían
+   fallado.
+
+Las migraciones sueltas en la raíz (`migration_*.sql`) son de la época anterior
+a `migrations/`. Se conservan por historia; las nuevas van numeradas.
