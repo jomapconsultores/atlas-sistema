@@ -9,6 +9,9 @@
     .table-premium { border-radius: 12px; overflow: hidden; border: none; margin: 0; }
     .table-premium thead th { background: #1a1a2e; color: white; font-weight: 600; font-size: 11px; letter-spacing: 0.5px; border: none; padding: 10px 12px; text-transform: uppercase; }
     .table-premium tbody td { padding: 8px 12px; font-size: 13px; border-bottom: 1px solid #f0f0f0; }
+    .col-fecha { min-width: 132px; white-space: nowrap; }
+    .dia-semana { font-size: 11px; color: #78909c; }
+    .dia-finde { color: #c62828; font-weight: 600; }
 </style>
 <div class="page-hero">
     <h2>🕒 Mi Asistencia</h2>
@@ -80,10 +83,13 @@
 {% endif %}
 
 <div class="card-premium"><div class="card-header-grad grad-dark">📅 Últimos 14 días</div><div class="card-body p-0">
-<div class="table-responsive"><table class="table table-premium mb-0"><thead><tr><th>Fecha</th><th>Ingreso</th><th>Salida</th><th class="text-center">Horas</th><th class="text-center">Extra</th><th class="text-center">Total día</th></tr></thead><tbody>
+<div class="table-responsive"><table class="table table-premium mb-0"><thead><tr><th class="col-fecha">Fecha</th><th>Ingreso</th><th>Salida</th><th class="text-center">Horas</th><th class="text-center">Extra</th><th class="text-center">Total día</th></tr></thead><tbody>
 {% for m in historial %}
 <tr>
-    <td>{{ m.fecha }}</td>
+    <td class="col-fecha">
+        {{ m.fecha }}<br>
+        <span class="dia-semana {{ 'dia-finde' if m._es_finde }}">{{ m._dia }}</span>
+    </td>
     <td>{{ m.hora_ingreso[:5] if m.hora_ingreso else '—' }}</td>
     <td>{{ m.hora_salida[:5] if m.hora_salida else '—' }}</td>
     <td class="text-center">{% if m._horas %}<strong>{{ "%.2f"|format(m._horas) }}</strong>{% elif m.hora_ingreso %}<span class="text-warning">sin salida</span>{% else %}—{% endif %}</td>

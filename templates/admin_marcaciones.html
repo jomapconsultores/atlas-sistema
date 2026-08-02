@@ -20,6 +20,14 @@
     .kpi-4 { background: linear-gradient(135deg, #14532d, #16a34a); }
     .barra { height: 6px; border-radius: 4px; background: #eceff1; overflow: hidden; margin-top: 4px; }
     .barra > span { display: block; height: 100%; border-radius: 4px; }
+    /* La jornada ("8.0 h/día × 22 días" + la insignia de proporción) se partía
+       en varias líneas y quedaba ilegible. Ancho propio y sin cortes. */
+    .col-jornada { min-width: 190px; white-space: nowrap; }
+    .col-jornada .badge-premium { white-space: nowrap; }
+    /* Fecha + día de la semana en una sola línea. */
+    .col-fecha { min-width: 132px; white-space: nowrap; }
+    .dia-semana { font-size: 11px; color: #78909c; text-transform: capitalize; }
+    .dia-finde { color: #c62828; font-weight: 600; }
 </style>
 <div class="page-hero">
     <h2>🕒 Marcaciones de Asistencia</h2>
@@ -76,7 +84,7 @@
     <div class="table-responsive"><table class="table table-premium mb-0">
         <thead><tr>
             <th>Persona</th>
-            <th class="text-center">Jornada pactada</th>
+            <th class="text-center col-jornada">Jornada pactada</th>
             <th class="text-center">Días<br>trab. / exig.</th>
             <th class="text-center">Horas<br>trab. / exig.</th>
             <th class="text-center">Cumplimiento</th>
@@ -96,7 +104,7 @@
                 <span class="badge-premium text-white bg-{{ 'warning' if r.rol=='secretaria' else 'success' if r.rol=='profesor' else 'purple' if r.rol=='psicologo' else 'info' }}">{{ r.rol }}</span>
                 {% if not r.tiene_jornada %}<br><span class="badge-premium bg-light text-dark border" title="Se calcula con la jornada por defecto y sueldo 0">⚠️ sin jornada configurada</span>{% endif %}
             </td>
-            <td class="text-center">
+            <td class="text-center col-jornada">
                 {{ "%.1f"|format(r.horas_dia) }} h/día × {{ r.dias_mes }} días<br>
                 <span class="badge-premium {{ 'bg-primary' if r.es_tiempo_completo else 'bg-secondary' }} text-white">
                     {{ 'Tiempo completo' if r.es_tiempo_completo else (r.factor_jornada * 100)|round(0)|int ~ '% de jornada' }}
@@ -195,10 +203,13 @@
 <!-- ===== REGISTROS DÍA A DÍA ===== -->
 <div class="card-premium"><div class="card-header-grad grad-dark">📋 Registros del mes — horas por día</div><div class="card-body p-0">
 <div class="table-responsive"><table class="table table-premium mb-0">
-<thead><tr><th>Fecha</th><th>Nombre</th><th>Rol</th><th>Ingreso</th><th>Salida</th><th class="text-center">Horas</th><th class="text-center">Extra</th><th class="text-center">Total día</th><th></th></tr></thead><tbody>
+<thead><tr><th class="col-fecha">Fecha</th><th>Nombre</th><th>Rol</th><th>Ingreso</th><th>Salida</th><th class="text-center">Horas</th><th class="text-center">Extra</th><th class="text-center">Total día</th><th></th></tr></thead><tbody>
 {% for m in marcaciones %}
 <tr id="fila-marcacion-{{ m.id }}">
-    <td>{{ m.fecha }}</td>
+    <td class="col-fecha">
+        {{ m.fecha }}<br>
+        <span class="dia-semana {{ 'dia-finde' if m._es_finde }}">{{ m._dia }}{% if m._es_finde %} · fin de semana{% endif %}</span>
+    </td>
     <td>{{ m.usuarios.nombre if m.usuarios else '—' }}</td>
     <td><span class="badge-premium text-white bg-{{ 'warning' if m.usuarios and m.usuarios.rol=='secretaria' else 'success' if m.usuarios and m.usuarios.rol=='profesor' else 'purple' if m.usuarios and m.usuarios.rol=='psicologo' else 'info' }}">{{ m.usuarios.rol if m.usuarios else '—' }}</span></td>
     <td>{{ m.hora_ingreso[:5] if m.hora_ingreso else '—' }}</td>

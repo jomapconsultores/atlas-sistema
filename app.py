@@ -4332,6 +4332,7 @@ def mi_asistencia():
         m['_horas_extra'] = _num(m.get('horas_extra'))
         m['_total_dia'] = round(m['_horas'] + m['_horas_extra'], 2)
         m['_recargo'] = RECARGOS_EXTRA.get(m.get('tipo_extra') or 'suplementaria', {}) if m['_horas_extra'] else {}
+        m['_dia'], m['_es_finde'] = _dia_semana(m.get('fecha'))
 
     # Resumen del mes en curso frente a la jornada pactada (si la tiene).
     mes_actual, anio_actual = ahora_ec.month, ahora_ec.year
@@ -4409,6 +4410,19 @@ def _num(v, defecto=0.0):
         return float(v)
     except (TypeError, ValueError):
         return defecto
+
+# Nombre del día en español. Se resuelve aquí y no con strftime('%A') porque
+# ese depende del locale del servidor, que en el contenedor es inglés.
+DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+
+def _dia_semana(fecha):
+    """('Lunes', False) para una fecha 'YYYY-MM-DD'. El segundo valor indica si
+    cae en fin de semana, para resaltarlo en el reporte."""
+    try:
+        d = datetime.strptime(str(fecha)[:10], '%Y-%m-%d').date()
+    except (TypeError, ValueError):
+        return ('', False)
+    return (DIAS_SEMANA[d.weekday()], d.weekday() >= 5)
 
 def _resumen_asistencia(filas, jornadas, personas_base=None):
     """Reporte final por persona del período: días y horas trabajadas, horas
@@ -4557,6 +4571,7 @@ def admin_marcaciones():
         f['_tipo_extra'] = f.get('tipo_extra') or ('suplementaria' if f['_horas_extra'] else '')
         f['_recargo'] = RECARGOS_EXTRA.get(f['_tipo_extra'], {})
         f['_sobre_jornada_legal'] = f['_horas'] > JORNADA_MAX_DIARIA
+        f['_dia'], f['_es_finde'] = _dia_semana(f.get('fecha'))
 
     jornadas = _jornadas_por_usuario()
     # Personal con jornada pactada y activo: entra al reporte aunque no tenga
