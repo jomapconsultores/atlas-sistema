@@ -241,6 +241,13 @@ MODULOS_DISPONIBLES = [
 ]
 MODULOS_KEYS = {m['key'] for m in MODULOS_DISPONIBLES}
 
+# Módulos que el acceso total de un SOCIO no cubre. Marcar ingreso y salida es
+# una acción personal de quien cumple un horario, no una capacidad de gestión:
+# a los socios se les paga por liquidación, no por jornada, y su marcación
+# ensuciaba el reporte de asistencia. Sigue siendo otorgable desde /usuarios a
+# un socio concreto que sí deba fichar.
+MODULOS_PERSONALES_SOCIO = {'asistencia.marcar'}
+
 # Compatibilidad: 'academico' y 'personas' eran permisos ÚNICOS (paraguas).
 # Ahora están desglosados en submódulos, pero las cuentas que ya tenían el
 # paraguas otorgado NO se migran: si un usuario tiene 'academico'/'personas' en
@@ -308,13 +315,17 @@ def _roles_disponibles_usuario_actual():
     return g._roles_cache
 
 def tiene_modulo(modulo_key):
-    """Admin/socio siempre tienen acceso total (igual que antes). Cualquier
-    otro rol necesita un permiso explícito otorgado por un ADMIN (/usuarios
-    exige rol admin estricto, no socio) en /usuarios."""
+    """Admin/socio tienen acceso total, SALVO los módulos de MODULOS_PERSONALES,
+    que son acciones sobre uno mismo y no capacidades de gestión. Cualquier otro
+    rol necesita un permiso explícito otorgado por un ADMIN (/usuarios exige rol
+    admin estricto, no socio) en /usuarios."""
     if not current_user.is_authenticated:
         return False
     if current_user.rol in ('admin', 'socio'):
-        return True
+        if not (current_user.rol == 'socio' and modulo_key in MODULOS_PERSONALES_SOCIO):
+            return True
+        # Un socio SÍ puede tener el módulo personal, pero solo si se le otorgó
+        # a mano; el acceso general de su rol no se lo concede. Sigue de largo.
     perms = _permisos_usuario_actual()
     if modulo_key in perms:
         return True
@@ -4033,6 +4044,7 @@ def gestion_usuarios():
                           permisos_por_usuario=permisos_por_usuario,
                           roles_disponibles=ROLES_DISPONIBLES,
                           roles_por_usuario=roles_por_usuario,
+                          modulos_personales_socio=MODULOS_PERSONALES_SOCIO,
                           caps=caps, es_admin=(current_user.rol == 'admin'))
 
 @app.route('/api/usuario/<int:id>/permisos', methods=['POST'])

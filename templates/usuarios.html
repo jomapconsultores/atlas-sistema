@@ -58,7 +58,7 @@
 {% if caps.roles and puede_tocar %}
 <button type="button" class="btn btn-sm btn-outline-dark btn-premium" onclick="toggleRoles({{ u.id }})">👤 Roles</button>
 {% endif %}
-{% if caps.permisos and u.rol not in ['admin', 'socio'] %}
+{% if caps.permisos and u.rol != 'admin' %}
 <button type="button" class="btn btn-sm btn-outline-secondary btn-premium" onclick="togglePermisos({{ u.id }})">🔐 Permisos</button>
 {% endif %}
 {% if caps.editar and puede_tocar %}
@@ -96,10 +96,18 @@
     </div>
 </td></tr>
 {% endif %}
-{% if caps.permisos and u.rol not in ['admin', 'socio'] %}
+{% if caps.permisos and u.rol != 'admin' %}
 <tr id="permisos-fila-{{ u.id }}" style="display:none;"><td colspan="5" class="bg-light">
     <div class="p-3">
         <strong>Módulos habilitados para {{ u.nombre }}:</strong>
+        {% if u.rol == 'socio' %}
+        <div class="alert alert-info py-2 px-3 mt-2 mb-0 small">
+            Un socio ya accede a todo por su rol, así que marcar aquí el resto no cambia nada.
+            Los únicos que hacen falta otorgarle son los <strong>módulos personales</strong>
+            (marcados con 👤), que su rol NO le concede:
+            {{ modulos_disponibles | selectattr('key', 'in', modulos_personales_socio) | map(attribute='label') | join(', ') }}.
+        </div>
+        {% endif %}
         {% set otorgados = permisos_por_usuario.get(u.id, []) %}
         {# 'academico'/'personas' eran permisos paraguas: si el usuario todavía
            los tiene, cada submódulo del grupo cuenta como otorgado. #}
@@ -117,7 +125,7 @@
                     <div class="col-md-4 col-6">
                         <div class="form-check">
                             <input class="form-check-input perm-check" data-grupo="{{ grupo }}" type="checkbox" value="{{ m.key }}" id="perm-{{ u.id }}-{{ m.key }}" {% if m.key in otorgados or heredado %}checked{% endif %}>
-                            <label class="form-check-label" for="perm-{{ u.id }}-{{ m.key }}" style="font-size:12px;">{{ m.label }}</label>
+                            <label class="form-check-label" for="perm-{{ u.id }}-{{ m.key }}" style="font-size:12px;">{% if m.key in modulos_personales_socio %}👤 {% endif %}{{ m.label }}</label>
                         </div>
                     </div>
                     {% endfor %}
