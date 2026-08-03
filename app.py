@@ -684,9 +684,13 @@ def valores_por_estado(estado, tipo_sesion, horas, valor_base):
     siguiera arrastrando dinero y apareciera cobrada/pagada en los reportes.
 
       - Cancelado: $0 para TODOS (no se cobra al estudiante ni se paga a nadie).
-      - Cancelado-Pagado (clase/preuniversitario): $5 FIJO al docente.
-      - Cancelado-Pagado (terapia/ambos): la MITAD del porcentaje de psicología.
-      - Realizado y el resto: la regla normal de pago.
+      - Cancelado-Pagado: la sesión NO se le cobra al estudiante, pero igual se
+        le paga a quien la iba a dar: $5 FIJO en clase/preuniversitario y la
+        MITAD del porcentaje en terapia/ambos. Ese pago sale de Atlas, así que
+        valor_atlas queda NEGATIVO: es dinero que el centro pone, no que gana.
+        (La tarifa sigue haciendo falta para calcular el % de terapia, por eso
+        se recibe en valor_base aunque después no se cobre.)
+      - Realizado: la regla normal de pago.
     """
     if estado == 'Cancelado':
         return 0, 0, 0
@@ -702,6 +706,10 @@ def valores_por_estado(estado, tipo_sesion, horas, valor_base):
         pago = round(valor * PORCENTAJE_PSICOLOGIA * FACTOR_PSICOLOGIA_CANCELADO, 2)
     else:
         pago = round(valor * PORCENTAJE_PSICOLOGIA, 2)
+    if estado == 'Cancelado-Pagado':
+        # La sesión no se dio: al estudiante no se le cobra nada. El pago a
+        # quien la iba a dar lo asume Atlas, de ahí el valor_atlas negativo.
+        return 0, pago, round(-pago, 2)
     return valor, pago, round(valor - pago, 2)
 
 # ========== CARGAR COSTOS DESDE SUPABASE ==========
