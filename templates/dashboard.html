@@ -130,9 +130,12 @@
                    Una 'Cancelado-Pagado' también se cobra, así que si aparece
                    aquí y no debía cobrarse, hay que pasarla a 'Cancelado'. #}
                 {% if d.sesiones %}
-                <details style="border-top:1px dashed #eee;">
+                {% set canc_pag = d.sesiones|selectattr('estado', 'equalto', 'Cancelado-Pagado')|list %}
+                {# Si hay canceladas-pagadas se abre solo: son las que suelen estar
+                   marcadas por error y las que hay que revisar primero. #}
+                <details style="border-top:1px dashed #eee;"{% if canc_pag %} open{% endif %}>
                     <summary style="cursor:pointer; font-size:11.5px; color:#64748b; padding:7px 14px; list-style:none;">
-                        ¿De dónde sale? · {{ d.sesiones|length }} sesión(es) · cobrado ${{ '%.2f'|format(d.cobrar) }} − pagado ${{ '%.2f'|format(d.pagado) }}{% if d.devuelto %} + devuelto ${{ '%.2f'|format(d.devuelto) }}{% endif %}
+                        ¿De dónde sale? · {{ d.sesiones|length }} sesión(es){% if canc_pag %} · <strong style="color:#92400e;">{{ canc_pag|length }} cancelada(s)-pagada(s) por ${{ '%.2f'|format(canc_pag|sum(attribute='valor')) }}</strong>{% endif %} · cobrado ${{ '%.2f'|format(d.cobrar) }} − pagado ${{ '%.2f'|format(d.pagado) }}{% if d.devuelto %} + devuelto ${{ '%.2f'|format(d.devuelto) }}{% endif %}
                     </summary>
                     <div style="padding:0 14px 10px;">
                         {% for s in d.sesiones %}
@@ -143,7 +146,7 @@
                             <span style="flex-shrink:0; font-weight:700; color:#1a1a2e;">${{ '%.2f'|format(s.valor) }}</span>
                         </div>
                         {% endfor %}
-                        {% if d.sesiones|selectattr('estado', 'equalto', 'Cancelado-Pagado')|list %}
+                        {% if canc_pag %}
                         <div style="font-size:11px; color:#92400e; background:#fffbeb; border-radius:8px; padding:7px 9px; margin-top:8px; line-height:1.45;">
                             ⚠️ Las <strong>Cancelado-Pagado</strong> se le cobran igual al estudiante (por eso se le paga al docente). Si alguna no debía cobrarse, márcala como <strong>❌ Cancelado</strong> en el Módulo 2 y sale de esta lista.
                         </div>
