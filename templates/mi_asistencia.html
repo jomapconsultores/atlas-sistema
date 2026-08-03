@@ -12,30 +12,59 @@
     .col-fecha { min-width: 132px; white-space: nowrap; }
     .dia-semana { font-size: 11px; color: #78909c; }
     .dia-finde { color: #c62828; font-weight: 600; }
+    /* Tramos del día (doble jornada): cada entrada/salida en su propia línea. */
+    .tramos { list-style: none; margin: 0; padding: 0; }
+    .tramos li { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px dashed #eceff1; font-size: 14px; }
+    .tramos li:last-child { border-bottom: none; }
+    .tramo-n { width: 22px; height: 22px; border-radius: 50%; background: #eceff1; color: #455a64; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+    .tramo-abierto { color: #ef6c00; font-weight: 600; }
+    .col-tramos { min-width: 190px; }
+    .col-tramos .tramos li { padding: 2px 0; font-size: 12.5px; border-bottom: none; }
 </style>
+{# Entradas y salidas de un día, una línea por tramo. Se usa igual en el bloque
+   de hoy y en el historial. #}
+{% macro pinta_tramos(tramos, compacto=false) %}
+<ul class="tramos">
+    {% for t in tramos %}
+    <li>
+        {% if tramos|length > 1 %}<span class="tramo-n">{{ loop.index }}</span>{% endif %}
+        <span>{{ t.hora_ingreso[:5] if t.hora_ingreso else '—' }}</span>
+        <span class="text-muted">→</span>
+        {% if t.hora_salida %}<span>{{ t.hora_salida[:5] }}</span>
+        {% else %}<span class="tramo-abierto">{{ 'abierto' if compacto else 'sin salida' }}</span>{% endif %}
+    </li>
+    {% else %}
+    <li><span class="text-muted">—</span></li>
+    {% endfor %}
+</ul>
+{% endmacro %}
 <div class="page-hero">
     <h2>🕒 Mi Asistencia</h2>
-    <p>Marca tu ingreso y salida del día.</p>
+    <p>Marca tu ingreso y tu salida. Si tienes doble jornada, marca cada vez que entras y sales.</p>
 </div>
 
 <div class="card-premium"><div class="card-body p-4">
-    <div class="row g-3 text-center">
-        <div class="col-md-6">
-            <div class="mb-2 text-muted">Ingreso de hoy</div>
-            <h3>{{ marcacion_hoy.hora_ingreso[:5] if marcacion_hoy and marcacion_hoy.hora_ingreso else '—' }}</h3>
-            {% if not marcacion_hoy %}
-            <form method="POST"><input type="hidden" name="accion" value="ingreso">
-                <button type="submit" class="btn btn-success btn-marcar">✅ Marcar ingreso</button>
-            </form>
+    <div class="row g-4 align-items-center">
+        <div class="col-md-7">
+            <div class="mb-2 text-muted text-uppercase small">Mis marcaciones de hoy</div>
+            {{ pinta_tramos(tramos_hoy) }}
+            {% if horas_hoy %}
+            <div class="mt-2 small text-muted">Llevas <strong>{{ horas_hoy|horas }} h</strong> en el día
+                {%- if tramos_hoy|length > 1 %}, sumando los {{ tramos_hoy|length }} tramos{% endif %}.</div>
             {% endif %}
         </div>
-        <div class="col-md-6">
-            <div class="mb-2 text-muted">Salida de hoy</div>
-            <h3>{{ marcacion_hoy.hora_salida[:5] if marcacion_hoy and marcacion_hoy.hora_salida else '—' }}</h3>
-            {% if marcacion_hoy and not marcacion_hoy.hora_salida %}
+        <div class="col-md-5 text-center">
+            {% if tramo_abierto %}
             <form method="POST"><input type="hidden" name="accion" value="salida">
                 <button type="submit" class="btn btn-danger btn-marcar">🚪 Marcar salida</button>
             </form>
+            {% elif tramos_hoy|length >= max_tramos %}
+            <div class="text-muted small">Ya registraste el máximo de {{ max_tramos }} entradas del día.</div>
+            {% else %}
+            <form method="POST"><input type="hidden" name="accion" value="ingreso">
+                <button type="submit" class="btn btn-success btn-marcar">✅ Marcar {{ 'ingreso' if not tramos_hoy else 'nuevo ingreso' }}</button>
+            </form>
+            {% if tramos_hoy %}<div class="mt-2 small text-muted">Vuelves después del corte: se abre otro tramo del mismo día.</div>{% endif %}
             {% endif %}
         </div>
     </div>
@@ -112,21 +141,23 @@
 {% endif %}
 
 <div class="card-premium"><div class="card-header-grad grad-dark">📅 Últimos 14 días</div><div class="card-body p-0">
-<div class="table-responsive"><table class="table table-premium mb-0"><thead><tr><th class="col-fecha">Fecha</th><th>Ingreso</th><th>Salida</th><th class="text-center">Horas</th><th class="text-center">Extra</th><th class="text-center">Total día</th></tr></thead><tbody>
+<div class="table-responsive"><table class="table table-premium mb-0"><thead><tr><th class="col-fecha">Fecha</th><th class="col-tramos">Entradas y salidas</th><th class="text-center">Horas</th><th class="text-center">Extra</th><th class="text-center">Total día</th></tr></thead><tbody>
 {% for m in historial %}
 <tr>
     <td class="col-fecha">
         {{ m.fecha }}<br>
         <span class="dia-semana {{ 'dia-finde' if m._es_finde }}">{{ m._dia }}</span>
     </td>
-    <td>{{ m.hora_ingreso[:5] if m.hora_ingreso else '—' }}</td>
-    <td>{{ m.hora_salida[:5] if m.hora_salida else '—' }}</td>
-    <td class="text-center">{% if m._horas %}<strong>{{ m._horas|horas }}</strong>{% elif m.hora_ingreso %}<span class="text-warning">sin salida</span>{% else %}—{% endif %}{% if m._con_permiso %}<br><small class="text-info" {% if m.motivo_permiso %}title="{{ m.motivo_permiso }}"{% endif %}>🪪 con permiso</small>{% endif %}</td>
+    <td class="col-tramos">
+        {{ pinta_tramos(m._tramos, true) }}
+        {% if m._tramos|length > 1 %}<small class="text-muted">{{ m._tramos|length }} tramos</small>{% endif %}
+    </td>
+    <td class="text-center">{% if m._horas %}<strong>{{ m._horas|horas }}</strong>{% if m._abierto %}<br><small class="text-warning">falta una salida</small>{% endif %}{% elif m._abierto %}<span class="text-warning">sin salida</span>{% elif m._tramos %}<strong>0</strong>{% else %}—{% endif %}{% if m._con_permiso %}<br><small class="text-info" {% if m.motivo_permiso %}title="{{ m.motivo_permiso }}"{% endif %}>🪪 con permiso</small>{% endif %}</td>
     <td class="text-center">{% if m._horas_extra %}+{{ m._horas_extra|horas }}{% if m._recargo %}<br><small class="text-muted" title="{{ m._recargo.detalle }}">{{ m._recargo.label }}</small>{% endif %}{% else %}—{% endif %}</td>
     <td class="text-center"><strong>{{ m._total_dia|horas }}</strong></td>
 </tr>
 {% else %}
-<tr><td colspan="6" class="text-center text-muted py-3">Todavía no tienes marcaciones</td></tr>
+<tr><td colspan="5" class="text-center text-muted py-3">Todavía no tienes marcaciones</td></tr>
 {% endfor %}
 </tbody></table></div></div></div>
 {% endblock %}

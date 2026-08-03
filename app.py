@@ -4401,6 +4401,80 @@ def mi_reporte():
                          mes=mes, anio=anio)
 
 # ========== ASISTENCIA (marcación de ingreso/salida) ==========
+# Tope de entradas de un mismo día. Con doble jornada son 2 (mañana y tarde);
+# se dejan 6 para salidas intermedias (trámites, almuerzo partido) sin que un
+# botón repetido por error llene el día de tramos.
+MAX_TRAMOS_DIA = 6
+
+def _tramos_del_dia(usuario_id, fecha):
+    """Entradas y salidas de una persona en un día, en orden.
+
+    Devuelve None —no lista vacía— si la tabla todavía no existe (migración
+    0005 pendiente); quien llama vuelve entonces al comportamiento antiguo de
+    un solo ingreso y una sola salida por día."""
+    try:
+        return (supabase.table('marcaciones_tramos').select('*')
+                .eq('usuario_id', usuario_id).eq('fecha', fecha)
+                .order('hora_ingreso').execute().data or [])
+    except Exception:
+        return None
+
+def _marcar_asistencia(usuario_id, fecha, hora, accion):
+    """Registra un ingreso o una salida. Devuelve (mensaje, categoría) para flash.
+
+    Un día puede tener VARIOS tramos: quien trabaja doble jornada entra por la
+    mañana, sale al mediodía y vuelve por la tarde. Cada ingreso abre un tramo
+    en 'marcaciones_tramos' y la salida cierra el que esté abierto. La fila de
+    'marcaciones' sigue siendo el registro del DÍA (permiso, horas extra) y
+    guarda el primer ingreso y la última salida.
+    """
+    dia = supabase.table('marcaciones').select('*').eq('usuario_id', usuario_id).eq('fecha', fecha).execute().data
+    dia = dia[0] if dia else None
+    tramos = _tramos_del_dia(usuario_id, fecha)
+    hay_tramos = tramos is not None
+    if not hay_tramos:
+        # Sin la tabla, el único tramo posible es la propia marcación del día.
+        tramos = [dia] if dia and dia.get('hora_ingreso') else []
+    abierto = next((t for t in tramos if t.get('hora_ingreso') and not t.get('hora_salida')), None)
+
+    if accion == 'ingreso':
+        if abierto:
+            return (f"⚠️ Tienes un ingreso abierto desde las {str(abierto['hora_ingreso'])[:5]}: "
+                    "marca primero tu salida", 'error')
+        if tramos and not hay_tramos:
+            return ('⚠️ Ya marcaste tu ingreso hoy. Para marcar varias veces al día hay que aplicar '
+                    'migrations/0005_marcaciones_multiples.sql', 'error')
+        if len(tramos) >= MAX_TRAMOS_DIA:
+            return (f'⚠️ Ya registraste {MAX_TRAMOS_DIA} entradas hoy, el máximo por día', 'error')
+        if not dia:
+            creada = supabase.table('marcaciones').insert({
+                'usuario_id': usuario_id, 'fecha': fecha, 'hora_ingreso': hora}).execute().data
+            dia = creada[0] if creada else None
+        elif not dia.get('hora_ingreso'):
+            supabase.table('marcaciones').update({'hora_ingreso': hora}).eq('id', dia['id']).execute()
+        if not dia:
+            return ('⚠️ No se pudo registrar el ingreso, intenta de nuevo', 'error')
+        if hay_tramos:
+            supabase.table('marcaciones_tramos').insert({
+                'marcacion_id': dia['id'], 'usuario_id': usuario_id, 'fecha': fecha,
+                'hora_ingreso': hora}).execute()
+        n = len(tramos) + 1
+        return (f'✅ Ingreso marcado a las {hora[:5]}' if n == 1
+                else f'✅ Ingreso {n} del día marcado a las {hora[:5]}', 'success')
+
+    if not abierto:
+        if not tramos:
+            return ('⚠️ Primero debes marcar tu ingreso', 'error')
+        return ('⚠️ Ya marcaste tu salida hoy', 'error') if not hay_tramos else \
+               ('⚠️ Ya cerraste tu último tramo. Si vuelves a entrar, marca un nuevo ingreso', 'error')
+    if hay_tramos:
+        supabase.table('marcaciones_tramos').update({'hora_salida': hora}).eq('id', abierto['id']).execute()
+    # La marcación del día guarda SIEMPRE la última salida.
+    supabase.table('marcaciones').update({'hora_salida': hora}).eq('id', dia['id']).execute()
+    n = len(tramos)
+    return (f'✅ Salida marcada a las {hora[:5]}' if n == 1
+            else f'✅ Salida {n} del día marcada a las {hora[:5]}', 'success')
+
 @app.route('/mi-asistencia', methods=['GET', 'POST'])
 @login_required
 @requiere_modulo('asistencia.marcar')
@@ -4409,34 +4483,22 @@ def mi_asistencia():
     hoy = str(ahora_ec.date())
     if request.method == 'POST':
         accion = request.form.get('accion')
-        ahora = ahora_ec.strftime('%H:%M:%S')
-        fila = supabase.table('marcaciones').select('*').eq('usuario_id', current_user.id).eq('fecha', hoy).execute().data
-        if accion == 'ingreso':
-            if fila:
-                flash('⚠️ Ya marcaste tu ingreso hoy', 'error')
-            else:
-                try:
-                    supabase.table('marcaciones').insert({
-                        'usuario_id': current_user.id, 'fecha': hoy, 'hora_ingreso': ahora
-                    }).execute()
-                    flash(f'✅ Ingreso marcado a las {ahora[:5]}', 'success')
-                except Exception:
-                    flash('⚠️ Ya marcaste tu ingreso hoy', 'error')
-        elif accion == 'salida':
-            if not fila:
-                flash('⚠️ Primero debes marcar tu ingreso', 'error')
-            elif fila[0].get('hora_salida'):
-                flash('⚠️ Ya marcaste tu salida hoy', 'error')
-            else:
-                try:
-                    supabase.table('marcaciones').update({'hora_salida': ahora}).eq('id', fila[0]['id']).execute()
-                    flash(f'✅ Salida marcada a las {ahora[:5]}', 'success')
-                except Exception:
-                    flash('⚠️ No se pudo registrar la salida, intenta de nuevo', 'error')
+        if accion not in ('ingreso', 'salida'):
+            return redirect(url_for('mi_asistencia'))
+        try:
+            mensaje, categoria = _marcar_asistencia(current_user.id, hoy,
+                                                    ahora_ec.strftime('%H:%M:%S'), accion)
+        except Exception:
+            # El índice único de tramo abierto puede rechazar un doble clic:
+            # es exactamente lo que debe pasar, y aquí se cuenta como tal.
+            mensaje, categoria = ('⚠️ No se pudo registrar la marcación, revisa tu asistencia del día '
+                                  'e intenta de nuevo', 'error')
+        flash(mensaje, categoria)
         return redirect(url_for('mi_asistencia'))
 
     marcacion_hoy = supabase.table('marcaciones').select('*').eq('usuario_id', current_user.id).eq('fecha', hoy).execute().data
-    historial = (supabase.table('marcaciones').select('*')
+    marcacion_hoy = _adjuntar_tramos(marcacion_hoy)
+    historial = _adjuntar_tramos(supabase.table('marcaciones').select('*')
         .eq('usuario_id', current_user.id).order('fecha', desc=True).limit(14).execute().data or [])
     for m in historial:
         m['_horas'] = _horas_del_dia(m)
@@ -4449,10 +4511,10 @@ def mi_asistencia():
     # Resumen del mes en curso frente a la jornada pactada (si la tiene).
     mes_actual, anio_actual = ahora_ec.month, ahora_ec.year
     ultimo = monthrange(anio_actual, mes_actual)[1]
-    del_mes = _fetch_all(supabase.table('marcaciones').select('*')
+    del_mes = _adjuntar_tramos(_fetch_all(supabase.table('marcaciones').select('*')
         .eq('usuario_id', current_user.id)
         .gte('fecha', f"{anio_actual}-{mes_actual:02d}-01")
-        .lte('fecha', f"{anio_actual}-{mes_actual:02d}-{ultimo}"))
+        .lte('fecha', f"{anio_actual}-{mes_actual:02d}-{ultimo}")))
     jornadas = _jornadas_por_usuario()
     mi_jornada = jornadas.get(current_user.id)
     resumen = _resumen_asistencia(del_mes, jornadas,
@@ -4461,8 +4523,16 @@ def mi_asistencia():
     # El sueldo solo se muestra si quien administra lo autorizó a mano para esta
     # persona (casilla en la jornada). Por defecto NO: es dato sensible.
     ver_sueldo = bool((mi_jornada or {}).get('ver_sueldo'))
+    # Estado de hoy: los tramos ya marcados y si queda uno abierto. De eso
+    # depende qué botón se ofrece (entrar o salir), no de que exista la fila.
+    hoy_fila = marcacion_hoy[0] if marcacion_hoy else None
+    tramos_hoy = (hoy_fila or {}).get('_tramos') or []
     return render_template('mi_asistencia.html',
-                          marcacion_hoy=marcacion_hoy[0] if marcacion_hoy else None,
+                          marcacion_hoy=hoy_fila,
+                          tramos_hoy=tramos_hoy,
+                          tramo_abierto=bool((hoy_fila or {}).get('_abierto')),
+                          horas_hoy=_horas_del_dia(hoy_fila) if hoy_fila else 0,
+                          max_tramos=MAX_TRAMOS_DIA,
                           historial=historial, mi_resumen=mi_resumen,
                           tiene_jornada=bool(mi_jornada), mes=mes_actual, anio=anio_actual,
                           ver_sueldo=ver_sueldo,
@@ -4509,17 +4579,14 @@ JORNADA_DEFECTO = {'horas_dia': JORNADA_MAX_DIARIA, 'dias_mes': 22,
                    'horas_jornada_completa': JORNADA_MAX_DIARIA,
                    'sueldo_tiempo_completo': SBU_ECUADOR, 'recargo_hora_extra': 1.5}
 
-def _horas_del_dia(m):
-    """Horas efectivas de una marcación: salida - ingreso, en HORAS ENTERAS.
+def _tramo_como_marcacion(m):
+    """La propia marcación vista como un único tramo. Es lo que se usa con las
+    filas anteriores a la migración 0005 (o si esa tabla aún no existe)."""
+    return {'id': None, 'hora_ingreso': m.get('hora_ingreso'), 'hora_salida': m.get('hora_salida')}
 
-    El reloj da minutos y segundos (08:58 a 12:06 son 3.14 h), pero la jornada
-    se cuenta en horas enteras: ese día son 3 y uno de 2:58 son 3. Se redondea
-    al entero más cercano con medio hacia ARRIBA; round() de Python redondea el
-    medio al par (round(4.5) == 4), que aquí sorprendería.
-
-    Sin salida marcada devuelve 0: el día queda 'sin cerrar', no como jornada.
-    """
-    ini, fin = m.get('hora_ingreso'), m.get('hora_salida')
+def _segundos_tramo(t):
+    """Segundos trabajados en un tramo. 0 si le falta el ingreso o la salida."""
+    ini, fin = t.get('hora_ingreso'), t.get('hora_salida')
     if not ini or not fin:
         return 0
     try:
@@ -4530,7 +4597,62 @@ def _horas_del_dia(m):
     seg = (h2 - h1).total_seconds()
     if seg < 0:      # salida al día siguiente (turno cruzado)
         seg += 24 * 3600
-    return int(math.floor(seg / 3600 + 0.5))
+    return seg
+
+def _adjuntar_tramos(filas):
+    """Cuelga en cada marcación sus tramos del día en '_tramos' (ya ordenados)
+    y si queda alguno abierto en '_abierto'. Devuelve la misma lista.
+
+    Los tramos son las entradas y salidas reales del día: quien tiene doble
+    jornada marca dos (mañana y tarde). Si la tabla no existe todavía —o la
+    fila es anterior a la migración 0005— el tramo es la propia marcación, así
+    que todo lo que sigue cuenta igual sin casos especiales.
+    """
+    if not filas:
+        return filas
+    fechas = [str(f.get('fecha'))[:10] for f in filas if f.get('fecha')]
+    usuarios = sorted({f.get('usuario_id') for f in filas if f.get('usuario_id')})
+    por_dia = {}
+    if fechas and usuarios:
+        try:
+            crudos = _fetch_all(supabase.table('marcaciones_tramos').select('*')
+                                .in_('usuario_id', usuarios)
+                                .gte('fecha', min(fechas)).lte('fecha', max(fechas)))
+        except Exception:
+            crudos = []      # migración 0005 pendiente: se cae al tramo único
+        for t in crudos:
+            por_dia.setdefault((t.get('usuario_id'), str(t.get('fecha'))[:10]), []).append(t)
+        for lista in por_dia.values():
+            lista.sort(key=lambda t: str(t.get('hora_ingreso') or ''))
+    for f in filas:
+        tramos = por_dia.get((f.get('usuario_id'), str(f.get('fecha'))[:10]))
+        if not tramos:
+            tramos = [_tramo_como_marcacion(f)] if f.get('hora_ingreso') else []
+        f['_tramos'] = tramos
+        f['_abierto'] = any(t.get('hora_ingreso') and not t.get('hora_salida') for t in tramos)
+    return filas
+
+def _horas_del_dia(m):
+    """Horas efectivas de un día, en HORAS ENTERAS, sumando TODOS sus tramos.
+
+    Con doble jornada el día son dos tramos (mañana y tarde) y lo trabajado es
+    la suma de ambos, no la resta entre la primera entrada y la última salida:
+    esa cuenta regalaría el almuerzo como tiempo trabajado.
+
+    El reloj da minutos y segundos (08:58 a 12:06 son 3.14 h), pero la jornada
+    se cuenta en horas enteras: ese día son 3 y uno de 2:58 son 3. Se redondea
+    al entero más cercano con medio hacia ARRIBA; round() de Python redondea el
+    medio al par (round(4.5) == 4), que aquí sorprendería. El redondeo va sobre
+    el TOTAL del día y no tramo a tramo: 08:00-11:30 más 14:00-17:30 son 7 h,
+    no 4 + 4 = 8.
+
+    Un tramo sin salida marcada no suma: queda 'sin cerrar', no como jornada.
+    """
+    tramos = m.get('_tramos')
+    if tramos is None:
+        tramos = [m] if m.get('hora_ingreso') else []
+    seg = sum(_segundos_tramo(t) for t in tramos)
+    return int(math.floor(seg / 3600 + 0.5)) if seg > 0 else 0
 
 def _num(v, defecto=0.0):
     try:
@@ -4604,10 +4726,16 @@ def _resumen_asistencia(filas, jornadas, personas_base=None):
             r['nombre'], r['rol'] = u.get('nombre'), u.get('rol') or r['rol']
         horas = _horas_del_dia(f)
         permiso = bool(f.get('con_permiso'))
+        # Un día con doble jornada puede tener el primer tramo cerrado y el
+        # segundo abierto: cuenta las horas del cerrado y AVISA igual de que
+        # falta una salida, que si no el tramo abierto se perdería en silencio.
+        abierto = bool(f.get('_abierto')) if '_abierto' in f else bool(f.get('hora_ingreso') and not f.get('hora_salida'))
         if horas > 0:
             r['dias_trabajados'] += 1
             r['horas_trabajadas'] += horas
-        elif f.get('hora_ingreso'):
+            if abierto:
+                r['dias_sin_cerrar'] += 1
+        elif f.get('hora_ingreso') or abierto:
             # Con permiso, un día sin salida marcada sigue contando como día:
             # la ausencia está justificada, no es un olvido de fichar.
             if permiso:
@@ -4735,6 +4863,8 @@ def admin_marcaciones():
     # Sin el permiso amplio, se acota a marcaciones de profesores/psicólogos.
     if not ve_todas:
         filas = [f for f in filas if (f.get('usuarios') or {}).get('rol') in ('profesor', 'psicologo')]
+    # Entradas y salidas reales de cada día (doble jornada = varios tramos).
+    _adjuntar_tramos(filas)
 
     jornadas = _jornadas_por_usuario()
     # Horas de cada día para la tabla de registros (contabilización diaria).
@@ -4745,6 +4875,8 @@ def admin_marcaciones():
         f['_recargo'] = RECARGOS_EXTRA.get(f['_tipo_extra'], {})
         f['_sobre_jornada_legal'] = f['_horas'] > JORNADA_MAX_DIARIA
         f['_dia'], f['_es_finde'] = _dia_semana(f.get('fecha'))
+        # Doble jornada: más de una entrada en el mismo día.
+        f['_doble_jornada'] = len(f.get('_tramos') or []) > 1
         # Jornada del día para el modal de permiso: cuánto debía cumplir y
         # cuánto se le repondría si se autoriza la salida.
         j = jornadas.get(f.get('usuario_id')) or {}

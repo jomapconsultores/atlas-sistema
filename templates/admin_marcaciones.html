@@ -57,7 +57,29 @@
     .col-fecha { min-width: 132px; white-space: nowrap; }
     .dia-semana { font-size: 11px; color: #78909c; text-transform: capitalize; }
     .dia-finde { color: #c62828; font-weight: 600; }
+    /* Entradas y salidas del día: con doble jornada son varias, una por línea. */
+    .col-tramos { min-width: 168px; }
+    .tramos { list-style: none; margin: 0; padding: 0; }
+    .tramos li { display: flex; align-items: center; gap: 6px; padding: 1px 0; font-size: 12.5px; white-space: nowrap; }
+    .tramo-n { width: 18px; height: 18px; border-radius: 50%; background: #eceff1; color: #455a64; font-size: 10px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+    .tramo-abierto { color: #ef6c00; font-weight: 600; }
 </style>
+{# Una línea por tramo (entrada → salida) del día. #}
+{% macro pinta_tramos(tramos) %}
+<ul class="tramos">
+    {% for t in tramos %}
+    <li>
+        {% if tramos|length > 1 %}<span class="tramo-n">{{ loop.index }}</span>{% endif %}
+        <span>{{ t.hora_ingreso[:5] if t.hora_ingreso else '—' }}</span>
+        <span class="text-muted">→</span>
+        {% if t.hora_salida %}<span>{{ t.hora_salida[:5] }}</span>
+        {% else %}<span class="tramo-abierto">abierto</span>{% endif %}
+    </li>
+    {% else %}
+    <li><span class="text-muted">—</span></li>
+    {% endfor %}
+</ul>
+{% endmacro %}
 <div class="page-hero">
     <h2>🕒 Marcaciones de Asistencia</h2>
     {% if solo_docentes %}
@@ -155,7 +177,7 @@
             </td>
             <td class="text-center col-dias">
                 <strong>{{ r.dias_trabajados }}</strong> / {{ r.dias_mes }}
-                {% if r.dias_sin_cerrar %}<br><span class="badge-premium bg-warning text-dark" title="Días con ingreso pero sin salida marcada: no cuentan horas">{{ r.dias_sin_cerrar }} sin cerrar</span>{% endif %}
+                {% if r.dias_sin_cerrar %}<br><span class="badge-premium bg-warning text-dark" title="Días con algún tramo sin salida marcada: esas horas no se cuentan">{{ r.dias_sin_cerrar }} sin cerrar</span>{% endif %}
                 {% if r.dias_sobre_jornada %}<br><span class="badge-premium bg-info text-white" title="Trabajó más días que los exigidos; el sueldo base no sube (tope 100%)">+{{ r.dias_sobre_jornada }} sobre lo exigido</span>{% endif %}
             </td>
             <td class="text-center col-horas">
@@ -242,12 +264,18 @@
                     el sueldo base, se paga como hora extra.
                 </div>
                 <div class="mb-2">
-                    <strong>3. Permiso.</strong>
+                    <strong>3. Doble jornada.</strong>
+                    Un día puede tener varias entradas y salidas (mañana y tarde). Las horas del día
+                    son la <em>suma de los tramos</em>, no la resta entre la primera entrada y la última
+                    salida: el corte del mediodía no se paga.
+                </div>
+                <div class="mb-2">
+                    <strong>4. Permiso.</strong>
                     Un día marcado 🪪 con permiso se paga como jornada completa: las horas que falten se
                     reponen y ese día deja de contar como incumplimiento.
                 </div>
                 <div class="mb-2">
-                    <strong>4. Horas extra</strong>, con el criterio ecuatoriano.
+                    <strong>5. Horas extra</strong>, con el criterio ecuatoriano.
                     Valor hora = remuneración mensual ÷ (30 días × horas de su jornada), el clásico
                     ÷{{ horas_mes_legal }} a tiempo completo (Art. 47/55), por el recargo del tipo de hora de cada día.
                     A media jornada bajan sueldo y divisor en la misma proporción, así que la hora vale
@@ -264,7 +292,7 @@
 <!-- ===== REGISTROS DÍA A DÍA ===== -->
 <div class="card-premium"><div class="card-header-grad grad-dark">📋 Registros del mes — horas por día</div><div class="card-body p-0">
 <div class="table-responsive"><table class="table table-premium mb-0">
-<thead><tr><th class="col-fecha">Fecha</th><th>Nombre</th><th>Rol</th><th>Ingreso</th><th>Salida</th><th class="text-center col-horas-dia">Horas</th><th class="text-center col-extra-dia">Extra</th><th class="text-center col-totaldia">Total día</th><th></th></tr></thead><tbody>
+<thead><tr><th class="col-fecha">Fecha</th><th>Nombre</th><th>Rol</th><th class="col-tramos">Entradas y salidas</th><th class="text-center col-horas-dia">Horas</th><th class="text-center col-extra-dia">Extra</th><th class="text-center col-totaldia">Total día</th><th></th></tr></thead><tbody>
 {% for m in marcaciones %}
 <tr id="fila-marcacion-{{ m.id }}">
     <td class="col-fecha">
@@ -273,12 +301,16 @@
     </td>
     <td>{{ m.usuarios.nombre if m.usuarios else '—' }}</td>
     <td><span class="badge-premium text-white bg-{{ 'warning' if m.usuarios and m.usuarios.rol=='secretaria' else 'success' if m.usuarios and m.usuarios.rol=='profesor' else 'purple' if m.usuarios and m.usuarios.rol=='psicologo' else 'info' }}">{{ m.usuarios.rol if m.usuarios else '—' }}</span></td>
-    <td>{{ m.hora_ingreso[:5] if m.hora_ingreso else '—' }}</td>
-    <td>{{ m.hora_salida[:5] if m.hora_salida else '—' }}</td>
+    <td class="col-tramos">
+        {{ pinta_tramos(m._tramos) }}
+        {% if m._doble_jornada %}<span class="badge-premium bg-secondary text-white" title="Marcó más de una entrada en el día">🔁 {{ m._tramos|length }} tramos</span>{% endif %}
+    </td>
     <td class="text-center col-horas-dia">
         {% if m._horas %}<strong>{{ m._horas|horas }}</strong>
         {% if m._sobre_jornada_legal %}<br><span class="badge-premium bg-danger text-white" title="Más de {{ jornada_max_diaria }} h en el día: el excedente debería ir como hora suplementaria o extraordinaria (Art. 47)">sobre {{ jornada_max_diaria }} h</span>{% endif %}
-        {% elif m.hora_ingreso %}<span class="badge-premium bg-warning text-dark" title="Falta marcar la salida">sin salida</span>
+        {% if m._abierto %}<br><span class="badge-premium bg-warning text-dark" title="Uno de los tramos del día quedó sin salida marcada">falta una salida</span>{% endif %}
+        {% elif m._abierto %}<span class="badge-premium bg-warning text-dark" title="Falta marcar la salida">sin salida</span>
+        {% elif m._tramos %}<strong>0</strong>
         {% else %}—{% endif %}
         {% if m._con_permiso %}<br><span class="badge-premium bg-info text-white" {% if m.motivo_permiso %}title="{{ m.motivo_permiso }}"{% endif %}>🪪 con permiso{% if m._horas_repuestas %} +{{ m._horas_repuestas|horas }} h{% endif %}</span>
         {% elif m._horas and m._horas_repuestas %}<br><small class="text-muted" title="Jornada pactada: {{ m._horas_jornada|horas }} h">faltan {{ m._horas_repuestas|horas }} h</small>{% endif %}
@@ -297,7 +329,7 @@
     </td>
 </tr>
 {% else %}
-<tr><td colspan="9" class="text-center text-muted py-3">Sin marcaciones en este período</td></tr>
+<tr><td colspan="8" class="text-center text-muted py-3">Sin marcaciones en este período</td></tr>
 {% endfor %}
 </tbody></table></div></div></div>
 
