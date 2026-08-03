@@ -1363,7 +1363,7 @@ def _estudiantes_con_deuda():
     try:
         estudiantes = supabase.table('estudiantes').select('id,nombres,apellidos').eq('activo', True).execute().data or []
         ses_rows = _fetch_all(supabase.table('sesiones').select(
-            'estudiante_id,fecha,estado,valor_total,tipo_sesion,horas,precio_hora,'
+            'id,estudiante_id,fecha,estado,valor_total,tipo_sesion,horas,precio_hora,'
             'cobro_por_sesion,asignatura,tema_terapia'
         ).in_('estado', ['Realizado', 'Cancelado-Pagado']).order('fecha', desc=True))
         pagos_rows = _fetch_all(supabase.table('pagos').select('estudiante_id,monto'))
@@ -1384,6 +1384,7 @@ def _estudiantes_con_deuda():
             cobrar_por_est[eid] = cobrar_por_est.get(eid, 0) + monto
             if monto > 0:
                 ses_por_est.setdefault(eid, []).append({
+                    'id': s.get('id'),
                     'fecha': s.get('fecha') or '',
                     'estado': s.get('estado') or '',
                     'detalle': s.get('asignatura') or s.get('tema_terapia') or s.get('tipo_sesion') or 'Sesión',
