@@ -20,10 +20,16 @@
     .tramo-abierto { color: #ef6c00; font-weight: 600; }
     .col-tramos { min-width: 190px; }
     .col-tramos .tramos li { padding: 2px 0; font-size: 12.5px; border-bottom: none; }
+    /* Reloj en vivo. Cifras tabulares para que no bailen los dígitos al pasar
+       de 1 a 2 (o de 19:59:59 a 20:00:00) con una fuente proporcional. */
+    .reloj { font-size: 40px; font-weight: 800; line-height: 1; letter-spacing: 1px; color: #263238; font-variant-numeric: tabular-nums; }
+    .reloj-fecha { font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: #78909c; margin-bottom: 4px; }
+    .crono { font-variant-numeric: tabular-nums; color: #ef6c00; font-weight: 600; }
+    @media (max-width: 575px) { .reloj { font-size: 32px; } }
 </style>
 {# Entradas y salidas de un día, una línea por tramo. Se usa igual en el bloque
    de hoy y en el historial. #}
-{% macro pinta_tramos(tramos, compacto=false) %}
+{% macro pinta_tramos(tramos, compacto=false, vivo=false) %}
 <ul class="tramos">
     {% for t in tramos %}
     <li>
@@ -31,6 +37,7 @@
         <span>{{ t.hora_ingreso[:5] if t.hora_ingreso else '—' }}</span>
         <span class="text-muted">→</span>
         {% if t.hora_salida %}<span>{{ t.hora_salida[:5] }}</span>
+        {% elif vivo %}<span class="tramo-abierto">en curso</span><span class="crono" id="cronoTramo"></span>
         {% else %}<span class="tramo-abierto">{{ 'abierto' if compacto else 'sin salida' }}</span>{% endif %}
     </li>
     {% else %}
@@ -46,12 +53,12 @@
 <div class="card-premium"><div class="card-body p-4">
     <div class="row g-4 align-items-center">
         <div class="col-md-7">
-            <div class="mb-2 text-muted text-uppercase small">Mis marcaciones de hoy</div>
-            {{ pinta_tramos(tramos_hoy) }}
-            {% if horas_hoy %}
-            <div class="mt-2 small text-muted">Llevas <strong>{{ horas_hoy|horas }} h</strong> en el día
-                {%- if tramos_hoy|length > 1 %}, sumando los {{ tramos_hoy|length }} tramos{% endif %}.</div>
-            {% endif %}
+            <div class="reloj-fecha">{{ hoy_dia_nombre }} {{ hoy_dia_num }} de {{ ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'][mes-1] }}</div>
+            <div class="reloj" id="reloj">--:--:--</div>
+            <div class="mb-2 mt-3 text-muted text-uppercase small">Mis marcaciones de hoy</div>
+            {{ pinta_tramos(tramos_hoy, false, true) }}
+            <div class="mt-2 small text-muted" id="totalDia"
+                 title="El día se contabiliza en horas enteras; aquí se ve el tiempo exacto que llevas."></div>
         </div>
         <div class="col-md-5 text-center">
             {% if tramo_abierto %}
@@ -160,4 +167,49 @@
 <tr><td colspan="5" class="text-center text-muted py-3">Todavía no tienes marcaciones</td></tr>
 {% endfor %}
 </tbody></table></div></div></div>
+
+<script>
+(function () {
+    // El reloj arranca en la hora del SERVIDOR y avanza con el tiempo que pasa
+    // en el navegador. No se lee el reloj del dispositivo: si el teléfono lo
+    // tiene mal puesto mostraría una hora que no es la que se guarda al marcar.
+    // Todo va en segundos desde medianoche, así no hay zonas horarias de por
+    // medio y siempre se pinta la de Ecuador.
+    var SEG_SERVIDOR = {{ segundos_ahora|tojson }},
+        ABIERTO_DESDE = {{ abierto_desde_seg|tojson }},
+        SEG_CERRADOS = {{ segundos_cerrados|tojson }},
+        T0 = Date.now();
+
+    function dos(n) { return String(n).padStart(2, '0'); }
+    // La cuenta se hace SIEMPRE contra Date.now(), no sumando un tic por
+    // intervalo: los navegadores frenan los temporizadores en pestañas de
+    // fondo y el reloj se atrasaría minutos en una jornada.
+    function ahora() { return SEG_SERVIDOR + Math.floor((Date.now() - T0) / 1000); }
+
+    function hhmmss(seg) {
+        seg = ((seg % 86400) + 86400) % 86400;
+        return dos(Math.floor(seg / 3600)) + ':' + dos(Math.floor(seg / 60) % 60) + ':' + dos(seg % 60);
+    }
+    function duracion(seg) {
+        var h = Math.floor(seg / 3600), m = Math.floor(seg / 60) % 60;
+        return h ? h + ' h ' + m + ' min' : m + ' min';
+    }
+
+    function tic() {
+        var t = ahora(), enCurso = 0;
+        document.getElementById('reloj').textContent = hhmmss(t);
+        if (ABIERTO_DESDE !== null) {
+            enCurso = t - ABIERTO_DESDE;
+            if (enCurso < 0) enCurso += 86400;      // tramo que cruza la medianoche
+            var crono = document.getElementById('cronoTramo');
+            if (crono) crono.textContent = duracion(enCurso);
+        }
+        var total = document.getElementById('totalDia'), seg = SEG_CERRADOS + enCurso;
+        if (total) total.innerHTML = seg ? 'Llevas <strong>' + duracion(seg) + '</strong> en el día' +
+            ({{ tramos_hoy|length }} > 1 ? ', sumando los {{ tramos_hoy|length }} tramos' : '') + '.' : '';
+    }
+    tic();
+    setInterval(tic, 1000);
+})();
+</script>
 {% endblock %}

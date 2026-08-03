@@ -4527,12 +4527,26 @@ def mi_asistencia():
     # depende qué botón se ofrece (entrar o salir), no de que exista la fila.
     hoy_fila = marcacion_hoy[0] if marcacion_hoy else None
     tramos_hoy = (hoy_fila or {}).get('_tramos') or []
+    # Reloj en vivo. Se manda la hora DEL SERVIDOR (segundos desde medianoche en
+    # Ecuador) y el navegador la hace correr desde ahí sumando el tiempo
+    # transcurrido. No se usa el reloj del dispositivo: un teléfono con la hora
+    # mal puesta mostraría una hora que no es la que se guarda al marcar.
+    # Van segundos desde medianoche, no una marca de tiempo, para que el
+    # navegador no tenga que convertir zonas horarias y pinte siempre la de aquí.
+    segundos_ahora = ahora_ec.hour * 3600 + ahora_ec.minute * 60 + ahora_ec.second
+    abierto = next((t for t in tramos_hoy if t.get('hora_ingreso') and not t.get('hora_salida')), None)
+    # Lo ya cerrado del día en segundos: _segundos_tramo da 0 en los abiertos,
+    # que son justo los que cuenta el cronómetro en el navegador.
+    segundos_cerrados = int(sum(_segundos_tramo(t) for t in tramos_hoy))
     return render_template('mi_asistencia.html',
                           marcacion_hoy=hoy_fila,
                           tramos_hoy=tramos_hoy,
                           tramo_abierto=bool((hoy_fila or {}).get('_abierto')),
-                          horas_hoy=_horas_del_dia(hoy_fila) if hoy_fila else 0,
                           max_tramos=MAX_TRAMOS_DIA,
+                          segundos_ahora=segundos_ahora,
+                          segundos_cerrados=segundos_cerrados,
+                          abierto_desde_seg=_hora_a_segundos(abierto['hora_ingreso']) if abierto else None,
+                          hoy_dia_nombre=_dia_semana(hoy)[0], hoy_dia_num=ahora_ec.day,
                           historial=historial, mi_resumen=mi_resumen,
                           tiene_jornada=bool(mi_jornada), mes=mes_actual, anio=anio_actual,
                           ver_sueldo=ver_sueldo,
@@ -4583,6 +4597,15 @@ def _tramo_como_marcacion(m):
     """La propia marcación vista como un único tramo. Es lo que se usa con las
     filas anteriores a la migración 0005 (o si esa tabla aún no existe)."""
     return {'id': None, 'hora_ingreso': m.get('hora_ingreso'), 'hora_salida': m.get('hora_salida')}
+
+def _hora_a_segundos(v):
+    """'14:30:00' -> 52200, los segundos transcurridos del día. None si no se
+    puede leer. Es la unidad con la que trabaja el reloj en vivo."""
+    try:
+        t = datetime.strptime(str(v)[:8], '%H:%M:%S')
+    except (TypeError, ValueError):
+        return None
+    return t.hour * 3600 + t.minute * 60 + t.second
 
 def _segundos_tramo(t):
     """Segundos trabajados en un tramo. 0 si le falta el ingreso o la salida."""
