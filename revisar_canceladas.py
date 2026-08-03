@@ -14,10 +14,15 @@
       completo en vez de la mitad: --recalcular las pone al día.
       Decidir cuáles debían ser 'Cancelado' a secas sigue siendo manual.
 
+  (C) Con --estudiante NOMBRE: desglosa por qué ese estudiante aparece en el
+      «Recordatorio de cobros» del panel de inicio (qué sesiones se le están
+      cobrando, cuáles son 'Cancelado-Pagado' y cómo sale el saldo).
+
 Uso:
     python revisar_canceladas.py                    # solo informa
     python revisar_canceladas.py --corregir         # pone en $0 las del caso (A)
     python revisar_canceladas.py --recalcular       # reaplica la regla al caso (B)
+    python revisar_canceladas.py --estudiante ludizaca   # caso (C)
     python revisar_canceladas.py --mes 7 --anio 2026    # acota el período
 """
 import argparse
@@ -71,6 +76,81 @@ def _linea(s):
             f"{s.get('profesor_terapeuta') or '-':<22} "
             f"cobra ${s.get('valor_total') or 0:>8.2f}  "
             f"paga ${s.get('valor_pagar_docente') or 0:>7.2f}")
+
+
+def explicar_deuda(patron):
+    """Reproduce el «Recordatorio de cobros» del panel de inicio para los
+    estudiantes cuyo nombre contenga `patron`, y desglosa de dónde sale el saldo.
+
+    El panel usa la misma cuenta que el Módulo 3:
+        saldo = cobrar - (pagado - devuelto)
+    donde `cobrar` suma el valor de las sesiones en 'Realizado' y
+    'Cancelado-Pagado'. Una sesión 'Cancelado' NO suma; una 'Cancelado-Pagado'
+    SÍ se le cobra completa al estudiante, que es la causa habitual de que
+    alguien siga apareciendo con deuda por una sesión que no se dio.
+    """
+    patron_norm = (patron or '').strip().lower()
+    estudiantes = _fetch_all(supabase.table('estudiantes').select('id,nombres,apellidos,activo'))
+    coinciden = [e for e in estudiantes
+                 if patron_norm in f"{e.get('apellidos','')} {e.get('nombres','')}".lower()]
+
+    print("=" * 118)
+    print(f"Deuda del panel de inicio — estudiantes que coinciden con «{patron}»: {len(coinciden)}")
+    print("=" * 118)
+    if not coinciden:
+        print("  Ningún estudiante coincide. Revisa cómo está escrito el nombre.")
+        return
+
+    for e in coinciden:
+        nombre = f"{e.get('apellidos','')} {e.get('nombres','')}".strip()
+        activo = 'activo' if e.get('activo') else 'INACTIVO (no sale en el panel)'
+        print(f"\n── {nombre}  (id {e['id']}, {activo})")
+
+        ses = _fetch_all(supabase.table('sesiones').select(
+            'id,fecha,estado,tipo_sesion,asignatura,tema_terapia,profesor_terapeuta,valor_total'
+        ).eq('estudiante_id', e['id']).order('fecha'))
+        pagos = _fetch_all(supabase.table('pagos').select('id,fecha_pago,monto')
+                           .eq('estudiante_id', e['id']).order('fecha_pago'))
+        try:
+            devs = _fetch_all(supabase.table('devoluciones').select('id,fecha,monto,sesion_id')
+                              .eq('estudiante_id', e['id']).order('fecha'))
+        except Exception:
+            devs = []
+
+        cuentan = [s for s in ses if s.get('estado') in ('Realizado', 'Cancelado-Pagado')]
+        no_cuentan = [s for s in ses if s.get('estado') not in ('Realizado', 'Cancelado-Pagado')]
+        cobrar = round(sum(float(s.get('valor_total') or 0) for s in cuentan), 2)
+        pagado = round(sum(float(p.get('monto') or 0) for p in pagos), 2)
+        devuelto = round(sum(float(d.get('monto') or 0) for d in devs), 2)
+        saldo = round(cobrar - (pagado - devuelto), 2)
+
+        print(f"   Sesiones que SÍ se le cobran ({len(cuentan)}):")
+        for s in cuentan:
+            det = s.get('asignatura') or s.get('tema_terapia') or s.get('tipo_sesion') or '-'
+            aviso = '   ← cancelada, pero se le cobra igual' if s.get('estado') == 'Cancelado-Pagado' else ''
+            print(f"     #{s['id']:<6} {s.get('fecha')}  {str(s.get('estado')):<17} "
+                  f"{str(det)[:20]:<20} ${float(s.get('valor_total') or 0):>8.2f}{aviso}")
+        if not cuentan:
+            print("     (ninguna)")
+
+        if no_cuentan:
+            print(f"   Sesiones que NO se le cobran ({len(no_cuentan)}):")
+            for s in no_cuentan:
+                print(f"     #{s['id']:<6} {s.get('fecha')}  {str(s.get('estado')):<17} "
+                      f"${float(s.get('valor_total') or 0):>8.2f}")
+
+        print(f"   Pagos ({len(pagos)}): ${pagado:.2f}   ·   Devoluciones ({len(devs)}): ${devuelto:.2f}")
+        print(f"   SALDO = {cobrar:.2f} - ({pagado:.2f} - {devuelto:.2f}) = ${saldo:.2f}"
+              f"{'  → APARECE en el panel' if saldo > 0 else '  → no aparece'}")
+
+        canc_pag = [s for s in cuentan if s.get('estado') == 'Cancelado-Pagado']
+        if saldo > 0 and canc_pag:
+            monto = round(sum(float(s.get('valor_total') or 0) for s in canc_pag), 2)
+            print(f"   ⚠ ${monto:.2f} de esa deuda vienen de {len(canc_pag)} sesión(es) "
+                  f"'Cancelado-Pagado'. Si no debían cobrarse, pásalas a 'Cancelado'")
+            print(f"     desde el Módulo 2 y el saldo baja a ${round(saldo - monto, 2):.2f}.")
+
+    print("\n" + "=" * 118)
 
 
 def revisar(corregir=False, recalcular=False, mes=None, anio=None):
@@ -154,9 +234,14 @@ if __name__ == '__main__':
                    help="pone en $0 las sesiones 'Cancelado' que aún tienen importes")
     p.add_argument('--recalcular', action='store_true',
                    help="reaplica la regla de pago a las 'Cancelado-Pagado' desactualizadas")
+    p.add_argument('--estudiante', metavar='NOMBRE',
+                   help='explica por qué ese estudiante aparece con deuda en el panel de inicio')
     p.add_argument('--mes', type=int, help='mes a revisar (1-12)')
     p.add_argument('--anio', type=int, help='año a revisar')
     a = p.parse_args()
     if bool(a.mes) != bool(a.anio):
         p.error('--mes y --anio se usan juntos')
-    revisar(corregir=a.corregir, recalcular=a.recalcular, mes=a.mes, anio=a.anio)
+    if a.estudiante:
+        explicar_deuda(a.estudiante)
+    else:
+        revisar(corregir=a.corregir, recalcular=a.recalcular, mes=a.mes, anio=a.anio)
