@@ -627,11 +627,22 @@ def pago_sesion_docente(s):
       parte de terapia es terapia (% del valor) [regla de gerencia 06/2026]
     - Cancelado-Pagado: el valor reducido ya registrado (valor_pagar_docente:
       $5 fijo en clase, la mitad del % en terapia/ambos), a docencia si es
-      clase y a psicología si es terapia/ambos."""
+      clase y a psicología si es terapia/ambos.
+    - Cancelado (o cualquier otro estado): $0. La sesión no se dio y no se
+      paga: ni al docente ni al psicólogo.
+
+    Solo 'Realizado' y 'Cancelado-Pagado' generan pago. Antes esta función no
+    miraba el estado salvo para Cancelado-Pagado, así que una sesión cancelada
+    devolvía el pago COMPLETO (una clase de 2 h, $14) y lo único que evitaba
+    que se pagara era que cada reporte se acordara de filtrar por estado. Con
+    la regla aquí dentro, olvidar ese filtro ya no cuesta dinero."""
     tipo = s.get('tipo_sesion', 'clase')
     horas = s.get('horas', 0) or 0
     valor = s.get('valor_total', 0) or 0
-    if s.get('estado') == 'Cancelado-Pagado':
+    estado = s.get('estado')
+    if estado not in ('Realizado', 'Cancelado-Pagado'):
+        return (0, 0)
+    if estado == 'Cancelado-Pagado':
         fijo = round(s.get('valor_pagar_docente', 0) or 0, 2)
         return (fijo, 0) if tipo in ('clase', 'preuniversitario') else (0, fijo)
     if tipo in ('clase', 'preuniversitario'):
