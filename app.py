@@ -625,9 +625,10 @@ def pago_sesion_docente(s):
     - terapia: valor_total × PORCENTAJE_PSICOLOGIA
     - ambos: DIVIDIDO — la parte de clases es clases (horas × tarifa) y la
       parte de terapia es terapia (% del valor) [regla de gerencia 06/2026]
-    - Cancelado-Pagado: el valor reducido ya registrado (valor_pagar_docente:
-      $5 fijo en clase, la mitad del % en terapia/ambos), a docencia si es
-      clase y a psicología si es terapia/ambos.
+    - Cancelado-Pagado: SÍ se paga, con la tarifa reducida ($5 fijo en clase,
+      la mitad del % en terapia/ambos), a docencia si es clase y a psicología
+      si es terapia/ambos. Que no se le cobre al estudiante no quita el pago:
+      lo asume Atlas.
     - Cancelado (o cualquier otro estado): $0. La sesión no se dio y no se
       paga: ni al docente ni al psicólogo.
 
@@ -643,7 +644,14 @@ def pago_sesion_docente(s):
     if estado not in ('Realizado', 'Cancelado-Pagado'):
         return (0, 0)
     if estado == 'Cancelado-Pagado':
-        fijo = round(s.get('valor_pagar_docente', 0) or 0, 2)
+        # Se calcula con la regla, NO se lee valor_pagar_docente. Leerlo dejaba
+        # el pago a merced de lo que hubiera quedado grabado: una fila con ese
+        # campo en 0 (marcada antes de que existiera la tarifa reducida, o con
+        # el guardado a medias) no le pagaba nada al docente ni al psicólogo, y
+        # las terapias viejas seguían cobrando el 40.18% entero en vez de la
+        # mitad hasta que alguien recalculara la base.
+        _, fijo, _ = valores_por_estado('Cancelado-Pagado', tipo, horas,
+                                        valor_base_sesion(s, horas))
         return (fijo, 0) if tipo in ('clase', 'preuniversitario') else (0, fijo)
     if tipo in ('clase', 'preuniversitario'):
         return (round(horas * PAGO_DOCENCIA_POR_HORA, 2), 0)
