@@ -54,7 +54,7 @@
                         <th>Estado</th>
                         <th title="Realizado">✅<br><span class="th-nota">Realizado</span></th>
                         <th title="Cancelado: no se cobra al estudiante y no se paga a nadie">❌<br><span class="th-nota">Cancelado<br>$0</span></th>
-                        <th title="No se le cobra al estudiante, pero se le paga igual al docente/psicólogo (lo asume Atlas)">❌💰<br><span class="th-nota">Canc-Pagado<br>no cobra, paga</span></th>
+                        <th title="No se dio, pero el estudiante la paga igual y se le paga al docente/psicólogo">❌💰<br><span class="th-nota">Canc-Pagado<br>cobra y paga</span></th>
                         {% if current_user.rol in ['admin','socio'] %}<th>🗑️</th>{% endif %}
                     </tr>
                 </thead>
@@ -120,7 +120,7 @@ function mensajeEstado(e) {
         return '❌ ¿Marcar como CANCELADO?\n\nNo se le cobra al estudiante y NO se le paga a nadie ($0).';
     }
     if (e === 'Cancelado-Pagado') {
-        return '⚠️ ¿Marcar como CANCELADO-PAGADO?\n\nAl estudiante NO se le cobra nada.\nAtlas asume el pago de quien iba a darla (tarifa reducida):\n· Clase: $5 fijos al docente\n· Terapia: la mitad del porcentaje del psicólogo\n\nSi tampoco hay que pagarle, usa la opción ❌ Cancelado.';
+        return '⚠️ ¿Marcar como CANCELADO-PAGADO?\n\nLa sesión no se dio pero el estudiante la paga igual,\ny por eso se le paga a quien iba a darla (tarifa reducida):\n· Clase: $5 fijos al docente\n· Terapia: la mitad del porcentaje del psicólogo\n\nSi no hay que cobrar ni pagar nada, usa la opción ❌ Cancelado.';
     }
     return '¿Confirmas marcar como ' + e + '?';
 }
@@ -168,7 +168,7 @@ async function cargarPendientes() {
                         <div>
                             <button class="btn btn-success btn-sm me-1" onclick="marcarPendiente(${s.id}, 'Realizado')">✅ Realizado</button>
                             <button class="btn btn-danger btn-sm me-1" onclick="marcarPendiente(${s.id}, 'Cancelado')" title="No se cobra ni se paga a nadie">❌ Cancelado ($0)</button>
-                            <button class="btn btn-warning btn-sm" onclick="marcarPendiente(${s.id}, 'Cancelado-Pagado')" title="No se le cobra al estudiante, pero se le paga igual al docente/psicólogo">❌💰 Canc-Pagado</button>
+                            <button class="btn btn-warning btn-sm" onclick="marcarPendiente(${s.id}, 'Cancelado-Pagado')" title="El estudiante la paga igual y se le paga al docente/psicólogo">❌💰 Canc-Pagado</button>
                         </div>
                     </div>
                 </div>`;

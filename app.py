@@ -663,21 +663,28 @@ def pago_sesion_docente(s):
 def cobro_sesion_estudiante(s):
     """Lo que se le cobra al estudiante por una sesión.
 
-    Solo se cobra lo 'Realizado'. Una sesión cancelada no se le cobra, ni
-    siquiera cuando se le paga igual a quien la iba a dar ('Cancelado-Pagado'):
-    ese pago lo asume Atlas.
+    - Realizado: el valor de la sesión.
+    - Cancelado-Pagado: TAMBIÉN se cobra. Ese estado significa que la sesión no
+      se dio pero el estudiante la paga igual, y precisamente por eso se le paga
+      a quien la iba a dar (docente o psicólogo, con tarifa reducida).
+    - Cancelado: $0. No se cobra ni se paga a nadie.
 
-    Se decide por el ESTADO y no por el importe guardado, igual que
-    pago_sesion_docente. Así las filas grabadas cuando 'Cancelado-Pagado' sí se
-    cobraba dejan de sumar de inmediato, sin esperar a que alguien recalcule la
-    base: mientras el reporte leyera valor_total a secas, el cambio de regla no
-    se notaba en el Recordatorio de cobros ni en los saldos del Módulo 3."""
-    if s.get('estado') != 'Realizado':
+    Se decide por el ESTADO y no solo por el importe guardado, igual que
+    pago_sesion_docente: mientras el reporte leyera valor_total a secas, un
+    cambio de regla no se notaba en el Recordatorio de cobros ni en los saldos
+    del Módulo 3 hasta migrar la base. En 'Cancelado-Pagado' se recupera la
+    tarifa cuando el importe guardado está en cero, para que las filas que
+    quedaron sin valor no dejen de cobrarse."""
+    estado = s.get('estado')
+    if estado not in ('Realizado', 'Cancelado-Pagado'):
         return 0
     try:
-        return round(float(s.get('valor_total') or 0), 2)
+        valor = float(s.get('valor_total') or 0)
     except (TypeError, ValueError):
-        return 0
+        valor = 0
+    if estado == 'Cancelado-Pagado' and valor <= 0:
+        valor = valor_base_sesion(s)
+    return round(valor, 2)
 
 
 # Estados válidos de una sesión. Cualquier otro valor se rechaza en las APIs:
@@ -712,12 +719,10 @@ def valores_por_estado(estado, tipo_sesion, horas, valor_base):
     siguiera arrastrando dinero y apareciera cobrada/pagada en los reportes.
 
       - Cancelado: $0 para TODOS (no se cobra al estudiante ni se paga a nadie).
-      - Cancelado-Pagado: la sesión NO se le cobra al estudiante, pero igual se
-        le paga a quien la iba a dar: $5 FIJO en clase/preuniversitario y la
-        MITAD del porcentaje en terapia/ambos. Ese pago sale de Atlas, así que
-        valor_atlas queda NEGATIVO: es dinero que el centro pone, no que gana.
-        (La tarifa sigue haciendo falta para calcular el % de terapia, por eso
-        se recibe en valor_base aunque después no se cobre.)
+      - Cancelado-Pagado: la sesión no se dio pero el estudiante la paga igual,
+        y por eso se le paga a quien la iba a dar con tarifa reducida: $5 FIJO
+        en clase/preuniversitario y la MITAD del porcentaje en terapia/ambos.
+        El estudiante paga el valor completo y Atlas se queda con la diferencia.
       - Realizado: la regla normal de pago.
     """
     if estado == 'Cancelado':
@@ -734,10 +739,6 @@ def valores_por_estado(estado, tipo_sesion, horas, valor_base):
         pago = round(valor * PORCENTAJE_PSICOLOGIA * FACTOR_PSICOLOGIA_CANCELADO, 2)
     else:
         pago = round(valor * PORCENTAJE_PSICOLOGIA, 2)
-    if estado == 'Cancelado-Pagado':
-        # La sesión no se dio: al estudiante no se le cobra nada. El pago a
-        # quien la iba a dar lo asume Atlas, de ahí el valor_atlas negativo.
-        return 0, pago, round(-pago, 2)
     return valor, pago, round(valor - pago, 2)
 
 # ========== CARGAR COSTOS DESDE SUPABASE ==========

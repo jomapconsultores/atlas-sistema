@@ -9,10 +9,11 @@
       La regla es $0 para todos, así que esto se corrige.
 
   (B) Sesiones en estado 'Cancelado-Pagado', comparadas con la regla vigente:
-      al estudiante no se le cobra nada y Atlas asume el pago reducido de quien
-      iba a darla. Las guardadas antes del cambio siguen cobrándole al
-      estudiante (y las de terapia, pagando el 40.18% en vez de la mitad):
-      --recalcular las pone al día.
+      el estudiante la paga igual y por eso se le paga a quien iba a darla con
+      tarifa reducida ($5 fijo en clase, la mitad del % en terapia). Las de
+      terapia marcadas antes del cambio guardan el 40.18% entero, y las que se
+      marcaron mientras el cobro estuvo en $0 quedaron sin valor: --recalcular
+      las pone al día.
       Decidir cuáles debían ser 'Cancelado' a secas sigue siendo manual.
 
   (C) Con --estudiante NOMBRE: desglosa por qué ese estudiante aparece en el
@@ -145,16 +146,13 @@ def explicar_deuda(patron):
         print(f"   SALDO = {cobrar:.2f} - ({pagado:.2f} - {devuelto:.2f}) = ${saldo:.2f}"
               f"{'  → APARECE en el panel' if saldo > 0 else '  → no aparece'}")
 
-        # Filas 'Cancelado-Pagado' que aún guardan el cobro viejo. Ya no suman al
-        # saldo (los reportes lo deciden por el estado), pero conviene limpiarlas
-        # con --recalcular para que el dato guardado diga la verdad.
-        residuo = [s for s in ses if s.get('estado') == 'Cancelado-Pagado'
-                   and float(s.get('valor_total') or 0) > 0]
-        if residuo:
-            monto = round(sum(float(s.get('valor_total') or 0) for s in residuo), 2)
-            print(f"   ℹ {len(residuo)} sesión(es) 'Cancelado-Pagado' guardan un cobro viejo "
-                  f"de ${monto:.2f} que ya NO se le cobra.")
-            print("     Corre --recalcular para dejarlas en $0 también en la base.")
+        canc_pag = [s for s in cuentan if s.get('estado') == 'Cancelado-Pagado']
+        if saldo > 0 and canc_pag:
+            monto = round(sum(cobro_sesion_estudiante(s) for s in canc_pag), 2)
+            print(f"   ⚠ ${monto:.2f} de esa deuda vienen de {len(canc_pag)} sesión(es) "
+                  f"'Cancelado-Pagado', que SÍ se le cobran.")
+            print(f"     Si esas no debían cobrarse, pásalas a 'Cancelado' desde el "
+                  f"Módulo 2 y el saldo baja a ${round(saldo - monto, 2):.2f}.")
 
     print("\n" + "=" * 118)
 
