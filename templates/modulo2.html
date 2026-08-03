@@ -21,6 +21,11 @@
     .hora-invalida { border: 2px solid #dc3545 !important; background-color: #ffe6e6 !important; }
     .error-msg { color: #dc3545; font-size: 12px; margin-top: 5px; display: none; }
     .btn-outline-secondary, .btn-outline-primary, .btn-outline-success, .btn-outline-info, .btn-outline-warning { border-radius: 10px; font-weight: 500; }
+    /* Las dos formas de cancelar estaban una junto a otra como dos ❌ sin texto:
+       era muy fácil marcar «Cancelado-Pagado» queriendo marcar «Cancelado». */
+    .table thead th .th-nota { display: block; font-size: 8px; font-weight: 500; line-height: 1.2; letter-spacing: 0; text-transform: none; opacity: .8; }
+    td.col-canc { background: #fff5f5; }
+    td.col-canc-pag { background: #fff9e8; }
 </style>
 
 <div class="page-hero">
@@ -46,7 +51,10 @@
                 <thead>
                     <tr>
                         <th>Fecha</th><th>Hora</th><th>Estudiante</th><th>Tipo</th><th>Asig/Tema</th><th>Prof</th>
-                        <th>Estado</th><th>✅</th><th>❌</th><th>❌💰</th>
+                        <th>Estado</th>
+                        <th title="Realizado">✅<br><span class="th-nota">Realizado</span></th>
+                        <th title="Cancelado: no se cobra al estudiante y no se paga a nadie">❌<br><span class="th-nota">Cancelado<br>$0</span></th>
+                        <th title="Cancelado pero se paga igual al docente">❌💰<br><span class="th-nota">Canc-Pagado<br>se paga</span></th>
                         {% if current_user.rol in ['admin','socio'] %}<th>🗑️</th>{% endif %}
                     </tr>
                 </thead>
@@ -63,8 +71,8 @@
                             <span class="badge bg-{{ 'success' if s.estado=='Realizado' else 'danger' if s.estado=='Cancelado' else 'warning' if s.estado=='Planificado' else 'info' }}">{{ s.estado }}</span>
                         </td>
                         <td><input type="radio" name="est_{{ s.id }}" class="radio-sesion" data-id="{{ s.id }}" data-estado="Realizado" {{ 'checked' if s.estado=='Realizado' }}></td>
-                        <td><input type="radio" name="est_{{ s.id }}" class="radio-sesion" data-id="{{ s.id }}" data-estado="Cancelado" {{ 'checked' if s.estado=='Cancelado' }}></td>
-                        <td><input type="radio" name="est_{{ s.id }}" class="radio-sesion" data-id="{{ s.id }}" data-estado="Cancelado-Pagado" {{ 'checked' if s.estado=='Cancelado-Pagado' }}></td>
+                        <td class="col-canc"><input type="radio" name="est_{{ s.id }}" class="radio-sesion" data-id="{{ s.id }}" data-estado="Cancelado" title="Cancelado: $0 para todos" {{ 'checked' if s.estado=='Cancelado' }}></td>
+                        <td class="col-canc-pag"><input type="radio" name="est_{{ s.id }}" class="radio-sesion" data-id="{{ s.id }}" data-estado="Cancelado-Pagado" title="Cancelado-Pagado: se le paga igual al docente/psicólogo" {{ 'checked' if s.estado=='Cancelado-Pagado' }}></td>
                         {% if current_user.rol in ['admin','socio'] %}
                         <td><button class="btn btn-danger btn-sm" onclick="eliminarSesion({{ s.id }})">🗑️</button></td>
                         {% endif %}
@@ -103,15 +111,25 @@
     if (nota && input) ATLAS_FERIADOS.pintarNota(nota, input.value);
 })();
 
+// Texto de confirmación por estado. El de Cancelado-Pagado decía «50% para el
+// docente / 50% para Atlas», que no es lo que hace el sistema: se paga un valor
+// fijo por clase, o el porcentaje de psicología en terapia. Con esa descripción
+// era fácil elegir esta opción creyendo que se estaba cancelando sin pagar.
+function mensajeEstado(e) {
+    if (e === 'Cancelado') {
+        return '❌ ¿Marcar como CANCELADO?\n\nNo se le cobra al estudiante y NO se le paga a nadie ($0).';
+    }
+    if (e === 'Cancelado-Pagado') {
+        return '⚠️ ¿Marcar como CANCELADO-PAGADO?\n\nLa sesión no se dio, pero SÍ se le paga (tarifa reducida):\n· Clase: $5 fijos al docente\n· Terapia: la mitad del porcentaje del psicólogo\n\nSi no hay que pagarle nada, usa la opción ❌ Cancelado.';
+    }
+    return '¿Confirmas marcar como ' + e + '?';
+}
+
 document.querySelectorAll('.radio-sesion').forEach(r => {
     r.addEventListener('change', function() {
         if (!this.checked) return;
         const id = this.dataset.id, e = this.dataset.estado;
-        let mensaje = '¿Confirmas marcar como ' + e + '?';
-        if (e === 'Cancelado-Pagado') {
-            mensaje = '⚠️ ¿Marcar como Cancelado-Pagado?\n\n50% para el docente\n50% para Atlas';
-        }
-        if (!confirm(mensaje)) {
+        if (!confirm(mensajeEstado(e))) {
             location.reload();
             return;
         }
@@ -149,8 +167,8 @@ async function cargarPendientes() {
                         </div>
                         <div>
                             <button class="btn btn-success btn-sm me-1" onclick="marcarPendiente(${s.id}, 'Realizado')">✅ Realizado</button>
-                            <button class="btn btn-warning btn-sm me-1" onclick="marcarPendiente(${s.id}, 'Cancelado')">❌ Cancelado</button>
-                            <button class="btn btn-info btn-sm" onclick="marcarPendiente(${s.id}, 'Cancelado-Pagado')">❌💰 Canc-Pag</button>
+                            <button class="btn btn-danger btn-sm me-1" onclick="marcarPendiente(${s.id}, 'Cancelado')" title="No se cobra ni se paga a nadie">❌ Cancelado ($0)</button>
+                            <button class="btn btn-warning btn-sm" onclick="marcarPendiente(${s.id}, 'Cancelado-Pagado')" title="Se le paga igual al docente/psicólogo">❌💰 Canc-Pagado</button>
                         </div>
                     </div>
                 </div>`;
@@ -163,9 +181,7 @@ async function cargarPendientes() {
 }
 
 async function marcarPendiente(id, estado) {
-    let mensaje = `¿Marcar esta sesión como ${estado}?`;
-    if (estado === 'Cancelado-Pagado') mensaje = '⚠️ ¿Marcar como Cancelado-Pagado?\n\n50% para el docente\n50% para Atlas';
-    if (!confirm(mensaje)) return;
+    if (!confirm(mensajeEstado(estado))) return;
     try {
         const response = await fetch('/api/sesion/' + id + '/toggle', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({estado: estado})});
         const result = await response.json();

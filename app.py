@@ -584,6 +584,11 @@ def a_oracion(texto):
 PAGO_DOCENCIA_POR_HORA = 7
 PAGO_DOCENCIA_CANCELADO = 5   # valor FIJO al docente por clase Cancelado-Pagado (no por hora)
 PORCENTAJE_PSICOLOGIA = 0.4018
+# En terapia Cancelado-Pagado el psicólogo cobra la MITAD de su porcentaje
+# (20.09% del valor). Antes cobraba el 40.18% completo, es decir lo mismo que
+# si la sesión se hubiera dado, mientras que en clases sí había una tarifa
+# reducida ($5 en vez de $7/h).
+FACTOR_PSICOLOGIA_CANCELADO = 0.5
 COMISION_CLIENTE_EXTERNO = 0.25
 
 def norm_nombre(v):
@@ -620,8 +625,9 @@ def pago_sesion_docente(s):
     - terapia: valor_total × PORCENTAJE_PSICOLOGIA
     - ambos: DIVIDIDO — la parte de clases es clases (horas × tarifa) y la
       parte de terapia es terapia (% del valor) [regla de gerencia 06/2026]
-    - Cancelado-Pagado: el valor fijo registrado (valor_pagar_docente),
-      a docencia si es clase y a psicología si es terapia/ambos."""
+    - Cancelado-Pagado: el valor reducido ya registrado (valor_pagar_docente:
+      $5 fijo en clase, la mitad del % en terapia/ambos), a docencia si es
+      clase y a psicología si es terapia/ambos."""
     tipo = s.get('tipo_sesion', 'clase')
     horas = s.get('horas', 0) or 0
     valor = s.get('valor_total', 0) or 0
@@ -634,6 +640,58 @@ def pago_sesion_docente(s):
         return (round(horas * PAGO_DOCENCIA_POR_HORA, 2),
                 round(valor * PORCENTAJE_PSICOLOGIA, 2))
     return (0, round(valor * PORCENTAJE_PSICOLOGIA, 2))
+
+# Estados válidos de una sesión. Cualquier otro valor se rechaza en las APIs:
+# un estado con una errata (o inventado desde fuera) se guardaba tal cual y la
+# sesión desaparecía de todos los reportes, que filtran por estos nombres.
+ESTADOS_SESION = ('Planificado', 'Realizado', 'Cancelado', 'Cancelado-Pagado')
+
+
+def valor_base_sesion(s, horas=None):
+    """Valor que paga el estudiante por la sesión, reconstruido desde la fila.
+    En cobro por sesión (terapia/ambos) la tarifa vive en valor_total y, si se
+    perdió, en precio_hora (donde la deja el Módulo 1). En clases es horas ×
+    precio por hora."""
+    tipo = s.get('tipo_sesion', 'clase')
+    if horas is None:
+        horas = s.get('horas', 0) or 0
+    # 'or 10' trataría un precio legítimo de $0 (clase gratuita) como vacío;
+    # is None es lo correcto.
+    _ph = s.get('precio_hora')
+    precio_hora = _ph if _ph is not None else 10
+    if s.get('cobro_por_sesion') or tipo in ('terapia', 'ambos'):
+        return round(s.get('valor_total') or precio_hora, 2)
+    return round(horas * precio_hora, 2)
+
+
+def valores_por_estado(estado, tipo_sesion, horas, valor_base):
+    """Dinero de una sesión según su estado: (valor_total, pago_docente, valor_atlas).
+
+    REGLA ÚNICA para el toggle del Módulo 2, el editor de planificación y las
+    devoluciones. Antes cada uno tenía su propia copia y bastaba que una sola
+    ruta olvidara poner los valores en cero para que una sesión cancelada
+    siguiera arrastrando dinero y apareciera cobrada/pagada en los reportes.
+
+      - Cancelado: $0 para TODOS (no se cobra al estudiante ni se paga a nadie).
+      - Cancelado-Pagado (clase/preuniversitario): $5 FIJO al docente.
+      - Cancelado-Pagado (terapia/ambos): la MITAD del porcentaje de psicología.
+      - Realizado y el resto: la regla normal de pago.
+    """
+    if estado == 'Cancelado':
+        return 0, 0, 0
+    valor = round(valor_base or 0, 2)
+    horas = horas or 0
+    if tipo_sesion in ('clase', 'preuniversitario'):
+        pago = PAGO_DOCENCIA_CANCELADO if estado == 'Cancelado-Pagado' \
+            else round(horas * PAGO_DOCENCIA_POR_HORA, 2)
+    elif tipo_sesion == 'ambos' and estado == 'Realizado':
+        # Regla dividida: docencia (horas × tarifa) + psicología (% del valor)
+        pago = round(horas * PAGO_DOCENCIA_POR_HORA, 2) + round(valor * PORCENTAJE_PSICOLOGIA, 2)
+    elif estado == 'Cancelado-Pagado':
+        pago = round(valor * PORCENTAJE_PSICOLOGIA * FACTOR_PSICOLOGIA_CANCELADO, 2)
+    else:
+        pago = round(valor * PORCENTAJE_PSICOLOGIA, 2)
+    return valor, pago, round(valor - pago, 2)
 
 # ========== CARGAR COSTOS DESDE SUPABASE ==========
 def cargar_costos():
@@ -843,10 +901,17 @@ def crear_devolucion(tipo_cliente, fecha, monto, tipo_pago, motivo, pagar_docent
                 'monto_pagado': nuevo_pagado, 'estado': nuevo_estado
             }).eq('id', cita_id).execute()
 
-    # 4) Sesión asociada: queda 'Cancelado' (no se cobra, no paga docente por sesión)
+    # 4) Sesión asociada: queda 'Cancelado' (no se cobra, no paga docente por sesión).
+    # El estado por sí solo no basta: hay que poner el dinero en cero. Antes la
+    # sesión quedaba cancelada pero conservando valor_total y valor_pagar_docente,
+    # así que seguía sumando en cualquier cuenta que mirara los importes y no el
+    # estado, y se veía como una cita cancelada que igual se cobró y se pagó.
     if sesion_id:
         try:
-            supabase.table('sesiones').update({'estado': 'Cancelado'}).eq('id', int(sesion_id)).execute()
+            supabase.table('sesiones').update({
+                'estado': 'Cancelado', 'valor_total': 0,
+                'valor_pagar_docente': 0, 'valor_atlas': 0
+            }).eq('id', int(sesion_id)).execute()
         except Exception:
             pass
     return res.data[0]['id'] if res.data else None
@@ -1652,6 +1717,8 @@ def api_editar_sesion(id):
                 return jsonify({'success': False, 'error': 'Debe seleccionar un precio por hora (costo)'})
 
         estado_nuevo = data.get('estado', 'Planificado')
+        if estado_nuevo not in ESTADOS_SESION:
+            return jsonify({'success': False, 'error': f'Estado no válido: {estado_nuevo}'})
         updates = {
             'fecha': data['fecha'],
             'hora_inicio': hora_inicio_str,
@@ -1673,26 +1740,16 @@ def api_editar_sesion(id):
         # Recalcular SIEMPRE cobro y pago según el estado (misma regla que el
         # toggle del Módulo 2: antes, cambiar el estado desde el editor dejaba
         # valor_pagar_docente desactualizado o en 0 y el docente cobraba mal)
-        if estado_nuevo in ('Realizado', 'Cancelado-Pagado'):
+        if estado_nuevo in ('Realizado', 'Cancelado-Pagado', 'Cancelado'):
             if es_terapia:
-                valor_calc = round(valor_total or precio_hora or 0, 2)  # tarifa por sesión
+                valor_base = round(valor_total or precio_hora or 0, 2)  # tarifa por sesión
             else:
-                valor_calc = round(horas * precio_hora, 2)
-            if tipo_sesion in ('clase', 'preuniversitario'):
-                pago_docente = PAGO_DOCENCIA_CANCELADO if estado_nuevo == 'Cancelado-Pagado' \
-                    else round(horas * PAGO_DOCENCIA_POR_HORA, 2)
-            elif tipo_sesion == 'ambos' and estado_nuevo == 'Realizado':
-                # Regla dividida: docencia (horas × tarifa) + psicología (% del valor)
-                pago_docente = round(horas * PAGO_DOCENCIA_POR_HORA, 2) + round(valor_calc * PORCENTAJE_PSICOLOGIA, 2)
-            else:
-                pago_docente = round(valor_calc * PORCENTAJE_PSICOLOGIA, 2)
-            updates['valor_total'] = valor_calc
+                valor_base = round(horas * precio_hora, 2)
+            v_total, pago_docente, v_atlas = valores_por_estado(
+                estado_nuevo, tipo_sesion, horas, valor_base)
+            updates['valor_total'] = v_total
             updates['valor_pagar_docente'] = pago_docente
-            updates['valor_atlas'] = round(valor_calc - pago_docente, 2)
-        elif estado_nuevo == 'Cancelado':
-            updates['valor_total'] = 0
-            updates['valor_pagar_docente'] = 0
-            updates['valor_atlas'] = 0
+            updates['valor_atlas'] = v_atlas
 
         supabase.table('sesiones').update(updates).eq('id', id).execute()
 
@@ -1803,52 +1860,25 @@ def toggle_sesion(id):
 
     data = request.get_json()
     estado = data.get('estado', 'Realizado')
+    if estado not in ESTADOS_SESION:
+        return jsonify({'success': False, 'error': f'Estado no válido: {estado}'}), 400
     updates = {'estado': estado}
 
-    if estado in ['Realizado', 'Cancelado-Pagado']:
-        s = s0
-        if s.data:
-            sd = s.data[0]
-            tipo_sesion = sd.get('tipo_sesion', 'clase')
-            horas = sd.get('horas', 1) or 1
-            # 'or 10' trataría un precio legítimo de $0 (clase gratuita) como
-            # vacío y lo reemplazaría por el default; is None es lo correcto.
-            _ph = sd.get('precio_hora')
-            precio_hora = _ph if _ph is not None else 10
+    if estado in ('Realizado', 'Cancelado-Pagado', 'Cancelado'):
+        sd = s0.data[0]
+        # Regla única de dinero por estado (valores_por_estado):
+        #  - Cancelado: $0 para todos
+        #  - Clases realizadas: $7/h · Cancelado-Pagado: $5 FIJO por clase
+        #  - Terapia: 40.18% del valor
+        #  - Ambos realizado: docencia (horas × $7) + psicología (% del valor)
+        horas_sd = sd.get('horas', 1) or 1
+        v_total, pago_docente, valor_atlas = valores_por_estado(
+            estado, sd.get('tipo_sesion', 'clase'), horas_sd,
+            valor_base_sesion(sd, horas_sd))
+        updates['valor_total'] = v_total
+        updates['valor_pagar_docente'] = pago_docente
+        updates['valor_atlas'] = valor_atlas
 
-            # Valor que paga el estudiante
-            if sd.get('cobro_por_sesion') or tipo_sesion in ['terapia', 'ambos']:
-                # Tarifa POR SESIÓN: usa el valor ya registrado en la sesión
-                # (puede haberse pactado distinto en el editor); si no hay,
-                # cae a precio_hora (donde el Módulo 1 guarda la tarifa)
-                valor_total_sesion = round(sd.get('valor_total') or precio_hora, 2)
-            else:
-                valor_total_sesion = round(horas * precio_hora, 2)
-
-            # Pago al docente (regla única, igual que pago_sesion_docente):
-            #  - Clases realizadas: $7/h · Cancelado-Pagado: $5 FIJO por clase
-            #  - Terapia: 40.18% del valor
-            #  - Ambos realizado: docencia (horas × $7) + psicología (% del valor)
-            if tipo_sesion in ['clase', 'preuniversitario']:
-                if estado == 'Cancelado-Pagado':
-                    pago_docente = PAGO_DOCENCIA_CANCELADO
-                else:
-                    pago_docente = round(horas * PAGO_DOCENCIA_POR_HORA, 2)
-            elif tipo_sesion == 'ambos' and estado == 'Realizado':
-                pago_docente = round(horas * PAGO_DOCENCIA_POR_HORA, 2) + round(valor_total_sesion * PORCENTAJE_PSICOLOGIA, 2)
-            else:
-                pago_docente = round(valor_total_sesion * PORCENTAJE_PSICOLOGIA, 2)
-
-            valor_atlas = round(valor_total_sesion - pago_docente, 2)
-
-            updates['valor_total'] = valor_total_sesion
-            updates['valor_pagar_docente'] = pago_docente
-            updates['valor_atlas'] = valor_atlas
-    elif estado == 'Cancelado':
-        updates['valor_total'] = 0
-        updates['valor_pagar_docente'] = 0
-        updates['valor_atlas'] = 0
-    
     supabase.table('sesiones').update(updates).eq('id', id).execute()
 
     # Auto-sincronizar con Google Calendar: refleja el nuevo estado (realizado/cancelado) en el calendario
@@ -5270,9 +5300,22 @@ def eliminar_devolucion(id):
                     'monto_pagado': nuevo_pagado, 'estado': nuevo_estado
                 }).eq('id', d['cita_id']).execute()
         # Restaurar la sesión que la devolución canceló (vuelve a cobrarse y a
-        # pagarse al docente por sesión, ya que el gasto vinculado se elimina abajo)
+        # pagarse al docente por sesión, ya que el gasto vinculado se elimina abajo).
+        # Al cancelarla se pusieron los importes en cero, así que hay que
+        # recalcularlos con la regla única; si no, la sesión volvía a 'Realizado'
+        # valiendo $0 y el docente dejaba de cobrarla.
         if d.get('sesion_id'):
-            supabase.table('sesiones').update({'estado': 'Realizado'}).eq('id', d['sesion_id']).execute()
+            _ses = supabase.table('sesiones').select('*').eq('id', d['sesion_id']).execute()
+            upd_ses = {'estado': 'Realizado'}
+            if _ses.data:
+                _sd = _ses.data[0]
+                _h = _sd.get('horas', 1) or 1
+                _vt, _pd, _va = valores_por_estado(
+                    'Realizado', _sd.get('tipo_sesion', 'clase'), _h,
+                    valor_base_sesion(_sd, _h))
+                upd_ses.update({'valor_total': _vt, 'valor_pagar_docente': _pd,
+                                'valor_atlas': _va})
+            supabase.table('sesiones').update(upd_ses).eq('id', d['sesion_id']).execute()
     except Exception as e:
         return jsonify({'success': False, 'error': f'No se pudo revertir cita/sesión, nada se eliminó: {e}'})
     # Recién ahora, con las reversiones ya confirmadas: borrar el gasto y la devolución.
