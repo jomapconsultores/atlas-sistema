@@ -652,6 +652,26 @@ def pago_sesion_docente(s):
                 round(valor * PORCENTAJE_PSICOLOGIA, 2))
     return (0, round(valor * PORCENTAJE_PSICOLOGIA, 2))
 
+def cobro_sesion_estudiante(s):
+    """Lo que se le cobra al estudiante por una sesión.
+
+    Solo se cobra lo 'Realizado'. Una sesión cancelada no se le cobra, ni
+    siquiera cuando se le paga igual a quien la iba a dar ('Cancelado-Pagado'):
+    ese pago lo asume Atlas.
+
+    Se decide por el ESTADO y no por el importe guardado, igual que
+    pago_sesion_docente. Así las filas grabadas cuando 'Cancelado-Pagado' sí se
+    cobraba dejan de sumar de inmediato, sin esperar a que alguien recalcule la
+    base: mientras el reporte leyera valor_total a secas, el cambio de regla no
+    se notaba en el Recordatorio de cobros ni en los saldos del Módulo 3."""
+    if s.get('estado') != 'Realizado':
+        return 0
+    try:
+        return round(float(s.get('valor_total') or 0), 2)
+    except (TypeError, ValueError):
+        return 0
+
+
 # Estados válidos de una sesión. Cualquier otro valor se rechaza en las APIs:
 # un estado con una errata (o inventado desde fuera) se guardaba tal cual y la
 # sesión desaparecía de todos los reportes, que filtran por estos nombres.
@@ -1327,7 +1347,7 @@ def _estudiantes_con_deuda():
     Devuelve [{'nombre', 'saldo'}] ordenado de mayor a menor deuda."""
     try:
         estudiantes = supabase.table('estudiantes').select('id,nombres,apellidos').eq('activo', True).execute().data or []
-        ses_rows = _fetch_all(supabase.table('sesiones').select('estudiante_id,valor_total').in_('estado', ['Realizado', 'Cancelado-Pagado']))
+        ses_rows = _fetch_all(supabase.table('sesiones').select('estudiante_id,valor_total,estado').in_('estado', ['Realizado', 'Cancelado-Pagado']))
         pagos_rows = _fetch_all(supabase.table('pagos').select('estudiante_id,monto'))
         try:
             dev_rows = _fetch_all(supabase.table('devoluciones').select('estudiante_id,monto'))
@@ -1340,7 +1360,7 @@ def _estudiantes_con_deuda():
                 return 0.0
         cobrar_por_est, pagado_por_est, dev_por_est = {}, {}, {}
         for s in ses_rows:
-            cobrar_por_est[s.get('estudiante_id')] = cobrar_por_est.get(s.get('estudiante_id'), 0) + _num(s.get('valor_total'))
+            cobrar_por_est[s.get('estudiante_id')] = cobrar_por_est.get(s.get('estudiante_id'), 0) + cobro_sesion_estudiante(s)
         for p in pagos_rows:
             pagado_por_est[p.get('estudiante_id')] = pagado_por_est.get(p.get('estudiante_id'), 0) + _num(p.get('monto'))
         for d in dev_rows:
@@ -2192,7 +2212,7 @@ def modulo3():
             continue
         ses_e = ses_por_est_m3.get(e['id'], [])
         pag_e = pagos_por_est_m3.get(e['id'], [])
-        cobrar = sum(s.get('valor_total', 0) or 0 for s in ses_e)
+        cobrar = sum(cobro_sesion_estudiante(s) for s in ses_e)
         pagado = sum(p.get('monto', 0) or 0 for p in pag_e)
         devuelto = dev_por_est_m3.get(e['id'], 0)
         pagado_neto = pagado - devuelto
@@ -2205,7 +2225,7 @@ def modulo3():
         str(d['id']): [
             {'id': s['id'], 'fecha': s.get('fecha') or '',
              'detalle': s.get('asignatura') or s.get('tema_terapia') or s.get('tipo_sesion') or 'Sesión',
-             'estado': s.get('estado') or '', 'valor': s.get('valor_total') or 0}
+             'estado': s.get('estado') or '', 'valor': cobro_sesion_estudiante(s)}
             for s in d.get('sesiones', [])
         ] for d in datos
     }
@@ -2316,7 +2336,9 @@ def modulo5():
 
     for s in sesiones_data:
         horas = s.get('horas', 0) or 0
-        valor = s.get('valor_total', 0) or 0
+        # Lo que se le cobra al estudiante: $0 si la sesión no se dio, aunque
+        # al docente se le pague igual (Cancelado-Pagado, que asume Atlas)
+        valor = cobro_sesion_estudiante(s)
         tipo = s.get('tipo_sesion', 'clase')
         profesor = norm_nombre(s.get('profesor_terapeuta', '')) or 'Desconocido'
         profesores_lista.add(profesor)
@@ -2874,7 +2896,7 @@ def reportes():
 
         ses_realizadas = [s for s in ses_data if s['estado'] == 'Realizado']
 
-        cobrar = sum(s.get('valor_total', 0) or 0 for s in ses_data)
+        cobrar = sum(cobro_sesion_estudiante(s) for s in ses_data)
         pagado = sum(p.get('monto', 0) or 0 for p in pag_data)
         
         horas_real = sum(s.get('horas', 0) or 0 for s in ses_realizadas)
@@ -2887,7 +2909,7 @@ def reportes():
         cobrar_psico_est = 0
         for s in ses_data:
             tipo = s.get('tipo_sesion', 'clase')
-            valor = s.get('valor_total', 0) or 0
+            valor = cobro_sesion_estudiante(s)
             if tipo in ['clase', 'preuniversitario']:
                 cobrar_clases_est += valor
                 planificado_clases += valor
@@ -2992,7 +3014,7 @@ def reportes():
         nombre_est = f"{e['apellidos']} {e['nombres']}"
         ses_est_data = ses_por_est.get(e['id'], [])  # ya consultado en lote arriba
         horas_est = sum(s.get('horas', 0) or 0 for s in ses_est_data)
-        cobrar_est = sum(s.get('valor_total', 0) or 0 for s in ses_est_data)
+        cobrar_est = sum(cobro_sesion_estudiante(s) for s in ses_est_data)
         horas_por_estudiante[nombre_est] = horas_est
         cobrar_por_estudiante[nombre_est] = cobrar_est
     
@@ -3007,7 +3029,7 @@ def reportes():
                 asignaturas_valores[asig] = {'horas': 0, 'valor': 0, 'estudiantes': 0}
                 asignaturas_estudiantes[asig] = set()
             asignaturas_valores[asig]['horas'] += s.get('horas', 0) or 0
-            asignaturas_valores[asig]['valor'] += s.get('valor_total', 0) or 0
+            asignaturas_valores[asig]['valor'] += cobro_sesion_estudiante(s)
             asignaturas_estudiantes[asig].add(nombre_est)
     
     for asig in asignaturas_valores:
@@ -4299,7 +4321,7 @@ def mi_reporte():
 
         if incluir:
             horas = s.get('horas', 0) or 0
-            valor = s.get('valor_total', 0) or 0
+            valor = cobro_sesion_estudiante(s)
             tipo = s.get('tipo_sesion', 'clase')
 
             # Pago al docente (regla única); para el estudiante lo relevante es 'valor'

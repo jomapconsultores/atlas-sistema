@@ -32,7 +32,7 @@ from calendar import monthrange
 from supabase_client import supabase
 # La regla de dinero vive en un solo sitio (app.py); este script la reutiliza
 # en vez de tener su propia copia que se desincronice.
-from app import valor_base_sesion, valores_por_estado
+from app import valor_base_sesion, valores_por_estado, cobro_sesion_estudiante
 
 CAMPOS_DINERO = ('valor_total', 'valor_pagar_docente', 'valor_atlas')
 
@@ -118,9 +118,10 @@ def explicar_deuda(patron):
         except Exception:
             devs = []
 
-        cuentan = [s for s in ses if s.get('estado') in ('Realizado', 'Cancelado-Pagado')]
-        no_cuentan = [s for s in ses if s.get('estado') not in ('Realizado', 'Cancelado-Pagado')]
-        cobrar = round(sum(float(s.get('valor_total') or 0) for s in cuentan), 2)
+        # Misma regla que el panel: solo lo 'Realizado' se le cobra
+        cuentan = [s for s in ses if cobro_sesion_estudiante(s) > 0]
+        no_cuentan = [s for s in ses if cobro_sesion_estudiante(s) == 0]
+        cobrar = round(sum(cobro_sesion_estudiante(s) for s in cuentan), 2)
         pagado = round(sum(float(p.get('monto') or 0) for p in pagos), 2)
         devuelto = round(sum(float(d.get('monto') or 0) for d in devs), 2)
         saldo = round(cobrar - (pagado - devuelto), 2)
@@ -144,14 +145,16 @@ def explicar_deuda(patron):
         print(f"   SALDO = {cobrar:.2f} - ({pagado:.2f} - {devuelto:.2f}) = ${saldo:.2f}"
               f"{'  → APARECE en el panel' if saldo > 0 else '  → no aparece'}")
 
-        canc_pag = [s for s in cuentan if s.get('estado') == 'Cancelado-Pagado'
-                    and float(s.get('valor_total') or 0) > 0]
-        if saldo > 0 and canc_pag:
-            monto = round(sum(float(s.get('valor_total') or 0) for s in canc_pag), 2)
-            print(f"   ⚠ ${monto:.2f} de esa deuda vienen de {len(canc_pag)} sesión(es) "
-                  f"'Cancelado-Pagado' que todavía tienen el cobro viejo.")
-            print(f"     Ya no debe cobrarse: corre --recalcular y el saldo baja a "
-                  f"${round(saldo - monto, 2):.2f}.")
+        # Filas 'Cancelado-Pagado' que aún guardan el cobro viejo. Ya no suman al
+        # saldo (los reportes lo deciden por el estado), pero conviene limpiarlas
+        # con --recalcular para que el dato guardado diga la verdad.
+        residuo = [s for s in ses if s.get('estado') == 'Cancelado-Pagado'
+                   and float(s.get('valor_total') or 0) > 0]
+        if residuo:
+            monto = round(sum(float(s.get('valor_total') or 0) for s in residuo), 2)
+            print(f"   ℹ {len(residuo)} sesión(es) 'Cancelado-Pagado' guardan un cobro viejo "
+                  f"de ${monto:.2f} que ya NO se le cobra.")
+            print("     Corre --recalcular para dejarlas en $0 también en la base.")
 
     print("\n" + "=" * 118)
 
