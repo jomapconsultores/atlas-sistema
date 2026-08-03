@@ -111,10 +111,11 @@
             <div style="overflow-y:auto; padding:10px 14px 16px;">
                 <p style="font-size:12.5px; color:#64748b; margin:6px 6px 10px;">Haz clic en un estudiante para ir al Módulo 3 y registrar su pago.</p>
                 {% for d in estudiantes_deuda %}
+                <div style="border:1px solid #f1f1f1; border-radius:14px; margin-bottom:8px; overflow:hidden;">
                 <a href="/modulo3?filtro_estudiante={{ d.nombre|urlencode }}"
-                   style="display:flex; align-items:center; gap:12px; text-decoration:none; color:inherit; padding:12px 14px; border-radius:14px; border:1px solid #f1f1f1; margin-bottom:8px; transition:all .2s;"
-                   onmouseover="this.style.background='#fff8ec';this.style.borderColor='#f59e0b';"
-                   onmouseout="this.style.background='#fff';this.style.borderColor='#f1f1f1';">
+                   style="display:flex; align-items:center; gap:12px; text-decoration:none; color:inherit; padding:12px 14px; transition:all .2s;"
+                   onmouseover="this.style.background='#fff8ec';"
+                   onmouseout="this.style.background='#fff';">
                     <div style="width:42px; height:42px; border-radius:12px; background:#fff3e0; color:#d97706; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:17px; flex-shrink:0;">{{ d.nombre[0]|upper }}</div>
                     <div style="flex:1; min-width:0;">
                         <div style="font-weight:700; font-size:14px; color:#1a1a2e; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ d.nombre }}</div>
@@ -125,6 +126,32 @@
                         <div style="font-size:11px; color:#f59e0b; font-weight:600;">Cobrar →</div>
                     </div>
                 </a>
+                {# Desglose: de qué sesiones sale el monto y en qué estado están.
+                   Una 'Cancelado-Pagado' también se cobra, así que si aparece
+                   aquí y no debía cobrarse, hay que pasarla a 'Cancelado'. #}
+                {% if d.sesiones %}
+                <details style="border-top:1px dashed #eee;">
+                    <summary style="cursor:pointer; font-size:11.5px; color:#64748b; padding:7px 14px; list-style:none;">
+                        ¿De dónde sale? · {{ d.sesiones|length }} sesión(es) · cobrado ${{ '%.2f'|format(d.cobrar) }} − pagado ${{ '%.2f'|format(d.pagado) }}{% if d.devuelto %} + devuelto ${{ '%.2f'|format(d.devuelto) }}{% endif %}
+                    </summary>
+                    <div style="padding:0 14px 10px;">
+                        {% for s in d.sesiones %}
+                        <div style="display:flex; align-items:center; gap:8px; font-size:11.5px; padding:4px 0; border-bottom:1px solid #fafafa;">
+                            <span style="color:#94a3b8; flex-shrink:0;">{{ s.fecha }}</span>
+                            <span style="flex:1; min-width:0; color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ s.detalle }}</span>
+                            <span style="flex-shrink:0; font-weight:600; padding:1px 7px; border-radius:8px; {% if s.estado == 'Cancelado-Pagado' %}background:#fef3c7; color:#92400e;{% else %}background:#dcfce7; color:#166534;{% endif %}">{{ s.estado }}</span>
+                            <span style="flex-shrink:0; font-weight:700; color:#1a1a2e;">${{ '%.2f'|format(s.valor) }}</span>
+                        </div>
+                        {% endfor %}
+                        {% if d.sesiones|selectattr('estado', 'equalto', 'Cancelado-Pagado')|list %}
+                        <div style="font-size:11px; color:#92400e; background:#fffbeb; border-radius:8px; padding:7px 9px; margin-top:8px; line-height:1.45;">
+                            ⚠️ Las <strong>Cancelado-Pagado</strong> se le cobran igual al estudiante (por eso se le paga al docente). Si alguna no debía cobrarse, márcala como <strong>❌ Cancelado</strong> en el Módulo 2 y sale de esta lista.
+                        </div>
+                        {% endif %}
+                    </div>
+                </details>
+                {% endif %}
+                </div>
                 {% endfor %}
             </div>
             <div style="padding:12px 18px; border-top:1px solid #f1f1f1; text-align:right;">

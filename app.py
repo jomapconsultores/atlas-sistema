@@ -1353,10 +1353,19 @@ def passkey_eliminar(pid):
 def _estudiantes_con_deuda():
     """Lista de estudiantes activos con saldo pendiente (cobrar > pagado neto).
     Misma lógica de saldo que el Módulo 3: saldo = cobrar - (pagado - devuelto).
-    Devuelve [{'nombre', 'saldo'}] ordenado de mayor a menor deuda."""
+
+    Devuelve [{'nombre', 'saldo', 'cobrar', 'pagado', 'devuelto', 'sesiones'}]
+    ordenado de mayor a menor deuda. 'sesiones' trae las que componen el cobro
+    con su fecha y su ESTADO, porque el recordatorio decía solo «pendiente de
+    pago» y no había forma de saber, sin abrir la base, si el monto venía de
+    una clase dada o de una 'Cancelado-Pagado' (que también se cobra) marcada
+    por error."""
     try:
         estudiantes = supabase.table('estudiantes').select('id,nombres,apellidos').eq('activo', True).execute().data or []
-        ses_rows = _fetch_all(supabase.table('sesiones').select('estudiante_id,valor_total,estado').in_('estado', ['Realizado', 'Cancelado-Pagado']))
+        ses_rows = _fetch_all(supabase.table('sesiones').select(
+            'estudiante_id,fecha,estado,valor_total,tipo_sesion,horas,precio_hora,'
+            'cobro_por_sesion,asignatura,tema_terapia'
+        ).in_('estado', ['Realizado', 'Cancelado-Pagado']).order('fecha', desc=True))
         pagos_rows = _fetch_all(supabase.table('pagos').select('estudiante_id,monto'))
         try:
             dev_rows = _fetch_all(supabase.table('devoluciones').select('estudiante_id,monto'))
@@ -1368,8 +1377,18 @@ def _estudiantes_con_deuda():
             except (TypeError, ValueError):
                 return 0.0
         cobrar_por_est, pagado_por_est, dev_por_est = {}, {}, {}
+        ses_por_est = {}
         for s in ses_rows:
-            cobrar_por_est[s.get('estudiante_id')] = cobrar_por_est.get(s.get('estudiante_id'), 0) + cobro_sesion_estudiante(s)
+            eid = s.get('estudiante_id')
+            monto = cobro_sesion_estudiante(s)
+            cobrar_por_est[eid] = cobrar_por_est.get(eid, 0) + monto
+            if monto > 0:
+                ses_por_est.setdefault(eid, []).append({
+                    'fecha': s.get('fecha') or '',
+                    'estado': s.get('estado') or '',
+                    'detalle': s.get('asignatura') or s.get('tema_terapia') or s.get('tipo_sesion') or 'Sesión',
+                    'valor': monto,
+                })
         for p in pagos_rows:
             pagado_por_est[p.get('estudiante_id')] = pagado_por_est.get(p.get('estudiante_id'), 0) + _num(p.get('monto'))
         for d in dev_rows:
@@ -1377,9 +1396,19 @@ def _estudiantes_con_deuda():
                 dev_por_est[d['estudiante_id']] = dev_por_est.get(d['estudiante_id'], 0) + _num(d.get('monto'))
         deudas = []
         for e in estudiantes:
-            saldo = cobrar_por_est.get(e['id'], 0) - (pagado_por_est.get(e['id'], 0) - dev_por_est.get(e['id'], 0))
+            cobrar = cobrar_por_est.get(e['id'], 0)
+            pagado = pagado_por_est.get(e['id'], 0)
+            devuelto = dev_por_est.get(e['id'], 0)
+            saldo = cobrar - (pagado - devuelto)
             if round(saldo, 2) > 0:
-                deudas.append({'nombre': f"{e['apellidos']} {e['nombres']}", 'saldo': round(saldo, 2)})
+                deudas.append({
+                    'nombre': f"{e['apellidos']} {e['nombres']}",
+                    'saldo': round(saldo, 2),
+                    'cobrar': round(cobrar, 2),
+                    'pagado': round(pagado, 2),
+                    'devuelto': round(devuelto, 2),
+                    'sesiones': ses_por_est.get(e['id'], []),
+                })
         deudas.sort(key=lambda x: x['saldo'], reverse=True)
         return deudas
     except Exception as e:
