@@ -518,7 +518,7 @@ PRECIOS_PENSION = [99, 100, 110]
 PROFESORES = ['Carmen Reinoso', 'Rosalía Moscoso', 'Marco Antonio Posligua',
               'Edwin Rumipulla', 'Catherine Alvear', 'Alexander Nivelo',
               'Daniel Castillo', 'Johanna Nievecela']
-ENCARGADOS = ['CARMEN', 'ROSALÍA', 'EDWIN', 'MAP', 'JOHANNA']
+ENCARGADOS = ['CARMEN', 'ROSALÍA', 'EDWIN', 'MAP', 'JOHANNA', 'CRISTINA']
 SOCIOS = ['Carmen Reinoso', 'Rosalía Moscoso', 'Marco Antonio Posligua']
 
 INSTITUCIONES_DEFAULT = [
