@@ -240,6 +240,33 @@
     </div>
 </div>
 
+<!-- Reembolsos a personas que no son socios -->
+{% if reembolsos_otros %}
+<div class="card shadow border-0 mb-4" style="border-radius:15px;">
+    <div class="card-header text-white fw-bold d-flex justify-content-between align-items-center" style="background:linear-gradient(135deg,#00897b,#00695c); border-radius:15px 15px 0 0;">
+        <span>🙋 Reembolsos a otras personas (no socios)</span>
+        <span class="badge bg-light text-dark fs-6">${{ "%.2f"|format(total_reembolsos_otros) }}</span>
+    </div>
+    <div style="padding:9px 16px; background:#e0f2f1; border-bottom:1px solid #b2dfdb; font-size:12px; color:#555; line-height:1.75;">
+        💡 Personas habilitadas para reembolso que <strong>no son socias</strong>: pagaron un gasto del centro de su bolsillo, así que se les devuelve ese monto,
+        pero no les corresponde parte alícuota del balance, por eso no aparecen en la tabla de distribución de arriba.
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-sm table-hover mb-0">
+            <thead style="background:#f8f9fa;"><tr><th class="ps-3">Persona</th><th class="text-end">Total a recibir</th></tr></thead>
+            <tbody>
+                {% for r in reembolsos_otros %}
+                <tr><td class="ps-3">{{ r.nombre }}</td><td class="text-end fw-bold text-warning">${{ "%.2f"|format(r.monto) }}</td></tr>
+                {% endfor %}
+            </tbody>
+            <tfoot style="background:#f8f9fa; font-weight:bold;">
+                <tr><td class="ps-3">TOTAL</td><td class="text-end">${{ "%.2f"|format(total_reembolsos_otros) }}</td></tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+{% endif %}
+
 <!-- Reembolsos pendientes del período -->
 {% set gastos_con_reembolso = gastos | selectattr('reembolso') | list %}
 {% if gastos_con_reembolso %}
@@ -341,7 +368,9 @@
                     <td class="ps-3">{{ docente }}</td>
                     <td class="text-end">${{ "%.2f"|format(monto) }}</td>
                     <td class="text-center">
-                        {% if docente in ['Carmen Reinoso', 'Rosalía Moscoso', 'Marco Antonio Posligua'] %}
+                        {# Lista de socios desde el servidor: repetirla aquí se
+                           desincroniza en cuanto cambie SOCIOS. #}
+                        {% if docente in socios %}
                         <span class="badge bg-primary">Sí</span>
                         {% else %}
                         <span class="badge bg-secondary">No</span>

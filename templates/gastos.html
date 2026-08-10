@@ -179,14 +179,14 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-bold">Persona que realiza el gasto *</label>
-                        <select name="persona" class="form-select border-0 shadow-sm" required>
+                        <select name="persona" id="gastoPersona" class="form-select border-0 shadow-sm sel-persona-reembolso" data-primera-opcion="Seleccionar..." required>
                             <option value="">Seleccionar...</option>
                             <option value="Atlas (cuenta directa)">🏦 Atlas (cuenta directa)</option>
-                            <option value="Carmen Reinoso">Carmen Reinoso</option>
-                            <option value="Rosalía Moscoso">Rosalía Moscoso</option>
-                            <option value="Marco Antonio Posligua">Marco Antonio Posligua</option>
+                            {% for p in personas_reembolso %}
+                            <option value="{{ p }}">{{ p }}</option>
+                            {% endfor %}
                         </select>
-                        <small class="text-muted">"Atlas (cuenta directa)" = pagado directamente desde la cuenta del centro (sin reembolso a un socio).</small>
+                        <small class="text-muted">"Atlas (cuenta directa)" = pagado directamente desde la cuenta del centro (sin reembolso a nadie).</small>
                     </div>
                     <div class="mb-3 form-check form-switch">
                         <input type="checkbox" name="reembolso" id="reembolso" class="form-check-input" value="true" onchange="toggleReembolso()">
@@ -194,12 +194,19 @@
                     </div>
                     <div class="mb-3" id="divReembolsado" style="display:none;">
                         <label class="form-label fw-bold">Reembolsar a *</label>
-                        <select name="reembolsado_a" class="form-select border-0 shadow-sm">
-                            <option value="">Seleccionar socio...</option>
-                            <option value="Carmen Reinoso">Carmen Reinoso</option>
-                            <option value="Rosalía Moscoso">Rosalía Moscoso</option>
-                            <option value="Marco Antonio Posligua">Marco Antonio Posligua</option>
-                        </select>
+                        <div class="input-group">
+                            <select name="reembolsado_a" id="gastoReembolsadoA" class="form-select border-0 shadow-sm sel-persona-reembolso" data-primera-opcion="Seleccionar persona...">
+                                <option value="">Seleccionar persona...</option>
+                                {% for p in personas_reembolso %}
+                                <option value="{{ p }}">{{ p }}</option>
+                                {% endfor %}
+                            </select>
+                            {% if current_user.rol in ['admin', 'socio'] %}
+                            <button class="btn btn-outline-secondary" type="button" title="Habilitar a otra persona para reembolsos"
+                                    onclick="nuevaPersonaReembolso('gastoReembolsadoA')">➕</button>
+                            {% endif %}
+                        </div>
+                        <small class="text-muted">¿Falta alguien? Añádelo con ➕ y queda grabado para los próximos reembolsos.</small>
                     </div>
                     <button type="submit" class="btn btn-danger w-100 shadow-sm" style="border-radius: 10px;">
                         <i class="bi bi-plus-circle"></i> Registrar Gasto
@@ -314,7 +321,49 @@
 
 <!-- GESTIÓN DE REEMBOLSOS (admin/socio) -->
 {% if current_user.rol in ['admin', 'socio'] %}
+
+<!-- ===== PERSONAS HABILITADAS PARA REEMBOLSO ===== -->
 <div class="card shadow border-0 mt-4" style="border-radius:15px; overflow:hidden;">
+    <div class="card-header text-white d-flex justify-content-between align-items-center" style="background:linear-gradient(135deg,#00897b,#00695c); cursor:pointer;"
+         data-bs-toggle="collapse" data-bs-target="#personasReembolso" role="button" aria-expanded="false">
+        <strong>👥 Personas que pueden recibir reembolso <span class="badge bg-light text-dark">{{ personas_reembolso|length }}</span></strong>
+        <span class="small">▼ ver / ocultar</span>
+    </div>
+    <div class="collapse" id="personasReembolso">
+        <div class="card-body">
+            <p class="text-muted small">
+                💡 A quien esté en esta lista se le puede asignar un gasto por reembolsar, marcarle el pago y aparece en la liquidación
+                igual que a un socio. Los socios son fijos y no se pueden quitar.
+            </p>
+            {% if not personas_reembolso_ok %}
+            <div class="alert alert-warning py-2 small mb-3">
+                ⚠️ Todavía no se puede guardar gente nueva: falta aplicar <code>migrations/0006_personas_reembolso.sql</code> en la base.
+            </div>
+            {% endif %}
+            <div class="d-flex flex-wrap gap-2 mb-3" id="listaPersonasReembolso">
+                {% for s in socios %}
+                <span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle py-2 px-3">
+                    {{ s }} <span class="opacity-75">· socio</span>
+                </span>
+                {% endfor %}
+                {% for p in personas_reembolso_extra %}
+                <span class="badge bg-light text-dark border py-2 px-3" id="persona-reemb-{{ p['id'] }}">
+                    {{ p['nombre'] }}
+                    <button type="button" class="btn-close btn-close-sm ms-2 align-middle" style="font-size:.6rem;"
+                            title="Quitar de la lista" onclick="quitarPersonaReembolso({{ p['id'] }}, '{{ p['nombre']|e }}')"></button>
+                </span>
+                {% endfor %}
+            </div>
+            <div class="input-group" style="max-width:520px;">
+                <input type="text" id="nuevaPersonaNombre" class="form-control" placeholder="Nombre y apellido de la nueva persona"
+                       onkeydown="if(event.key==='Enter'){event.preventDefault();crearPersonaReembolso();}">
+                <button class="btn btn-success" type="button" onclick="crearPersonaReembolso()">➕ Agregar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow border-0 mt-3" style="border-radius:15px; overflow:hidden;">
     <div class="card-header text-white d-flex justify-content-between align-items-center" style="background:linear-gradient(135deg,#f57c00,#e65100);">
         <strong>💸 Gestión de Reembolsos Pendientes</strong>
         {% if reembolsos_pend %}
@@ -343,12 +392,18 @@
                     <td><span class="badge bg-secondary">{{ r.get('categoria','') }}</span></td>
                     <td>{{ r.get('persona','—') }}</td>
                     <td>
-                        <select class="form-select form-select-sm border-0 shadow-sm" style="min-width:160px;"
+                        <select class="form-select form-select-sm border-0 shadow-sm sel-persona-reembolso" style="min-width:160px;"
+                            data-primera-opcion="Sin asignar"
                             onchange="actualizarReembolsadoA({{ r['id'] }}, this.value)">
                             <option value="">Sin asignar</option>
-                            {% for s in socios %}
-                            <option value="{{ s }}" {{ 'selected' if r.get('reembolsado_a') == s }}>{{ s }}</option>
+                            {% for p in personas_reembolso %}
+                            <option value="{{ p }}" {{ 'selected' if r.get('reembolsado_a') == p }}>{{ p }}</option>
                             {% endfor %}
+                            {# Beneficiario dado de baja después de asignarlo: se mantiene en la
+                               lista para que su reembolso se siga viendo y pagando igual. #}
+                            {% if r.get('reembolsado_a') and r.get('reembolsado_a') not in personas_reembolso %}
+                            <option value="{{ r['reembolsado_a'] }}" selected>{{ r['reembolsado_a'] }} (dado de baja)</option>
+                            {% endif %}
                         </select>
                     </td>
                     <td class="text-end fw-bold text-warning">${{ "%.2f"|format(r['monto']) }}</td>
@@ -690,6 +745,73 @@ async function guardarTogglePagado(nombre, fecha) {
     } catch (e) {
         alert('❌ Error');
     }
+}
+
+// ── Personas habilitadas para reembolso ──
+// Al agregar a alguien se añade la opción a TODOS los desplegables de personas
+// que ya están en la página (formulario y tabla de pendientes), sin recargar:
+// así no se pierde el gasto que se estaba escribiendo.
+function agregarOpcionPersona(nombre, selectDestinoId) {
+    document.querySelectorAll('select.sel-persona-reembolso').forEach(function (sel) {
+        if ([...sel.options].some(o => o.value === nombre)) return;
+        const opt = new Option(nombre, nombre);
+        sel.add(opt);
+    });
+    if (selectDestinoId) {
+        const destino = document.getElementById(selectDestinoId);
+        if (destino) destino.value = nombre;
+    }
+}
+
+async function guardarPersonaReembolso(nombre, selectDestinoId) {
+    nombre = (nombre || '').trim();
+    if (!nombre) return false;
+    try {
+        const r = await fetch('/api/personas-reembolso/crear', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({nombre: nombre})
+        });
+        const res = await r.json();
+        if (!res.success) { alert('❌ ' + (res.error || 'No se pudo agregar')); return false; }
+        agregarOpcionPersona(res.nombre, selectDestinoId);
+        return res.nombre;
+    } catch (e) {
+        alert('❌ Error de conexión');
+        return false;
+    }
+}
+
+// Botón ➕ junto a "Reembolsar a" en el formulario de gasto.
+async function nuevaPersonaReembolso(selectDestinoId) {
+    const nombre = prompt('Nombre y apellido de la persona a la que se le podrá reembolsar:');
+    if (nombre === null) return;
+    // Sin recargar a propósito: el gasto que se está escribiendo se perdería.
+    // La persona queda seleccionada aquí y en la tarjeta de gestión aparece
+    // en la siguiente carga de la página.
+    await guardarPersonaReembolso(nombre, selectDestinoId);
+}
+
+// Botón "Agregar" de la tarjeta de gestión.
+async function crearPersonaReembolso() {
+    const input = document.getElementById('nuevaPersonaNombre');
+    const creado = await guardarPersonaReembolso(input.value, 'gastoReembolsadoA');
+    if (creado) { input.value = ''; location.reload(); }
+}
+
+async function quitarPersonaReembolso(id, nombre) {
+    if (!confirm('¿Quitar a ' + nombre + ' de la lista de reembolsos?\n\nLos reembolsos que ya tenga asignados se conservan y se siguen pudiendo pagar; solo deja de ofrecerse para gastos nuevos.')) return;
+    try {
+        const r = await fetch('/api/personas-reembolso/' + id + '/quitar', {
+            method: 'POST', headers: {'Content-Type': 'application/json'}
+        });
+        const res = await r.json();
+        if (!res.success) { alert('❌ ' + (res.error || 'No se pudo quitar')); return; }
+        if (res.pendientes > 0) {
+            alert('ℹ️ ' + nombre + ' queda fuera de la lista, pero todavía tiene ' + res.pendientes +
+                  ' reembolso(s) pendiente(s) de pago. Siguen apareciendo abajo hasta que los marques como pagados.');
+        }
+        location.reload();
+    } catch (e) { alert('❌ Error de conexión'); }
 }
 
 // Cargar sugerencias

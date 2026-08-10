@@ -542,6 +542,7 @@ _CACHE_TTL = 300  # 5 minutos para datos semi-estáticos
 _ASIG_CACHE:  dict = {'t': 0.0, 'data': None}
 _PROF_CACHE:  dict = {'t': 0.0, 'data': None}
 _COSTOS_CACHE: dict = {'t': 0.0, 'data': None}
+_REEMB_CACHE: dict = {'t': 0.0, 'data': None}
 
 def cargar_asignaturas():
     """Lista de asignaturas con caché de 5 min para no consultar en cada página."""
@@ -574,6 +575,33 @@ def cargar_profesores():
     _PROF_CACHE['data'] = result
     _PROF_CACHE['t'] = time.time()
     return result
+
+def cargar_personas_reembolso():
+    """Personas a las que se les puede reembolsar un gasto.
+
+    Son los SOCIOS (fijos, siempre presentes) más las que se hayan creado desde
+    /gastos y estén activas en la tabla 'personas_reembolso'. Los socios van
+    primero y las demás en orden alfabético. Si la tabla todavía no existe
+    (migración 0006 sin aplicar) devuelve solo los socios, que es como
+    funcionaba antes."""
+    import time
+    if _REEMB_CACHE['data'] and time.time() - _REEMB_CACHE['t'] < _CACHE_TTL:
+        return _REEMB_CACHE['data']
+    try:
+        r = supabase.table('personas_reembolso').select('nombre').eq('activo', True).execute()
+        extras = sorted({(p.get('nombre') or '').strip() for p in (r.data or [])} - {''} - set(SOCIOS))
+    except Exception:
+        extras = []
+    result = list(SOCIOS) + extras
+    _REEMB_CACHE['data'] = result
+    _REEMB_CACHE['t'] = time.time()
+    return result
+
+def invalidar_personas_reembolso():
+    """Se llama al crear/quitar una persona para que el cambio se vea al instante
+    y no dentro de hasta 5 minutos (el TTL de la caché)."""
+    _REEMB_CACHE['data'] = None
+    _REEMB_CACHE['t'] = 0.0
 
 def a_oracion(texto):
     if not texto:
@@ -3122,11 +3150,20 @@ def gestion_gastos():
         fecha_obj = datetime.strptime(fecha, '%Y-%m-%d')
         mes_periodo = int(request.form.get('mes_periodo', fecha_obj.month))
         anio_periodo = int(request.form.get('anio_periodo', fecha_obj.year))
+        # El beneficiario debe calzar EXACTO con una persona habilitada: la
+        # liquidación agrupa los reembolsos por ese texto. Si no calza (p. ej.
+        # la quitaron mientras el formulario estaba abierto) el gasto SÍ se
+        # guarda, pero sin beneficiario, para corregirlo en la tabla de
+        # pendientes en vez de perder el registro.
+        beneficiario = (request.form.get('reembolsado_a', '') or '').strip() or None
+        if beneficiario and beneficiario not in cargar_personas_reembolso():
+            flash(f'⚠️ "{beneficiario}" ya no está habilitado para reembolsos: el gasto se guardó sin beneficiario, asígnalo en «Gestión de Reembolsos Pendientes».', 'warning')
+            beneficiario = None
         gasto_data = {
             'concepto': request.form['concepto'], 'monto': float(request.form['monto']),
             'fecha': fecha, 'categoria': request.form.get('categoria', ''),
             'persona': request.form.get('persona', ''), 'reembolso': request.form.get('reembolso') == 'true',
-            'reembolsado_a': request.form.get('reembolsado_a', '') or None,
+            'reembolsado_a': beneficiario,
             'registrado_por': current_user.nombre, 'mes': fecha_obj.month, 'anio': fecha_obj.year,
             'mes_periodo': mes_periodo, 'anio_periodo': anio_periodo
         }
@@ -3194,9 +3231,26 @@ def gestion_gastos():
     except Exception:
         reembolsos_pagados = []
 
+    # ── Personas que pueden recibir un reembolso ──
+    # Socios (fijos) + las creadas desde esta misma pantalla. 'extra' son solo
+    # las creadas, que son las únicas que se pueden quitar.
+    personas_reembolso = cargar_personas_reembolso()
+    try:
+        personas_reembolso_extra = [p for p in (supabase.table('personas_reembolso')
+            .select('id,nombre,creado_por').eq('activo', True).order('nombre').execute().data or [])
+            if (p.get('nombre') or '').strip() not in SOCIOS]
+        personas_reembolso_ok = True
+    except Exception:
+        # Migración 0006 sin aplicar: se puede seguir usando la lista de socios.
+        personas_reembolso_extra = []
+        personas_reembolso_ok = False
+
     # ── Cuentas de pago (datos bancarios) por persona ──
-    # Lista de personas = docentes/psicólogos registrados + quienes tienen pago este mes.
-    personas_cuentas = sorted(set(cargar_profesores()) | set(pagos_docentes_detalle.keys()))
+    # Lista de personas = docentes/psicólogos registrados + quienes tienen pago
+    # este mes + quienes pueden recibir reembolsos (para poder guardarles los
+    # datos bancarios con los que se les transfiere ese reembolso).
+    personas_cuentas = sorted(set(cargar_profesores()) | set(pagos_docentes_detalle.keys())
+                              | set(personas_reembolso))
     cuentas_pago = {}
     try:
         _cp = supabase.table('cuentas_pago_docentes').select('*').execute().data or []
@@ -3232,7 +3286,10 @@ def gestion_gastos():
                          cuentas_pago=cuentas_pago,
                          cuentas_ok=cuentas_ok,
                          bancos_lista=bancos_lista,
-                         socios=SOCIOS)
+                         socios=SOCIOS,
+                         personas_reembolso=personas_reembolso,
+                         personas_reembolso_extra=personas_reembolso_extra,
+                         personas_reembolso_ok=personas_reembolso_ok)
 
 @app.route('/api/gasto/<int:id>/eliminar', methods=['POST'])
 @login_required
@@ -3248,12 +3305,18 @@ def api_actualizar_reembolso(id):
     data = request.get_json()
     update = {}
     if 'reembolsado_a' in data:
-        valor = data['reembolsado_a'] or None
-        # Debe calzar EXACTO con un nombre de SOCIOS: la liquidación agrupa
+        valor = (data['reembolsado_a'] or '').strip() or None
+        # Debe calzar EXACTO con una persona habilitada: la liquidación agrupa
         # los reembolsos por ese texto, y un valor que no calce se pierde
-        # silenciosamente del reparto sin ningún aviso.
-        if valor is not None and valor not in SOCIOS:
-            return jsonify({'success': False, 'error': f'"{valor}" no es un socio válido. Debe ser uno de: {", ".join(SOCIOS)}'}), 400
+        # silenciosamente del reparto sin ningún aviso. Se admite también el
+        # beneficiario que ya tenía el gasto aunque esa persona se haya dado de
+        # baja después: si no, guardar cualquier otro cambio de la fila fallaría.
+        if valor is not None and valor not in cargar_personas_reembolso():
+            actual = (supabase.table('gastos').select('reembolsado_a').eq('id', id)
+                      .execute().data or [{}])[0].get('reembolsado_a')
+            if valor != actual:
+                habilitadas = ', '.join(cargar_personas_reembolso())
+                return jsonify({'success': False, 'error': f'"{valor}" no está habilitado para reembolsos. Debe ser uno de: {habilitadas}'}), 400
         update['reembolsado_a'] = valor
     if 'reembolso' in data:
         update['reembolso'] = bool(data['reembolso'])
@@ -3292,6 +3355,77 @@ def api_reversar_reembolso(id):
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+
+# ---------- Personas habilitadas para recibir un reembolso ----------
+@app.route('/api/personas-reembolso')
+@login_required
+@requiere_modulo_api('finanzas.gastos')
+def api_personas_reembolso():
+    """Lista actual (socios + creadas). La usa el formulario para refrescar los
+    desplegables sin recargar la página."""
+    return jsonify({'success': True, 'personas': cargar_personas_reembolso(), 'socios': SOCIOS})
+
+@app.route('/api/personas-reembolso/crear', methods=['POST'])
+@login_required
+@requiere_modulo_api('finanzas.gastos')
+def api_crear_persona_reembolso():
+    """Habilita a una persona más para recibir reembolsos. Queda grabada en la
+    base, así que desde ese momento se le pueden asignar gastos, pagárselos y
+    aparece en la liquidación igual que a un socio."""
+    if current_user.rol not in ['admin', 'socio']:
+        return jsonify({'success': False, 'error': 'Sin permiso'}), 403
+    data = request.get_json() or {}
+    # Espacios de sobra colapsados: "Ana  Pérez" y "Ana Pérez" son la misma
+    # persona y, como los reembolsos se agrupan por el texto del nombre, dos
+    # variantes le partirían el total en dos.
+    nombre = ' '.join((data.get('nombre') or '').split())
+    if len(nombre) < 3:
+        return jsonify({'success': False, 'error': 'Escribe el nombre completo (mínimo 3 letras).'}), 400
+    if len(nombre) > 60:
+        return jsonify({'success': False, 'error': 'El nombre es demasiado largo.'}), 400
+    existentes = cargar_personas_reembolso()
+    ya = next((p for p in existentes if p.lower() == nombre.lower()), None)
+    if ya:
+        return jsonify({'success': False, 'error': f'"{ya}" ya está en la lista.'}), 400
+    try:
+        # Si estaba dada de baja se reactiva en vez de insertar: el índice único
+        # por nombre rechazaría el insert y el nombre quedaría inutilizable.
+        previa = (supabase.table('personas_reembolso').select('id,nombre')
+                  .ilike('nombre', nombre).execute().data or [])
+        if previa:
+            supabase.table('personas_reembolso').update({'activo': True}).eq('id', previa[0]['id']).execute()
+            nombre = previa[0]['nombre']
+        else:
+            supabase.table('personas_reembolso').insert({
+                'nombre': nombre, 'activo': True, 'creado_por': current_user.nombre}).execute()
+    except Exception as e:
+        return jsonify({'success': False, 'error': 'No se pudo guardar. ¿Ya ejecutaste migrations/0006_personas_reembolso.sql? ' + str(e)}), 400
+    invalidar_personas_reembolso()
+    return jsonify({'success': True, 'nombre': nombre, 'personas': cargar_personas_reembolso()})
+
+@app.route('/api/personas-reembolso/<int:id>/quitar', methods=['POST'])
+@login_required
+@requiere_modulo_api('finanzas.gastos')
+def api_quitar_persona_reembolso(id):
+    """Baja lógica: deja de ofrecerse en los desplegables, pero los gastos que
+    ya tenía asignados conservan su beneficiario y se siguen pudiendo pagar."""
+    if current_user.rol not in ['admin', 'socio']:
+        return jsonify({'success': False, 'error': 'Sin permiso'}), 403
+    try:
+        fila = (supabase.table('personas_reembolso').select('nombre').eq('id', id).execute().data or [])
+        if not fila:
+            return jsonify({'success': False, 'error': 'Persona no encontrada'}), 404
+        nombre = fila[0]['nombre']
+        if nombre in SOCIOS:
+            return jsonify({'success': False, 'error': 'No se puede quitar a un socio.'}), 400
+        supabase.table('personas_reembolso').update({'activo': False}).eq('id', id).execute()
+        pendientes = len(_fetch_all(supabase.table('gastos').select('id')
+            .eq('reembolsado_a', nombre).eq('reembolso', True)
+            .or_('reembolso_pagado.is.null,reembolso_pagado.eq.false')))
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+    invalidar_personas_reembolso()
+    return jsonify({'success': True, 'nombre': nombre, 'pendientes': pendientes})
 
 @app.route('/api/gasto/<int:id>/marcar-pagado', methods=['POST'])
 @login_required
@@ -3467,6 +3601,14 @@ def liquidacion():
         reembolsos_pend_por_socio[b] = round(reembolsos_pend_por_socio.get(b, 0) + (g.get('monto', 0) or 0), 2)
     total_reembolsos_pendientes = round(sum(g.get('monto', 0) or 0 for g in reembolsos_pendientes), 2)
 
+    # Reembolsos del período a personas que NO son socios: no les toca alícuota
+    # ni tienen fila en la distribución, pero el centro sí les debe ese dinero,
+    # así que se listan aparte para que no queden invisibles en la liquidación.
+    reembolsos_otros = sorted(
+        [{'nombre': n, 'monto': round(m, 2)} for n, m in reembolsos_por_socio.items() if n not in SOCIOS],
+        key=lambda x: x['nombre'])
+    total_reembolsos_otros = round(sum(x['monto'] for x in reembolsos_otros), 2)
+
     # Ingresos del período (netos de devoluciones)
     pagos_mes = _fetch_all(supabase.table('pagos').select('*').gte('fecha_pago', f"{anio}-{mes:02d}-01").lte('fecha_pago', f"{anio}-{mes:02d}-{ultimo_dia}"))
     total_ingresos_bruto = sum(p.get('monto', 0) or 0 for p in pagos_mes)
@@ -3564,6 +3706,8 @@ def liquidacion():
         reembolsos_pendientes=reembolsos_pendientes,
         reembolsos_pend_por_socio=reembolsos_pend_por_socio,
         total_reembolsos_pendientes=total_reembolsos_pendientes,
+        reembolsos_otros=reembolsos_otros, total_reembolsos_otros=total_reembolsos_otros,
+        socios=SOCIOS,
         total_ingresos=total_ingresos, total_ingresos_bruto=total_ingresos_bruto,
         total_devoluciones=total_devoluciones, total_pago_docentes=total_pago_docentes,
         total_anticipos=total_anticipos, total_pago_docentes_neto=total_pago_docentes_neto,
@@ -5264,6 +5408,13 @@ def api_editar_gasto(id):
     if data.get('campo') not in ('concepto', 'monto', 'categoria', 'persona', 'fecha', 'reembolsado_a'):
         return jsonify({'success': False, 'error': 'Campo no permitido'})
     valor = data.get('valor')
+    # Mismo criterio que /api/gasto/<id>/reembolso: un beneficiario que no calce
+    # con una persona habilitada desaparece del reparto de la liquidación.
+    if campo == 'reembolsado_a':
+        valor = (valor or '').strip() or None
+        if valor is not None and valor not in cargar_personas_reembolso():
+            habilitadas = ', '.join(cargar_personas_reembolso())
+            return jsonify({'success': False, 'error': f'"{valor}" no está habilitado para reembolsos. Debe ser uno de: {habilitadas}'})
     try:
         if campo == 'monto':
             valor = float(valor)
