@@ -237,6 +237,37 @@ body{font-family:'Inter',sans-serif;background:var(--navy);color:var(--white);ov
     margin-top:32px;transition:all .25s}
 .whatsapp-btn:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(37,211,102,.35)}
 
+/* ── FORMULARIO DE CONTACTO ── */
+.lead-form{margin-top:36px;padding-top:32px;border-top:1px solid rgba(255,255,255,.12)}
+.lead-form h3{font-size:19px;font-weight:800;margin-bottom:6px;letter-spacing:-.4px}
+.lead-form .lf-sub{font-size:13.5px;color:var(--muted);margin-bottom:22px}
+.lf-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.lf-field{display:flex;flex-direction:column;gap:6px}
+.lf-field.full{grid-column:1/-1}
+.lf-field label{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:rgba(255,255,255,.55)}
+.lf-field input,.lf-field select,.lf-field textarea{
+    font-family:inherit;font-size:14.5px;color:#fff;
+    background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);
+    border-radius:12px;padding:12px 14px;transition:border-color .2s,background .2s}
+.lf-field textarea{resize:vertical;min-height:88px}
+.lf-field select option{background:#0a1628;color:#fff}
+.lf-field input:focus,.lf-field select:focus,.lf-field textarea:focus{
+    outline:none;border-color:var(--gold);background:rgba(255,255,255,.09)}
+.lf-field input::placeholder,.lf-field textarea::placeholder{color:rgba(255,255,255,.3)}
+.lf-consent{grid-column:1/-1;display:flex;align-items:flex-start;gap:10px;
+    font-size:12.5px;color:rgba(255,255,255,.7);line-height:1.55}
+.lf-consent input{width:17px;height:17px;flex-shrink:0;margin-top:2px;accent-color:var(--gold);cursor:pointer}
+.lf-submit{grid-column:1/-1;border:none;cursor:pointer;font-family:inherit;
+    background:linear-gradient(135deg,var(--gold2),var(--gold));color:#0a0f1e;
+    font-size:15px;font-weight:800;padding:14px 30px;border-radius:13px;transition:all .25s}
+.lf-submit:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 12px 32px rgba(240,192,64,.4)}
+.lf-submit:disabled{opacity:.6;cursor:not-allowed}
+.lf-msg{grid-column:1/-1;font-size:13.5px;line-height:1.6;border-radius:12px;padding:14px 16px;display:none}
+.lf-msg.ok{display:block;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.35);color:var(--green2)}
+.lf-msg.err{display:block;background:rgba(240,192,64,.1);border:1px solid rgba(240,192,64,.35);color:var(--gold)}
+.lf-msg a{color:inherit;font-weight:700}
+@media(max-width:600px){.lf-grid{grid-template-columns:1fr}}
+
 /* ── CTA BAND ── */
 .cta-band{position:relative;z-index:1;
     padding:clamp(56px,8vw,90px) clamp(20px,6vw,80px);
@@ -728,7 +759,7 @@ footer .f-right{font-size:12px;color:var(--muted);text-align:right}
             <p style="font-size:15px;color:var(--muted);max-width:480px;margin:0 auto;line-height:1.7">
                 Escríbenos o llámanos — con gusto orientamos a estudiantes y padres para encontrar el programa ideal.
             </p>
-            <a href="https://wa.me/593990948817" target="_blank" rel="noopener" class="whatsapp-btn">
+            <a href="https://wa.me/593990948817?text=Hola%2C%20vengo%20de%20la%20web%20de%20ATLAS%20y%20quisiera%20informaci%C3%B3n." target="_blank" rel="noopener" class="whatsapp-btn">
                 💬 Escribir por WhatsApp
             </a>
         </div>
@@ -755,6 +786,46 @@ footer .f-right{font-size:12px;color:var(--muted);text-align:right}
                 </div>
             </div>
         </div>
+
+        <!-- ── Formulario: deja tus datos y te contactamos ── -->
+        <div class="lead-form">
+            <h3>¿Prefieres que te llamemos?</h3>
+            <p class="lf-sub">Déjanos tus datos y te contactamos para orientarte sin compromiso.</p>
+            <form class="lf-grid" id="leadForm" novalidate>
+                <div class="lf-field">
+                    <label for="lf-name">Nombre completo *</label>
+                    <input type="text" id="lf-name" name="name" required autocomplete="name" placeholder="Tu nombre">
+                </div>
+                <div class="lf-field">
+                    <label for="lf-phone">WhatsApp / Teléfono *</label>
+                    <input type="tel" id="lf-phone" name="phone" required autocomplete="tel" placeholder="099 999 9999">
+                </div>
+                <div class="lf-field">
+                    <label for="lf-email">Correo (opcional)</label>
+                    <input type="email" id="lf-email" name="email" autocomplete="email" placeholder="tucorreo@ejemplo.com">
+                </div>
+                <div class="lf-field">
+                    <label for="lf-interes">¿Qué te interesa?</label>
+                    <select id="lf-interes" name="interested_product">
+                        <option value="Nivelación Académica">Nivelación Académica</option>
+                        <option value="Preparación Pre-Universitaria">Preparación Pre-Universitaria</option>
+                        <option value="Psicología Clínica">Psicología Clínica</option>
+                        <option value="Cursos Especiales">Cursos Especiales</option>
+                        <option value="Aún no lo sé">Aún no lo sé</option>
+                    </select>
+                </div>
+                <div class="lf-field full">
+                    <label for="lf-message">Cuéntanos brevemente</label>
+                    <textarea id="lf-message" name="message" placeholder="Ej.: Busco nivelación en matemáticas para mi hijo de 3ro de bachillerato."></textarea>
+                </div>
+                <label class="lf-consent">
+                    <input type="checkbox" id="lf-consent" required>
+                    <span>Autorizo a ATLAS Centro de Estudios a contactarme por WhatsApp, llamada o correo para responder esta consulta. Puedo pedir la baja en cualquier momento.</span>
+                </label>
+                <button type="submit" class="lf-submit" id="lfSubmit">Quiero que me contacten</button>
+                <div class="lf-msg" id="lfMsg" role="status" aria-live="polite"></div>
+            </form>
+        </div>
     </div>
 </section>
 
@@ -766,7 +837,7 @@ footer .f-right{font-size:12px;color:var(--muted);text-align:right}
         <!-- QR recortado del roll-up: 2268×5784px
              A 300px ancho → escala 0.13228 → alto total 765px
              QR ocupa ~69% a ~88% → y_ini≈527px, mostrar desde -505px con 170px de altura -->
-        <a href="https://wa.me/593990948817" target="_blank" rel="noopener"
+        <a href="https://wa.me/593990948817?text=Hola%2C%20escane%C3%A9%20el%20c%C3%B3digo%20QR%20de%20ATLAS%20y%20quisiera%20informaci%C3%B3n." target="_blank" rel="noopener"
            title="Abrir WhatsApp"
            style="display:inline-block;border-radius:18px;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.5);text-decoration:none">
             <div style="
@@ -823,7 +894,7 @@ footer .f-right{font-size:12px;color:var(--muted);text-align:right}
 @media(min-width:1340px){ #rollupPanel{ display:block; } }
 </style>
 
-<a href="https://wa.me/593990948817" target="_blank" rel="noopener" style="position:fixed;bottom:22px;right:22px;z-index:500;
+<a href="https://wa.me/593990948817?text=Hola%2C%20vengo%20de%20la%20web%20de%20ATLAS.%20Tengo%20una%20consulta." target="_blank" rel="noopener" style="position:fixed;bottom:22px;right:22px;z-index:500;
     background:linear-gradient(135deg,#25d366,#128c7e);
     color:#fff;font-size:14px;font-weight:800;
     padding:13px 20px;border-radius:50px;text-decoration:none;
@@ -838,6 +909,113 @@ footer .f-right{font-size:12px;color:var(--muted);text-align:right}
 <script>
 const nav = document.getElementById('mainNav');
 window.addEventListener('scroll', () => nav.classList.toggle('scrolled', scrollY > 40), {passive:true});
+
+/* ── Captación de leads → CRM ─────────────────────────────────
+   El formulario entrega el lead al backend de marketing, que lo clasifica
+   y le da seguimiento. Los botones de WhatsApp siguen funcionando igual. */
+(function () {
+  const CAPTURE_URL      = "https://api.marketing.pensamiento-libre.org/capture";
+  const POLITICA_VERSION = "atlas-2026-08";
+  const WA_NUMERO        = "593990948817";
+  const UTM_STORE        = "atlas_utm_first_touch";
+  const PENDIENTE        = "atlas_lead_pendiente";
+  const UTM_KEYS = ["utm_source","utm_medium","utm_campaign","utm_term","utm_content",
+                    "gclid","fbclid","ttclid","msclkid"];
+
+  const form = document.getElementById('leadForm');
+  if (!form) return;
+  const btn = document.getElementById('lfSubmit');
+  const msg = document.getElementById('lfMsg');
+
+  // Atribución first-touch: sin esto todos los leads de anuncios llegan
+  // indistinguibles y no hay forma de saber qué campaña pagó cada uno.
+  try {
+    if (!sessionStorage.getItem(UTM_STORE)) {
+      const params = new URLSearchParams(location.search), found = {};
+      for (const k of UTM_KEYS) {
+        const v = params.get(k);
+        if (v) found[k] = v.slice(0, 200);
+      }
+      if (document.referrer) found.referrer = document.referrer.slice(0, 200);
+      if (Object.keys(found).length) sessionStorage.setItem(UTM_STORE, JSON.stringify(found));
+    }
+  } catch {}
+
+  const leerUtm = () => {
+    try { return JSON.parse(sessionStorage.getItem(UTM_STORE) || "{}"); } catch { return {}; }
+  };
+
+  const enviar = async (payload) => {
+    const res = await fetch(CAPTURE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error("status " + res.status);
+  };
+
+  // Si una petición anterior quedó a medias (red caída, pestaña cerrada),
+  // se reintenta al volver a cargar la página.
+  try {
+    const p = localStorage.getItem(PENDIENTE);
+    if (p) enviar(JSON.parse(p)).then(() => localStorage.removeItem(PENDIENTE)).catch(() => {});
+  } catch {}
+
+  const mostrar = (texto, clase) => {
+    msg.innerHTML = texto;
+    msg.className = 'lf-msg ' + clase;
+  };
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const name    = form.name.value.trim();
+    const phone   = form.phone.value.trim();
+    const email   = form.email.value.trim();
+    const message = form.message.value.trim();
+    const interes = form.interested_product.value;
+    const consent = document.getElementById('lf-consent').checked;
+
+    if (!name)    return mostrar('Escribe tu nombre para poder responderte.', 'err');
+    if (!phone)   return mostrar('Necesitamos un número de contacto.', 'err');
+    if (!consent) return mostrar('Marca la autorización para que podamos contactarte.', 'err');
+
+    const payload = {
+      name, phone, email,
+      message: message || `Consulta desde la web sobre ${interes}.`,
+      interested_product: interes,
+      consent: true,
+      consent_text: document.querySelector('.lf-consent span')?.innerText?.trim() ?? '',
+      policy_version: POLITICA_VERSION,
+      utm: leerUtm(),
+    };
+
+    btn.disabled = true;
+    btn.textContent = 'Enviando…';
+    // Se guarda ANTES de la petición: si la red cae a mitad, el lead no se pierde.
+    try { localStorage.setItem(PENDIENTE, JSON.stringify(payload)); } catch {}
+
+    try {
+      await enviar(payload);
+      try { localStorage.removeItem(PENDIENTE); } catch {}
+      form.reset();
+      mostrar('✅ <strong>¡Listo, ' + name.split(' ')[0] + '!</strong> Recibimos tus datos y te contactamos muy pronto.', 'ok');
+    } catch {
+      const texto = encodeURIComponent(
+        `Hola, soy ${name}. Me interesa: ${interes}.` + (message ? ` ${message}` : '')
+      );
+      mostrar(
+        'No pudimos enviar el formulario en este momento. ' +
+        'Escríbenos directo por <a href="https://wa.me/' + WA_NUMERO + '?text=' + texto + '" target="_blank" rel="noopener">WhatsApp</a> ' +
+        'o al <a href="mailto:atlas.cenest@gmail.com">atlas.cenest@gmail.com</a> — lo reintentaremos solos cuando vuelvas a entrar.',
+        'err'
+      );
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Quiero que me contacten';
+    }
+  });
+})();
 </script>
 </body>
 </html>
