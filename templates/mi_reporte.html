@@ -142,7 +142,7 @@
                         <td>{{ d.asignatura }}</td>
                         <td class="text-center">{{ d.horas }}</td>
                         <td class="text-end fw-bold text-success">
-                            {% if es_docente %}${{ "%.2f"|format(d.mi_pago) }}{% else %}${{ "%.2f"|format(d.valor) }}{% endif %}
+                            {% if es_docente %}${{ "%.2f"|format(d.mi_pago) }}{% if d.es_excepcional %}<br><span class="badge bg-warning text-dark" title="Pago excepcional autorizado por un socio o el administrador">⭐ ${{ "%.2f"|format(d.tarifa_docencia) }}/h</span>{% endif %}{% else %}${{ "%.2f"|format(d.valor) }}{% endif %}
                         </td>
                         <td><span class="badge bg-{{ 'info' if d.estado=='Cancelado-Pagado' else 'success' }}">{{ d.estado }}</span></td>
                     </tr>

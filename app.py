@@ -220,6 +220,9 @@ MODULOS_DISPONIBLES = [
     {'key': 'finanzas.devoluciones', 'label': 'Devoluciones', 'grupo': 'Finanzas'},
     {'key': 'finanzas.pagos_docentes', 'label': 'Pagos a docentes', 'grupo': 'Finanzas'},
     {'key': 'finanzas.anticipos', 'label': 'Anticipos', 'grupo': 'Finanzas'},
+    # Solicitar la excepción es delegable; APROBARLA no (siempre socio/admin,
+    # ver _puede_aprobar_excepcion).
+    {'key': 'finanzas.pagos_excepcionales', 'label': 'Pagos excepcionales a docentes (solicitar)', 'grupo': 'Finanzas'},
     {'key': 'finanzas.gastos', 'label': 'Gastos', 'grupo': 'Finanzas'},
     {'key': 'finanzas.liquidacion', 'label': 'Liquidación', 'grupo': 'Finanzas'},
     {'key': 'finanzas.movimientos', 'label': 'Movimientos en cuenta', 'grupo': 'Finanzas'},
@@ -441,9 +444,11 @@ def _puede_eliminar_movimientos():
         return True
     return 'finanzas.movimientos_eliminar' in _permisos_usuario_actual()
 
-# Inyecta contadores (anticipos pendientes y contactos nuevos) en TODAS las plantillas (badges del menú lateral).
+# Inyecta contadores (anticipos pendientes, contactos nuevos y pagos
+# excepcionales por aprobar) en TODAS las plantillas (badges del menú lateral).
 # Con caché de 30 s: antes eran 2 consultas a la BD en CADA página que se abría.
-_GLOBALES_CACHE = {'t': 0.0, 'datos': {'solicitudes_pendientes': 0, 'contactos_nuevos': 0}}
+_GLOBALES_VACIOS = {'solicitudes_pendientes': 0, 'contactos_nuevos': 0, 'excepciones_pendientes': 0}
+_GLOBALES_CACHE = {'t': 0.0, 'datos': dict(_GLOBALES_VACIOS)}
 
 @app.context_processor
 def inyectar_globales():
@@ -469,7 +474,7 @@ def inyectar_globales():
             'puede_eliminar_movimientos': puede_elim_mov}
     try:
         if not (current_user.is_authenticated and getattr(current_user, 'rol', None) in ['admin', 'socio']):
-            return {**base, 'solicitudes_pendientes': 0, 'contactos_nuevos': 0}
+            return {**base, **_GLOBALES_VACIOS}
         if time.time() - _GLOBALES_CACHE['t'] > 30:
             solicitudes = supabase.table('anticipos_solicitudes').select('id').eq('estado', 'pendiente').execute()
             pendientes = len(solicitudes.data or [])
@@ -478,11 +483,21 @@ def inyectar_globales():
                 contactos_nuevos = len(cont.data or [])
             except Exception:
                 contactos_nuevos = 0
-            _GLOBALES_CACHE['datos'] = {'solicitudes_pendientes': pendientes, 'contactos_nuevos': contactos_nuevos}
+            # Pagos excepcionales esperando la firma de un socio/admin. En un
+            # try aparte: si la tabla todavía no existe (migración sin correr),
+            # el badge queda en 0 y el resto del menú sigue funcionando.
+            try:
+                exc = supabase.table('pagos_excepcionales').select('id').eq('estado', 'pendiente').execute()
+                excepciones_pendientes = len(exc.data or [])
+            except Exception:
+                excepciones_pendientes = 0
+            _GLOBALES_CACHE['datos'] = {'solicitudes_pendientes': pendientes,
+                                        'contactos_nuevos': contactos_nuevos,
+                                        'excepciones_pendientes': excepciones_pendientes}
             _GLOBALES_CACHE['t'] = time.time()
         return {**base, **_GLOBALES_CACHE['datos']}
     except Exception:
-        return {**base, 'solicitudes_pendientes': 0, 'contactos_nuevos': 0}
+        return {**base, **_GLOBALES_VACIOS}
 
 # Evita que el navegador cachee las páginas HTML (causa de "no veo los cambios" tras desplegar).
 # Los recursos estáticos (logo, etc.) NO se tocan y siguen cacheando normalmente.
@@ -610,6 +625,15 @@ def a_oracion(texto):
 
 # ========== CONSTANTES DE PAGOS ==========
 PAGO_DOCENCIA_POR_HORA = 7
+# Tarifa/hora excepcional: casos esporádicos y justificados en los que se le
+# paga más al docente por UNA clase puntual. No se aplica sola — la propone
+# quien gestiona y solo rige cuando un SOCIO o el ADMINISTRADOR la aprueba en
+# /pagos-excepcionales (queda grabada en sesiones.tarifa_docente_hora).
+PAGO_DOCENCIA_EXCEPCIONAL = 10
+# Tope duro de la excepción. Un tipeo ($100/h, $1000/h) no puede inflar la
+# nómina ni aunque alguien lo apruebe de apuro: por encima de esto se rechaza
+# al solicitar y, si llegara a quedar grabado en la BD, se ignora al calcular.
+TARIFA_DOCENTE_MAX = 50
 PAGO_DOCENCIA_CANCELADO = 5   # valor FIJO al docente por clase Cancelado-Pagado (no por hora)
 PORCENTAJE_PSICOLOGIA = 0.4018
 # En terapia Cancelado-Pagado el psicólogo cobra la MITAD de su porcentaje
@@ -646,17 +670,39 @@ def dedup_sesiones_docente(sesiones):
     return result
 
 
+def tarifa_docencia_sesion(s):
+    """Tarifa por hora de docencia que rige UNA sesión.
+
+    Es SIEMPRE PAGO_DOCENCIA_POR_HORA ($7) salvo que la sesión tenga una
+    tarifa excepcional ya APROBADA por un socio/admin, que vive en la columna
+    sesiones.tarifa_docente_hora (la escribe únicamente aprobar_pago_excepcional).
+
+    Un valor ausente, no numérico, <= 0 o por encima de TARIFA_DOCENTE_MAX se
+    ignora y se cae a la estándar: la excepción es la ruta cara, así que ante
+    cualquier duda sobre el dato se paga lo normal y nunca de más. Funciona
+    igual si la columna todavía no existe en la BD (devuelve $7)."""
+    try:
+        t = float(s.get('tarifa_docente_hora') or 0)
+    except (TypeError, ValueError):
+        return PAGO_DOCENCIA_POR_HORA
+    if t <= 0 or t > TARIFA_DOCENTE_MAX:
+        return PAGO_DOCENCIA_POR_HORA
+    return t
+
+
 def pago_sesion_docente(s):
     """Desglose del pago al docente por una sesión: (pago_docencia, pago_psicologia).
     Regla única para Módulo 5, Reportes, Liquidación y Mi Reporte:
-    - clase/preuniversitario: horas × PAGO_DOCENCIA_POR_HORA
+    - clase/preuniversitario: horas × tarifa de docencia ($7/h, o la tarifa
+      excepcional aprobada para esa sesión — ver tarifa_docencia_sesion)
     - terapia: valor_total × PORCENTAJE_PSICOLOGIA
     - ambos: DIVIDIDO — la parte de clases es clases (horas × tarifa) y la
       parte de terapia es terapia (% del valor) [regla de gerencia 06/2026]
     - Cancelado-Pagado: SÍ se paga, con la tarifa reducida ($5 fijo en clase,
       la mitad del % en terapia/ambos), a docencia si es clase y a psicología
       si es terapia/ambos. Que no se le cobre al estudiante no quita el pago:
-      lo asume Atlas.
+      lo asume Atlas. La tarifa excepcional NO aplica aquí: se paga por la
+      eventualidad de dar la clase, y esta no se dio.
     - Cancelado (o cualquier otro estado): $0. La sesión no se dio y no se
       paga: ni al docente ni al psicólogo.
 
@@ -681,10 +727,11 @@ def pago_sesion_docente(s):
         _, fijo, _ = valores_por_estado('Cancelado-Pagado', tipo, horas,
                                         valor_base_sesion(s, horas))
         return (fijo, 0) if tipo in ('clase', 'preuniversitario') else (0, fijo)
+    tarifa = tarifa_docencia_sesion(s)
     if tipo in ('clase', 'preuniversitario'):
-        return (round(horas * PAGO_DOCENCIA_POR_HORA, 2), 0)
+        return (round(horas * tarifa, 2), 0)
     if tipo == 'ambos':
-        return (round(horas * PAGO_DOCENCIA_POR_HORA, 2),
+        return (round(horas * tarifa, 2),
                 round(valor * PORCENTAJE_PSICOLOGIA, 2))
     return (0, round(valor * PORCENTAJE_PSICOLOGIA, 2))
 
@@ -738,7 +785,7 @@ def valor_base_sesion(s, horas=None):
     return round(horas * precio_hora, 2)
 
 
-def valores_por_estado(estado, tipo_sesion, horas, valor_base):
+def valores_por_estado(estado, tipo_sesion, horas, valor_base, tarifa_hora=None):
     """Dinero de una sesión según su estado: (valor_total, pago_docente, valor_atlas).
 
     REGLA ÚNICA para el toggle del Módulo 2, el editor de planificación y las
@@ -752,17 +799,28 @@ def valores_por_estado(estado, tipo_sesion, horas, valor_base):
         en clase/preuniversitario y la MITAD del porcentaje en terapia/ambos.
         El estudiante paga el valor completo y Atlas se queda con la diferencia.
       - Realizado: la regla normal de pago.
+
+    `tarifa_hora` es la tarifa de docencia de ESA sesión: se pasa
+    tarifa_docencia_sesion(fila) para respetar una excepción aprobada. Si no se
+    pasa (o viene fuera de rango) se usa la estándar de $7/h. En
+    Cancelado-Pagado no se mira: ahí la clase no se dio y rige el fijo de $5.
     """
     if estado == 'Cancelado':
         return 0, 0, 0
     valor = round(valor_base or 0, 2)
     horas = horas or 0
+    try:
+        tarifa = float(tarifa_hora or 0)
+    except (TypeError, ValueError):
+        tarifa = 0
+    if not (0 < tarifa <= TARIFA_DOCENTE_MAX):
+        tarifa = PAGO_DOCENCIA_POR_HORA
     if tipo_sesion in ('clase', 'preuniversitario'):
         pago = PAGO_DOCENCIA_CANCELADO if estado == 'Cancelado-Pagado' \
-            else round(horas * PAGO_DOCENCIA_POR_HORA, 2)
+            else round(horas * tarifa, 2)
     elif tipo_sesion == 'ambos' and estado == 'Realizado':
         # Regla dividida: docencia (horas × tarifa) + psicología (% del valor)
-        pago = round(horas * PAGO_DOCENCIA_POR_HORA, 2) + round(valor * PORCENTAJE_PSICOLOGIA, 2)
+        pago = round(horas * tarifa, 2) + round(valor * PORCENTAJE_PSICOLOGIA, 2)
     elif estado == 'Cancelado-Pagado':
         pago = round(valor * PORCENTAJE_PSICOLOGIA * FACTOR_PSICOLOGIA_CANCELADO, 2)
     else:
@@ -1851,8 +1909,17 @@ def api_editar_sesion(id):
                 valor_base = round(valor_total or precio_hora or 0, 2)  # tarifa por sesión
             else:
                 valor_base = round(horas * precio_hora, 2)
+            # Tarifa de docencia vigente para ESTA sesión: si tiene una
+            # excepción aprobada ($10/h), editar la planificación no puede
+            # devolverla en silencio a los $7 estándar. El editor no la toca;
+            # solo se cambia desde /pagos-excepcionales.
+            try:
+                _fila_t = supabase.table('sesiones').select('tarifa_docente_hora').eq('id', id).execute().data
+                _tarifa_ses = tarifa_docencia_sesion(_fila_t[0]) if _fila_t else PAGO_DOCENCIA_POR_HORA
+            except Exception:
+                _tarifa_ses = PAGO_DOCENCIA_POR_HORA
             v_total, pago_docente, v_atlas = valores_por_estado(
-                estado_nuevo, tipo_sesion, horas, valor_base)
+                estado_nuevo, tipo_sesion, horas, valor_base, _tarifa_ses)
             updates['valor_total'] = v_total
             updates['valor_pagar_docente'] = pago_docente
             updates['valor_atlas'] = v_atlas
@@ -1974,13 +2041,14 @@ def toggle_sesion(id):
         sd = s0.data[0]
         # Regla única de dinero por estado (valores_por_estado):
         #  - Cancelado: $0 para todos
-        #  - Clases realizadas: $7/h · Cancelado-Pagado: $5 FIJO por clase
+        #  - Clases realizadas: $7/h (o la tarifa excepcional aprobada para esa
+        #    sesión) · Cancelado-Pagado: $5 FIJO por clase
         #  - Terapia: 40.18% del valor
         #  - Ambos realizado: docencia (horas × $7) + psicología (% del valor)
         horas_sd = sd.get('horas', 1) or 1
         v_total, pago_docente, valor_atlas = valores_por_estado(
             estado, sd.get('tipo_sesion', 'clase'), horas_sd,
-            valor_base_sesion(sd, horas_sd))
+            valor_base_sesion(sd, horas_sd), tarifa_docencia_sesion(sd))
         updates['valor_total'] = v_total
         updates['valor_pagar_docente'] = pago_docente
         updates['valor_atlas'] = valor_atlas
@@ -2413,6 +2481,13 @@ def modulo5():
         
         # Regla única de pago (incluye 'ambos' dividido: clases + % terapia)
         pago_docente, pago_psicologia = pago_sesion_docente(s)
+        # Tarifa realmente usada: si no es la estándar, la clase tiene una
+        # excepción aprobada y se marca en el listado. Un pago distinto sin
+        # explicación a la vista es exactamente lo que hay que evitar en la
+        # nómina, aunque esté autorizado.
+        tarifa_usada = tarifa_docencia_sesion(s)
+        es_excepcional = (estado == 'Realizado' and tipo in TIPOS_CON_DOCENCIA
+                          and tarifa_usada != PAGO_DOCENCIA_POR_HORA)
         total_docencia += pago_docente
         total_psicologia += pago_psicologia
         total_pagar = pago_docente + pago_psicologia
@@ -2436,6 +2511,8 @@ def modulo5():
             'pago_docente': pago_docente,
             'pago_psicologia': pago_psicologia,
             'total_pagar': total_pagar,
+            'tarifa_docencia': tarifa_usada,
+            'es_excepcional': es_excepcional,
             'estado': estado
         })
         
@@ -2730,6 +2807,311 @@ def descontar_anticipo(id):
         supabase.table('anticipos_solicitudes').update(datos).eq('id', id).eq('estado', 'aprobado').execute()
     flash('💸 Anticipo marcado como descontado: ya no se restará en los próximos períodos', 'success')
     return redirect(url_for('gestion_anticipos'))
+
+# ========== PAGOS EXCEPCIONALES A DOCENTES ==========
+# La docencia se paga a $7/h. En casos esporádicos y justificados una clase
+# concreta puede pagarse a más ($10/h). No es un campo que se edite a mano:
+#   1. quien gestiona la SOLICITA sobre una sesión concreta, con motivo obligatorio;
+#   2. queda 'pendiente' sin mover un centavo;
+#   3. un SOCIO o el ADMINISTRADOR la aprueba (o la rechaza), y recién ahí se
+#      graba en sesiones.tarifa_docente_hora y empieza a pagarse.
+# Como el pago sale de la regla única (pago_sesion_docente), la excepción se
+# refleja sola en Módulo 5, Reportes, Liquidación y Mi reporte.
+ESTADOS_EXCEPCION_VIVOS = ('pendiente', 'aprobado')
+# Solo se puede pedir sobre sesiones que pagan docencia por hora. En terapia el
+# pago es un % del valor, no una tarifa horaria, y no hay nada que sustituir.
+TIPOS_CON_DOCENCIA = ('clase', 'preuniversitario', 'ambos')
+AVISO_MIGRACION_EXC = ('❌ Falta correr la migración migration_pago_excepcional.sql '
+                       'en Supabase para usar los pagos excepcionales')
+
+
+def _puede_aprobar_excepcion():
+    """Aprobar / rechazar / revocar es de SOCIO o ADMINISTRADOR y NO se delega
+    (a diferencia de solicitar, que sí es un permiso otorgable): es la
+    autorización del gasto extra, no una tarea administrativa. Por eso mira el
+    rol directo y no tiene_modulo()."""
+    return current_user.is_authenticated and current_user.rol in ('admin', 'socio')
+
+
+def _filas_sesion_fisica(sesion_id):
+    """(fila_pedida, todas las filas de la MISMA clase física).
+    En una clase grupal hay una fila por estudiante; el pago al docente se
+    deduplica por sesión física (dedup_sesiones_docente) y puede quedarse con
+    cualquiera de ellas, así que la tarifa excepcional tiene que ir en TODAS o
+    el pago dependería de cuál se leyó primero."""
+    base = supabase.table('sesiones').select('*').eq('id', sesion_id).execute().data
+    if not base:
+        return None, []
+    s = base[0]
+    gid = s.get('sesion_grupo_id')
+    try:
+        if gid:
+            filas = supabase.table('sesiones').select('*').eq('sesion_grupo_id', gid).execute().data or [s]
+        else:
+            filas = supabase.table('sesiones').select('*').eq(
+                'profesor_terapeuta', s.get('profesor_terapeuta')).eq('fecha', s.get('fecha')).eq(
+                'hora_inicio', s.get('hora_inicio')).eq('hora_fin', s.get('hora_fin')).execute().data or [s]
+    except Exception:
+        filas = [s]
+    return s, filas
+
+
+def _aplicar_tarifa_excepcional(sesion_id, tarifa):
+    """Graba la tarifa excepcional (o la quita, con tarifa=None) en todas las
+    filas de la clase física y recalcula sus importes con la regla única.
+    Devuelve (n_filas_actualizadas, error)."""
+    try:
+        s, filas = _filas_sesion_fisica(sesion_id)
+    except Exception:
+        return 0, 'No se pudo leer la sesión'
+    if not s:
+        return 0, 'La sesión ya no existe'
+    hechas = 0
+    for f in filas:
+        upd = {'tarifa_docente_hora': tarifa}
+        estado_f = f.get('estado')
+        if estado_f in ('Realizado', 'Cancelado-Pagado', 'Cancelado'):
+            h = f.get('horas', 1) or 1
+            vt, pd_doc, va = valores_por_estado(
+                estado_f, f.get('tipo_sesion', 'clase'), h, valor_base_sesion(f, h),
+                tarifa or PAGO_DOCENCIA_POR_HORA)
+            upd.update({'valor_total': vt, 'valor_pagar_docente': pd_doc, 'valor_atlas': va})
+        try:
+            supabase.table('sesiones').update(upd).eq('id', f['id']).execute()
+        except Exception as e:
+            # Caso típico: la columna tarifa_docente_hora todavía no existe.
+            # Se corta aquí y quien llama NO marca la solicitud como resuelta,
+            # así que no queda una excepción "aprobada" que nadie está pagando.
+            pendientes = len(filas) - hechas
+            return hechas, (f'{AVISO_MIGRACION_EXC} — quedaron {pendientes} de '
+                            f'{len(filas)} filas de la clase sin actualizar ({e})')
+        hechas += 1
+    return hechas, None
+
+
+def _excepciones_por_sesion(estados=ESTADOS_EXCEPCION_VIVOS):
+    """{sesion_id: solicitud} de las excepciones en los estados dados. Sirve
+    para no ofrecer dos veces la misma clase y para marcarla en los listados."""
+    try:
+        filas = supabase.table('pagos_excepcionales').select('*').in_('estado', list(estados)).execute().data or []
+    except Exception:
+        return {}
+    return {f['sesion_id']: f for f in filas}
+
+
+@app.route('/pagos-excepcionales')
+@login_required
+@requiere_modulo('finanzas.pagos_excepcionales')
+def pagos_excepcionales():
+    docente = norm_nombre(request.args.get('docente', ''))
+    desde = (request.args.get('desde') or '').strip()
+    hasta = (request.args.get('hasta') or '').strip()
+    if not desde and not hasta:
+        hoy = date.today()  # por defecto, el mes en curso
+        desde = hoy.replace(day=1).isoformat()
+        hasta = f"{hoy.year}-{hoy.month:02d}-{monthrange(hoy.year, hoy.month)[1]}"
+
+    try:
+        solicitudes = supabase.table('pagos_excepcionales').select('*').order(
+            'fecha_solicitud', desc=True).execute().data or []
+    except Exception:
+        flash(AVISO_MIGRACION_EXC, 'error')
+        solicitudes = []
+
+    # Sesiones sobre las que se puede pedir la excepción: clases YA realizadas
+    # (la eventualidad ya ocurrió), del período elegido y sin una solicitud viva.
+    # Cancelado-Pagado queda fuera: esa clase no se dio y se paga el fijo de $5.
+    ya_pedidas = _excepciones_por_sesion()
+    candidatas = []
+    try:
+        q = supabase.table('sesiones').select(
+            'id,fecha,hora_inicio,hora_fin,profesor_terapeuta,asignatura,tema_terapia,'
+            'tipo_sesion,horas,estado,valor_total,precio_hora,cobro_por_sesion,'
+            'sesion_grupo_id,tarifa_docente_hora,estudiantes(nombres,apellidos)'
+        ).eq('estado', 'Realizado')
+        if desde:
+            q = q.gte('fecha', desde)
+        if hasta:
+            q = q.lte('fecha', hasta)
+        filas = _fetch_all(q.order('fecha', desc=True))
+    except Exception:
+        flash(AVISO_MIGRACION_EXC, 'error')
+        filas = []
+
+    for s in dedup_sesiones_docente(filas):
+        if s.get('tipo_sesion') not in TIPOS_CON_DOCENCIA:
+            continue
+        prof = norm_nombre(s.get('profesor_terapeuta', ''))
+        if docente and docente.lower() not in prof.lower():
+            continue
+        if s['id'] in ya_pedidas:
+            continue
+        horas = s.get('horas', 0) or 0
+        est = s.get('estudiantes') or {}
+        candidatas.append({
+            'id': s['id'],
+            'fecha': s.get('fecha'),
+            'hora': f"{(s.get('hora_inicio') or '')[:5]}-{(s.get('hora_fin') or '')[:5]}",
+            'docente': prof,
+            'estudiante': f"{est.get('apellidos', '')} {est.get('nombres', '')}".strip().title(),
+            'asignatura': s.get('asignatura') or s.get('tema_terapia') or '-',
+            'tipo': s.get('tipo_sesion'),
+            'horas': horas,
+            'pago_estandar': round(horas * PAGO_DOCENCIA_POR_HORA, 2),
+            'pago_excepcional': round(horas * PAGO_DOCENCIA_EXCEPCIONAL, 2),
+        })
+
+    return render_template('pagos_excepcionales.html',
+                           solicitudes=solicitudes, candidatas=candidatas,
+                           docente=docente, desde=desde, hasta=hasta,
+                           puede_aprobar=_puede_aprobar_excepcion(),
+                           tarifa_estandar=PAGO_DOCENCIA_POR_HORA,
+                           tarifa_sugerida=PAGO_DOCENCIA_EXCEPCIONAL,
+                           tarifa_max=TARIFA_DOCENTE_MAX)
+
+
+@app.route('/solicitar-pago-excepcional', methods=['POST'])
+@login_required
+@requiere_modulo('finanzas.pagos_excepcionales')
+def solicitar_pago_excepcional():
+    # 'volver' preserva los filtros de búsqueda al recargar, pero viene del
+    # formulario: solo se acepta una ruta interna. Una URL absoluta (o '//host')
+    # convertiría este POST en un redirect abierto hacia afuera del sistema.
+    _volver_a = (request.form.get('volver') or '').strip()
+    if not _volver_a.startswith('/') or _volver_a.startswith('//'):
+        _volver_a = url_for('pagos_excepcionales')
+    volver = redirect(_volver_a)
+    try:
+        sesion_id = int(request.form.get('sesion_id') or 0)
+    except (TypeError, ValueError):
+        sesion_id = 0
+    motivo = (request.form.get('motivo') or '').strip()
+    try:
+        tarifa = round(float(request.form.get('tarifa_hora') or 0), 2)
+    except (TypeError, ValueError):
+        tarifa = 0
+
+    # La justificación es el requisito de fondo: sin ella la excepción no
+    # existe, así que se exige algo escrito y no un "x" para salir del paso.
+    if len(motivo) < 10:
+        flash('❌ Debe justificar la excepción (al menos 10 caracteres)', 'error')
+        return volver
+    if tarifa <= PAGO_DOCENCIA_POR_HORA:
+        flash(f'❌ La tarifa excepcional debe ser mayor a la estándar de ${PAGO_DOCENCIA_POR_HORA}/h', 'error')
+        return volver
+    if tarifa > TARIFA_DOCENTE_MAX:
+        flash(f'❌ La tarifa excepcional no puede superar ${TARIFA_DOCENTE_MAX}/h', 'error')
+        return volver
+
+    s = supabase.table('sesiones').select('*').eq('id', sesion_id).execute().data
+    if not s:
+        flash('❌ La sesión no existe', 'error')
+        return volver
+    s = s[0]
+    if s.get('estado') != 'Realizado':
+        flash('❌ Solo se puede pedir sobre una clase ya realizada', 'error')
+        return volver
+    if s.get('tipo_sesion') not in TIPOS_CON_DOCENCIA:
+        flash('❌ La tarifa por hora solo aplica a clases y preuniversitario; en terapia el pago es un porcentaje', 'error')
+        return volver
+    if sesion_id in _excepciones_por_sesion():
+        flash('⚠️ Esa clase ya tiene una solicitud pendiente o aprobada', 'warning')
+        return volver
+
+    horas = s.get('horas', 0) or 0
+    registro = {
+        'sesion_id': sesion_id,
+        'sesion_grupo_id': s.get('sesion_grupo_id'),
+        'docente': norm_nombre(s.get('profesor_terapeuta', '')),
+        'fecha_sesion': s.get('fecha'),
+        'hora_inicio': (s.get('hora_inicio') or '')[:5],
+        'hora_fin': (s.get('hora_fin') or '')[:5],
+        'horas': horas,
+        'asignatura': s.get('asignatura') or s.get('tema_terapia') or '',
+        'tarifa_hora': tarifa,
+        'tarifa_estandar': PAGO_DOCENCIA_POR_HORA,
+        'diferencia': round((tarifa - PAGO_DOCENCIA_POR_HORA) * horas, 2),
+        'motivo': motivo,
+        'estado': 'pendiente',
+        'solicitado_por': current_user.nombre,
+    }
+    try:
+        supabase.table('pagos_excepcionales').insert(registro).execute()
+    except Exception as e:
+        flash(f'❌ No se pudo registrar la solicitud: {e}', 'error')
+        return volver
+    flash('✅ Solicitud enviada. Queda pendiente hasta que un socio o el administrador la apruebe', 'success')
+    return volver
+
+
+@app.route('/aprobar-pago-excepcional/<int:id>', methods=['POST'])
+@login_required
+@socio_admin_required
+def aprobar_pago_excepcional(id):
+    """Aprueba la excepción y recién aquí toca el dinero. El orden importa: la
+    tarifa se aplica ANTES de marcar la solicitud como aprobada, para que un
+    fallo a mitad de camino no deje una solicitud 'aprobada' que en realidad no
+    se está pagando."""
+    fila = supabase.table('pagos_excepcionales').select('*').eq('id', id).eq('estado', 'pendiente').execute().data
+    if not fila:
+        flash('⚠️ Esa solicitud ya no está pendiente', 'warning')
+        return redirect(url_for('pagos_excepcionales'))
+    sol = fila[0]
+    try:
+        tarifa = round(float(sol.get('tarifa_hora') or 0), 2)
+    except (TypeError, ValueError):
+        tarifa = 0
+    if not (PAGO_DOCENCIA_POR_HORA < tarifa <= TARIFA_DOCENTE_MAX):
+        flash('❌ La tarifa de esa solicitud está fuera de rango; no se aplicó nada', 'error')
+        return redirect(url_for('pagos_excepcionales'))
+
+    n, error = _aplicar_tarifa_excepcional(sol['sesion_id'], tarifa)
+    if error:
+        flash(f'❌ No se aprobó: {error}', 'error')
+        return redirect(url_for('pagos_excepcionales'))
+    supabase.table('pagos_excepcionales').update({
+        'estado': 'aprobado', 'resuelto_por': current_user.nombre,
+        'fecha_resolucion': datetime.now().isoformat()
+    }).eq('id', id).eq('estado', 'pendiente').execute()
+    extra = f' ({n} filas de la clase grupal)' if n > 1 else ''
+    flash(f'✅ Aprobado: esa clase se paga a ${tarifa:.2f}/h{extra}', 'success')
+    return redirect(url_for('pagos_excepcionales'))
+
+
+@app.route('/rechazar-pago-excepcional/<int:id>', methods=['POST'])
+@login_required
+@socio_admin_required
+def rechazar_pago_excepcional(id):
+    supabase.table('pagos_excepcionales').update({
+        'estado': 'rechazado',
+        'motivo_rechazo': (request.form.get('motivo_rechazo') or 'Sin motivo').strip()[:500],
+        'resuelto_por': current_user.nombre,
+        'fecha_resolucion': datetime.now().isoformat()
+    }).eq('id', id).eq('estado', 'pendiente').execute()
+    flash('❌ Solicitud rechazada: esa clase sigue pagándose a la tarifa estándar', 'info')
+    return redirect(url_for('pagos_excepcionales'))
+
+
+@app.route('/revocar-pago-excepcional/<int:id>', methods=['POST'])
+@login_required
+@socio_admin_required
+def revocar_pago_excepcional(id):
+    """Deshace una excepción ya aprobada: devuelve la clase a $7/h. Útil si se
+    aprobó por error o si el pago del mes todavía no se hizo."""
+    fila = supabase.table('pagos_excepcionales').select('*').eq('id', id).eq('estado', 'aprobado').execute().data
+    if not fila:
+        flash('⚠️ Esa solicitud no está aprobada', 'warning')
+        return redirect(url_for('pagos_excepcionales'))
+    n, error = _aplicar_tarifa_excepcional(fila[0]['sesion_id'], None)
+    if error:
+        flash(f'❌ No se pudo revertir: {error}', 'error')
+        return redirect(url_for('pagos_excepcionales'))
+    supabase.table('pagos_excepcionales').update({
+        'estado': 'revocado', 'resuelto_por': current_user.nombre,
+        'fecha_resolucion': datetime.now().isoformat()
+    }).eq('id', id).eq('estado', 'aprobado').execute()
+    flash(f'↩️ Excepción revocada: esa clase vuelve a ${PAGO_DOCENCIA_POR_HORA}/h', 'success')
+    return redirect(url_for('pagos_excepcionales'))
 
 # ========== CONTACTOS (solicitudes desde la landing) ==========
 @app.route('/contactos')
@@ -4509,6 +4891,12 @@ def mi_reporte():
 
             # Pago al docente (regla única); para el estudiante lo relevante es 'valor'
             mi_pago = sum(pago_sesion_docente(s))
+            # Si esa clase tiene una tarifa excepcional aprobada, el docente la
+            # ve en su propio reporte: es su respaldo de que el monto distinto
+            # está autorizado y no es un error.
+            _tarifa_mr = tarifa_docencia_sesion(s)
+            _exc_mr = (s.get('estado') == 'Realizado' and tipo in TIPOS_CON_DOCENCIA
+                       and _tarifa_mr != PAGO_DOCENCIA_POR_HORA)
             total_horas += horas
             if es_docente:
                 total_a_pagar += mi_pago
@@ -4528,6 +4916,8 @@ def mi_reporte():
                 'horas': horas,
                 'valor': valor,
                 'mi_pago': mi_pago,
+                'tarifa_docencia': _tarifa_mr,
+                'es_excepcional': _exc_mr,
                 'estado': s['estado']
             })
 
@@ -5498,14 +5888,23 @@ def api_toggle_pago_docente():
 @login_required
 @requiere_modulo('administracion.reporte_duplicados')
 def reporte_duplicados():
-    try:
-        sesiones = supabase.table('sesiones').select(
-            'id,fecha,hora_inicio,hora_fin,profesor_terapeuta,estudiante_id,horas,tipo_sesion,estado,valor_total,asignatura,tema_terapia,sesion_grupo_id,estudiantes(nombres,apellidos)'
-        ).in_('estado', ['Realizado', 'Cancelado-Pagado']).order('fecha', desc=True).execute()
-    except Exception:
-        sesiones = supabase.table('sesiones').select(
-            'id,fecha,hora_inicio,hora_fin,profesor_terapeuta,estudiante_id,horas,tipo_sesion,estado,valor_total,asignatura,tema_terapia,estudiantes(nombres,apellidos)'
-        ).in_('estado', ['Realizado', 'Cancelado-Pagado']).order('fecha', desc=True).execute()
+    # Se pide de más a menos columnas: las que aún no existan en la BD (según
+    # qué migraciones se hayan corrido) hacen fallar el select entero, así que
+    # cada intento deja caer una y el reporte sigue funcionando igual.
+    _base_cols = 'id,fecha,hora_inicio,hora_fin,profesor_terapeuta,estudiante_id,horas,tipo_sesion,estado,valor_total,asignatura,tema_terapia'
+    sesiones = None
+    for _cols in (f'{_base_cols},sesion_grupo_id,tarifa_docente_hora,estudiantes(nombres,apellidos)',
+                  f'{_base_cols},sesion_grupo_id,estudiantes(nombres,apellidos)',
+                  f'{_base_cols},estudiantes(nombres,apellidos)'):
+        try:
+            sesiones = supabase.table('sesiones').select(_cols).in_(
+                'estado', ['Realizado', 'Cancelado-Pagado']).order('fecha', desc=True).execute()
+            break
+        except Exception:
+            continue
+    if sesiones is None:
+        flash('❌ No se pudo leer las sesiones', 'error')
+        return redirect(url_for('dashboard'))
 
     from collections import defaultdict
     grupos = defaultdict(list)
@@ -5528,8 +5927,11 @@ def reporte_duplicados():
         horas = rep.get('horas', 0) or 0
         tipo = rep.get('tipo_sesion', 'clase')
         if tipo in ['clase', 'preuniversitario']:
-            pago_correcto = horas * PAGO_DOCENCIA_POR_HORA
-            pago_actual   = pago_correcto * len(rows)
+            # Con la tarifa que realmente rige esa clase (la estándar, o la
+            # excepcional si un socio/admin la aprobó): si no, el reporte
+            # marcaría como "sobrepago" la diferencia legítima de $10/h.
+            pago_correcto = round(horas * tarifa_docencia_sesion(rep), 2)
+            pago_actual   = round(pago_correcto * len(rows), 2)
         else:
             valor = rep.get('valor_total', 0) or 0
             pago_correcto = round(valor * PORCENTAJE_PSICOLOGIA, 2)
@@ -5698,7 +6100,7 @@ def eliminar_devolucion(id):
                 _h = _sd.get('horas', 1) or 1
                 _vt, _pd, _va = valores_por_estado(
                     'Realizado', _sd.get('tipo_sesion', 'clase'), _h,
-                    valor_base_sesion(_sd, _h))
+                    valor_base_sesion(_sd, _h), tarifa_docencia_sesion(_sd))
                 upd_ses.update({'valor_total': _vt, 'valor_pagar_docente': _pd,
                                 'valor_atlas': _va})
             supabase.table('sesiones').update(upd_ses).eq('id', d['sesion_id']).execute()

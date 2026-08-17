@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block title %}Pagos excepcionales - Atlas{% endblock %}
+{% block content %}
+<style>
+    .card-premium { border-radius: 20px; border: none; box-shadow: 0 4px 20px rgba(0,0,0,0.06); background: white; margin-bottom: 20px; overflow: hidden; }
+    .card-header-grad { padding: 14px 20px; color: white; font-weight: 700; font-size: 15px; }
+    .grad-warning { background: linear-gradient(135deg, #f4b400, #e65100); }
+    .grad-info { background: linear-gradient(135deg, #4285f4, #1a237e); }
+    .table-premium { border-radius: 12px; overflow: hidden; border: none; margin: 0; }
+    .table-premium thead th { background: #1a1a2e; color: white; font-weight: 600; font-size: 11px; letter-spacing: 0.5px; border: none; padding: 10px 12px; text-transform: uppercase; }
+    .table-premium tbody td { padding: 8px 12px; font-size: 13px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+    .btn-premium { border-radius: 10px; font-weight: 600; font-size: 11px; padding: 6px 12px; }
+    .badge-premium { padding: 5px 10px; border-radius: 10px; font-size: 10px; font-weight: 600; }
+    .fila-form td { background: #fffdf5; }
+    .nota-regla { background: #fff8e1; border-left: 4px solid #f4b400; border-radius: 10px; padding: 12px 16px; font-size: 13px; margin-bottom: 20px; }
+</style>
+
+<div class="page-hero">
+    <h2>⭐ Pagos excepcionales a docentes</h2>
+    <p>Tarifa mayor a la estándar por una clase puntual, justificada y autorizada.</p>
+</div>
+
+<div class="nota-regla">
+    La docencia se paga a <strong>${{ "%.2f"|format(tarifa_estandar) }}/hora</strong>. Por una eventualidad se puede pedir
+    hasta <strong>${{ "%.2f"|format(tarifa_max) }}/hora</strong> para <em>una clase concreta</em>: la solicitud exige un motivo escrito y
+    <strong>no mueve un centavo</strong> hasta que un socio o el administrador la apruebe. Aprobada, la clase se paga a la nueva tarifa
+    en el Módulo 5, Reportes, Liquidación y en el reporte del propio docente.
+    {% if not puede_aprobar %}<br><small class="text-muted">Tu usuario puede solicitar, pero no aprobar.</small>{% endif %}
+</div>
+
+{# ---------- Solicitar sobre una clase realizada ---------- #}
+<div class="card-premium">
+    <div class="card-header-grad grad-info">🔎 Elegir la clase</div>
+    <div class="card-body">
+        <form method="GET" class="row g-2 align-items-end mb-3">
+            <div class="col-md-4">
+                <label class="form-label small fw-bold">Docente</label>
+                <input type="text" name="docente" value="{{ docente }}" class="form-control form-control-sm" placeholder="Nombre o parte del nombre">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold">Desde</label>
+                <input type="date" name="desde" value="{{ desde }}" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold">Hasta</label>
+                <input type="date" name="hasta" value="{{ hasta }}" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary btn-premium w-100">Buscar</button>
+            </div>
+        </form>
+
+        {% if candidatas %}
+        <div class="table-responsive"><table class="table table-premium mb-0">
+            <thead><tr>
+                <th>Fecha</th><th>Horario</th><th>Docente</th><th>Estudiante</th><th>Asignatura</th>
+                <th class="text-center">Hrs</th><th class="text-end">Pago actual</th><th class="text-end">Con ${{ "%.0f"|format(tarifa_sugerida) }}/h</th><th></th>
+            </tr></thead>
+            <tbody>
+            {% for c in candidatas %}
+            <tr>
+                <td>{{ c.fecha }}</td>
+                <td>{{ c.hora }}</td>
+                <td><strong>{{ c.docente }}</strong></td>
+                <td>{{ c.estudiante or '-' }}</td>
+                <td>{{ c.asignatura }}</td>
+                <td class="text-center">{{ c.horas }}</td>
+                <td class="text-end">${{ "%.2f"|format(c.pago_estandar) }}</td>
+                <td class="text-end text-warning fw-bold">${{ "%.2f"|format(c.pago_excepcional) }}</td>
+                <td class="text-end"><button type="button" class="btn btn-warning btn-premium" onclick="toggleForm({{ c.id }})">⭐ Solicitar</button></td>
+            </tr>
+            <tr class="fila-form d-none" id="form-{{ c.id }}">
+                <td colspan="9">
+                    <form method="POST" action="/solicitar-pago-excepcional" class="row g-2 align-items-end">
+                        <input type="hidden" name="sesion_id" value="{{ c.id }}">
+                        <input type="hidden" name="volver" value="{{ request.full_path }}">
+                        <div class="col-md-2">
+                            <label class="form-label small fw-bold">Tarifa por hora</label>
+                            <input type="number" name="tarifa_hora" step="0.01"
+                                   min="{{ tarifa_estandar + 0.01 }}" max="{{ tarifa_max }}"
+                                   value="{{ tarifa_sugerida }}" class="form-control form-control-sm" required>
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label small fw-bold">Justificación (obligatoria)</label>
+                            <input type="text" name="motivo" minlength="10" maxlength="500" required
+                                   class="form-control form-control-sm"
+                                   placeholder="Ej.: clase de refuerzo fuera de horario a pedido del representante">
+                        </div>
+                        <div class="col-md-2">
+                            <button type="submit" class="btn btn-success btn-premium w-100">Enviar solicitud</button>
+                        </div>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table></div>
+        {% else %}
+        <p class="text-muted mb-0">No hay clases realizadas en ese período (o ya tienen una solicitud registrada).</p>
+        {% endif %}
+    </div>
+</div>
+
+{# ---------- Bitácora de solicitudes ---------- #}
+<div class="card-premium">
+    <div class="card-header-grad grad-warning">📋 Solicitudes</div>
+    <div class="card-body p-0">
+    <div class="table-responsive"><table class="table table-premium mb-0">
+        <thead><tr>
+            <th>Solicitado</th><th>Clase</th><th>Docente</th><th class="text-center">Hrs</th>
+            <th class="text-end">Tarifa</th><th class="text-end">Diferencia</th><th>Justificación</th>
+            <th>Estado</th><th>Autorización</th><th></th>
+        </tr></thead>
+        <tbody>
+        {% for s in solicitudes %}
+        <tr>
+            <td><small>{{ (s.fecha_solicitud or '')[:10] }}<br><span class="text-muted">{{ s.solicitado_por }}</span></small></td>
+            <td>{{ s.fecha_sesion }}<br><small class="text-muted">{{ s.hora_inicio }}-{{ s.hora_fin }} · {{ s.asignatura or '-' }}</small></td>
+            <td><strong>{{ s.docente }}</strong></td>
+            <td class="text-center">{{ s.horas }}</td>
+            <td class="text-end">${{ "%.2f"|format(s.tarifa_hora or 0) }}/h<br><small class="text-muted">antes ${{ "%.2f"|format(s.tarifa_estandar or 0) }}/h</small></td>
+            <td class="text-end fw-bold {% if s.estado == 'aprobado' %}text-warning{% else %}text-muted{% endif %}">+${{ "%.2f"|format(s.diferencia or 0) }}</td>
+            <td><small>{{ s.motivo }}</small>{% if s.motivo_rechazo %}<br><small class="text-danger">Rechazo: {{ s.motivo_rechazo }}</small>{% endif %}</td>
+            <td><span class="badge-premium bg-{{ 'warning' if s.estado=='pendiente' else 'success' if s.estado=='aprobado' else 'danger' if s.estado=='rechazado' else 'secondary' }}">{{ s.estado }}</span></td>
+            <td><small>{% if s.resuelto_por %}{{ s.resuelto_por }}<br><span class="text-muted">{{ (s.fecha_resolucion or '')[:10] }}</span>{% else %}—{% endif %}</small></td>
+            <td class="text-end">
+                {% if puede_aprobar and s.estado == 'pendiente' %}
+                <form method="POST" action="/aprobar-pago-excepcional/{{ s.id }}" style="display:inline;"
+                      onsubmit="return confirm('¿Aprobar el pago de ${{ "%.2f"|format(s.tarifa_hora or 0) }}/h para esa clase? Se pagará {{ "%.2f"|format(s.diferencia or 0) }} dólares más al docente.');">
+                    <button type="submit" class="btn btn-success btn-premium" title="Aprobar">✅</button>
+                </form>
+                <button type="button" class="btn btn-danger btn-premium" onclick="toggleForm('rech-{{ s.id }}')" title="Rechazar">❌</button>
+                {% elif puede_aprobar and s.estado == 'aprobado' %}
+                <form method="POST" action="/revocar-pago-excepcional/{{ s.id }}" style="display:inline;"
+                      onsubmit="return confirm('¿Revocar la excepción? Esa clase vuelve a pagarse a la tarifa estándar.');">
+                    <button type="submit" class="btn btn-outline-secondary btn-premium" title="Volver a la tarifa estándar">↩️ Revocar</button>
+                </form>
+                {% endif %}
+            </td>
+        </tr>
+        {% if puede_aprobar and s.estado == 'pendiente' %}
+        <tr class="fila-form d-none" id="form-rech-{{ s.id }}">
+            <td colspan="10">
+                <form method="POST" action="/rechazar-pago-excepcional/{{ s.id }}" class="row g-2 align-items-end">
+                    <div class="col-md-10">
+                        <label class="form-label small fw-bold">Motivo del rechazo</label>
+                        <input type="text" name="motivo_rechazo" maxlength="500" class="form-control form-control-sm" placeholder="Por qué no se autoriza">
+                    </div>
+                    <div class="col-md-2"><button type="submit" class="btn btn-danger btn-premium w-100">Rechazar</button></div>
+                </form>
+            </td>
+        </tr>
+        {% endif %}
+        {% else %}
+        <tr><td colspan="10" class="text-center text-muted py-4">Todavía no se ha pedido ningún pago excepcional.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+    </div>
+</div>
+
+<script>
+function toggleForm(id) {
+    var fila = document.getElementById('form-' + id);
+    if (fila) { fila.classList.toggle('d-none'); }
+}
+</script>
+{% endblock %}

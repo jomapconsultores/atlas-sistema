@@ -1209,11 +1209,12 @@
     {% set puede_devoluciones = es_admin_socio or tiene_modulo('finanzas.devoluciones') %}
     {% set puede_pagos_docentes = es_admin_socio or tiene_modulo('finanzas.pagos_docentes') %}
     {% set puede_anticipos_fin = es_admin_socio or tiene_modulo('finanzas.anticipos') %}
+    {% set puede_excepcionales = es_admin_socio or tiene_modulo('finanzas.pagos_excepcionales') %}
     {% set puede_gastos_fin = es_admin_socio or tiene_modulo('finanzas.gastos') %}
     {% set puede_liquidacion = es_admin_socio or tiene_modulo('finanzas.liquidacion') %}
     {% set puede_movimientos = es_admin_socio or tiene_modulo('finanzas.movimientos') %}
     {% set puede_reportes_fin = es_admin_socio or tiene_modulo('finanzas.reportes') %}
-    {% set puede_finanzas = puede_pagos_estudiantes or puede_devoluciones or puede_pagos_docentes or puede_anticipos_fin or puede_gastos_fin or puede_liquidacion or puede_movimientos or puede_reportes_fin %}
+    {% set puede_finanzas = puede_pagos_estudiantes or puede_devoluciones or puede_pagos_docentes or puede_anticipos_fin or puede_excepcionales or puede_gastos_fin or puede_liquidacion or puede_movimientos or puede_reportes_fin %}
     {% set puede_costos = es_admin_socio or tiene_modulo('administracion.costos') %}
     {% set puede_reporte_duplicados = es_admin_socio or tiene_modulo('administracion.reporte_duplicados') %}
     {% set puede_marcaciones = es_admin_socio or tiene_modulo('administracion.marcaciones') %}
@@ -1272,6 +1273,7 @@
       {% if puede_devoluciones %}{% set _ = items.append({'url':'/devoluciones', 'label':'Devoluciones', 'ico':'↩️'}) %}{% endif %}
       {% if puede_pagos_docentes %}{% set _ = items.append({'url':'/modulo5', 'label':'Pagos a docentes', 'ico':'💳'}) %}{% endif %}
       {% if puede_anticipos_fin %}{% set _ = items.append({'url':'/gestion-anticipos', 'label':'Anticipos', 'ico':'🏦', 'badge':solicitudes_pendientes or 0}) %}{% endif %}
+      {% if puede_excepcionales %}{% set _ = items.append({'url':'/pagos-excepcionales', 'label':'Pagos excepcionales', 'ico':'⭐', 'badge':excepciones_pendientes or 0}) %}{% endif %}
       {% if puede_gastos_fin %}{% set _ = items.append({'url':'/gastos', 'label':'Gastos', 'ico':'📉'}) %}{% endif %}
       {% if puede_liquidacion %}{% set _ = items.append({'url':'/liquidacion', 'label':'Liquidación', 'ico':'⚖️'}) %}{% endif %}
       {% if puede_movimientos %}{% set _ = items.append({'url':'/movimientos-cuenta', 'label':'Movimientos en cuenta', 'ico':'🏧'}) %}{% endif %}
@@ -1366,7 +1368,7 @@
         {% endif %}
 
         {% if puede_finanzas %}
-        {% set fin_active = p in ['/modulo3','/modulo5','/devoluciones','/reportes','/gastos','/liquidacion','/gestion-anticipos','/movimientos-cuenta'] %}
+        {% set fin_active = p in ['/modulo3','/modulo5','/devoluciones','/reportes','/gastos','/liquidacion','/gestion-anticipos','/pagos-excepcionales','/movimientos-cuenta'] %}
         <div class="nav-group {% if fin_active %}open{% endif %}">
             <button type="button" class="nav-group-toggle"><span class="ico">💰</span> Finanzas</button>
             <div class="nav-group-items">
@@ -1387,17 +1389,18 @@
                 </div>
                 {% endif %}
 
-                {# Pagos a docentes › Anticipos (cada uno con su propio permiso) #}
-                {% if puede_pagos_docentes or puede_anticipos_fin %}
-                <div class="nav-group nav-nested {% if p in ['/modulo5','/gestion-anticipos'] %}open{% endif %}">
+                {# Pagos a docentes › Anticipos · Pagos excepcionales (cada uno con su propio permiso) #}
+                {% if puede_pagos_docentes or puede_anticipos_fin or puede_excepcionales %}
+                <div class="nav-group nav-nested {% if p in ['/modulo5','/gestion-anticipos','/pagos-excepcionales'] %}open{% endif %}">
                     <div class="nav-parent">
                         {% if puede_pagos_docentes %}<a href="/modulo5" class="{% if p=='/modulo5' %}active{% endif %}">Pagos a docentes</a>
                         {% else %}<span class="nav-parent-label">Pagos a docentes</span>{% endif %}
-                        {% if puede_anticipos_fin %}<button type="button" class="nav-chev" aria-label="Ver anticipos"></button>{% endif %}
+                        {% if puede_anticipos_fin or puede_excepcionales %}<button type="button" class="nav-chev" aria-label="Ver anticipos y pagos excepcionales"></button>{% endif %}
                     </div>
-                    {% if puede_anticipos_fin %}
+                    {% if puede_anticipos_fin or puede_excepcionales %}
                     <div class="nav-group-items">
-                        <a href="/gestion-anticipos" class="{% if p=='/gestion-anticipos' %}active{% endif %}">Anticipos {% if solicitudes_pendientes and solicitudes_pendientes>0 %}<span class="side-badge">{{ solicitudes_pendientes }}</span>{% endif %}</a>
+                        {% if puede_anticipos_fin %}<a href="/gestion-anticipos" class="{% if p=='/gestion-anticipos' %}active{% endif %}">Anticipos {% if solicitudes_pendientes and solicitudes_pendientes>0 %}<span class="side-badge">{{ solicitudes_pendientes }}</span>{% endif %}</a>{% endif %}
+                        {% if puede_excepcionales %}<a href="/pagos-excepcionales" class="{% if p=='/pagos-excepcionales' %}active{% endif %}">Pagos excepcionales {% if excepciones_pendientes and excepciones_pendientes>0 %}<span class="side-badge">{{ excepciones_pendientes }}</span>{% endif %}</a>{% endif %}
                     </div>
                     {% endif %}
                 </div>
@@ -1494,7 +1497,7 @@
        Tocar una sección NO navega a ciegas: abre su hoja con las opciones a
        las que esa persona tiene acceso, y desde ahí se elige. Así se entra en
        el módulo y se ven sus submódulos en el mismo gesto. #}
-    {% set badges_totales = (contactos_nuevos or 0) + (solicitudes_pendientes or 0) %}
+    {% set badges_totales = (contactos_nuevos or 0) + (solicitudes_pendientes or 0) + (excepciones_pendientes or 0) %}
     <nav class="app-tabbar" id="appTabbar" aria-label="Secciones">
         <a href="/dashboard" class="{% if p=='/dashboard' %}active{% endif %}">
             <span class="tab-ico">🏠</span><span>Inicio</span>
