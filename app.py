@@ -2911,11 +2911,17 @@ def pagos_excepcionales():
         desde = hoy.replace(day=1).isoformat()
         hasta = f"{hoy.year}-{hoy.month:02d}-{monthrange(hoy.year, hoy.month)[1]}"
 
+    # Si falta la migración fallan las DOS consultas de abajo. Se acumula en una
+    # bandera y se avisa UNA vez, en un panel dentro de la página con los pasos
+    # a seguir: antes cada carga soltaba dos flash idénticos, que además se
+    # apilaban con los de las recargas anteriores hasta llenar la pantalla del
+    # mismo texto sin decir qué hacer.
+    falta_migracion = False
     try:
         solicitudes = supabase.table('pagos_excepcionales').select('*').order(
             'fecha_solicitud', desc=True).execute().data or []
     except Exception:
-        flash(AVISO_MIGRACION_EXC, 'error')
+        falta_migracion = True
         solicitudes = []
 
     # Sesiones sobre las que se puede pedir la excepción: clases YA realizadas
@@ -2935,7 +2941,7 @@ def pagos_excepcionales():
             q = q.lte('fecha', hasta)
         filas = _fetch_all(q.order('fecha', desc=True))
     except Exception:
-        flash(AVISO_MIGRACION_EXC, 'error')
+        falta_migracion = True
         filas = []
 
     for s in dedup_sesiones_docente(filas):
@@ -2964,6 +2970,7 @@ def pagos_excepcionales():
     return render_template('pagos_excepcionales.html',
                            solicitudes=solicitudes, candidatas=candidatas,
                            docente=docente, desde=desde, hasta=hasta,
+                           falta_migracion=falta_migracion,
                            puede_aprobar=_puede_aprobar_excepcion(),
                            tarifa_estandar=PAGO_DOCENCIA_POR_HORA,
                            tarifa_sugerida=PAGO_DOCENCIA_EXCEPCIONAL,

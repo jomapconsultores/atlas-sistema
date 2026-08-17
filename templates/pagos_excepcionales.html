@@ -13,12 +13,31 @@
     .badge-premium { padding: 5px 10px; border-radius: 10px; font-size: 10px; font-weight: 600; }
     .fila-form td { background: #fffdf5; }
     .nota-regla { background: #fff8e1; border-left: 4px solid #f4b400; border-radius: 10px; padding: 12px 16px; font-size: 13px; margin-bottom: 20px; }
+    .nota-migracion { background: #fdecea; border-left: 4px solid #d93025; border-radius: 10px; padding: 16px 20px; font-size: 14px; margin-bottom: 20px; }
+    .nota-migracion ol { margin: 10px 0 0 0; padding-left: 20px; }
+    .nota-migracion li { margin-bottom: 5px; }
+    .nota-migracion code { background: #fff; border: 1px solid #f5c6c3; border-radius: 5px; padding: 1px 6px; color: #b3261e; font-size: 13px; }
 </style>
 
 <div class="page-hero">
     <h2>⭐ Pagos excepcionales a docentes</h2>
     <p>Tarifa mayor a la estándar por una clase puntual, justificada y autorizada.</p>
 </div>
+
+{% if falta_migracion %}
+<div class="nota-migracion">
+    <strong>⚠️ Falta un paso en la base de datos</strong><br>
+    Esta pantalla todavía no puede guardar nada: faltan la columna <code>sesiones.tarifa_docente_hora</code>
+    y la tabla <code>pagos_excepcionales</code>. <strong>El resto del sistema funciona con normalidad</strong> y los
+    pagos se siguen calculando a la tarifa estándar.
+    <ol>
+        <li>Abre <strong>Supabase → SQL Editor</strong> en el proyecto de Atlas.</li>
+        <li>Pega el contenido del archivo <code>migration_pago_excepcional.sql</code> (está en la raíz del repositorio) y ejecútalo con <strong>Run</strong>.</li>
+        <li>Vuelve a esta página y recarga: este aviso desaparece y podrás registrar solicitudes.</li>
+    </ol>
+    <small class="text-muted">No hace falta volver a desplegar la aplicación.</small>
+</div>
+{% endif %}
 
 <div class="nota-regla">
     La docencia se paga a <strong>${{ "%.2f"|format(tarifa_estandar) }}/hora</strong>. Por una eventualidad se puede pedir
