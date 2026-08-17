@@ -14,6 +14,17 @@
 .inline-select{width:100%;border:1px solid #1a73e8;border-radius:6px;padding:3px 7px;font-size:12px;background:white;}
 .saving{opacity:0.5;}
 .chip{display:inline-block;background:#e8f0fe;color:#1a73e8;border-radius:12px;padding:1px 9px;font-size:11px;margin:1px 2px;font-weight:600;}
+/* El botón de registrar era un btn-sm de 31px de alto encajado al fondo de la
+   fila del selector de asignaturas (4 filas de alto): quedaba diminuto y se
+   perdía. Ahora va en su propia línea, con el mismo azul del encabezado de la
+   tarjeta, tamaño normal y sombra, para que se vea como la acción principal. */
+.btn-registrar{background:linear-gradient(135deg,#1a73e8,#0d47a1);border:none;color:#fff;
+    font-weight:700;font-size:15px;border-radius:12px;padding:11px 30px;
+    box-shadow:0 4px 14px rgba(26,115,232,0.35);transition:filter .15s, box-shadow .15s, transform .15s;}
+.btn-registrar:hover,.btn-registrar:focus{color:#fff;filter:brightness(1.08);
+    box-shadow:0 6px 20px rgba(26,115,232,0.45);transform:translateY(-1px);}
+.btn-registrar:active{transform:translateY(0);}
+@media(max-width:767px){.btn-registrar{width:100%;}}
 </style>
 
 <div class="page-hero">
@@ -49,7 +60,7 @@
                 <label class="form-label fw-semibold small mb-1">Email</label>
                 <input type="email" name="email" class="form-control form-control-sm" placeholder="correo@...">
             </div>
-            <div class="col-md-10">
+            <div class="col-12">
                 <label class="form-label fw-semibold small mb-1">Asignaturas asignadas</label>
                 <select name="asignaturas" class="form-select form-select-sm" multiple size="4">
                     {% for a in asignaturas %}
@@ -58,8 +69,8 @@
                 </select>
                 <small class="text-muted">Mantén Ctrl (o Cmd) para seleccionar varias.</small>
             </div>
-            <div class="col-md-2 d-flex align-items-end">
-                <button type="submit" class="btn btn-primary btn-sm w-100" style="height:31px;">✅ Registrar</button>
+            <div class="col-12 d-flex justify-content-end">
+                <button type="submit" class="btn btn-registrar">✅ Registrar docente</button>
             </div>
         </form>
     </div>
