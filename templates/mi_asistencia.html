@@ -102,7 +102,7 @@
         {% if tiene_jornada %}
         <hr>
         <div class="small text-muted">
-            Jornada pactada: <strong>{{ mi_resumen.horas_dia|horas }} h/día × {{ mi_resumen.dias_mes }} días</strong>
+            Jornada pactada: <strong>{{ mi_resumen.horas_dia|horas }} h/día × {{ mi_resumen.dias_mes }} días</strong>{% if mi_resumen.dias_mes_origen == 'calendario' %}<span title="Días trabajables de este mes: de lunes a viernes{{ ', sin %d feriado(s)'|format(mi_resumen.feriados_mes) if mi_resumen.feriados_mes else '' }}"> 📅 de este mes</span>{% endif %}
             ({{ 'tiempo completo' if mi_resumen.es_tiempo_completo else (mi_resumen.factor_jornada * 100)|round(0)|int ~ '% de jornada' }}).
             {% if mi_resumen.cumple_jornada %}✅ Ya cumpliste la jornada del mes.
             {% else %}Te faltan <strong>{{ (-mi_resumen.diferencia_horas)|horas }} h</strong>{% if mi_resumen.dias_faltantes %} y {{ mi_resumen.dias_faltantes }} día(s){% endif %} para completarla.{% endif %}

@@ -5059,7 +5059,8 @@ def mi_asistencia():
     jornadas = _jornadas_por_usuario()
     mi_jornada = jornadas.get(current_user.id)
     resumen = _resumen_asistencia(del_mes, jornadas,
-        [{'id': current_user.id, 'nombre': current_user.nombre, 'rol': current_user.rol}])
+        [{'id': current_user.id, 'nombre': current_user.nombre, 'rol': current_user.rol}],
+        anio_actual, mes_actual)
     mi_resumen = next((r for r in resumen if r['usuario_id'] == current_user.id), None)
     # El sueldo solo se muestra si quien administra lo autorizó a mano para esta
     # persona (casilla en la jornada). Por defecto NO: es dato sensible.
@@ -5248,7 +5249,39 @@ def _dia_semana(fecha):
         return ('', False)
     return (DIAS_SEMANA[d.weekday()], d.weekday() >= 5)
 
-def _resumen_asistencia(filas, jornadas, personas_base=None):
+def _feriados_mes(anio, mes):
+    """Fechas de feriado del mes, como set de 'YYYY-MM-DD'.
+
+    Vacío si la tabla todavía no existe (migración 0007 pendiente): entonces el
+    mes se cuenta sin descontar feriados, que es como se contaba antes."""
+    ultimo = monthrange(anio, mes)[1]
+    try:
+        filas = (supabase.table('feriados').select('fecha')
+                 .gte('fecha', f"{anio}-{mes:02d}-01")
+                 .lte('fecha', f"{anio}-{mes:02d}-{ultimo}").execute().data or [])
+    except Exception:
+        return set()
+    return {str(f['fecha'])[:10] for f in filas}
+
+def _dias_habiles_mes(anio, mes, feriados=None):
+    """Días realmente trabajables del mes: de lunes a viernes, sin feriados.
+
+    Es lo que se le puede exigir a quien cumple horario de oficina, y sustituye
+    al 'dias_mes' fijo de la jornada. Agosto de 2026 tiene 21 días de lunes a
+    viernes y el 10 es feriado, así que son 20: exigir 22 le descontaba sueldo
+    a quien no faltó ningún día.
+
+    Quien trabaja sábados —o una cantidad de días pactada que no sigue el
+    calendario— desactiva el automático en su jornada y vuelve al número fijo.
+    """
+    if feriados is None:
+        feriados = _feriados_mes(anio, mes)
+    ultimo = monthrange(anio, mes)[1]
+    return sum(1 for d in range(1, ultimo + 1)
+               if date(anio, mes, d).weekday() < 5
+               and f"{anio}-{mes:02d}-{d:02d}" not in feriados)
+
+def _resumen_asistencia(filas, jornadas, personas_base=None, anio=None, mes=None):
     """Reporte final por persona del período: días y horas trabajadas, horas
     extra, cumplimiento de la jornada pactada y sueldo a pagar.
 
@@ -5258,6 +5291,11 @@ def _resumen_asistencia(filas, jornadas, personas_base=None):
       2) por HORAS   -> horas efectivamente trabajadas / horas exigidas del mes
     El segundo proporcional se topa en 1: trabajar de más no sube el sueldo
     base, se paga como hora extra.
+
+    Las horas exigidas del mes salen de los días REALMENTE trabajables (lunes a
+    viernes menos feriados) cuando se pasa el período en 'anio' y 'mes'. Con un
+    número fijo de días, un mes con feriados o con menos semanas le descontaba
+    sueldo a quien no había faltado un solo día.
 
     Un día marcado CON PERMISO se paga como jornada completa aunque se haya
     salido antes: las horas que falten se reponen. Sin eso, una salida
@@ -5276,6 +5314,12 @@ def _resumen_asistencia(filas, jornadas, personas_base=None):
                 # horas de cada día con permiso; lo que falte para la jornada se
                 # repone abajo, cuando ya se sabe cuántas horas debía cumplir.
                 '_horas_dias_permiso': []}
+
+    # Días exigidos del mes. Con el período a la vista se cuentan del calendario
+    # real (lunes a viernes menos feriados); sin él —o con el automático
+    # desactivado— manda el 'dias_mes' de la jornada.
+    feriados_mes = _feriados_mes(anio, mes) if (anio and mes) else set()
+    habiles = _dias_habiles_mes(anio, mes, feriados_mes) if (anio and mes) else None
 
     resumen = {}
     # Quien tiene jornada pactada aparece aunque no haya marcado nada en el mes:
@@ -5325,7 +5369,15 @@ def _resumen_asistencia(filas, jornadas, personas_base=None):
         j = jornadas.get(uid) or {}
         r['tiene_jornada'] = bool(j)
         horas_dia = _num(j.get('horas_dia'), JORNADA_DEFECTO['horas_dia']) or JORNADA_DEFECTO['horas_dia']
-        dias_mes = int(_num(j.get('dias_mes'), JORNADA_DEFECTO['dias_mes'])) or JORNADA_DEFECTO['dias_mes']
+        dias_fijos = int(_num(j.get('dias_mes'), JORNADA_DEFECTO['dias_mes'])) or JORNADA_DEFECTO['dias_mes']
+        # Por defecto el calendario manda: sin la columna (migración 0007
+        # pendiente) se asume automático, que es el comportamiento correcto.
+        auto = bool(j.get('dias_automaticos', True)) if j else True
+        usa_calendario = auto and habiles is not None
+        dias_mes = habiles if usa_calendario else dias_fijos
+        r['dias_mes_origen'] = 'calendario' if usa_calendario else 'fijo'
+        r['dias_mes_fijo'] = dias_fijos
+        r['feriados_mes'] = len(feriados_mes)
         h_completa = _num(j.get('horas_jornada_completa'), JORNADA_DEFECTO['horas_jornada_completa']) or JORNADA_DEFECTO['horas_jornada_completa']
         sueldo_tc = _num(j.get('sueldo_tiempo_completo'))
         recargo = _num(j.get('recargo_hora_extra'), JORNADA_DEFECTO['recargo_hora_extra'])
@@ -5459,7 +5511,7 @@ def admin_marcaciones():
         us = (supabase.table('usuarios').select('id,nombre,rol')
               .in_('id', list(jornadas.keys())).eq('activo', True).execute().data or [])
         personas_base = [u for u in us if ve_todas or u.get('rol') in ('profesor', 'psicologo')]
-    resumen = _resumen_asistencia(filas, jornadas, personas_base)
+    resumen = _resumen_asistencia(filas, jornadas, personas_base, anio, mes)
     totales = {
         'dias': sum(r['dias_trabajados'] for r in resumen),
         'horas': round(sum(r['horas_trabajadas'] for r in resumen), 2),
@@ -5493,7 +5545,12 @@ def admin_marcaciones():
         personal = [u for u in (supabase.table('usuarios').select('id,nombre,rol')
                                 .eq('activo', True).order('nombre').execute().data or [])
                     if u.get('rol') in roles]
+    # Días trabajables del período, para el formulario de jornada: ahí se ve
+    # cuántos días exigirá el mes elegido antes de guardar nada.
+    feriados_periodo = _feriados_mes(anio, mes)
     return render_template('admin_marcaciones.html', marcaciones=filas, mes=mes, anio=anio,
+                          dias_habiles=_dias_habiles_mes(anio, mes, feriados_periodo),
+                          feriados_periodo=sorted(feriados_periodo),
                           solo_docentes=(not ve_todas), resumen=resumen, totales=totales,
                           jornadas=jornadas, puede_jornada=puede_jornada, personal=personal,
                           # Las columnas de dinero y el desglose del cálculo son
@@ -5612,15 +5669,31 @@ def api_guardar_jornada(usuario_id):
 
     valores = {'usuario_id': usuario_id, 'horas_dia': horas_dia, 'dias_mes': dias_mes,
                'horas_jornada_completa': h_completa, 'sueldo_tiempo_completo': sueldo,
-               'recargo_hora_extra': recargo, 'ver_sueldo': ver_sueldo}
-    try:
+               'recargo_hora_extra': recargo, 'ver_sueldo': ver_sueldo,
+               'dias_automaticos': bool(data.get('dias_automaticos', True))}
+
+    def _grabar(vals):
         existe = supabase.table('jornadas_laborales').select('id').eq('usuario_id', usuario_id).execute().data
         if existe:
-            supabase.table('jornadas_laborales').update(valores).eq('usuario_id', usuario_id).execute()
+            supabase.table('jornadas_laborales').update(vals).eq('usuario_id', usuario_id).execute()
         else:
-            supabase.table('jornadas_laborales').insert(valores).execute()
+            supabase.table('jornadas_laborales').insert(vals).execute()
+
+    try:
+        _grabar(valores)
         return jsonify({'success': True, 'avisos': avisos})
     except Exception as e:
+        # Sin la migración 0007 la columna 'dias_automaticos' no existe todavía.
+        # El resto de la jornada sí se puede guardar: se graba sin ella y se
+        # avisa, en vez de perder el cambio entero por una columna que falta.
+        if 'dias_automaticos' in str(e):
+            try:
+                _grabar({k: v for k, v in valores.items() if k != 'dias_automaticos'})
+                return jsonify({'success': True, 'avisos': avisos + [
+                    'Los días del mes se guardaron como número fijo: para que se cuenten del '
+                    'calendario falta aplicar migrations/0007_dias_habiles.sql.']})
+            except Exception as e2:
+                e = e2
         return jsonify({'success': False, 'error': 'No se pudo guardar. ¿Aplicaste migrations/0002_jornadas_asistencia.sql? ' + str(e)})
 
 # ========== EDITAR PERFIL ==========
