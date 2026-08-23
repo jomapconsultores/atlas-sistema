@@ -5636,7 +5636,13 @@ def api_marcacion_permiso(id):
 def api_guardar_jornada(usuario_id):
     """Jornada pactada y sueldo a tiempo completo de una persona (uno por
     usuario: se inserta o se actualiza el existente)."""
-    if not (tiene_modulo('asistencia.jornada_sueldo') or tiene_modulo('administracion.marcaciones')):
+    # Mismo criterio que 've_dinero' en /admin/marcaciones: aquí se fija el
+    # SUELDO de una persona. 'administracion.marcaciones' NO alcanza —es para
+    # consultar asistencia— y aceptarlo abría un boquete: quien solo tenía ese
+    # permiso no veía un importe en pantalla, pero por API podía cambiar el
+    # sueldo de cualquiera (el suyo incluido) y activarse la casilla de ver
+    # sueldos, que es justo lo que la migración 0004 cerró.
+    if not (current_user.rol in ('admin', 'socio') or tiene_modulo('asistencia.jornada_sueldo')):
         return jsonify({'success': False, 'error': 'Acceso restringido'}), 403
     data = request.get_json() or {}
     try:
