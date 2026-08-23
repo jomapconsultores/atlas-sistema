@@ -325,6 +325,9 @@
     </td>
     <td class="text-center col-totaldia"><strong>{{ m._total_dia|horas }}</strong></td>
     <td class="text-end" style="white-space:nowrap;">
+        <button class="btn btn-sm {{ 'btn-danger text-white' if m._abierto else 'btn-outline-secondary' }}"
+                title="{{ 'Falta una salida: corrígela para que el día cuente' if m._abierto else 'Corregir una entrada o una salida mal marcada' }}"
+                onclick='abrirCorreccion({{ (m.usuarios.nombre if m.usuarios else "—")|tojson }}, {{ m.fecha|tojson }}, {{ m._tramos|tojson }})'>✏️ Corregir</button>
         <button class="btn btn-sm btn-outline-warning" title="Registrar horas extra de este día"
                 onclick='abrirHorasExtra({{ m.id }}, {{ (m.usuarios.nombre if m.usuarios else "—")|tojson }}, {{ m.fecha|tojson }}, {{ m._horas_extra|default(0, true) }}, {{ (m.nota_extra or "")|tojson }}, {{ (m._tipo_extra or "suplementaria")|tojson }})'>⏱ Extra</button>
         <button class="btn btn-sm {{ 'btn-info text-white' if m._con_permiso else 'btn-outline-info' }}" title="Salida autorizada: pagar la jornada completa de este día"
@@ -406,6 +409,32 @@
 
 {% if puede_jornada %}
 <!-- ===== MODAL JORNADA Y SUELDO ===== -->
+<!-- ===== MODAL CORREGIR MARCACIÓN ===== -->
+<div class="modal fade" id="modalCorreccion" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content" style="border-radius:16px;">
+      <div class="modal-header"><h5 class="modal-title">✏️ Corregir marcación</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <p class="text-muted mb-3" id="correccionContexto"></p>
+        <div id="correccionTramos"></div>
+        <div class="mt-3">
+          <label class="form-label fw-bold">Motivo de la corrección *</label>
+          <input type="text" id="correccionMotivo" class="form-control" maxlength="200"
+                 placeholder="Olvidó marcar la salida, fichó dos veces por error...">
+          <small class="text-muted">Se guarda con tu nombre junto al cambio.</small>
+        </div>
+        <div class="alert alert-warning small mt-3 mb-0">
+          Cambiar una hora cambia las horas de ese día y, con ellas, el sueldo del mes.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal fade" id="modalJornada" tabindex="-1">
   <!-- scrollable: sin esto el modal es mas alto que la ventana, se desborda por
        arriba y su cabecera (titulo y boton de cerrar) queda tapada por la barra
@@ -579,6 +608,86 @@ async function guardarPermiso() {
     const d = await r.json();
     if (d.success) location.reload();
     else alert('❌ ' + (d.error || 'No se pudo guardar'));
+}
+
+// ===== Corregir una entrada o una salida =====
+// Cada tramo se edita por separado: el día puede tener varios y solo suele
+// estar mal uno (casi siempre el que quedó sin salida).
+let TRAMOS_EN_EDICION = [];
+
+function abrirCorreccion(nombre, fecha, tramos) {
+    TRAMOS_EN_EDICION = tramos || [];
+    document.getElementById('correccionContexto').innerHTML =
+        'Entradas y salidas de <strong>' + nombre + '</strong> el <strong>' + fecha + '</strong>';
+    document.getElementById('correccionMotivo').value = '';
+    pintarTramosCorreccion();
+    new bootstrap.Modal(document.getElementById('modalCorreccion')).show();
+}
+
+function pintarTramosCorreccion() {
+    const caja = document.getElementById('correccionTramos');
+    if (!TRAMOS_EN_EDICION.length) {
+        caja.innerHTML = '<p class="text-muted mb-0">Ese día no tiene ninguna entrada marcada.</p>';
+        return;
+    }
+    caja.innerHTML = TRAMOS_EN_EDICION.map(function(t, i) {
+        // Los días anteriores a la migración 0005 no tienen fila propia de
+        // tramo, así que no hay nada concreto que corregir todavía.
+        if (!t.id) {
+            return '<div class="alert alert-secondary small mb-2">Tramo ' + (i + 1) +
+                   ': es una marcación antigua, sin registro propio. Aplica ' +
+                   'migrations/0005_marcaciones_multiples.sql para poder corregirla.</div>';
+        }
+        const ini = (t.hora_ingreso || '').substring(0, 5);
+        const fin = (t.hora_salida || '').substring(0, 5);
+        return '' +
+        '<div class="border rounded p-2 mb-2">' +
+          '<div class="d-flex align-items-center gap-2 mb-2">' +
+            '<span class="badge bg-secondary">Tramo ' + (i + 1) + '</span>' +
+            (fin ? '' : '<span class="badge bg-warning text-dark">sin salida</span>') +
+            (t.corregido_por ? '<small class="text-muted ms-auto" title="' +
+              (t.motivo_correccion || '') + '">corregido por ' + t.corregido_por + '</small>' : '') +
+          '</div>' +
+          '<div class="row g-2 align-items-end">' +
+            '<div class="col-5"><label class="form-label small mb-1">Entrada</label>' +
+              '<input type="time" class="form-control form-control-sm" id="corrIn' + t.id + '" value="' + ini + '"></div>' +
+            '<div class="col-5"><label class="form-label small mb-1">Salida</label>' +
+              '<input type="time" class="form-control form-control-sm" id="corrOut' + t.id + '" value="' + fin + '"></div>' +
+            '<div class="col-2 text-end">' +
+              '<button class="btn btn-sm btn-outline-danger" title="Borrar este tramo" ' +
+                'onclick="borrarTramo(' + t.id + ')">🗑</button></div>' +
+          '</div>' +
+          '<button class="btn btn-sm btn-success mt-2 w-100" onclick="guardarCorreccion(' + t.id + ')">Guardar este tramo</button>' +
+        '</div>';
+    }).join('');
+}
+
+async function guardarCorreccion(id) {
+    const motivo = document.getElementById('correccionMotivo').value.trim();
+    if (!motivo) { alert('Escribe el motivo de la corrección'); return; }
+    const r = await fetch('/api/tramo/' + id + '/corregir', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            hora_ingreso: document.getElementById('corrIn' + id).value,
+            hora_salida: document.getElementById('corrOut' + id).value,
+            motivo: motivo
+        })
+    });
+    const d = await r.json();
+    if (d.success) {
+        if (d.aviso) alert('⚠️ ' + d.aviso);
+        location.reload();
+    } else alert('❌ ' + (d.error || 'No se pudo guardar'));
+}
+
+async function borrarTramo(id) {
+    if (!confirm('¿Borrar este tramo? Las horas de ese día se recalculan sin él.')) return;
+    const r = await fetch('/api/tramo/' + id + '/eliminar', {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'
+    });
+    const d = await r.json();
+    if (d.success) location.reload();
+    else alert('❌ ' + (d.error || 'No se pudo borrar'));
 }
 
 {% if puede_jornada %}
