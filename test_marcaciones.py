@@ -171,5 +171,56 @@ rechaza('dejar en curso un tramo que no es el ultimo',
         rev(CERRADO, 1, '09:00:00', None), 'puede quedarse sin salida')
 rechaza('cruzarse con la tarde ya cerrada', rev(CERRADO, 1, '09:00:00', '14:30:00'), 'se cruza')
 
+
+# ============================================================
+# 3. Historial de jornadas (cada mes con la que regia entonces)
+# ============================================================
+print('\n== La jornada vigente en cada mes ==')
+# Cristina: medio tiempo «desde siempre» y jornada completa desde agosto.
+ETAPAS = {
+    1: [
+        {'id': 2, 'usuario_id': 1, 'vigente_desde': '2026-08-01', 'horas_dia': 8, 'dias_mes': 22,
+         'horas_jornada_completa': 8, 'sueldo_tiempo_completo': 482, 'recargo_hora_extra': 1.5,
+         'dias_automaticos': True},
+        {'id': 1, 'usuario_id': 1, 'vigente_desde': '2000-01-01', 'horas_dia': 4, 'dias_mes': 22,
+         'horas_jornada_completa': 8, 'sueldo_tiempo_completo': 482, 'recargo_hora_extra': 1.5,
+         'dias_automaticos': True},
+    ]
+}
+app._jornadas_todas = lambda: {uid: list(v) for uid, v in ETAPAS.items()}
+
+igual('julio manda la etapa antigua', app._jornadas_por_usuario(2026, 7)[1]['horas_dia'], 4)
+igual('agosto manda la nueva', app._jornadas_por_usuario(2026, 8)[1]['horas_dia'], 8)
+igual('septiembre sigue con la nueva', app._jornadas_por_usuario(2026, 9)[1]['horas_dia'], 8)
+igual('sin periodo, la de hoy', app._jornadas_por_usuario()[1]['horas_dia'], 8)
+
+print('\n== El pasado deja de moverse al cambiar la jornada ==')
+# Julio de Cristina: 20 dias de 8 h, con la jornada de medio tiempo vigente.
+JULIO = [dia(('2026-07-%02d' % d, '09:00', '13:00', '14:00', '18:00'))
+         for d in (6, 7, 8, 9, 10, 13, 14, 15, 16, 17, 20, 21, 22, 23, 24, 27, 28, 29, 30, 31)]
+FERIADOS[(2026, 7)] = set()
+
+jul = app._resumen_asistencia(JULIO, app._jornadas_por_usuario(2026, 7), None, 2026, 7)[0]
+igual('julio se calcula con 4 h/dia', jul['horas_dia'], 4.0)
+igual('julio: horas exigidas', jul['horas_esperadas_mes'], 92.0)   # 23 dias habiles x 4
+igual('julio: sueldo de medio tiempo', jul['sueldo_proporcional'], 241.0)
+igual('julio: cumplio', jul['cumple_jornada'], True)
+
+ago = app._resumen_asistencia(MES_COMPLETO, app._jornadas_por_usuario(2026, 8), None, 2026, 8)[0]
+igual('agosto se calcula con 8 h/dia', ago['horas_dia'], 8.0)
+igual('agosto: horas exigidas', ago['horas_esperadas_mes'], 160.0)
+igual('agosto: sueldo de jornada completa', ago['sueldo_proporcional'], round(482 * (159 / 160.0), 2))
+
+print('\n== Antes del historial: un cambio reescribia el pasado ==')
+solo_nueva = {1: ETAPAS[1][0]}
+roto = app._resumen_asistencia(JULIO, solo_nueva, None, 2026, 7)[0]
+igual('julio con la jornada de agosto exigiria', roto['horas_esperadas_mes'], 184.0)
+igual('...y julio pasaria a incumplido', roto['cumple_jornada'], False)
+
+print('\n== Quien empieza mas tarde no tiene jornada antes ==')
+app._jornadas_todas = lambda: {1: [ETAPAS[1][0]]}   # solo desde agosto
+igual('en julio no hay jornada', app._jornadas_por_usuario(2026, 7).get(1), None)
+igual('en agosto si', app._jornadas_por_usuario(2026, 8)[1]['horas_dia'], 8)
+
 print('\n' + ('TODO OK' if not fallos else 'FALLAN %d: %s' % (len(fallos), ', '.join(fallos))))
 sys.exit(1 if fallos else 0)

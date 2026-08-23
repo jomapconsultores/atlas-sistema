@@ -159,7 +159,7 @@
                 <strong>{{ r.nombre }}</strong>
                 {% if puede_jornada %}
                 <button class="btn btn-sm btn-outline-dark py-0 px-1 ms-1" title="Configurar jornada y sueldo"
-                        onclick='abrirJornada({{ r.usuario_id }}, {{ r.nombre|tojson }}, {{ r.horas_dia }}, {{ r.dias_mes_fijo }}, {{ r.horas_jornada_completa }}, {{ r.sueldo_tiempo_completo }}, {{ r.recargo_hora_extra }}, {{ (r.ver_sueldo or False)|tojson }}, {{ (r.dias_mes_origen == 'calendario')|tojson }})'>⚙️</button>
+                        onclick='abrirJornada({{ r.usuario_id }}, {{ r.nombre|tojson }}, {{ r.horas_dia }}, {{ r.dias_mes_fijo }}, {{ r.horas_jornada_completa }}, {{ r.sueldo_tiempo_completo }}, {{ r.recargo_hora_extra }}, {{ (r.ver_sueldo or False)|tojson }}, {{ (r.dias_mes_origen == 'calendario')|tojson }}, {{ (r.vigente_desde or "")|tojson }})'>⚙️</button>
                 {% endif %}
                 <br>
                 <span class="badge-premium text-white bg-{{ 'warning' if r.rol=='secretaria' else 'success' if r.rol=='profesor' else 'purple' if r.rol=='psicologo' else 'info' }}">{{ r.rol }}</span>
@@ -168,6 +168,9 @@
             </td>
             <td class="text-center col-jornada">
                 {{ r.horas_dia|horas }} h/día × {{ r.dias_mes }} días<br>
+                {% if r.vigente_desde and r.vigente_desde != '2000-01-01' %}
+                <span class="badge-premium bg-light text-dark border" title="Esta jornada rige desde el {{ r.vigente_desde }}. Los meses anteriores se calculan con la que regía entonces.">rige desde {{ r.vigente_desde }}</span><br>
+                {% endif %}
                 {% if r.dias_mes_origen == 'calendario' %}
                 <span class="badge-premium bg-light text-dark border" title="Días trabajables de este mes: de lunes a viernes{{ ', descontando %d feriado(s)'|format(r.feriados_mes) if r.feriados_mes else '' }}. Se cuentan solos del calendario.">📅 días del calendario</span><br>
                 {% endif %}
@@ -465,6 +468,14 @@
             </select>
         </div>
         <div class="row g-2">
+          <div class="col-12 mb-1">
+            <label class="form-label fw-bold">Rige desde *</label>
+            <input type="date" id="jornadaVigenteDesde" class="form-control">
+            <small class="text-muted">
+              Guardar no cambia las jornadas anteriores: abre una etapa nueva desde esta fecha.
+              Los meses anteriores se siguen calculando con la que regía entonces.
+            </small>
+          </div>
           <div class="col-6">
             <label class="form-label fw-bold">Horas por día *</label>
             <input type="number" id="jornadaHorasDia" class="form-control" step="0.5" min="0.5" max="24">
@@ -509,6 +520,10 @@
           </div>
         </div>
         <div class="alert alert-info mt-3 mb-0 small" id="jornadaPreview"></div>
+        <div class="mt-3" id="jornadaHistorialCaja" style="display:none;">
+          <label class="form-label fw-bold mb-1">🗂 Etapas de esta persona</label>
+          <div id="jornadaHistorial"></div>
+        </div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -691,7 +706,53 @@ async function borrarTramo(id) {
 }
 
 {% if puede_jornada %}
-function abrirJornada(uid, nombre, horasDia, diasMes, horasCompleta, sueldo, recargo, verSueldo, diasAuto) {
+// Etapas de jornada de cada persona y primer día del mes que se está viendo:
+// es la fecha desde la que se propone que rija un cambio.
+const HISTORIAL_JORNADAS = {{ jornadas_historial|tojson }};
+const PRIMERO_DEL_MES = '{{ "%04d-%02d-01"|format(anio, mes) }}';
+
+// Las etapas se muestran para saber qué jornada regía en cada tramo del año, y
+// para deshacer una abierta por error.
+function pintarHistorialJornada(uid) {
+    const caja = document.getElementById('jornadaHistorialCaja');
+    const lista = document.getElementById('jornadaHistorial');
+    const etapas = HISTORIAL_JORNADAS[uid] || [];
+    if (etapas.length < 2) {   // con una sola etapa no hay historial que contar
+        caja.style.display = 'none';
+        return;
+    }
+    caja.style.display = 'block';
+    lista.innerHTML = etapas.map(function(e, i) {
+        const desde = (e.vigente_desde || '').substring(0, 10);
+        const vigente = i === 0;
+        return '<div class="d-flex align-items-center gap-2 border rounded px-2 py-1 mb-1 small">' +
+            '<span class="badge ' + (vigente ? 'bg-success' : 'bg-secondary') + '">' +
+              (vigente ? 'vigente' : 'anterior') + '</span>' +
+            '<span>desde <strong>' + (desde === '2000-01-01' ? 'siempre' : desde) + '</strong></span>' +
+            '<span class="text-muted">· ' + e.horas_dia + ' h/día · $' +
+              Number(e.sueldo_tiempo_completo || 0).toFixed(2) + '</span>' +
+            '<button class="btn btn-sm btn-outline-danger ms-auto py-0 px-1" title="Borrar esta etapa" ' +
+              'onclick="borrarEtapaJornada(' + e.id + ')">🗑</button>' +
+        '</div>';
+    }).join('');
+}
+
+async function borrarEtapaJornada(id) {
+    if (!confirm('¿Borrar esta etapa? Los meses que caían bajo ella se recalcularán con la etapa anterior.')) return;
+    const r = await fetch('/api/jornada/etapa/' + id + '/eliminar', {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'
+    });
+    const d = await r.json();
+    if (d.success) location.reload();
+    else alert('❌ ' + (d.error || 'No se pudo borrar'));
+}
+
+function abrirJornada(uid, nombre, horasDia, diasMes, horasCompleta, sueldo, recargo, verSueldo, diasAuto, vigenteDesde) {
+    // Se propone corregir la etapa que se está viendo; cambiando la fecha a una
+    // posterior se abre una nueva y la anterior queda intacta.
+    document.getElementById('jornadaVigenteDesde').value =
+        (vigenteDesde && vigenteDesde !== '2000-01-01') ? vigenteDesde : PRIMERO_DEL_MES;
+    pintarHistorialJornada(uid);
     document.getElementById('jornadaUsuarioId').value = uid;
     document.getElementById('jornadaHorasDia').value = horasDia;
     document.getElementById('jornadaDiasMes').value = diasMes;
@@ -711,6 +772,8 @@ function abrirJornadaNueva() {
     document.getElementById('jornadaUsuarioId').value = '';
     document.getElementById('jornadaPersona').value = '';
     document.getElementById('jornadaSelectorPersona').style.display = 'block';
+    document.getElementById('jornadaVigenteDesde').value = PRIMERO_DEL_MES;
+    document.getElementById('jornadaHistorialCaja').style.display = 'none';
     document.getElementById('jornadaContexto').innerText = 'Elige a la persona y define la jornada que debe cumplir y su sueldo a tiempo completo.';
     document.getElementById('jornadaHorasDia').value = {{ jornada_defecto.horas_dia }};
     document.getElementById('jornadaDiasMes').value = {{ jornada_defecto.dias_mes }};
@@ -735,6 +798,7 @@ function cargarJornadaPersona() {
     document.getElementById('jornadaRecargo').value = op.dataset.recargo;
     document.getElementById('jornadaVerSueldo').checked = op.dataset.verSueldo === '1';
     document.getElementById('jornadaDiasAuto').checked = op.dataset.diasAuto !== '0';
+    pintarHistorialJornada(parseInt(sel.value, 10));
     sincronizarDiasAuto();
 }
 
@@ -807,9 +871,11 @@ async function guardarJornada() {
         sueldo_tiempo_completo: document.getElementById('jornadaSueldo').value,
         recargo_hora_extra: document.getElementById('jornadaRecargo').value,
         ver_sueldo: document.getElementById('jornadaVerSueldo').checked,
-        dias_automaticos: document.getElementById('jornadaDiasAuto').checked
+        dias_automaticos: document.getElementById('jornadaDiasAuto').checked,
+        vigente_desde: document.getElementById('jornadaVigenteDesde').value
     };
     if (!payload.horas_dia || !payload.dias_mes) { alert('Horas por día y días del mes son obligatorios'); return; }
+    if (!payload.vigente_desde) { alert('Indica desde cuándo rige esta jornada'); return; }
     const r = await fetch('/api/jornada/' + uid, {
         method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
     });

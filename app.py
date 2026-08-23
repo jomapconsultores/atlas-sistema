@@ -5056,7 +5056,7 @@ def mi_asistencia():
         .eq('usuario_id', current_user.id)
         .gte('fecha', f"{anio_actual}-{mes_actual:02d}-01")
         .lte('fecha', f"{anio_actual}-{mes_actual:02d}-{ultimo}")))
-    jornadas = _jornadas_por_usuario()
+    jornadas = _jornadas_por_usuario(anio_actual, mes_actual)
     mi_jornada = jornadas.get(current_user.id)
     resumen = _resumen_asistencia(del_mes, jornadas,
         [{'id': current_user.id, 'nombre': current_user.nombre, 'rol': current_user.rol}],
@@ -5442,6 +5442,9 @@ def _resumen_asistencia(filas, jornadas, personas_base=None, anio=None, mes=None
         dias_mes = habiles if usa_calendario else dias_fijos
         r['dias_mes_origen'] = 'calendario' if usa_calendario else 'fijo'
         r['dias_mes_fijo'] = dias_fijos
+        # Desde cuándo rige la jornada con la que se calculó este mes.
+        r['vigente_desde'] = _vigencia(j) if j else None
+        r['jornada_id'] = j.get('id') if j else None
         r['feriados_mes'] = len(feriados_mes)
         h_completa = _num(j.get('horas_jornada_completa'), JORNADA_DEFECTO['horas_jornada_completa']) or JORNADA_DEFECTO['horas_jornada_completa']
         sueldo_tc = _num(j.get('sueldo_tiempo_completo'))
@@ -5516,14 +5519,52 @@ def _resumen_asistencia(filas, jornadas, personas_base=None, anio=None, mes=None
 
     return sorted(resumen.values(), key=lambda r: r['nombre'])
 
-def _jornadas_por_usuario():
-    """{usuario_id: jornada}. Si la tabla aún no existe (migración pendiente)
-    devuelve {} y el módulo sigue funcionando solo con horas y días."""
+# Fecha con la que se ordenan las jornadas que no dicen desde cuándo rigen
+# (las de antes de la migración 0009): valen «desde siempre».
+VIGENCIA_ANTIGUA = '2000-01-01'
+
+def _vigencia(j):
+    return str((j or {}).get('vigente_desde') or VIGENCIA_ANTIGUA)[:10]
+
+def _jornadas_todas():
+    """Todas las etapas de jornada, agrupadas por persona y de la más reciente a
+    la más antigua. {} si la tabla aún no existe (migración pendiente)."""
     try:
         filas = supabase.table('jornadas_laborales').select('*').execute().data or []
     except Exception:
         return {}
-    return {f['usuario_id']: f for f in filas}
+    por_usuario = {}
+    for f in filas:
+        por_usuario.setdefault(f['usuario_id'], []).append(f)
+    for etapas in por_usuario.values():
+        etapas.sort(key=_vigencia, reverse=True)
+    return por_usuario
+
+def _jornadas_por_usuario(anio=None, mes=None):
+    """{usuario_id: la jornada que regía en ese mes}.
+
+    Cada cambio de jornada abre una etapa nueva con su 'vigente_desde', y para
+    un mes se toma la última que empezó antes de que ese mes terminara. Sin
+    esto, cambiar una jornada reescribía el pasado: al pasar a alguien de medio
+    tiempo a jornada completa, sus meses anteriores se recalculaban como
+    incumplidos y cambiaba el sueldo de meses ya pagados.
+
+    Sin período se devuelve la jornada vigente hoy, que es lo que quiere quien
+    va a configurarla.
+    """
+    todas = _jornadas_todas()
+    if anio and mes:
+        corte = f"{anio}-{mes:02d}-{monthrange(anio, mes)[1]:02d}"
+    else:
+        corte = str(date.today())
+    vigentes = {}
+    for uid, etapas in todas.items():
+        # Ya vienen de la más reciente a la más antigua: la primera que empezó
+        # antes del corte es la que regía.
+        etapa = next((e for e in etapas if _vigencia(e) <= corte), None)
+        if etapa:
+            vigentes[uid] = etapa
+    return vigentes
 
 @app.route('/admin/marcaciones')
 @login_required
@@ -5547,7 +5588,9 @@ def admin_marcaciones():
     # Entradas y salidas reales de cada día (doble jornada = varios tramos).
     _adjuntar_tramos(filas)
 
-    jornadas = _jornadas_por_usuario()
+    # La jornada que regía en el mes que se está viendo, no la de hoy: así el
+    # reporte de un mes cerrado no cambia porque después se cambiara la jornada.
+    jornadas = _jornadas_por_usuario(anio, mes)
     # Horas de cada día para la tabla de registros (contabilización diaria).
     for f in filas:
         f['_horas'] = _horas_del_dia(f)
@@ -5616,6 +5659,9 @@ def admin_marcaciones():
     return render_template('admin_marcaciones.html', marcaciones=filas, mes=mes, anio=anio,
                           dias_habiles=_dias_habiles_mes(anio, mes, feriados_periodo),
                           feriados_periodo=sorted(feriados_periodo),
+                          # Todas las etapas de cada persona, para verlas y
+                          # corregirlas desde el formulario de jornada.
+                          jornadas_historial=(_jornadas_todas() if puede_jornada else {}),
                           solo_docentes=(not ve_todas), resumen=resumen, totales=totales,
                           jornadas=jornadas, puede_jornada=puede_jornada, personal=personal,
                           # Las columnas de dinero y el desglose del cálculo son
@@ -5824,34 +5870,88 @@ def api_guardar_jornada(usuario_id):
         avisos.append(f'El sueldo de esta jornada queda bajo el mínimo legal: el SBU {SBU_ANIO} es '
                       f'${SBU_ECUADOR:.2f} y su parte proporcional para esta jornada es ${minimo:.2f} (Art. 82).')
 
+    # Desde cuándo rige. Guardar una jornada no pisa la anterior: abre una etapa
+    # nueva, y los meses ya cerrados siguen calculándose con la que regía
+    # entonces. Sin fecha se entiende que rige desde el primer día de este mes,
+    # que es lo que se quiere decir casi siempre con «a partir de ahora».
+    hoy_ec = datetime.now(TZ_ECUADOR).date()
+    vigente_desde = str(data.get('vigente_desde') or '')[:10]
+    try:
+        datetime.strptime(vigente_desde, '%Y-%m-%d')
+    except ValueError:
+        vigente_desde = f"{hoy_ec.year}-{hoy_ec.month:02d}-01"
+
     valores = {'usuario_id': usuario_id, 'horas_dia': horas_dia, 'dias_mes': dias_mes,
                'horas_jornada_completa': h_completa, 'sueldo_tiempo_completo': sueldo,
                'recargo_hora_extra': recargo, 'ver_sueldo': ver_sueldo,
-               'dias_automaticos': bool(data.get('dias_automaticos', True))}
+               'dias_automaticos': bool(data.get('dias_automaticos', True)),
+               'vigente_desde': vigente_desde}
 
     def _grabar(vals):
-        existe = supabase.table('jornadas_laborales').select('id').eq('usuario_id', usuario_id).execute().data
+        """Corrige la etapa que empieza ese mismo día, o abre una nueva."""
+        tabla = supabase.table('jornadas_laborales')
+        if 'vigente_desde' in vals:
+            misma = (tabla.select('id').eq('usuario_id', usuario_id)
+                     .eq('vigente_desde', vals['vigente_desde']).execute().data)
+            if misma:
+                tabla.update(vals).eq('id', misma[0]['id']).execute()
+            else:
+                tabla.insert(vals).execute()
+            return
+        # Sin la columna de vigencia (migración 0009 pendiente) se vuelve al
+        # comportamiento de siempre: una sola jornada por persona.
+        existe = tabla.select('id').eq('usuario_id', usuario_id).execute().data
         if existe:
-            supabase.table('jornadas_laborales').update(vals).eq('usuario_id', usuario_id).execute()
+            tabla.update(vals).eq('usuario_id', usuario_id).execute()
         else:
-            supabase.table('jornadas_laborales').insert(vals).execute()
+            tabla.insert(vals).execute()
 
     try:
         _grabar(valores)
-        return jsonify({'success': True, 'avisos': avisos})
+        return jsonify({'success': True, 'avisos': avisos, 'vigente_desde': vigente_desde})
     except Exception as e:
-        # Sin la migración 0007 la columna 'dias_automaticos' no existe todavía.
-        # El resto de la jornada sí se puede guardar: se graba sin ella y se
-        # avisa, en vez de perder el cambio entero por una columna que falta.
-        if 'dias_automaticos' in str(e):
+        # Migraciones pendientes: la columna que falta se deja fuera y se graba
+        # el resto, en vez de perder el cambio entero. Se avisa de lo que no
+        # llegó a aplicarse y de qué migración lo arregla.
+        FALTANTES = [
+            ('dias_automaticos', 'Los días del mes se guardaron como número fijo: para que se '
+                                 'cuenten del calendario falta aplicar migrations/0007_dias_habiles.sql.'),
+            ('vigente_desde', 'La jornada anterior se sobrescribió en vez de guardarse como una etapa '
+                              'nueva: para conservar el historial falta aplicar '
+                              'migrations/0009_jornadas_con_vigencia.sql.'),
+        ]
+        sobran = [col for col, _ in FALTANTES if col in str(e)]
+        if sobran:
             try:
-                _grabar({k: v for k, v in valores.items() if k != 'dias_automaticos'})
+                _grabar({k: v for k, v in valores.items() if k not in sobran})
                 return jsonify({'success': True, 'avisos': avisos + [
-                    'Los días del mes se guardaron como número fijo: para que se cuenten del '
-                    'calendario falta aplicar migrations/0007_dias_habiles.sql.']})
+                    texto for col, texto in FALTANTES if col in sobran]})
             except Exception as e2:
                 e = e2
         return jsonify({'success': False, 'error': 'No se pudo guardar. ¿Aplicaste migrations/0002_jornadas_asistencia.sql? ' + str(e)})
+
+@app.route('/api/jornada/etapa/<int:id>/eliminar', methods=['POST'])
+@login_required
+def api_eliminar_etapa_jornada(id):
+    """Borra una etapa de jornada abierta por error. Al quitarla vuelve a regir
+    la etapa anterior, y los meses que caían bajo esta se recalculan con ella."""
+    if not (current_user.rol in ('admin', 'socio') or tiene_modulo('asistencia.jornada_sueldo')):
+        return jsonify({'success': False, 'error': 'Acceso restringido'}), 403
+    fila = supabase.table('jornadas_laborales').select('usuario_id').eq('id', id).execute().data
+    if not fila:
+        return jsonify({'success': False, 'error': 'Esa etapa ya no existe'}), 404
+    # No dejar a la persona sin ninguna jornada: si es la única, se edita, no se
+    # borra. Sin jornada el reporte la calcularía con la de por defecto y un
+    # sueldo de 0, que es peor que la etapa equivocada.
+    todas = supabase.table('jornadas_laborales').select('id').eq('usuario_id', fila[0]['usuario_id']).execute().data or []
+    if len(todas) <= 1:
+        return jsonify({'success': False, 'error':
+            'Es la única jornada de esta persona: edítala en vez de borrarla'}), 400
+    try:
+        supabase.table('jornadas_laborales').delete().eq('id', id).execute()
+    except Exception as e:
+        return jsonify({'success': False, 'error': 'No se pudo borrar: ' + str(e)}), 400
+    return jsonify({'success': True})
 
 # ========== EDITAR PERFIL ==========
 @app.route('/editar-perfil', methods=['GET', 'POST'])
