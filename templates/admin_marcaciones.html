@@ -159,7 +159,7 @@
                 <strong>{{ r.nombre }}</strong>
                 {% if puede_jornada %}
                 <button class="btn btn-sm btn-outline-dark py-0 px-1 ms-1" title="Configurar jornada y sueldo"
-                        onclick='abrirJornada({{ r.usuario_id }}, {{ r.nombre|tojson }}, {{ r.horas_dia }}, {{ r.dias_mes }}, {{ r.horas_jornada_completa }}, {{ r.sueldo_tiempo_completo }}, {{ r.recargo_hora_extra }}, {{ (r.ver_sueldo or False)|tojson }})'>⚙️</button>
+                        onclick='abrirJornada({{ r.usuario_id }}, {{ r.nombre|tojson }}, {{ r.horas_dia }}, {{ r.dias_mes_fijo }}, {{ r.horas_jornada_completa }}, {{ r.sueldo_tiempo_completo }}, {{ r.recargo_hora_extra }}, {{ (r.ver_sueldo or False)|tojson }}, {{ (r.dias_mes_origen == 'calendario')|tojson }})'>⚙️</button>
                 {% endif %}
                 <br>
                 <span class="badge-premium text-white bg-{{ 'warning' if r.rol=='secretaria' else 'success' if r.rol=='profesor' else 'purple' if r.rol=='psicologo' else 'info' }}">{{ r.rol }}</span>
@@ -168,6 +168,9 @@
             </td>
             <td class="text-center col-jornada">
                 {{ r.horas_dia|horas }} h/día × {{ r.dias_mes }} días<br>
+                {% if r.dias_mes_origen == 'calendario' %}
+                <span class="badge-premium bg-light text-dark border" title="Días trabajables de este mes: de lunes a viernes{{ ', descontando %d feriado(s)'|format(r.feriados_mes) if r.feriados_mes else '' }}. Se cuentan solos del calendario.">📅 días del calendario</span><br>
+                {% endif %}
                 <span class="badge-premium {{ 'bg-primary' if r.es_tiempo_completo else 'bg-secondary' }} text-white">
                     {{ 'Tiempo completo' if r.es_tiempo_completo else (r.factor_jornada * 100)|round(0)|int ~ '% de jornada' }}
                 </span>
@@ -425,7 +428,8 @@
                         data-horas-completa="{{ jornadas.get(p.id, {}).get('horas_jornada_completa', jornada_defecto.horas_jornada_completa) }}"
                         data-sueldo="{{ jornadas.get(p.id, {}).get('sueldo_tiempo_completo', jornada_defecto.sueldo_tiempo_completo) }}"
                         data-recargo="{{ jornadas.get(p.id, {}).get('recargo_hora_extra', jornada_defecto.recargo_hora_extra) }}"
-                        data-ver-sueldo="{{ 1 if jornadas.get(p.id, {}).get('ver_sueldo') else 0 }}">
+                        data-ver-sueldo="{{ 1 if jornadas.get(p.id, {}).get('ver_sueldo') else 0 }}"
+                        data-dias-auto="{{ 0 if jornadas.get(p.id, {}).get('dias_automaticos', True) == False else 1 }}">
                     {{ p.nombre }} ({{ p.rol }}){{ ' — sin jornada' if p.id not in jornadas else '' }}
                 </option>
                 {% endfor %}
@@ -440,7 +444,11 @@
           <div class="col-6">
             <label class="form-label fw-bold">Días del mes *</label>
             <input type="number" id="jornadaDiasMes" class="form-control" step="1" min="1" max="31">
-            <small class="text-muted">Días laborables exigidos.</small>
+            <div class="form-check mt-1">
+              <input class="form-check-input" type="checkbox" id="jornadaDiasAuto" checked>
+              <label class="form-check-label small fw-bold" for="jornadaDiasAuto">📅 Contarlos del calendario</label>
+            </div>
+            <small class="text-muted" id="jornadaDiasAyuda"></small>
           </div>
           <div class="col-6">
             <label class="form-label fw-bold">Jornada completa (ref.)</label>
@@ -574,7 +582,7 @@ async function guardarPermiso() {
 }
 
 {% if puede_jornada %}
-function abrirJornada(uid, nombre, horasDia, diasMes, horasCompleta, sueldo, recargo, verSueldo) {
+function abrirJornada(uid, nombre, horasDia, diasMes, horasCompleta, sueldo, recargo, verSueldo, diasAuto) {
     document.getElementById('jornadaUsuarioId').value = uid;
     document.getElementById('jornadaHorasDia').value = horasDia;
     document.getElementById('jornadaDiasMes').value = diasMes;
@@ -582,9 +590,10 @@ function abrirJornada(uid, nombre, horasDia, diasMes, horasCompleta, sueldo, rec
     document.getElementById('jornadaSueldo').value = sueldo;
     document.getElementById('jornadaRecargo').value = recargo;
     document.getElementById('jornadaVerSueldo').checked = !!verSueldo;
+    document.getElementById('jornadaDiasAuto').checked = diasAuto !== false;
     document.getElementById('jornadaSelectorPersona').style.display = 'none';
     document.getElementById('jornadaContexto').innerHTML = 'Jornada y sueldo de <strong>' + nombre + '</strong>';
-    actualizarPreviewJornada();
+    sincronizarDiasAuto();
     new bootstrap.Modal(document.getElementById('modalJornada')).show();
 }
 
@@ -600,7 +609,8 @@ function abrirJornadaNueva() {
     document.getElementById('jornadaSueldo').value = '';
     document.getElementById('jornadaRecargo').value = {{ jornada_defecto.recargo_hora_extra }};
     document.getElementById('jornadaVerSueldo').checked = false;
-    actualizarPreviewJornada();
+    document.getElementById('jornadaDiasAuto').checked = true;
+    sincronizarDiasAuto();
     new bootstrap.Modal(document.getElementById('modalJornada')).show();
 }
 
@@ -615,11 +625,33 @@ function cargarJornadaPersona() {
     document.getElementById('jornadaSueldo').value = op.dataset.sueldo;
     document.getElementById('jornadaRecargo').value = op.dataset.recargo;
     document.getElementById('jornadaVerSueldo').checked = op.dataset.verSueldo === '1';
-    actualizarPreviewJornada();
+    document.getElementById('jornadaDiasAuto').checked = op.dataset.diasAuto !== '0';
+    sincronizarDiasAuto();
 }
 
 const SBU = {{ sbu }}, HORAS_MES_LEGAL = {{ horas_mes_legal }},
       MAX_DIA = {{ jornada_max_diaria }}, MAX_SEMANA = {{ jornada_max_semanal }};
+// Días trabajables del mes que se está viendo: lunes a viernes menos feriados.
+const DIAS_HABILES = {{ dias_habiles }}, FERIADOS_MES = {{ feriados_periodo|length }};
+
+// Con los días contados del calendario, el campo pasa a ser informativo: se
+// muestra lo que exige el mes a la vista y no se deja editar, para que nadie
+// crea que ese número es el que manda.
+function sincronizarDiasAuto() {
+    const auto = document.getElementById('jornadaDiasAuto').checked;
+    const campo = document.getElementById('jornadaDiasMes');
+    const ayuda = document.getElementById('jornadaDiasAyuda');
+    campo.disabled = auto;
+    if (auto) {
+        campo.value = DIAS_HABILES;
+        ayuda.innerHTML = 'Este mes son <strong>' + DIAS_HABILES + '</strong> días de lunes a viernes' +
+            (FERIADOS_MES ? ', ya sin ' + FERIADOS_MES + ' feriado' + (FERIADOS_MES > 1 ? 's' : '') : '') +
+            '. Cada mes se recuenta solo.';
+    } else {
+        ayuda.innerText = 'Número fijo, para quien trabaja sábados o los días que sean sin seguir el calendario.';
+    }
+    actualizarPreviewJornada();
+}
 
 function ponerSBU() {
     document.getElementById('jornadaSueldo').value = SBU.toFixed(2);
@@ -654,6 +686,7 @@ function actualizarPreviewJornada() {
     const el = document.getElementById(id);
     if (el) el.addEventListener('input', actualizarPreviewJornada);
 });
+document.getElementById('jornadaDiasAuto').addEventListener('change', sincronizarDiasAuto);
 
 async function guardarJornada() {
     const uid = document.getElementById('jornadaUsuarioId').value;
@@ -664,7 +697,8 @@ async function guardarJornada() {
         horas_jornada_completa: document.getElementById('jornadaHorasCompleta').value,
         sueldo_tiempo_completo: document.getElementById('jornadaSueldo').value,
         recargo_hora_extra: document.getElementById('jornadaRecargo').value,
-        ver_sueldo: document.getElementById('jornadaVerSueldo').checked
+        ver_sueldo: document.getElementById('jornadaVerSueldo').checked,
+        dias_automaticos: document.getElementById('jornadaDiasAuto').checked
     };
     if (!payload.horas_dia || !payload.dias_mes) { alert('Horas por día y días del mes son obligatorios'); return; }
     const r = await fetch('/api/jornada/' + uid, {
