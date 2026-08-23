@@ -5164,6 +5164,71 @@ def _segundos_tramo(t):
         seg += 24 * 3600
     return seg
 
+def _hora_normalizada(v):
+    """'9:05', '09:05' o '09:05:00' -> '09:05:00'. None si no es una hora del
+    día. Se usa al corregir a mano una entrada o una salida."""
+    partes = str(v or '').strip().split(':')
+    if len(partes) == 2:
+        partes.append('00')
+    if len(partes) != 3 or not all(partes):
+        return None
+    try:
+        h, m, s = (int(p) for p in partes)
+    except ValueError:
+        return None
+    if not (0 <= h <= 23 and 0 <= m <= 59 and 0 <= s <= 59):
+        return None
+    return f"{h:02d}:{m:02d}:{s:02d}"
+
+def _revisar_correccion(tramos, tramo_id, ingreso, salida):
+    """Comprueba que el tramo corregido cabe en su día. Devuelve el mensaje de
+    error, o None si la corrección es válida.
+
+    Un día es una sucesión de tramos que no se pisan: se entra, se sale y se
+    vuelve a entrar. Si una corrección solapa con otro tramo —o deja dos
+    abiertos a la vez— el día deja de poder leerse y las horas salen mal, que
+    es justo lo que se venía a arreglar.
+    """
+    if not ingreso:
+        return 'Falta la hora de entrada'
+    if salida and salida <= ingreso:
+        return ('La salida tiene que ser posterior a la entrada. Un turno que cruza '
+                'la medianoche todavía no se puede registrar.')
+    # Sin salida el tramo queda «en curso» y se extiende hasta el final del día:
+    # solo puede quedarse así el último. Se avisa aparte porque contarlo como un
+    # cruce cualquiera daría un mensaje que no ayuda a entender qué falta.
+    if not salida:
+        siguiente = next((t for t in tramos
+                          if t.get('id') != tramo_id and t.get('hora_ingreso')
+                          and str(t['hora_ingreso'])[:8] > ingreso), None)
+        if siguiente:
+            return ('Solo el último tramo del día puede quedarse sin salida, y a las '
+                    f"{str(siguiente['hora_ingreso'])[:5]} hay otra entrada")
+    for t in tramos:
+        if t.get('id') == tramo_id or not t.get('hora_ingreso'):
+            continue
+        ini = str(t['hora_ingreso'])[:8]
+        abierto = not t.get('hora_salida')
+        if not salida and abierto:
+            return f'Ya hay otro tramo sin salida ese día (el de las {ini[:5]}): ciérralo primero'
+        # Un tramo abierto se extiende hasta el final del día: mientras no
+        # tenga salida, cualquier hora posterior a su entrada está dentro.
+        fin = '23:59:59' if abierto else str(t['hora_salida'])[:8]
+        if ingreso < fin and (salida or '23:59:59') > ini:
+            return f'Se cruza con el tramo de las {ini[:5]}'
+    return None
+
+def _sincronizar_dia(marcacion_id, tramos):
+    """Deja en la fila del día el primer ingreso y la última salida de sus
+    tramos. Es lo que leen el reporte y todo lo escrito antes de la migración
+    0005, así que después de tocar un tramo hay que rehacerlo."""
+    con_hora = [t for t in tramos if t.get('hora_ingreso')]
+    salidas = [str(t['hora_salida'])[:8] for t in con_hora if t.get('hora_salida')]
+    supabase.table('marcaciones').update({
+        'hora_ingreso': min(str(t['hora_ingreso'])[:8] for t in con_hora) if con_hora else None,
+        'hora_salida': max(salidas) if salidas else None,
+    }).eq('id', marcacion_id).execute()
+
 def _adjuntar_tramos(filas):
     """Cuelga en cada marcación sus tramos del día en '_tramos' (ya ordenados)
     y si queda alguno abierto en '_abierto'. Devuelve la misma lista.
@@ -5630,6 +5695,92 @@ def api_marcacion_permiso(id):
         return jsonify({'success': True, 'con_permiso': con_permiso})
     except Exception as e:
         return jsonify({'success': False, 'error': 'No se pudo guardar. ¿Aplicaste migrations/0003_permiso_y_hora_normal.sql? ' + str(e)})
+
+def _tramo_para_editar(id):
+    """(tramo, marcacion_del_dia, respuesta_de_error). Resuelve el tramo y
+    comprueba que quien pide tiene permiso sobre esa persona."""
+    try:
+        fila = supabase.table('marcaciones_tramos').select('*').eq('id', id).execute().data
+    except Exception:
+        return None, None, (jsonify({'success': False, 'error':
+            'Falta aplicar migrations/0005_marcaciones_multiples.sql'}), 400)
+    if not fila:
+        return None, None, (jsonify({'success': False, 'error': 'Marcación no encontrada'}), 404)
+    tramo = fila[0]
+    dia = supabase.table('marcaciones').select('*').eq('id', tramo.get('marcacion_id')).execute().data
+    if not dia:
+        return None, None, (jsonify({'success': False, 'error': 'Marcación no encontrada'}), 404)
+    if not _puede_editar_marcacion(dia[0]):
+        return None, None, (jsonify({'success': False, 'error': 'Acceso restringido'}), 403)
+    return tramo, dia[0], None
+
+def _guardar_tramo(id, valores, auditoria):
+    """Graba la corrección con su rastro. Si las columnas de auditoría todavía
+    no existen (migración 0008 pendiente) graba las horas igual y lo dice: es
+    peor dejar un día sin poder arreglar que perder el registro de quién lo
+    arregló."""
+    try:
+        supabase.table('marcaciones_tramos').update({**valores, **auditoria}).eq('id', id).execute()
+        return None
+    except Exception as e:
+        if 'corregido' not in str(e) and 'motivo_correccion' not in str(e):
+            raise
+        supabase.table('marcaciones_tramos').update(valores).eq('id', id).execute()
+        return ('Se guardó la corrección, pero sin dejar constancia de quién la hizo: '
+                'falta aplicar migrations/0008_corregir_marcaciones.sql.')
+
+@app.route('/api/tramo/<int:id>/corregir', methods=['POST'])
+@login_required
+def api_corregir_tramo(id):
+    """Corrige la entrada o la salida de un tramo ya marcado.
+
+    Es lo que rescata un día perdido: sin esto, quien olvidaba fichar su salida
+    dejaba el tramo abierto para siempre y ese día valía 0 horas en su sueldo.
+    """
+    data = request.get_json() or {}
+    tramo, dia, error = _tramo_para_editar(id)
+    if error:
+        return error
+    motivo = (data.get('motivo') or '').strip()
+    if not motivo:
+        return jsonify({'success': False, 'error':
+            'Escribe por qué se corrige: queda guardado junto al cambio'}), 400
+    ingreso = _hora_normalizada(data.get('hora_ingreso'))
+    salida = _hora_normalizada(data.get('hora_salida'))
+    if data.get('hora_ingreso') and not ingreso:
+        return jsonify({'success': False, 'error': 'La hora de entrada no es válida'}), 400
+    if data.get('hora_salida') and not salida:
+        return jsonify({'success': False, 'error': 'La hora de salida no es válida'}), 400
+    fecha = str(tramo.get('fecha'))[:10]
+    aviso_val = _revisar_correccion(_tramos_del_dia(tramo['usuario_id'], fecha) or [],
+                                    id, ingreso, salida)
+    if aviso_val:
+        return jsonify({'success': False, 'error': aviso_val}), 400
+    try:
+        aviso = _guardar_tramo(id, {'hora_ingreso': ingreso, 'hora_salida': salida},
+                               {'corregido_por': current_user.nombre,
+                                'corregido_en': datetime.now(TZ_ECUADOR).isoformat(),
+                                'motivo_correccion': motivo})
+        _sincronizar_dia(tramo['marcacion_id'], _tramos_del_dia(tramo['usuario_id'], fecha) or [])
+    except Exception as e:
+        return jsonify({'success': False, 'error': 'No se pudo guardar: ' + str(e)}), 400
+    return jsonify({'success': True, 'aviso': aviso})
+
+@app.route('/api/tramo/<int:id>/eliminar', methods=['POST'])
+@login_required
+def api_eliminar_tramo(id):
+    """Borra un tramo marcado por error (un doble fichaje, una entrada que no
+    fue). El día se queda con los que sigan siendo verdad."""
+    tramo, dia, error = _tramo_para_editar(id)
+    if error:
+        return error
+    fecha = str(tramo.get('fecha'))[:10]
+    try:
+        supabase.table('marcaciones_tramos').delete().eq('id', id).execute()
+        _sincronizar_dia(tramo['marcacion_id'], _tramos_del_dia(tramo['usuario_id'], fecha) or [])
+    except Exception as e:
+        return jsonify({'success': False, 'error': 'No se pudo borrar: ' + str(e)}), 400
+    return jsonify({'success': True})
 
 @app.route('/api/jornada/<int:usuario_id>', methods=['POST'])
 @login_required
