@@ -1,0 +1,110 @@
+# ============================================================
+# Atlas + calendario — base de datos en el servidor de Coolify
+#
+# Variante del stack de deploy/ para desplegarlo COMO RECURSO DE COOLIFY, no en
+# un VPS pelado. Dos diferencias que importan:
+#
+#   1. Nadie publica los puertos 80/443: ahí ya está el proxy de Coolify. Este
+#      Caddy escucha solo en la red interna y Coolify le manda el tráfico del
+#      dominio. El Caddyfile no cambia: sigue traduciendo /rest/v1/* igual que
+#      Supabase, que es lo que hace que la app no se entere de la mudanza.
+#   2. Postgres lleva límite de memoria y tuning explícito. En un servidor
+#      compartido con las apps, un Postgres sin techo es el que se lleva por
+#      delante al resto cuando entra el OOM killer.
+#
+# Antes de levantarlo hay que MEDIR la RAM libre del servidor (free -h). Este
+# stack pide ~0,6-0,8 GB; con menos de 1 GB libre no se despliega.
+# ============================================================
+services:
+  db:
+    # Postgres 17: la Supabase de origen corre 17.x y un dump de 17 NO restaura
+    # en 15. Si algún día el origen sube de versión, esta imagen sube con él.
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?define POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-atlas}
+      AUTHENTICATOR_PASSWORD: ${AUTHENTICATOR_PASSWORD:?define AUTHENTICATOR_PASSWORD}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      # Se reutilizan los de deploy/ para no tener dos copias que se separen.
+      - ../init:/docker-entrypoint-initdb.d:ro
+    # Tuning para convivir con las apps en un servidor de 4 GB. Son valores
+    # conservadores a propósito: esta base es pequeña y la consultan pocas
+    # personas, así que no hace falta más y sí hace falta no estorbar.
+    command: >
+      postgres
+      -c shared_buffers=128MB
+      -c effective_cache_size=384MB
+      -c work_mem=4MB
+      -c maintenance_work_mem=64MB
+      -c max_connections=40
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-atlas}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 640M
+
+  rest:
+    image: postgrest/postgrest:v12.2.3
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${AUTHENTICATOR_PASSWORD}@db:5432/${POSTGRES_DB:-atlas}
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET:?define JWT_SECRET (32+ chars)}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+      PGRST_DB_POOL: "10"
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  adminer:
+    image: adminer:4
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+
+  # Traduce las rutas de Supabase. Coolify enruta el dominio a ESTE servicio,
+  # puerto 80 — se configura en la interfaz de Coolify, no con etiquetas aquí:
+  # las etiquetas de Traefik las genera Coolify y escribirlas a mano choca con
+  # las suyas.
+  proxy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [rest, adminer]
+    expose:
+      - "80"
+    environment:
+      # ':80' y no el dominio: el certificado lo pone el proxy de Coolify por
+      # delante. Dos capas sacando certificado para el mismo nombre se pelean.
+      DOMAIN: ":80"
+      ADMINER_AUTH_USER: ${ADMINER_AUTH_USER:?define ADMINER_AUTH_USER}
+      ADMINER_AUTH_HASH: ${ADMINER_AUTH_HASH:?define ADMINER_AUTH_HASH (hash bcrypt)}
+    volumes:
+      - ../Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+
+volumes:
+  db_data:
+  caddy_data:
+  caddy_config:
