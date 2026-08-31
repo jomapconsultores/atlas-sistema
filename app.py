@@ -3,7 +3,7 @@
 # ------------------------------------------------------------
 import os
 import math
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session, g
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session, g, make_response
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash
 from markupsafe import escape
@@ -1101,6 +1101,35 @@ def version():
         'proceso_iniciado': APP_INICIADA.isoformat(timespec='seconds'),
         'hora_servidor': datetime.now().isoformat(timespec='seconds'),
     })
+
+# ========== MANUAL DE USO ==========
+# El manual se lee DENTRO del sistema, no se reparte como archivo: así todos
+# miran la misma versión y no circulan copias viejas por WhatsApp. La página
+# desactiva guardar e imprimir, que frena la copia casual pero no es una
+# barrera real: quien mire el código de la página lo tiene igual. Para
+# repartirlo en papel o en PDF está el archivo que guarda la dirección.
+RUTA_MANUAL = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                           'docs', 'manual_sistema.html')
+
+
+@app.route('/manual')
+@login_required
+def manual():
+    """El manual de uso, para cualquiera que haya entrado al sistema."""
+    try:
+        with open(RUTA_MANUAL, encoding='utf-8') as f:
+            contenido = f.read()
+    except OSError:
+        flash('❌ El manual todavía no está publicado en este servidor', 'error')
+        return redirect(url_for('dashboard'))
+    resp = make_response(contenido)
+    resp.headers['Content-Type'] = 'text/html; charset=utf-8'
+    # Pesa un par de megas por las capturas: que el navegador lo guarde en
+    # caché evita volver a bajarlo en cada consulta del día.
+    resp.headers['Cache-Control'] = 'private, max-age=3600'
+    resp.headers['X-Robots-Tag'] = 'noindex, nofollow'
+    return resp
+
 
 @app.route('/contacto', methods=['POST'])
 def contacto():

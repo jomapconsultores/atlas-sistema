@@ -1310,7 +1310,8 @@
     {% endif %}
 
     {# La cuenta siempre existe: datos, clave y salida. #}
-    {% set cuenta_items = [{'url':'/editar-perfil', 'label':'Mis datos', 'ico':'✏️'},
+    {% set cuenta_items = [{'url':'/manual', 'label':'Manual del sistema', 'ico':'📘'},
+                           {'url':'/editar-perfil', 'label':'Mis datos', 'ico':'✏️'},
                            {'url':'/cambiar-clave', 'label':'Cambiar mi clave', 'ico':'🔑'}] %}
     {% if puede_marcar_asistencia %}{% set _ = cuenta_items.insert(0, {'url':'/mi-asistencia', 'label':'Marcar asistencia', 'ico':'🕒'}) %}{% endif %}
     {% set _ = cuenta_items.append({'url':'/logout', 'label':'Cerrar sesión', 'ico':'🚪'}) %}
@@ -1486,6 +1487,7 @@
         {% endif %}
 
         <div class="side-section">Cuenta</div>
+        <a href="/manual" class="{% if p=='/manual' %}active{% endif %}"><span class="ico">📘</span> Manual del sistema</a>
         <a href="/editar-perfil" class="{% if p=='/editar-perfil' %}active{% endif %}"><span class="ico">✏️</span> Editar perfil</a>
         <a href="/logout"><span class="ico">🚪</span> Cerrar sesión</a>
     </aside>
