@@ -111,11 +111,14 @@ Redeploy. Ninguna línea de código cambia.
 
 En la nube esto venía incluido; aquí no:
 
-- **Backups.** `pg_dump` diario a un Storage Box, retención 30 días, y una
+- **Backups.** `deploy/backup.sh` (pg_dump diario, retención 30 días) y una
   restauración de prueba al mes. Un backup sin probar no es un backup.
   Ojo: el proyecto Supabase actual está en plan Free y **hoy tampoco tiene
-  backups** («No backups» en su panel), así que esto no empeora — pero es la
-  ocasión de arreglarlo.
+  backups** («No backups» en su panel) — el script funciona igual contra la
+  nube, así que esto se puede arreglar sin esperar a la mudanza. Ver
+  «Respaldos» en `../README.md`.
 - **Alertas** de disco lleno y de Postgres caído.
 - **Migraciones**: se acabó el copiar y pegar en el editor SQL.
-  `python deploy/migrate.py` por túnel SSH, que además es mejor que lo de ahora.
+  `python deploy/migrate.py` por túnel SSH. Tampoco hay que esperar: el mismo
+  script sirve contra Supabase cambiando `DATABASE_URL`. La primera vez,
+  `--marcar-hasta 0009` registra las que ya se corrieron a mano.

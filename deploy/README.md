@@ -90,25 +90,44 @@ Nada más. El resto del código es idéntico.
 
 ## Migraciones a futuro (adiós al copiar/pegar SQL)
 
-> Mientras la base siga en la nube, `migrate.py` **no se usa**: los archivos de
-> `migrations/` se pegan en el editor SQL de Supabase. Lo de abajo aplica el día
-> que se complete la mudanza. Escribir las migraciones en `migrations/000X_*.sql`
-> vale para las dos épocas, así que se hace así desde ya.
+Las migraciones viven versionadas en `../migrations/*.sql` y las aplica
+`../deploy/migrate.py`, que lleva la cuenta en la tabla `public._migraciones` y
+solo corre las que faltan.
 
-Las migraciones viven versionadas en `../migrations/*.sql` y se aplican con
-`../deploy/migrate.py` por el **túnel SSH**:
+`migrate.py` **no depende de la mudanza**: le da igual qué Postgres haya al otro
+lado de `DATABASE_URL`. Con la base todavía en Supabase sirve igual, y es
+preferible al editor web, porque ahí nada queda registrado y no hay forma de
+saber qué se aplicó y qué no.
 
 ```bash
-# En TU PC, abre el túnel (deja la terminal abierta):
+# Base en Supabase (hoy). La cadena está en Settings → Database → Connection string
+DATABASE_URL="postgresql://postgres:PASS@db.PROYECTO.supabase.co:5432/postgres"     python deploy/migrate.py --dry-run     # solo lista lo pendiente
+DATABASE_URL="postgresql://..." python deploy/migrate.py
+```
+
+```bash
+# Base auto-alojada: primero el túnel en TU PC (deja la terminal abierta)
 ssh -L 5432:localhost:5432 usuario@IP_DEL_SERVIDOR
 
 # En otra terminal:
-DATABASE_URL="postgres://postgres:PASS@localhost:5432/atlas" python deploy/migrate.py --dry-run
 DATABASE_URL="postgres://postgres:PASS@localhost:5432/atlas" python deploy/migrate.py
 ```
 
+### Estrenar el control sobre una base que ya venía al día
+
+Las migraciones `0001`–`0009` se corrieron a mano en el editor de Supabase, así
+que `_migraciones` está vacía y la primera corrida querría reaplicarlas todas.
+Se registran de una vez, **sin ejecutar su SQL**, y pide confirmación:
+
+```bash
+DATABASE_URL="postgresql://..." python deploy/migrate.py --marcar-hasta 0009
+```
+
+Después, `--dry-run` debe listar solo la `0010` en adelante. Esto es para poner
+al día el registro, **no** para saltarse una migración que de verdad falta.
+
 Con esto, cuando yo (Claude) necesite crear/alterar tablas, agrego un archivo
-`migrations/000X_descripcion.sql` y lo aplico por el túnel — **sin paneles web**.
+`migrations/000X_descripcion.sql` y se aplica con un comando — **sin paneles web**.
 
 ## Seguridad
 
@@ -198,7 +217,9 @@ comprueba `/version`: si el commit no cambió, el despliegue no surtió efecto.
 
 1. Escribe el archivo en `migrations/000X_descripcion.sql` (idempotente:
    `IF NOT EXISTS` en todo lo que se pueda).
-2. Pégalo entero en el **editor SQL** del proyecto Supabase.
+2. Aplícalo con `deploy/migrate.py` apuntando a Supabase (ver arriba). El
+   editor SQL del panel sigue sirviendo —pegar el archivo entero y Run— pero
+   ahí nada queda registrado: después no hay forma de saber qué se aplicó.
 3. Si creaste o alteraste tablas, refresca el caché de la API o el cliente
    seguirá diciendo que no existen:
    ```sql
@@ -212,3 +233,35 @@ comprueba `/version`: si el commit no cambió, el despliegue no surtió efecto.
 
 Las migraciones sueltas en la raíz (`migration_*.sql`) son de la época anterior
 a `migrations/`. Se conservan por historia; las nuevas van numeradas.
+
+---
+
+## Respaldos
+
+**Hoy no hay ninguno.** El proyecto Supabase está en plan Free, que no hace
+backups, y el Postgres auto-alojado tampoco se respalda solo. Un `DROP TABLE`
+por error o un disco muerto se lleva el historial completo de sesiones, pagos y
+marcaciones.
+
+`deploy/backup.sh` hace el volcado y sirve para las dos épocas — solo cambia
+`DATABASE_URL`:
+
+```bash
+DATABASE_URL="postgresql://postgres:PASS@db.PROYECTO.supabase.co:5432/postgres"     deploy/backup.sh /var/backups/atlas
+```
+
+En cron, con la cadena de conexión en un archivo que solo lea root:
+
+```bash
+15 3 * * * . /root/atlas.env && /ruta/repo/deploy/backup.sh /var/backups/atlas >> /var/log/atlas-backup.log 2>&1
+```
+
+- Escribe a `.parcial` y renombra al final: un volcado cortado a la mitad no
+  queda con nombre de backup bueno.
+- Descarta el archivo si pesa menos de 50 KB (`MINIMO_BYTES`): a esa altura no
+  es un respaldo, es un error de conexión guardado en disco.
+- Borra los de más de 30 días (`RETENCION_DIAS`) **solo después** de confirmar
+  que el de hoy salió bien.
+
+Una vez al mes, restaura el último `.sql.gz` en una base vacía y entra a
+mirarlo. Un backup que nadie restauró no es un backup.
