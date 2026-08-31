@@ -10,7 +10,15 @@
     .table-premium thead th { background: #1a1a2e; color: white; font-weight: 600; font-size: 11px; letter-spacing: 0.5px; border: none; padding: 10px 12px; text-transform: uppercase; }
     .table-premium tbody td { padding: 8px 12px; font-size: 13px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
     .btn-premium { border-radius: 10px; font-weight: 600; font-size: 11px; padding: 6px 12px; }
-    .badge-premium { padding: 5px 10px; border-radius: 10px; font-size: 10px; font-weight: 600; }
+    .badge-premium { display: inline-block; padding: 5px 10px; border-radius: 10px; font-size: 10px; font-weight: 600; white-space: nowrap; }
+    /* La tabla tiene doce columnas y vive dentro de .table-responsive, que ya
+       da scroll horizontal. Sin esto el navegador prefiere estrujar las
+       columnas antes que desbordar, y parte por la mitad lo que no se puede
+       leer partido: la fecha en tres renglones y la píldora «Grupal · 2» en
+       dos, con el número colgando debajo. Las columnas de texto largo
+       (estudiantes, justificación) sí siguen fluyendo. */
+    .col-firme { white-space: nowrap; }
+    .col-nombres { min-width: 150px; }
     .fila-form td { background: #fffdf5; }
     .nota-regla { background: #fff8e1; border-left: 4px solid #f4b400; border-radius: 10px; padding: 12px 16px; font-size: 13px; margin-bottom: 20px; }
     .nota-migracion { background: #fdecea; border-left: 4px solid #d93025; border-radius: 10px; padding: 16px 20px; font-size: 14px; margin-bottom: 20px; }
@@ -74,33 +82,34 @@
         {% if candidatas %}
         <div class="table-responsive"><table class="table table-premium mb-0">
             <thead><tr>
-                <th>Fecha</th><th>Horario</th><th>Docente</th><th>Modalidad</th><th>Estudiante(s)</th><th>Asignatura</th>
-                <th class="text-center">Hrs</th><th class="text-end">Cobrado</th>
-                <th class="text-end">Pago actual</th><th class="text-end">Con ${{ "%.0f"|format(tarifa_sugerida) }}/h</th>
-                <th class="text-end">Margen Atlas</th><th></th>
+                <th class="col-firme">Fecha</th><th class="col-firme">Horario</th><th class="col-firme">Docente</th>
+                <th class="col-firme">Modalidad</th><th>Estudiante(s)</th><th>Asignatura</th>
+                <th class="text-center col-firme">Hrs</th><th class="text-end col-firme">Cobrado</th>
+                <th class="text-end col-firme">Pago actual</th><th class="text-end col-firme">Con ${{ "%.0f"|format(tarifa_sugerida) }}/h</th>
+                <th class="text-end col-firme">Margen Atlas</th><th></th>
             </tr></thead>
             <tbody>
             {% for c in candidatas %}
             <tr>
-                <td>{{ c.fecha }}</td>
-                <td>{{ c.hora }}</td>
-                <td><strong>{{ c.docente }}</strong></td>
-                <td>
+                <td class="col-firme">{{ c.fecha }}</td>
+                <td class="col-firme">{{ c.hora }}</td>
+                <td class="col-firme"><strong>{{ c.docente }}</strong></td>
+                <td class="col-firme">
                     {% if c.es_grupal %}<span class="badge-premium bg-info">👥 Grupal · {{ c.n_estudiantes }}</span>
                     {% else %}<span class="badge-premium bg-light text-dark">👤 Individual</span>{% endif %}
                     <br><small class="text-muted">{{ c.tipo }}</small>
                 </td>
-                <td><small>{{ c.estudiante or '-' }}</small></td>
+                <td class="col-nombres"><small>{{ c.estudiante or '-' }}</small></td>
                 <td>{{ c.asignatura }}</td>
-                <td class="text-center">{{ c.horas }}</td>
-                <td class="text-end">${{ "%.2f"|format(c.ingreso) }}</td>
-                <td class="text-end">${{ "%.2f"|format(c.pago_estandar) }}</td>
-                <td class="text-end text-warning fw-bold">${{ "%.2f"|format(c.pago_excepcional) }}</td>
-                <td class="text-end">
+                <td class="text-center col-firme">{{ c.horas }}</td>
+                <td class="text-end col-firme">${{ "%.2f"|format(c.ingreso) }}</td>
+                <td class="text-end col-firme">${{ "%.2f"|format(c.pago_estandar) }}</td>
+                <td class="text-end text-warning fw-bold col-firme">${{ "%.2f"|format(c.pago_excepcional) }}</td>
+                <td class="text-end col-firme">
                     ${{ "%.2f"|format(c.margen_actual) }} →
                     <strong class="{{ 'text-danger' if c.margen_excepcional < 0 else 'text-muted' }}">${{ "%.2f"|format(c.margen_excepcional) }}</strong>
                 </td>
-                <td class="text-end"><button type="button" class="btn btn-warning btn-premium" onclick="toggleForm({{ c.id }})">⭐ Solicitar</button></td>
+                <td class="text-end col-firme"><button type="button" class="btn btn-warning btn-premium" onclick="toggleForm({{ c.id }})">⭐ Solicitar</button></td>
             </tr>
             <tr class="fila-form d-none" id="form-{{ c.id }}">
                 <td colspan="12">
@@ -140,17 +149,19 @@
     <div class="card-body p-0">
     <div class="table-responsive"><table class="table table-premium mb-0">
         <thead><tr>
-            <th>Solicitado</th><th>Clase</th><th>Docente</th><th>Modalidad</th><th class="text-center">Hrs</th>
-            <th class="text-end">Tarifa</th><th class="text-end">Diferencia</th><th class="text-end">Impacto en Atlas</th>
-            <th>Justificación</th><th>Estado</th><th>Autorización</th><th></th>
+            <th class="col-firme">Solicitado</th><th class="col-firme">Clase</th><th class="col-firme">Docente</th>
+            <th class="col-firme">Modalidad</th><th class="text-center col-firme">Hrs</th>
+            <th class="text-end col-firme">Tarifa</th><th class="text-end col-firme">Diferencia</th>
+            <th class="text-end col-firme">Impacto en Atlas</th>
+            <th>Justificación</th><th class="col-firme">Estado</th><th class="col-firme">Autorización</th><th></th>
         </tr></thead>
         <tbody>
         {% for s in solicitudes %}
         <tr>
-            <td><small>{{ (s.fecha_solicitud or '')[:10] }}<br><span class="text-muted">{{ s.solicitado_por }}</span></small></td>
-            <td>{{ s.fecha_sesion }}<br><small class="text-muted">{{ s.hora_inicio }}-{{ s.hora_fin }} · {{ s.asignatura or '-' }}</small></td>
-            <td><strong>{{ s.docente }}</strong></td>
-            <td>
+            <td class="col-firme"><small>{{ (s.fecha_solicitud or '')[:10] }}<br><span class="text-muted">{{ s.solicitado_por }}</span></small></td>
+            <td class="col-firme">{{ s.fecha_sesion }}<br><small class="text-muted">{{ s.hora_inicio }}-{{ s.hora_fin }} · {{ s.asignatura or '-' }}</small></td>
+            <td class="col-firme"><strong>{{ s.docente }}</strong></td>
+            <td class="col-nombres">
                 {% if s.n_estudiantes %}
                     {% if s.es_grupal %}<span class="badge-premium bg-info">👥 Grupal · {{ s.n_estudiantes }}</span>
                     {% else %}<span class="badge-premium bg-light text-dark">👤 Individual</span>{% endif %}
@@ -159,20 +170,20 @@
                     {% if s.detalle_estimado %}<br><small class="text-muted" title="La solicitud se guardó sin este dato: se calculó ahora con las filas actuales de la clase">≈ calculado ahora</small>{% endif %}
                 {% else %}<span class="text-muted">—</span>{% endif %}
             </td>
-            <td class="text-center">{{ s.horas }}</td>
-            <td class="text-end">${{ "%.2f"|format(s.tarifa_hora or 0) }}/h<br><small class="text-muted">antes ${{ "%.2f"|format(s.tarifa_estandar or 0) }}/h</small></td>
-            <td class="text-end fw-bold {% if s.estado == 'aprobado' %}text-warning{% else %}text-muted{% endif %}">+${{ "%.2f"|format(s.diferencia or 0) }}</td>
-            <td class="text-end">
+            <td class="text-center col-firme">{{ s.horas }}</td>
+            <td class="text-end col-firme">${{ "%.2f"|format(s.tarifa_hora or 0) }}/h<br><small class="text-muted">antes ${{ "%.2f"|format(s.tarifa_estandar or 0) }}/h</small></td>
+            <td class="text-end fw-bold col-firme {% if s.estado == 'aprobado' %}text-warning{% else %}text-muted{% endif %}">+${{ "%.2f"|format(s.diferencia or 0) }}</td>
+            <td class="text-end col-firme">
                 {% if s.get('ingreso_clase') is not none %}
                     <small class="text-muted">Cobrado</small> ${{ "%.2f"|format(s.ingreso_clase|float) }}<br>
                     <small class="text-muted">Margen</small> ${{ "%.2f"|format(s.margen_actual|float) }} →
                     <strong class="{{ 'text-danger' if (s.margen_nuevo|float) < 0 else '' }}">${{ "%.2f"|format(s.margen_nuevo|float) }}</strong>
                 {% else %}<span class="text-muted">—</span>{% endif %}
             </td>
-            <td><small>{{ s.motivo }}</small>{% if s.motivo_rechazo %}<br><small class="text-danger">Rechazo: {{ s.motivo_rechazo }}</small>{% endif %}</td>
-            <td><span class="badge-premium bg-{{ 'warning' if s.estado=='pendiente' else 'success' if s.estado=='aprobado' else 'danger' if s.estado=='rechazado' else 'secondary' }}">{{ s.estado }}</span></td>
-            <td><small>{% if s.resuelto_por %}{{ s.resuelto_por }}<br><span class="text-muted">{{ (s.fecha_resolucion or '')[:10] }}</span>{% else %}—{% endif %}</small></td>
-            <td class="text-end">
+            <td style="min-width: 220px;"><small>{{ s.motivo }}</small>{% if s.motivo_rechazo %}<br><small class="text-danger">Rechazo: {{ s.motivo_rechazo }}</small>{% endif %}</td>
+            <td class="col-firme"><span class="badge-premium bg-{{ 'warning' if s.estado=='pendiente' else 'success' if s.estado=='aprobado' else 'danger' if s.estado=='rechazado' else 'secondary' }}">{{ s.estado }}</span></td>
+            <td class="col-firme"><small>{% if s.resuelto_por %}{{ s.resuelto_por }}<br><span class="text-muted">{{ (s.fecha_resolucion or '')[:10] }}</span>{% else %}—{% endif %}</small></td>
+            <td class="text-end col-firme">
                 {% if puede_aprobar and s.estado == 'pendiente' %}
                 <form method="POST" action="/aprobar-pago-excepcional/{{ s.id }}" style="display:inline;"
                       onsubmit="return confirm('¿Aprobar el pago de ${{ "%.2f"|format(s.tarifa_hora or 0) }}/h para esa clase{% if s.n_estudiantes %} ({{ 'grupal, ' ~ s.n_estudiantes ~ ' estudiantes' if s.es_grupal else 'individual' }}){% endif %}? Se pagará {{ "%.2f"|format(s.diferencia or 0) }} dólares más al docente{% if s.get('margen_nuevo') is not none %} y el margen de Atlas en esa clase pasa de ${{ "%.2f"|format(s.margen_actual|float) }} a ${{ "%.2f"|format(s.margen_nuevo|float) }}{% endif %}.');">
