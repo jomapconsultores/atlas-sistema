@@ -72,8 +72,10 @@
         {% if candidatas %}
         <div class="table-responsive"><table class="table table-premium mb-0">
             <thead><tr>
-                <th>Fecha</th><th>Horario</th><th>Docente</th><th>Estudiante</th><th>Asignatura</th>
-                <th class="text-center">Hrs</th><th class="text-end">Pago actual</th><th class="text-end">Con ${{ "%.0f"|format(tarifa_sugerida) }}/h</th><th></th>
+                <th>Fecha</th><th>Horario</th><th>Docente</th><th>Modalidad</th><th>Estudiante(s)</th><th>Asignatura</th>
+                <th class="text-center">Hrs</th><th class="text-end">Cobrado</th>
+                <th class="text-end">Pago actual</th><th class="text-end">Con ${{ "%.0f"|format(tarifa_sugerida) }}/h</th>
+                <th class="text-end">Margen Atlas</th><th></th>
             </tr></thead>
             <tbody>
             {% for c in candidatas %}
@@ -81,15 +83,25 @@
                 <td>{{ c.fecha }}</td>
                 <td>{{ c.hora }}</td>
                 <td><strong>{{ c.docente }}</strong></td>
-                <td>{{ c.estudiante or '-' }}</td>
+                <td>
+                    {% if c.es_grupal %}<span class="badge-premium bg-info">👥 Grupal · {{ c.n_estudiantes }}</span>
+                    {% else %}<span class="badge-premium bg-light text-dark">👤 Individual</span>{% endif %}
+                    <br><small class="text-muted">{{ c.tipo }}</small>
+                </td>
+                <td><small>{{ c.estudiante or '-' }}</small></td>
                 <td>{{ c.asignatura }}</td>
                 <td class="text-center">{{ c.horas }}</td>
+                <td class="text-end">${{ "%.2f"|format(c.ingreso) }}</td>
                 <td class="text-end">${{ "%.2f"|format(c.pago_estandar) }}</td>
                 <td class="text-end text-warning fw-bold">${{ "%.2f"|format(c.pago_excepcional) }}</td>
+                <td class="text-end">
+                    ${{ "%.2f"|format(c.margen_actual) }} →
+                    <strong class="{{ 'text-danger' if c.margen_excepcional < 0 else 'text-muted' }}">${{ "%.2f"|format(c.margen_excepcional) }}</strong>
+                </td>
                 <td class="text-end"><button type="button" class="btn btn-warning btn-premium" onclick="toggleForm({{ c.id }})">⭐ Solicitar</button></td>
             </tr>
             <tr class="fila-form d-none" id="form-{{ c.id }}">
-                <td colspan="9">
+                <td colspan="12">
                     <form method="POST" action="/solicitar-pago-excepcional" class="row g-2 align-items-end">
                         <input type="hidden" name="sesion_id" value="{{ c.id }}">
                         <input type="hidden" name="volver" value="{{ request.full_path }}">
@@ -126,9 +138,9 @@
     <div class="card-body p-0">
     <div class="table-responsive"><table class="table table-premium mb-0">
         <thead><tr>
-            <th>Solicitado</th><th>Clase</th><th>Docente</th><th class="text-center">Hrs</th>
-            <th class="text-end">Tarifa</th><th class="text-end">Diferencia</th><th>Justificación</th>
-            <th>Estado</th><th>Autorización</th><th></th>
+            <th>Solicitado</th><th>Clase</th><th>Docente</th><th>Modalidad</th><th class="text-center">Hrs</th>
+            <th class="text-end">Tarifa</th><th class="text-end">Diferencia</th><th class="text-end">Impacto en Atlas</th>
+            <th>Justificación</th><th>Estado</th><th>Autorización</th><th></th>
         </tr></thead>
         <tbody>
         {% for s in solicitudes %}
@@ -136,16 +148,32 @@
             <td><small>{{ (s.fecha_solicitud or '')[:10] }}<br><span class="text-muted">{{ s.solicitado_por }}</span></small></td>
             <td>{{ s.fecha_sesion }}<br><small class="text-muted">{{ s.hora_inicio }}-{{ s.hora_fin }} · {{ s.asignatura or '-' }}</small></td>
             <td><strong>{{ s.docente }}</strong></td>
+            <td>
+                {% if s.n_estudiantes %}
+                    {% if s.es_grupal %}<span class="badge-premium bg-info">👥 Grupal · {{ s.n_estudiantes }}</span>
+                    {% else %}<span class="badge-premium bg-light text-dark">👤 Individual</span>{% endif %}
+                    {% if s.estudiantes %}<br><small class="text-muted">{{ s.estudiantes }}</small>{% endif %}
+                    {% if s.tipo_sesion %}<br><small class="text-muted">{{ s.tipo_sesion }}</small>{% endif %}
+                    {% if s.detalle_estimado %}<br><small class="text-muted" title="La solicitud se guardó sin este dato: se calculó ahora con las filas actuales de la clase">≈ calculado ahora</small>{% endif %}
+                {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
             <td class="text-center">{{ s.horas }}</td>
             <td class="text-end">${{ "%.2f"|format(s.tarifa_hora or 0) }}/h<br><small class="text-muted">antes ${{ "%.2f"|format(s.tarifa_estandar or 0) }}/h</small></td>
             <td class="text-end fw-bold {% if s.estado == 'aprobado' %}text-warning{% else %}text-muted{% endif %}">+${{ "%.2f"|format(s.diferencia or 0) }}</td>
+            <td class="text-end">
+                {% if s.get('ingreso_clase') is not none %}
+                    <small class="text-muted">Cobrado</small> ${{ "%.2f"|format(s.ingreso_clase|float) }}<br>
+                    <small class="text-muted">Margen</small> ${{ "%.2f"|format(s.margen_actual|float) }} →
+                    <strong class="{{ 'text-danger' if (s.margen_nuevo|float) < 0 else '' }}">${{ "%.2f"|format(s.margen_nuevo|float) }}</strong>
+                {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
             <td><small>{{ s.motivo }}</small>{% if s.motivo_rechazo %}<br><small class="text-danger">Rechazo: {{ s.motivo_rechazo }}</small>{% endif %}</td>
             <td><span class="badge-premium bg-{{ 'warning' if s.estado=='pendiente' else 'success' if s.estado=='aprobado' else 'danger' if s.estado=='rechazado' else 'secondary' }}">{{ s.estado }}</span></td>
             <td><small>{% if s.resuelto_por %}{{ s.resuelto_por }}<br><span class="text-muted">{{ (s.fecha_resolucion or '')[:10] }}</span>{% else %}—{% endif %}</small></td>
             <td class="text-end">
                 {% if puede_aprobar and s.estado == 'pendiente' %}
                 <form method="POST" action="/aprobar-pago-excepcional/{{ s.id }}" style="display:inline;"
-                      onsubmit="return confirm('¿Aprobar el pago de ${{ "%.2f"|format(s.tarifa_hora or 0) }}/h para esa clase? Se pagará {{ "%.2f"|format(s.diferencia or 0) }} dólares más al docente.');">
+                      onsubmit="return confirm('¿Aprobar el pago de ${{ "%.2f"|format(s.tarifa_hora or 0) }}/h para esa clase{% if s.n_estudiantes %} ({{ 'grupal, ' ~ s.n_estudiantes ~ ' estudiantes' if s.es_grupal else 'individual' }}){% endif %}? Se pagará {{ "%.2f"|format(s.diferencia or 0) }} dólares más al docente{% if s.get('margen_nuevo') is not none %} y el margen de Atlas en esa clase pasa de ${{ "%.2f"|format(s.margen_actual|float) }} a ${{ "%.2f"|format(s.margen_nuevo|float) }}{% endif %}.');">
                     <button type="submit" class="btn btn-success btn-premium" title="Aprobar">✅</button>
                 </form>
                 <button type="button" class="btn btn-danger btn-premium" onclick="toggleForm('rech-{{ s.id }}')" title="Rechazar">❌</button>
@@ -159,7 +187,7 @@
         </tr>
         {% if puede_aprobar and s.estado == 'pendiente' %}
         <tr class="fila-form d-none" id="form-rech-{{ s.id }}">
-            <td colspan="10">
+            <td colspan="12">
                 <form method="POST" action="/rechazar-pago-excepcional/{{ s.id }}" class="row g-2 align-items-end">
                     <div class="col-md-10">
                         <label class="form-label small fw-bold">Motivo del rechazo</label>
@@ -171,7 +199,7 @@
         </tr>
         {% endif %}
         {% else %}
-        <tr><td colspan="10" class="text-center text-muted py-4">Todavía no se ha pedido ningún pago excepcional.</td></tr>
+        <tr><td colspan="12" class="text-center text-muted py-4">Todavía no se ha pedido ningún pago excepcional.</td></tr>
         {% endfor %}
         </tbody>
     </table></div>

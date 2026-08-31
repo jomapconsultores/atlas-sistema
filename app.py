@@ -650,6 +650,22 @@ def norm_nombre(v):
     return re.sub(r'\s+', ' ', (v or '')).strip()
 
 
+def clave_sesion_fisica(s):
+    """Identifica la CLASE FÍSICA a la que pertenece una fila de sesiones.
+    En una clase grupal hay una fila por estudiante y TODAS comparten esta
+    clave: sirve tanto para no pagarle dos veces al docente (dedup) como para
+    reconstruir con cuántos estudiantes se dio la clase."""
+    gid = s.get('sesion_grupo_id')
+    if gid:
+        return str(gid)
+    return '|'.join([
+        str(s.get('profesor_terapeuta', '')),
+        str(s.get('fecha', '')),
+        str(s.get('hora_inicio', '')),
+        str(s.get('hora_fin', ''))
+    ])
+
+
 def dedup_sesiones_docente(sesiones):
     """Devuelve una fila por sesión física (profesor+fecha+horario).
     Evita contar el pago al docente múltiples veces cuando varios
@@ -657,13 +673,7 @@ def dedup_sesiones_docente(sesiones):
     seen = set()
     result = []
     for s in sesiones:
-        gid = s.get('sesion_grupo_id')
-        key = str(gid) if gid else '|'.join([
-            str(s.get('profesor_terapeuta', '')),
-            str(s.get('fecha', '')),
-            str(s.get('hora_inicio', '')),
-            str(s.get('hora_fin', ''))
-        ])
+        key = clave_sesion_fisica(s)
         if key not in seen:
             seen.add(key)
             result.append(s)
@@ -2839,21 +2849,78 @@ def _filas_sesion_fisica(sesion_id):
     deduplica por sesión física (dedup_sesiones_docente) y puede quedarse con
     cualquiera de ellas, así que la tarifa excepcional tiene que ir en TODAS o
     el pago dependería de cuál se leyó primero."""
-    base = supabase.table('sesiones').select('*').eq('id', sesion_id).execute().data
+    _sel = '*, estudiantes(nombres,apellidos)'
+    base = supabase.table('sesiones').select(_sel).eq('id', sesion_id).execute().data
     if not base:
         return None, []
     s = base[0]
     gid = s.get('sesion_grupo_id')
     try:
         if gid:
-            filas = supabase.table('sesiones').select('*').eq('sesion_grupo_id', gid).execute().data or [s]
+            filas = supabase.table('sesiones').select(_sel).eq('sesion_grupo_id', gid).execute().data or [s]
         else:
-            filas = supabase.table('sesiones').select('*').eq(
+            filas = supabase.table('sesiones').select(_sel).eq(
                 'profesor_terapeuta', s.get('profesor_terapeuta')).eq('fecha', s.get('fecha')).eq(
                 'hora_inicio', s.get('hora_inicio')).eq('hora_fin', s.get('hora_fin')).execute().data or [s]
     except Exception:
         filas = [s]
     return s, filas
+
+
+def _nombre_estudiante(f):
+    est = f.get('estudiantes') or {}
+    return f"{est.get('apellidos', '')} {est.get('nombres', '')}".strip().title()
+
+
+def _detalle_clase_fisica(filas, tarifa=None):
+    """Con quiénes y con cuánto se dio UNA clase física, para poder juzgar la
+    excepción antes de firmarla.
+
+    Una tarifa mayor no pesa igual en una clase individual que en una grupal:
+    en la grupal el docente cobra lo mismo una sola vez (el pago se deduplica
+    por clase física) pero el ingreso son varias matrículas, así que el margen
+    aguanta. Sin este dato, quien aprueba ve '2 h a $10' y no sabe si eso deja
+    a Atlas con $4 o con $26.
+
+    `filas` son TODAS las filas de la clase (una por estudiante).
+    `tarifa` simula qué pasaría con esa tarifa/hora; None = la vigente hoy.
+    """
+    asistentes, vistos = [], set()
+    ingreso = 0.0
+    for f in filas:
+        # 'Cancelado' no cuenta: ese estudiante ni recibió la clase ni la paga.
+        if f.get('estado') == 'Cancelado':
+            continue
+        eid = f.get('estudiante_id') or f.get('id')
+        if eid in vistos:
+            continue
+        vistos.add(eid)
+        ingreso += cobro_sesion_estudiante(f)
+        if f.get('estado') == 'Realizado':
+            asistentes.append(_nombre_estudiante(f) or 'Sin nombre')
+    # El pago al docente es UNO por clase física, no uno por estudiante: se
+    # calcula sobre una fila representante con la regla única. Se prefiere una
+    # 'Realizado' — si el representante fuera la fila de un estudiante que
+    # canceló, el pago saldría en $0 aunque la clase sí se haya dado.
+    rep = next((f for f in filas if f.get('estado') == 'Realizado'),
+               next((f for f in filas if f.get('estado') == 'Cancelado-Pagado'),
+                    filas[0] if filas else {}))
+    rep = dict(rep)
+    if tarifa:
+        rep['tarifa_docente_hora'] = tarifa
+    docencia, psico = pago_sesion_docente(rep)
+    pago = round(docencia + psico, 2)
+    n = len(asistentes)
+    return {
+        'n_estudiantes': n,
+        'es_grupal': n > 1,
+        'estudiantes': asistentes,
+        'estudiantes_txt': ', '.join(asistentes),
+        'modalidad': f'Grupal ({n})' if n > 1 else 'Individual',
+        'ingreso': round(ingreso, 2),
+        'pago_docente': pago,
+        'margen': round(ingreso - pago, 2),
+    }
 
 
 def _aplicar_tarifa_excepcional(sesion_id, tarifa):
@@ -2924,17 +2991,44 @@ def pagos_excepcionales():
         falta_migracion = True
         solicitudes = []
 
+    # Las solicitudes pedidas antes de que se guardara el contexto (o si aún
+    # falta esa migración) llegan sin él. Para las PENDIENTES —las únicas que
+    # alguien tiene que juzgar ahora— se reconstruye al vuelo desde la clase.
+    # Solo esas: recalcular todo el histórico sería una consulta por fila.
+    _sin_detalle = [s for s in solicitudes
+                    if s.get('estado') == 'pendiente' and s.get('n_estudiantes') is None][:30]
+    for sol in _sin_detalle:
+        try:
+            _, _filas = _filas_sesion_fisica(sol['sesion_id'])
+        except Exception:
+            continue
+        if not _filas:
+            continue
+        _hoy = _detalle_clase_fisica(_filas)
+        _con = _detalle_clase_fisica(_filas, sol.get('tarifa_hora'))
+        sol.update({
+            'es_grupal': _hoy['es_grupal'], 'n_estudiantes': _hoy['n_estudiantes'],
+            'estudiantes': _hoy['estudiantes_txt'], 'ingreso_clase': _hoy['ingreso'],
+            'pago_docente_actual': _hoy['pago_docente'], 'pago_docente_nuevo': _con['pago_docente'],
+            'margen_actual': _hoy['margen'], 'margen_nuevo': _con['margen'],
+            'detalle_estimado': True,   # calculado ahora, no la foto de la solicitud
+        })
+
     # Sesiones sobre las que se puede pedir la excepción: clases YA realizadas
     # (la eventualidad ya ocurrió), del período elegido y sin una solicitud viva.
     # Cancelado-Pagado queda fuera: esa clase no se dio y se paga el fijo de $5.
     ya_pedidas = _excepciones_por_sesion()
     candidatas = []
     try:
+        # Se traen TODAS las filas del período (no solo las 'Realizado'): en una
+        # clase grupal hace falta el grupo completo para saber con cuántos
+        # estudiantes se dio y cuánto se cobró por ella. La candidata sigue
+        # siendo solo la clase realizada, que se filtra abajo.
         q = supabase.table('sesiones').select(
             'id,fecha,hora_inicio,hora_fin,profesor_terapeuta,asignatura,tema_terapia,'
             'tipo_sesion,horas,estado,valor_total,precio_hora,cobro_por_sesion,'
-            'sesion_grupo_id,tarifa_docente_hora,estudiantes(nombres,apellidos)'
-        ).eq('estado', 'Realizado')
+            'sesion_grupo_id,tarifa_docente_hora,estudiante_id,estudiantes(nombres,apellidos)'
+        ).in_('estado', ['Realizado', 'Cancelado', 'Cancelado-Pagado'])
         if desde:
             q = q.gte('fecha', desde)
         if hasta:
@@ -2944,7 +3038,12 @@ def pagos_excepcionales():
         falta_migracion = True
         filas = []
 
-    for s in dedup_sesiones_docente(filas):
+    grupos = {}
+    for f in filas:
+        grupos.setdefault(clave_sesion_fisica(f), []).append(f)
+
+    realizadas = [f for f in filas if f.get('estado') == 'Realizado']
+    for s in dedup_sesiones_docente(realizadas):
         if s.get('tipo_sesion') not in TIPOS_CON_DOCENCIA:
             continue
         prof = norm_nombre(s.get('profesor_terapeuta', ''))
@@ -2953,18 +3052,27 @@ def pagos_excepcionales():
         if s['id'] in ya_pedidas:
             continue
         horas = s.get('horas', 0) or 0
-        est = s.get('estudiantes') or {}
+        del_grupo = grupos.get(clave_sesion_fisica(s), [s])
+        # Hoy vs. con la tarifa sugerida: el mismo cálculo que usan los reportes.
+        hoy = _detalle_clase_fisica(del_grupo)
+        con_exc = _detalle_clase_fisica(del_grupo, PAGO_DOCENCIA_EXCEPCIONAL)
         candidatas.append({
             'id': s['id'],
             'fecha': s.get('fecha'),
             'hora': f"{(s.get('hora_inicio') or '')[:5]}-{(s.get('hora_fin') or '')[:5]}",
             'docente': prof,
-            'estudiante': f"{est.get('apellidos', '')} {est.get('nombres', '')}".strip().title(),
+            'estudiante': hoy['estudiantes_txt'],
             'asignatura': s.get('asignatura') or s.get('tema_terapia') or '-',
             'tipo': s.get('tipo_sesion'),
             'horas': horas,
-            'pago_estandar': round(horas * PAGO_DOCENCIA_POR_HORA, 2),
-            'pago_excepcional': round(horas * PAGO_DOCENCIA_EXCEPCIONAL, 2),
+            'es_grupal': hoy['es_grupal'],
+            'n_estudiantes': hoy['n_estudiantes'],
+            'modalidad': hoy['modalidad'],
+            'ingreso': hoy['ingreso'],
+            'pago_estandar': hoy['pago_docente'],
+            'pago_excepcional': con_exc['pago_docente'],
+            'margen_actual': hoy['margen'],
+            'margen_excepcional': con_exc['margen'],
         })
 
     return render_template('pagos_excepcionales.html',
@@ -3042,10 +3150,37 @@ def solicitar_pago_excepcional():
         'estado': 'pendiente',
         'solicitado_por': current_user.nombre,
     }
+    # Foto del contexto AL PEDIRLO: si la clase fue grupal, con cuántos
+    # estudiantes, cuánto entró por ella y cómo queda el margen. Se congela en
+    # la solicitud (no se recalcula al mirarla) porque es lo que quien firma
+    # tuvo a la vista, y porque las filas de la clase pueden cambiar después.
+    _, filas_clase = _filas_sesion_fisica(sesion_id)
+    hoy = _detalle_clase_fisica(filas_clase or [s])
+    con_exc = _detalle_clase_fisica(filas_clase or [s], tarifa)
+    detalle = {
+        'tipo_sesion': s.get('tipo_sesion'),
+        'es_grupal': hoy['es_grupal'],
+        'n_estudiantes': hoy['n_estudiantes'],
+        'estudiantes': hoy['estudiantes_txt'][:500],
+        'ingreso_clase': hoy['ingreso'],
+        'pago_docente_actual': hoy['pago_docente'],
+        'pago_docente_nuevo': con_exc['pago_docente'],
+        'margen_actual': hoy['margen'],
+        'margen_nuevo': con_exc['margen'],
+    }
     try:
-        supabase.table('pagos_excepcionales').insert(registro).execute()
+        supabase.table('pagos_excepcionales').insert({**registro, **detalle}).execute()
     except Exception as e:
-        flash(f'❌ No se pudo registrar la solicitud: {e}', 'error')
+        # Si todavía no se corrió migration_pago_excepcional_detalle.sql, esas
+        # columnas no existen. La solicitud es lo importante: se guarda igual
+        # sin la foto del contexto y se avisa qué falta.
+        try:
+            supabase.table('pagos_excepcionales').insert(registro).execute()
+        except Exception:
+            flash(f'❌ No se pudo registrar la solicitud: {e}', 'error')
+            return volver
+        flash('⚠️ Solicitud registrada, pero sin el detalle de la clase: falta correr '
+              'migration_pago_excepcional_detalle.sql en Supabase', 'warning')
         return volver
     flash('✅ Solicitud enviada. Queda pendiente hasta que un socio o el administrador la apruebe', 'success')
     return volver
