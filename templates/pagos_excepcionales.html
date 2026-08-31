@@ -32,7 +32,9 @@
     pagos se siguen calculando a la tarifa estándar.
     <ol>
         <li>Abre <strong>Supabase → SQL Editor</strong> en el proyecto de Atlas.</li>
-        <li>Pega el contenido del archivo <code>migration_pago_excepcional.sql</code> (está en la raíz del repositorio) y ejecútalo con <strong>Run</strong>.</li>
+        <li>Pega el contenido de <code>migrations/0010_pago_excepcional_detalle.sql</code> y ejecútalo con <strong>Run</strong>
+            (crea la tabla, la columna y el detalle de la clase; se puede correr aunque parte ya exista).
+            Con la base auto-alojada es <code>python deploy/migrate.py</code>.</li>
         <li>Vuelve a esta página y recarga: este aviso desaparece y podrás registrar solicitudes.</li>
     </ol>
     <small class="text-muted">No hace falta volver a desplegar la aplicación.</small>

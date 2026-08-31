@@ -2831,8 +2831,8 @@ ESTADOS_EXCEPCION_VIVOS = ('pendiente', 'aprobado')
 # Solo se puede pedir sobre sesiones que pagan docencia por hora. En terapia el
 # pago es un % del valor, no una tarifa horaria, y no hay nada que sustituir.
 TIPOS_CON_DOCENCIA = ('clase', 'preuniversitario', 'ambos')
-AVISO_MIGRACION_EXC = ('❌ Falta correr la migración migration_pago_excepcional.sql '
-                       'en Supabase para usar los pagos excepcionales')
+AVISO_MIGRACION_EXC = ('❌ Falta correr la migración migrations/0010_pago_excepcional_detalle.sql '
+                       'para usar los pagos excepcionales')
 
 
 def _puede_aprobar_excepcion():
@@ -3171,7 +3171,7 @@ def solicitar_pago_excepcional():
     try:
         supabase.table('pagos_excepcionales').insert({**registro, **detalle}).execute()
     except Exception as e:
-        # Si todavía no se corrió migration_pago_excepcional_detalle.sql, esas
+        # Si todavía no se corrió migrations/0010_pago_excepcional_detalle.sql, esas
         # columnas no existen. La solicitud es lo importante: se guarda igual
         # sin la foto del contexto y se avisa qué falta.
         try:
@@ -3180,7 +3180,7 @@ def solicitar_pago_excepcional():
             flash(f'❌ No se pudo registrar la solicitud: {e}', 'error')
             return volver
         flash('⚠️ Solicitud registrada, pero sin el detalle de la clase: falta correr '
-              'migration_pago_excepcional_detalle.sql en Supabase', 'warning')
+              'migrations/0010_pago_excepcional_detalle.sql', 'warning')
         return volver
     flash('✅ Solicitud enviada. Queda pendiente hasta que un socio o el administrador la apruebe', 'success')
     return volver
