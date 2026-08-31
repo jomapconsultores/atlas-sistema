@@ -1292,6 +1292,7 @@
       {% if puede_gestion_usuarios %}{% set _ = items.append({'url':'/usuarios', 'label':'Usuarios', 'ico':'🧑‍💼'}) %}{% endif %}
       {% if puede_reporte_duplicados %}{% set _ = items.append({'url':'/reporte-duplicados', 'label':'Reporte duplicados', 'ico':'🔍'}) %}{% endif %}
       {% if puede_marcaciones_docentes %}{% set _ = items.append({'url':'/admin/marcaciones', 'label':'Marcaciones de asistencia', 'ico':'🕒'}) %}{% endif %}
+      {% if rol in ['admin','socio'] %}{% set _ = items.append({'url':'/tramites-externos', 'label':'Trámites fuera del centro', 'ico':'🚶', 'badge': tramites_pendientes}) %}{% endif %}
       {% set _ = ns.secciones.append({'key':'administracion', 'label':'Administración', 'ico':'⚙️', 'items':items}) %}
     {% endif %}
 
@@ -1455,6 +1456,7 @@
                 {% if puede_gestion_usuarios %}<a href="/usuarios" class="{% if p=='/usuarios' %}active{% endif %}">Usuarios</a>{% endif %}
                 {% if puede_reporte_duplicados %}<a href="/reporte-duplicados" class="{% if p=='/reporte-duplicados' %}active{% endif %}">Reporte duplicados</a>{% endif %}
                 {% if puede_marcaciones_docentes %}<a href="/admin/marcaciones" class="{% if p=='/admin/marcaciones' %}active{% endif %}">Marcaciones de asistencia</a>{% endif %}
+                {% if rol in ['admin','socio'] %}<a href="/tramites-externos" class="{% if p=='/tramites-externos' %}active{% endif %}">Trámites fuera del centro{% if tramites_pendientes %} <span class="badge bg-warning text-dark">{{ tramites_pendientes }}</span>{% endif %}</a>{% endif %}
             </div>
         </div>
         {% endif %}
@@ -1499,7 +1501,7 @@
        Tocar una sección NO navega a ciegas: abre su hoja con las opciones a
        las que esa persona tiene acceso, y desde ahí se elige. Así se entra en
        el módulo y se ven sus submódulos en el mismo gesto. #}
-    {% set badges_totales = (contactos_nuevos or 0) + (solicitudes_pendientes or 0) + (excepciones_pendientes or 0) %}
+    {% set badges_totales = (contactos_nuevos or 0) + (solicitudes_pendientes or 0) + (excepciones_pendientes or 0) + (tramites_pendientes or 0) %}
     <nav class="app-tabbar" id="appTabbar" aria-label="Secciones">
         <a href="/dashboard" class="{% if p=='/dashboard' %}active{% endif %}">
             <span class="tab-ico">🏠</span><span>Inicio</span>

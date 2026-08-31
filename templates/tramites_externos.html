@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Trámites fuera del centro - Atlas{% endblock %}
+{% block content %}
+<style>
+    .card-premium { border-radius: 20px; border: none; box-shadow: 0 4px 20px rgba(0,0,0,0.06); background: white; margin-bottom: 20px; overflow: hidden; }
+    .card-header-grad { padding: 14px 20px; color: white; font-weight: 700; font-size: 15px; }
+    .grad-warning { background: linear-gradient(135deg, #f4b400, #e65100); }
+    .table-premium { border-radius: 12px; overflow: hidden; border: none; margin: 0; }
+    .table-premium thead th { background: #1a1a2e; color: white; font-weight: 600; font-size: 11px; letter-spacing: 0.5px; border: none; padding: 10px 12px; text-transform: uppercase; white-space: nowrap; }
+    .table-premium tbody td { padding: 10px 12px; font-size: 13px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+    .btn-premium { border-radius: 10px; font-weight: 600; font-size: 11px; padding: 6px 12px; }
+    .badge-premium { display: inline-block; padding: 5px 10px; border-radius: 10px; font-size: 10px; font-weight: 600; white-space: nowrap; }
+    .col-firme { white-space: nowrap; }
+    .fila-form td { background: #fffdf5; }
+    .nota-regla { background: #fff8e1; border-left: 4px solid #f4b400; border-radius: 10px; padding: 12px 16px; font-size: 13px; margin-bottom: 20px; }
+    .nota-migracion { background: #fdecea; border-left: 4px solid #d93025; border-radius: 10px; padding: 16px 20px; font-size: 14px; margin-bottom: 20px; }
+    .nota-migracion code { background: #fff; border: 1px solid #f5c6c3; border-radius: 5px; padding: 1px 6px; color: #b3261e; }
+    .filtros a { text-decoration: none; font-size: 12.5px; font-weight: 600; padding: 7px 14px; border-radius: 9px; border: 1px solid #e0e0e0; color: #444; }
+    .filtros a.on { background: #1a1a2e; border-color: #1a1a2e; color: #fff; }
+    .detalle { max-width: 340px; }
+</style>
+
+<div class="page-hero">
+    <h2>🚶 Trámites fuera del centro</h2>
+    <p>Trabajo hecho fuera, donde no hay dónde marcar. Aprobado, cuenta como jornada.</p>
+</div>
+
+{% if falta_migracion %}
+<div class="nota-migracion">
+    <strong>⚠️ Falta un paso en la base de datos</strong><br>
+    Todavía no existe la tabla <code>tramites_externos</code>, así que nadie puede registrar
+    ni aprobar trámites. <strong>El resto del sistema funciona con normalidad.</strong>
+    Corre <code>migrations/0011_tramites_externos.sql</code> en Supabase → SQL Editor
+    (o con <code>deploy/migrate.py</code>) y recarga esta página.
+</div>
+{% endif %}
+
+<div class="nota-regla">
+    Un trámite <strong>no suma horas mientras esté pendiente</strong>. Al aprobarlo, sus horas entran en la
+    asistencia de esa persona igual que un tramo marcado, y cuentan para el cumplimiento de su jornada
+    y para el sueldo del mes. Antes de firmar, mira <em>qué fue a hacer</em>: ese texto es el respaldo.
+</div>
+
+<div class="d-flex gap-2 mb-3 filtros flex-wrap">
+    {% for clave, etiqueta in [('pendiente', '⏳ Pendientes'), ('aprobado', '✅ Aprobados'),
+                               ('rechazado', '❌ Rechazados'), ('todos', 'Todos')] %}
+    <a href="{{ url_for('tramites_externos', estado=clave) }}" class="{% if estado == clave %}on{% endif %}">{{ etiqueta }}</a>
+    {% endfor %}
+    {% if tramites %}
+    <span class="ms-auto align-self-center text-muted" style="font-size:13px;">
+        {{ tramites|length }} trámite{{ 's' if tramites|length != 1 }} · <strong>{{ total_horas }} h</strong> en total
+    </span>
+    {% endif %}
+</div>
+
+<div class="card-premium">
+    <div class="card-header-grad grad-warning">📋 {{ 'Esperando autorización' if estado == 'pendiente' else 'Trámites' }}</div>
+    <div class="card-body p-0">
+    <div class="table-responsive"><table class="table table-premium mb-0">
+        <thead><tr>
+            <th class="col-firme">Persona</th><th class="col-firme">Día</th><th class="col-firme">Horario</th>
+            <th class="text-center col-firme">Horas</th><th class="col-firme">Dónde</th>
+            <th>Qué hizo</th><th class="col-firme">Estado</th><th class="col-firme">Autorización</th><th></th>
+        </tr></thead>
+        <tbody>
+        {% for t in tramites %}
+        <tr>
+            <td class="col-firme"><strong>{{ t._persona }}</strong>
+                <br><small class="text-muted">{{ (t.usuarios or {}).rol or '' }}</small></td>
+            <td class="col-firme">{{ t.fecha }}<br><small class="text-muted">registrado {{ (t.registrado_en or '')[:10] }}</small></td>
+            <td class="col-firme">{{ (t.hora_inicio or '')[:5] }}–{{ (t.hora_fin or '')[:5] }}</td>
+            <td class="text-center col-firme"><strong>{{ t._horas }}</strong></td>
+            <td class="col-firme">{{ t.lugar or '—' }}</td>
+            <td class="detalle"><small>{{ t.detalle }}</small>
+                {% if t.motivo_rechazo %}<br><small class="text-danger">Rechazo: {{ t.motivo_rechazo }}</small>{% endif %}</td>
+            <td class="col-firme"><span class="badge-premium bg-{{ 'warning' if t.estado=='pendiente' else 'success' if t.estado=='aprobado' else 'danger' }}">{{ t.estado }}</span></td>
+            <td class="col-firme"><small>{% if t.resuelto_por %}{{ t.resuelto_por }}<br><span class="text-muted">{{ (t.fecha_resolucion or '')[:10] }}</span>{% else %}—{% endif %}</small></td>
+            <td class="text-end col-firme">
+                {% if t.estado == 'pendiente' %}
+                <form method="POST" action="{{ url_for('aprobar_tramite', id=t.id) }}" style="display:inline;"
+                      onsubmit="return confirm('¿Aprobar este trámite? Se le sumarán {{ t._horas }} hora(s) a la asistencia de {{ t._persona }}.');">
+                    <button type="submit" class="btn btn-success btn-premium" title="Aprobar">✅</button>
+                </form>
+                <button type="button" class="btn btn-danger btn-premium" onclick="toggleForm('rech-{{ t.id }}')" title="Rechazar">❌</button>
+                {% endif %}
+            </td>
+        </tr>
+        {% if t.estado == 'pendiente' %}
+        <tr class="fila-form d-none" id="form-rech-{{ t.id }}">
+            <td colspan="9">
+                <form method="POST" action="{{ url_for('rechazar_tramite', id=t.id) }}" class="row g-2 align-items-end">
+                    <div class="col-md-10">
+                        <label class="form-label small fw-bold">Motivo del rechazo</label>
+                        <input type="text" name="motivo_rechazo" maxlength="500" class="form-control form-control-sm"
+                               placeholder="Por qué no se autoriza">
+                    </div>
+                    <div class="col-md-2"><button type="submit" class="btn btn-danger btn-premium w-100">Rechazar</button></div>
+                </form>
+            </td>
+        </tr>
+        {% endif %}
+        {% else %}
+        <tr><td colspan="9" class="text-center text-muted py-4">
+            {% if estado == 'pendiente' %}No hay trámites esperando autorización.{% else %}No hay trámites en este estado.{% endif %}
+        </td></tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+    </div>
+</div>
+
+<script>
+function toggleForm(id) {
+    var fila = document.getElementById('form-' + id);
+    if (fila) { fila.classList.toggle('d-none'); }
+}
+</script>
+{% endblock %}

@@ -147,6 +147,76 @@
 </div>
 {% endif %}
 
+{# ---------- Trámites fuera del centro ---------- #}
+{% if puede_tramites %}
+<div class="card-premium">
+    <div class="card-header-grad" style="background: linear-gradient(135deg, #00897b, #004d40);">
+        🚶 Trámites fuera del centro
+        {% if horas_tramites %}<span class="badge bg-light text-dark ms-2">{{ horas_tramites }} h aprobadas este mes</span>{% endif %}
+    </div>
+    <div class="card-body">
+        <p class="small text-muted mb-3">
+            ¿Saliste a hacer una gestión —el banco, el SRI, la imprenta— y no pudiste marcar?
+            Regístrala aquí con lo que fuiste a hacer. <strong>Suma horas cuando un socio o el
+            administrador la apruebe</strong>; mientras esté pendiente no cuenta.
+        </p>
+        <form method="POST" action="{{ url_for('registrar_tramite') }}" class="row g-2 align-items-end">
+            <div class="col-6 col-md-2">
+                <label class="form-label small fw-bold">Día</label>
+                <input type="date" name="fecha" value="{{ hoy_iso }}" max="{{ hoy_iso }}" required
+                       class="form-control form-control-sm">
+            </div>
+            <div class="col-3 col-md-2">
+                <label class="form-label small fw-bold">Salí a las</label>
+                <input type="time" name="hora_inicio" required class="form-control form-control-sm">
+            </div>
+            <div class="col-3 col-md-2">
+                <label class="form-label small fw-bold">Terminé a las</label>
+                <input type="time" name="hora_fin" required class="form-control form-control-sm">
+            </div>
+            <div class="col-12 col-md-3">
+                <label class="form-label small fw-bold">Dónde</label>
+                <input type="text" name="lugar" maxlength="120" class="form-control form-control-sm"
+                       placeholder="Banco, SRI, imprenta…">
+            </div>
+            <div class="col-12 col-md-3">
+                <label class="form-label small fw-bold">Qué fuiste a hacer</label>
+                <input type="text" name="detalle" minlength="10" maxlength="1000" required
+                       class="form-control form-control-sm"
+                       placeholder="Ej.: depósito de las pensiones de agosto">
+            </div>
+            <div class="col-12">
+                <button type="submit" class="btn btn-success btn-sm fw-bold px-4">Registrar trámite</button>
+            </div>
+        </form>
+
+        {% if mis_tramites %}
+        <div class="table-responsive mt-3"><table class="table table-sm align-middle mb-0" style="font-size:13px;">
+            <thead><tr class="text-muted" style="font-size:11px; text-transform:uppercase;">
+                <th>Día</th><th>Horario</th><th class="text-center">Horas</th><th>Dónde</th>
+                <th>Qué hice</th><th>Estado</th>
+            </tr></thead>
+            <tbody>
+            {% for t in mis_tramites %}
+            <tr>
+                <td style="white-space:nowrap;">{{ t.fecha }}</td>
+                <td style="white-space:nowrap;">{{ (t.hora_inicio or '')[:5] }}–{{ (t.hora_fin or '')[:5] }}</td>
+                <td class="text-center">{{ t._horas }}</td>
+                <td>{{ t.lugar or '—' }}</td>
+                <td><small>{{ t.detalle }}</small>
+                    {% if t.motivo_rechazo %}<br><small class="text-danger">Rechazo: {{ t.motivo_rechazo }}</small>{% endif %}</td>
+                <td style="white-space:nowrap;">
+                    <span class="badge bg-{{ 'warning text-dark' if t.estado=='pendiente' else 'success' if t.estado=='aprobado' else 'danger' }}">{{ t.estado }}</span>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table></div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
 <div class="card-premium"><div class="card-header-grad grad-dark">📅 Últimos 14 días</div><div class="card-body p-0">
 <div class="table-responsive"><table class="table table-premium mb-0"><thead><tr><th class="col-fecha">Fecha</th><th class="col-tramos">Entradas y salidas</th><th class="text-center">Horas</th><th class="text-center">Extra</th><th class="text-center">Total día</th></tr></thead><tbody>
 {% for m in historial %}

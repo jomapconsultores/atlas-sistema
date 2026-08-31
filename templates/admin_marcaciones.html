@@ -300,7 +300,7 @@
 <div class="table-responsive"><table class="table table-premium mb-0">
 <thead><tr><th class="col-fecha">Fecha</th><th>Nombre</th><th>Rol</th><th class="col-tramos">Entradas y salidas</th><th class="text-center col-horas-dia">Horas</th><th class="text-center col-extra-dia">Extra</th><th class="text-center col-totaldia">Total día</th><th></th></tr></thead><tbody>
 {% for m in marcaciones %}
-<tr id="fila-marcacion-{{ m.id }}">
+<tr {% if m.id %}id="fila-marcacion-{{ m.id }}"{% endif %} {% if m._solo_tramite %}class="fila-tramite"{% endif %}>
     <td class="col-fecha">
         {{ m.fecha }}<br>
         <span class="dia-semana {{ 'dia-finde' if m._es_finde }}">{{ m._dia }}{% if m._es_finde %} · fin de semana{% endif %}</span>
@@ -310,6 +310,12 @@
     <td class="col-tramos">
         {{ pinta_tramos(m._tramos) }}
         {% if m._doble_jornada %}<span class="badge-premium bg-secondary text-white" title="Marcó más de una entrada en el día">🔁 {{ m._tramos|length }} tramos</span>{% endif %}
+        {% if m._tramites %}
+        <br><span class="badge-premium text-white" style="background:#00897b;"
+              title="{% for t in m._tramites %}{{ (t.hora_inicio or '')[:5] }}–{{ (t.hora_fin or '')[:5] }} · {{ t.lugar or 'fuera del centro' }}: {{ t.detalle }}{{ '
+' if not loop.last }}{% endfor %}">
+            🚶 trámite{{ 's' if m._tramites|length > 1 }} fuera · {{ m._horas_tramite }} h</span>
+        {% endif %}
     </td>
     <td class="text-center col-horas-dia">
         {% if m._horas %}<strong>{{ m._horas|horas }}</strong>
@@ -328,6 +334,9 @@
     </td>
     <td class="text-center col-totaldia"><strong>{{ m._total_dia|horas }}</strong></td>
     <td class="text-end" style="white-space:nowrap;">
+        {% if m._solo_tramite %}
+        <small class="text-muted" title="Ese día no hubo marcación: son horas de un trámite ya aprobado">solo trámite</small>
+        {% else %}
         <button class="btn btn-sm {{ 'btn-danger text-white' if m._abierto else 'btn-outline-secondary' }}"
                 title="{{ 'Falta una salida: corrígela para que el día cuente' if m._abierto else 'Corregir una entrada o una salida mal marcada' }}"
                 onclick='abrirCorreccion({{ (m.usuarios.nombre if m.usuarios else "—")|tojson }}, {{ m.fecha|tojson }}, {{ m._tramos|tojson }})'>✏️ Corregir</button>
@@ -335,6 +344,7 @@
                 onclick='abrirHorasExtra({{ m.id }}, {{ (m.usuarios.nombre if m.usuarios else "—")|tojson }}, {{ m.fecha|tojson }}, {{ m._horas_extra|default(0, true) }}, {{ (m.nota_extra or "")|tojson }}, {{ (m._tipo_extra or "suplementaria")|tojson }})'>⏱ Extra</button>
         <button class="btn btn-sm {{ 'btn-info text-white' if m._con_permiso else 'btn-outline-info' }}" title="Salida autorizada: pagar la jornada completa de este día"
                 onclick='abrirPermiso({{ m.id }}, {{ (m.usuarios.nombre if m.usuarios else "—")|tojson }}, {{ m.fecha|tojson }}, {{ m._horas|default(0, true) }}, {{ m._horas_jornada|default(0, true) }}, {{ m._horas_repuestas|default(0, true) }}, {{ (m._con_permiso or False)|tojson }}, {{ (m.motivo_permiso or "")|tojson }})'>🪪 Permiso</button>
+        {% endif %}
     </td>
 </tr>
 {% else %}

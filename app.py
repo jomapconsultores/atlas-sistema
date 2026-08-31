@@ -232,6 +232,7 @@ MODULOS_DISPONIBLES = [
     {'key': 'administracion.reporte_duplicados', 'label': 'Reporte duplicados', 'grupo': 'Administración'},
     {'key': 'asistencia.marcar', 'label': 'Marcar ingreso/salida (propio)', 'grupo': 'Asistencia'},
     {'key': 'asistencia.ver_docentes', 'label': 'Ver marcaciones de profesores y psicólogos', 'grupo': 'Asistencia'},
+    {'key': 'asistencia.tramites', 'label': 'Registrar trámites fuera del centro', 'grupo': 'Asistencia'},
     {'key': 'asistencia.jornada_sueldo', 'label': 'Configurar jornada y sueldo del personal', 'grupo': 'Asistencia'},
     {'key': 'administracion.marcaciones', 'label': 'Ver todas las marcaciones', 'grupo': 'Administración'},
     # Gestión de usuarios delegable de forma granular. Cada capacidad se otorga
@@ -447,7 +448,8 @@ def _puede_eliminar_movimientos():
 # Inyecta contadores (anticipos pendientes, contactos nuevos y pagos
 # excepcionales por aprobar) en TODAS las plantillas (badges del menú lateral).
 # Con caché de 30 s: antes eran 2 consultas a la BD en CADA página que se abría.
-_GLOBALES_VACIOS = {'solicitudes_pendientes': 0, 'contactos_nuevos': 0, 'excepciones_pendientes': 0}
+_GLOBALES_VACIOS = {'solicitudes_pendientes': 0, 'contactos_nuevos': 0, 'excepciones_pendientes': 0,
+                    'tramites_pendientes': 0}
 _GLOBALES_CACHE = {'t': 0.0, 'datos': dict(_GLOBALES_VACIOS)}
 
 @app.context_processor
@@ -491,9 +493,17 @@ def inyectar_globales():
                 excepciones_pendientes = len(exc.data or [])
             except Exception:
                 excepciones_pendientes = 0
+            # Trámites fuera del centro esperando firma. En su propio try por lo
+            # mismo: sin la migración 0011 el badge queda en 0 y nada se rompe.
+            try:
+                trm = supabase.table('tramites_externos').select('id').eq('estado', 'pendiente').execute()
+                tramites_pendientes = len(trm.data or [])
+            except Exception:
+                tramites_pendientes = 0
             _GLOBALES_CACHE['datos'] = {'solicitudes_pendientes': pendientes,
                                         'contactos_nuevos': contactos_nuevos,
-                                        'excepciones_pendientes': excepciones_pendientes}
+                                        'excepciones_pendientes': excepciones_pendientes,
+                                        'tramites_pendientes': tramites_pendientes}
             _GLOBALES_CACHE['t'] = time.time()
         return {**base, **_GLOBALES_CACHE['datos']}
     except Exception:
@@ -5180,6 +5190,129 @@ def _marcar_asistencia(usuario_id, fecha, hora, accion):
     return (f'✅ Salida marcada a las {hora[:5]}' if n == 1
             else f'✅ Salida {n} del día marcada a las {hora[:5]}', 'success')
 
+# ========== TRÁMITES FUERA DEL CENTRO ==========
+# Quien sale a hacer una gestión no puede marcar, y ese rato es trabajo. Lo
+# registra con lo que fue a hacer escrito, y un socio o el administrador lo
+# aprueba: recién ahí suma horas. Ver migrations/0011_tramites_externos.sql.
+AVISO_MIGRACION_TRAMITES = ('❌ Falta correr la migración '
+                            'migrations/0011_tramites_externos.sql para usar los trámites')
+
+
+@app.route('/registrar-tramite', methods=['POST'])
+@login_required
+@requiere_modulo('asistencia.tramites')
+def registrar_tramite():
+    """Registra un trámite propio. Queda pendiente de autorización."""
+    volver = redirect(url_for('mi_asistencia'))
+    fecha = (request.form.get('fecha') or '').strip()
+    inicio = _hora_normalizada(request.form.get('hora_inicio'))
+    fin = _hora_normalizada(request.form.get('hora_fin'))
+    lugar = (request.form.get('lugar') or '').strip()[:120]
+    detalle = (request.form.get('detalle') or '').strip()
+
+    try:
+        dia = datetime.strptime(fecha, '%Y-%m-%d').date()
+    except ValueError:
+        flash('❌ Elige la fecha del trámite', 'error')
+        return volver
+    hoy_ec = datetime.now(TZ_ECUADOR).date()
+    if dia > hoy_ec:
+        flash('❌ No se puede registrar un trámite de un día que todavía no llegó', 'error')
+        return volver
+    if (hoy_ec - dia).days > 31:
+        flash('❌ Ese trámite es de hace más de un mes: pídeselo al administrador', 'error')
+        return volver
+    if not inicio or not fin:
+        flash('❌ Indica la hora en que saliste y la hora en que terminaste', 'error')
+        return volver
+    if fin <= inicio:
+        flash('❌ La hora de fin tiene que ser posterior a la de inicio', 'error')
+        return volver
+    # El detalle ES el reporte: sin él, el registro no sirve para justificar nada.
+    if len(detalle) < 10:
+        flash('❌ Escribe qué fuiste a hacer (al menos 10 caracteres)', 'error')
+        return volver
+    if _segundos_tramo({'hora_ingreso': inicio, 'hora_salida': fin}) > JORNADA_MAX_DIARIA * 3600:
+        flash(f'❌ Un trámite no puede durar más de {JORNADA_MAX_DIARIA} horas', 'error')
+        return volver
+    if _choca_con_marcacion(current_user.id, fecha, inicio, fin):
+        flash('⚠️ A esa hora ya estabas marcado en el centro: revisa el horario del trámite', 'warning')
+        return volver
+
+    try:
+        supabase.table('tramites_externos').insert({
+            'usuario_id': int(current_user.id), 'fecha': fecha,
+            'hora_inicio': inicio, 'hora_fin': fin,
+            'lugar': lugar or None, 'detalle': detalle[:1000], 'estado': 'pendiente',
+        }).execute()
+    except Exception as e:
+        flash(f'{AVISO_MIGRACION_TRAMITES} ({e})', 'error')
+        return volver
+    flash('✅ Trámite registrado. Suma horas cuando un socio o el administrador lo apruebe', 'success')
+    return volver
+
+
+@app.route('/tramites-externos')
+@login_required
+@socio_admin_required
+def tramites_externos():
+    """Bandeja de autorización: lo que se hizo fuera y está esperando firma."""
+    estado = (request.args.get('estado') or 'pendiente').strip()
+    if estado not in ESTADOS_TRAMITE + ('todos',):
+        estado = 'pendiente'
+    falta_migracion = False
+    try:
+        q = supabase.table('tramites_externos').select('*, usuarios(nombre,rol)')
+        if estado != 'todos':
+            q = q.eq('estado', estado)
+        tramites = _fetch_all(q.order('fecha', desc=True))
+    except Exception:
+        falta_migracion, tramites = True, []
+    for t in tramites:
+        t['_horas'] = _horas_de_tramites([t])
+        t['_persona'] = (t.get('usuarios') or {}).get('nombre') or '—'
+    return render_template('tramites_externos.html', tramites=tramites, estado=estado,
+                           falta_migracion=falta_migracion,
+                           total_horas=round(sum(t['_horas'] for t in tramites), 2))
+
+
+def _resolver_tramite(id, estado, extra=None):
+    """Aprueba o rechaza, solo si sigue pendiente: dos personas mirando la misma
+    bandeja no pueden resolver dos veces el mismo trámite."""
+    datos = {'estado': estado, 'resuelto_por': current_user.nombre,
+             'fecha_resolucion': datetime.now().isoformat()}
+    datos.update(extra or {})
+    try:
+        r = (supabase.table('tramites_externos').update(datos)
+             .eq('id', id).eq('estado', 'pendiente').execute())
+    except Exception as e:
+        flash(f'❌ No se pudo resolver el trámite: {e}', 'error')
+        return False
+    if not (r.data or []):
+        flash('⚠️ Ese trámite ya no estaba pendiente', 'warning')
+        return False
+    return True
+
+
+@app.route('/aprobar-tramite/<int:id>', methods=['POST'])
+@login_required
+@socio_admin_required
+def aprobar_tramite(id):
+    if _resolver_tramite(id, 'aprobado'):
+        flash('✅ Trámite aprobado: esas horas ya cuentan en su asistencia del mes', 'success')
+    return redirect(request.referrer or url_for('tramites_externos'))
+
+
+@app.route('/rechazar-tramite/<int:id>', methods=['POST'])
+@login_required
+@socio_admin_required
+def rechazar_tramite(id):
+    motivo = (request.form.get('motivo_rechazo') or 'Sin motivo').strip()[:500]
+    if _resolver_tramite(id, 'rechazado', {'motivo_rechazo': motivo}):
+        flash('❌ Trámite rechazado: no suma horas', 'info')
+    return redirect(request.referrer or url_for('tramites_externos'))
+
+
 @app.route('/mi-asistencia', methods=['GET', 'POST'])
 @login_required
 @requiere_modulo('asistencia.marcar')
@@ -5220,6 +5353,15 @@ def mi_asistencia():
         .eq('usuario_id', current_user.id)
         .gte('fecha', f"{anio_actual}-{mes_actual:02d}-01")
         .lte('fecha', f"{anio_actual}-{mes_actual:02d}-{ultimo}")))
+    # Trabajo hecho fuera del centro: los aprobados cuentan como jornada, así
+    # que entran al mes como un tramo más antes de calcular nada.
+    desde_mes = f"{anio_actual}-{mes_actual:02d}-01"
+    hasta_mes = f"{anio_actual}-{mes_actual:02d}-{ultimo}"
+    mis_tramites = _tramites_periodo([current_user.id], desde_mes, hasta_mes, ESTADOS_TRAMITE)
+    for t in mis_tramites:
+        t['_horas'] = _horas_de_tramites([t])
+    del_mes = _sumar_tramites(del_mes, [t for t in mis_tramites if t.get('estado') == 'aprobado'])
+
     jornadas = _jornadas_por_usuario(anio_actual, mes_actual)
     mi_jornada = jornadas.get(current_user.id)
     resumen = _resumen_asistencia(del_mes, jornadas,
@@ -5256,7 +5398,12 @@ def mi_asistencia():
                           historial=historial, mi_resumen=mi_resumen,
                           tiene_jornada=bool(mi_jornada), mes=mes_actual, anio=anio_actual,
                           ver_sueldo=ver_sueldo,
-                          sbu=SBU_ECUADOR, sbu_anio=SBU_ANIO, horas_mes_legal=HORAS_MES_LEGAL)
+                          sbu=SBU_ECUADOR, sbu_anio=SBU_ANIO, horas_mes_legal=HORAS_MES_LEGAL,
+                          mis_tramites=mis_tramites,
+                          puede_tramites=tiene_modulo('asistencia.tramites'),
+                          horas_tramites=round(sum(t['_horas'] for t in mis_tramites
+                                                   if t.get('estado') == 'aprobado'), 2),
+                          hoy_iso=hoy)
 
 # --- Marco legal ecuatoriano (Código del Trabajo) ------------------------
 # Salario Básico Unificado vigente. 2026: USD 482 (Acuerdo Ministerial
@@ -5392,6 +5539,101 @@ def _sincronizar_dia(marcacion_id, tramos):
         'hora_ingreso': min(str(t['hora_ingreso'])[:8] for t in con_hora) if con_hora else None,
         'hora_salida': max(salidas) if salidas else None,
     }).eq('id', marcacion_id).execute()
+
+ESTADOS_TRAMITE = ('pendiente', 'aprobado', 'rechazado')
+
+
+def _tramites_periodo(usuarios, desde, hasta, estados=('aprobado',)):
+    """Trámites externos de esas personas en el período, por estado.
+
+    Devuelve [] si la tabla todavía no existe (migración 0011 pendiente): sin
+    ella el reporte de asistencia debe seguir saliendo exactamente igual que
+    antes, no romperse.
+    """
+    if not usuarios:
+        return []
+    try:
+        q = (supabase.table('tramites_externos').select('*, usuarios(nombre,rol)')
+             .in_('usuario_id', list(usuarios)).in_('estado', list(estados)))
+        if desde:
+            q = q.gte('fecha', desde)
+        if hasta:
+            q = q.lte('fecha', hasta)
+        return _fetch_all(q.order('fecha', desc=True))
+    except Exception:
+        return []
+
+
+def _sumar_tramites(filas, tramites):
+    """Mete los trámites aprobados en las marcaciones como un tramo más.
+
+    Se hace así —y no sumando horas al final— para que el día se redondee UNA
+    vez y de la misma forma: 08:00-11:30 en el centro más 2 h en el banco son
+    6 h, no 4 + 2 con dos redondeos. Un día en el que solo hubo trámite entra
+    como una fila nueva, o no contaría como día trabajado y el mes saldría con
+    una falta que no existió.
+    """
+    por_dia = {}
+    for t in tramites or []:
+        por_dia.setdefault((t.get('usuario_id'), str(t.get('fecha'))[:10]), []).append(t)
+    if not por_dia:
+        return filas
+
+    def tramo(t):
+        return {'hora_ingreso': t.get('hora_inicio'), 'hora_salida': t.get('hora_fin')}
+
+    for f in filas:
+        suyos = por_dia.pop((f.get('usuario_id'), str(f.get('fecha'))[:10]), None)
+        if not suyos:
+            continue
+        base = f.get('_tramos')
+        if base is None:
+            base = [f] if f.get('hora_ingreso') else []
+        f['_tramos'] = list(base) + [tramo(t) for t in suyos]
+        f['_tramites'] = suyos
+        f['_horas_tramite'] = _horas_de_tramites(suyos)
+
+    solo_tramite = []
+    for (uid, fecha), suyos in por_dia.items():
+        orden = sorted(suyos, key=lambda t: str(t.get('hora_inicio')))
+        solo_tramite.append({
+            'usuario_id': uid, 'fecha': fecha,
+            'hora_ingreso': orden[0].get('hora_inicio'),
+            'hora_salida': orden[-1].get('hora_fin'),
+            'usuarios': orden[0].get('usuarios') or {},
+            '_tramos': [tramo(t) for t in orden], '_tramites': orden,
+            '_horas_tramite': _horas_de_tramites(orden), '_solo_tramite': True,
+        })
+    return list(filas) + solo_tramite
+
+
+def _horas_de_tramites(tramites):
+    """Horas de una lista de trámites, con el mismo redondeo que la jornada."""
+    seg = sum(_segundos_tramo({'hora_ingreso': t.get('hora_inicio'),
+                               'hora_salida': t.get('hora_fin')}) for t in tramites or [])
+    return int(math.floor(seg / 3600 + 0.5)) if seg > 0 else 0
+
+
+def _choca_con_marcacion(usuario_id, fecha, inicio, fin):
+    """¿El trámite pisa un tramo ya marcado ese día?
+
+    Si la persona estaba fichada en el centro a esa hora, no podía estar en el
+    banco: contarlo sumaría dos veces el mismo rato. Se avisa al registrar, que
+    es cuando tiene arreglo.
+    """
+    try:
+        tramos = (supabase.table('marcaciones_tramos').select('hora_ingreso,hora_salida')
+                  .eq('usuario_id', usuario_id).eq('fecha', fecha).execute().data or [])
+    except Exception:
+        return False
+    for t in tramos:
+        t_ini, t_fin = str(t.get('hora_ingreso') or '')[:8], str(t.get('hora_salida') or '')[:8]
+        if not t_ini or not t_fin:
+            continue
+        if inicio < t_fin and t_ini < fin:
+            return True
+    return False
+
 
 def _adjuntar_tramos(filas):
     """Cuelga en cada marcación sus tramos del día en '_tramos' (ya ordenados)
@@ -5783,6 +6025,30 @@ def admin_marcaciones():
         us = (supabase.table('usuarios').select('id,nombre,rol')
               .in_('id', list(jornadas.keys())).eq('activo', True).execute().data or [])
         personas_base = [u for u in us if ve_todas or u.get('rol') in ('profesor', 'psicologo')]
+    # El trabajo hecho fuera cuenta igual que el marcado, siempre que esté
+    # aprobado. Se suma antes del resumen para que el día se redondee una vez.
+    _ids_reporte = sorted({f.get('usuario_id') for f in filas if f.get('usuario_id')}
+                          | {p['id'] for p in personas_base})
+    tramites_periodo = _tramites_periodo(_ids_reporte, f"{anio}-{mes:02d}-01",
+                                         f"{anio}-{mes:02d}-{ultimo_dia}")
+    filas = _sumar_tramites(filas, tramites_periodo)
+    for f in filas:
+        if f.get('_solo_tramite'):
+            # Fila creada a partir de un trámite: no hay marcación que mostrar,
+            # pero el día existe y sus horas cuentan.
+            f['_horas'] = _horas_del_dia(f)
+            f['_horas_extra'] = 0.0
+            f['_tipo_extra'], f['_recargo'] = '', {}
+            f['_sobre_jornada_legal'] = f['_horas'] > JORNADA_MAX_DIARIA
+            f['_dia'], f['_es_finde'] = _dia_semana(f.get('fecha'))
+            f['_doble_jornada'] = len(f.get('_tramos') or []) > 1
+            _j = jornadas.get(f.get('usuario_id')) or {}
+            f['_horas_jornada'] = _num(_j.get('horas_dia'), JORNADA_DEFECTO['horas_dia'])
+            f['_con_permiso'] = False
+            f['_horas_repuestas'] = 0
+            f['_horas_pagadas'] = f['_horas']
+            f['_total_dia'] = f['_horas']
+    filas.sort(key=lambda f: (str(f.get('fecha')), str(f.get('hora_ingreso') or '')), reverse=True)
     resumen = _resumen_asistencia(filas, jornadas, personas_base, anio, mes)
     totales = {
         'dias': sum(r['dias_trabajados'] for r in resumen),
