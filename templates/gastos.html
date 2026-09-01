@@ -393,9 +393,9 @@
                         </thead>
                         <tbody>
                             {% for g in gastos %}
-                            <tr id="fila-gasto-{{ g['id'] }}" data-pagado="{{ 'si' if g.get('pagado') else 'no' }}" data-monto="{{ g['monto'] }}" style="transition: all 0.2s;{% if g.get('_para_otro_periodo') %}opacity:.6;background:#fff8e1;{% endif %}">
+                            <tr id="fila-gasto-{{ g['id'] }}" data-pagado="{{ 'si' if g.get('pagado') or (g.get('reembolso') and g.get('reembolso_pagado')) else 'no' }}" data-monto="{{ g['monto'] }}" style="transition: all 0.2s;{% if g.get('_para_otro_periodo') %}opacity:.6;background:#fff8e1;{% endif %}">
                                 <td class="text-center">
-                                    {% if not g.get('pagado') %}
+                                    {% if not (g.get('pagado') or (g.get('reembolso') and g.get('reembolso_pagado'))) %}
                                     <input type="checkbox" class="sel-gasto" value="{{ g['id'] }}" onclick="actualizarSeleccion()">
                                     {% endif %}
                                 </td>
@@ -429,7 +429,11 @@
                                     {% if g.get('pagado') %}
                                     <span class="badge bg-success" style="cursor:pointer;" title="Pagado el {{ g.get('fecha_pago','') }} — clic para revertir" onclick="marcarGastoPagado({{ g['id'] }}, true, '{{ g.get('fecha_pago','') }}')">✅ {{ g.get('fecha_pago','') }}</span>
                                     {% else %}
+                                    {% if g.get('reembolso') and g.get('reembolso_pagado') %}
+                                    <span class="badge bg-success" title="El reembolso ya se devolvió: ese dinero salió de la cuenta">✅ reembolsado</span>
+                                    {% else %}
                                     <span class="badge bg-warning text-dark" style="cursor:pointer;" title="Registrar pago y fecha" onclick="marcarGastoPagado({{ g['id'] }}, false, '')">⏳ Por pagar</span>
+                                    {% endif %}
                                     {% endif %}
                                 </td>
                                 <td class="text-center">
