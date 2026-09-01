@@ -3703,27 +3703,32 @@ def reportes():
                          datos_ingresos=datos_ingresos)
 
 
-# Quien figura como pagador cuando el gasto salió directo del banco de Atlas.
-PAGADOR_CUENTA_ATLAS = 'Atlas (cuenta directa)'
-
-
-def gasto_ya_salio_de_la_cuenta(g):
-    """¿Este gasto ya bajó el saldo del banco?
+def gasto_ya_salio_de_la_cuenta(g, hasta=None):
+    """¿Este gasto ya bajó el saldo del banco a la fecha de corte?
 
     Importa para el balance: la liquidación arranca del saldo REAL de la
     cuenta, que ya refleja todo lo que salió. Restar además un gasto ya pagado
     lo cuenta dos veces y hunde el balance —y con él, lo que aporta cada socio.
     Es el mismo criterio que ya se aplicaba a los anticipos entregados.
 
-    Se da por salido si: está marcado como pagado; si es un reembolso que ya se
-    le devolvió a quien lo puso; o si el pagador es la propia cuenta de Atlas,
-    que por definición significa que el dinero salió del banco.
+    Solo cuenta la marca EXPLÍCITA de pago: el botón «Pagar» del gasto, o el
+    reembolso ya devuelto a quien lo puso. No se deduce de quién figura como
+    pagador: «Atlas (cuenta directa)» dice quién paga, no cuándo, y el arriendo
+    del 1 de septiembre cargado al período de agosto no había salido todavía
+    cuando se cerró el saldo del 31.
+
+    Por eso también se mira la fecha: un gasto pagado DESPUÉS del corte no está
+    descontado de ese saldo, aunque hoy ya esté pagado.
     """
-    if g.get('pagado'):
+    pagado = bool(g.get('pagado')) or bool(g.get('reembolso') and g.get('reembolso_pagado'))
+    if not pagado:
+        return False
+    if not hasta:
         return True
-    if g.get('reembolso') and g.get('reembolso_pagado'):
-        return True
-    return norm_nombre(g.get('persona') or '').lower().startswith('atlas')
+    fecha = str(g.get('fecha_pago') or g.get('reembolso_fecha_pago') or '')[:10]
+    # Sin fecha de pago registrada no se puede saber cuándo salió: se respeta la
+    # marca, que es lo que la persona afirmó al pulsar el botón.
+    return (not fecha) or fecha <= str(hasta)[:10]
 
 
 # ========== GASTO ADMINISTRATIVO ==========
@@ -4448,8 +4453,9 @@ def liquidacion():
     # directo a la cuenta de Atlas): el saldo del que parte el balance ya los
     # descontó, así que restarlos otra vez sería contarlos dos veces.
     _gastos_del_periodo = gastos_periodo.data or []
+    _corte_saldo = f"{anio}-{mes:02d}-{ultimo_dia}"
     total_gastos_pagados = round(sum(g.get('monto', 0) or 0 for g in _gastos_del_periodo
-                                     if gasto_ya_salio_de_la_cuenta(g)), 2)
+                                     if gasto_ya_salio_de_la_cuenta(g, _corte_saldo)), 2)
     total_gastos = round(total_gastos, 2)
     total_gastos_por_pagar = round(total_gastos - total_gastos_pagados, 2)
     total_ingresos = round(total_ingresos, 2)

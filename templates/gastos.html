@@ -362,10 +362,25 @@
                 </form>
                 
                 {% if gastos %}
+                {# Lo pagado y lo pendiente, a la vista: es lo que decide cuánto
+                   descuenta el balance de la liquidación. #}
+                <div class="d-flex flex-wrap gap-2 align-items-center mb-2 p-2 rounded" style="background:#f8f9fa;">
+                    <span class="badge bg-success" id="chipPagado">✅ Pagado: $0.00</span>
+                    <span class="badge bg-warning text-dark" id="chipPendiente">⏳ Por pagar: $0.00</span>
+                    <div class="btn-group btn-group-sm ms-auto" role="group">
+                        <button type="button" class="btn btn-outline-secondary active" onclick="filtrarPago('todos', this)">Todos</button>
+                        <button type="button" class="btn btn-outline-warning" onclick="filtrarPago('pendiente', this)">Por pagar</button>
+                        <button type="button" class="btn btn-outline-success" onclick="filtrarPago('pagado', this)">Pagados</button>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-primary" id="btnMarcarSel" onclick="marcarSeleccionados()" disabled>
+                        Marcar seleccionados como pagados
+                    </button>
+                </div>
                 <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
                     <table class="table table-hover table-sm mb-0">
                         <thead class="sticky-top" style="background: #f8f9fa; top: 0; z-index: 10;">
                             <tr>
+                                <th class="text-center" style="width:34px;"><input type="checkbox" onclick="marcarTodos(this)" title="Seleccionar los que están por pagar"></th>
                                 <th>📅 Fecha</th>
                                 <th>Concepto</th>
                                 <th>Categoría</th>
@@ -378,7 +393,12 @@
                         </thead>
                         <tbody>
                             {% for g in gastos %}
-                            <tr id="fila-gasto-{{ g['id'] }}" style="transition: all 0.2s;{% if g.get('_para_otro_periodo') %}opacity:.6;background:#fff8e1;{% endif %}">
+                            <tr id="fila-gasto-{{ g['id'] }}" data-pagado="{{ 'si' if g.get('pagado') else 'no' }}" data-monto="{{ g['monto'] }}" style="transition: all 0.2s;{% if g.get('_para_otro_periodo') %}opacity:.6;background:#fff8e1;{% endif %}">
+                                <td class="text-center">
+                                    {% if not g.get('pagado') %}
+                                    <input type="checkbox" class="sel-gasto" value="{{ g['id'] }}" onclick="actualizarSeleccion()">
+                                    {% endif %}
+                                </td>
                                 <td>
                                     <span class="editable-celda" onclick="editarGastoInline({{ g['id'] }}, 'fecha', '{{ g['fecha'] }}')" style="cursor: pointer;">{{ g['fecha'] }}</span>
                                     {% if g.get('_de_otro_mes') %}<br><span class="badge bg-info" title="Con fecha de otro mes pero considerado para este período">✔ considerado aquí</span>{% endif %}
@@ -409,7 +429,7 @@
                                     {% if g.get('pagado') %}
                                     <span class="badge bg-success" style="cursor:pointer;" title="Pagado el {{ g.get('fecha_pago','') }} — clic para revertir" onclick="marcarGastoPagado({{ g['id'] }}, true, '{{ g.get('fecha_pago','') }}')">✅ {{ g.get('fecha_pago','') }}</span>
                                     {% else %}
-                                    <span class="badge bg-secondary" style="cursor:pointer;" title="Registrar pago y fecha" onclick="marcarGastoPagado({{ g['id'] }}, false, '')">⏳ Pagar</span>
+                                    <span class="badge bg-warning text-dark" style="cursor:pointer;" title="Registrar pago y fecha" onclick="marcarGastoPagado({{ g['id'] }}, false, '')">⏳ Por pagar</span>
                                     {% endif %}
                                 </td>
                                 <td class="text-center">
@@ -420,7 +440,7 @@
                         </tbody>
                         <tfoot style="background: #f8f9fa; font-weight: bold;">
                             <tr>
-                                <td colspan="4">Total</td>
+                                <td colspan="5">Total</td>
                                 <td class="text-end">${{ "%.2f"|format(total) }}</td>
                                 <td colspan="3"></td>
                             </tr>
@@ -980,6 +1000,73 @@ async function reversarReembolso(id) {
 }
 
 // ── Pago de gastos (registrar fecha) ──
+// ---- Pagado / por pagar -----------------------------------------------
+// El balance de la liquidación solo descuenta lo que TODAVÍA debe salir de la
+// cuenta, así que marcar un gasto como pagado cambia el reparto: conviene que
+// se vea de un vistazo cuánto hay de cada cosa.
+function resumenPagos() {
+    let pagado = 0, pendiente = 0;
+    document.querySelectorAll('tr[data-monto]').forEach(function (tr) {
+        const m = parseFloat(tr.dataset.monto) || 0;
+        if (tr.dataset.pagado === 'si') { pagado += m; } else { pendiente += m; }
+    });
+    const c1 = document.getElementById('chipPagado');
+    const c2 = document.getElementById('chipPendiente');
+    if (c1) c1.textContent = '✅ Pagado: $' + pagado.toFixed(2);
+    if (c2) c2.textContent = '⏳ Por pagar: $' + pendiente.toFixed(2);
+}
+
+function filtrarPago(estado, boton) {
+    document.querySelectorAll('.btn-group .btn').forEach(function (b) { b.classList.remove('active'); });
+    if (boton) boton.classList.add('active');
+    document.querySelectorAll('tr[data-monto]').forEach(function (tr) {
+        const p = tr.dataset.pagado === 'si';
+        tr.style.display = (estado === 'todos' || (estado === 'pagado') === p) ? '' : 'none';
+    });
+}
+
+function marcarTodos(fuente) {
+    document.querySelectorAll('.sel-gasto').forEach(function (c) {
+        if (c.closest('tr').style.display !== 'none') c.checked = fuente.checked;
+    });
+    actualizarSeleccion();
+}
+
+function actualizarSeleccion() {
+    const n = document.querySelectorAll('.sel-gasto:checked').length;
+    const b = document.getElementById('btnMarcarSel');
+    if (!b) return;
+    b.disabled = n === 0;
+    b.textContent = n ? 'Marcar ' + n + ' como pagados' : 'Marcar seleccionados como pagados';
+}
+
+async function marcarSeleccionados() {
+    const ids = [...document.querySelectorAll('.sel-gasto:checked')].map(function (c) { return c.value; });
+    if (!ids.length) return;
+    const hoy = new Date().toISOString().slice(0, 10);
+    const fecha = prompt('¿En qué fecha se pagaron estos ' + ids.length + ' gasto(s)?', hoy);
+    if (!fecha) return;
+    const btn = document.getElementById('btnMarcarSel');
+    btn.disabled = true;
+    btn.textContent = 'Marcando…';
+    let ok = 0;
+    for (const id of ids) {
+        try {
+            const r = await fetch('/api/gasto/' + id + '/marcar-pagado', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fecha: fecha })
+            });
+            const j = await r.json();
+            if (j.success) ok++;
+        } catch (e) { /* se informa al final con el conteo */ }
+    }
+    alert(ok + ' de ' + ids.length + ' gasto(s) marcados como pagados el ' + fecha + '.');
+    location.reload();
+}
+
+document.addEventListener('DOMContentLoaded', resumenPagos);
+
 async function marcarGastoPagado(id, pagado, fecha) {
     if (pagado) {
         if (!confirm('¿Quitar la marca de pagado de este gasto?')) return;
