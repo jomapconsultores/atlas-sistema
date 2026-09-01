@@ -229,11 +229,19 @@
             aquí se ve a quién corresponde. Lo que salga como <strong>sin registrar</strong> todavía no se descontó.
         </div>
         {% if not (gasto_admin.personas or gasto_admin.otros_registrados) %}
+        {% if gasto_admin.avisos %}
+        <div class="p-3">
+            {% for a in gasto_admin.avisos %}
+            <div class="alert alert-warning py-2 px-3 mb-2" style="font-size:14px;">⚠️ {{ a }}</div>
+            {% endfor %}
+        </div>
+        {% else %}
         <div class="p-3 text-muted" style="font-size:14px;">
             No hay pago administrativo en este período. Para que aparezca, la persona necesita
             <strong>jornada con sueldo configurado</strong> en <em>Asistencia → Configurar jornada y sueldo</em>;
             el cálculo sale de su asistencia del mes.
         </div>
+        {% endif %}
         {% else %}
         <div class="table-responsive">
             <table class="table table-sm align-middle mb-0">

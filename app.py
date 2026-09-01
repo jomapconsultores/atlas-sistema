@@ -3733,7 +3733,7 @@ def _gasto_administrativo_mes(mes, anio):
     a las horas trabajadas más las extras con su recargo—, exactamente la
     cifra que esa persona ve en «Mi asistencia».
     """
-    vacio = {'personas': [], 'total': 0.0, 'excluidos': [], 'sin_migracion': False}
+    vacio = {'personas': [], 'total': 0.0, 'excluidos': [], 'avisos': [], 'sin_migracion': False}
     try:
         jornadas = _jornadas_por_usuario(anio, mes)
     except Exception:
@@ -3741,7 +3741,11 @@ def _gasto_administrativo_mes(mes, anio):
     con_sueldo = {uid: j for uid, j in (jornadas or {}).items()
                   if _num(j.get('sueldo_tiempo_completo')) > 0}
     if not con_sueldo:
-        return vacio
+        # Sin jornada vigente en ESE mes no hay nada que calcular. El caso que
+        # despista es haber configurado la jornada hoy: rige desde hoy, así que
+        # el mes pasado sigue sin jornada y el panel saldría vacío sin decir por
+        # qué. Se mira el historial y se explica exactamente eso.
+        return dict(vacio, avisos=_avisos_jornada_posterior(anio, mes))
 
     try:
         usuarios = (supabase.table('usuarios').select('id,nombre,rol')
@@ -3749,7 +3753,7 @@ def _gasto_administrativo_mes(mes, anio):
     except Exception:
         return dict(vacio, sin_migracion=True)
     if not usuarios:
-        return vacio
+        return dict(vacio, avisos=_avisos_jornada_posterior(anio, mes))
 
     ultimo_dia = monthrange(anio, mes)[1]
     desde, hasta = f"{anio}-{mes:02d}-01", f"{anio}-{mes:02d}-{ultimo_dia}"
@@ -3781,8 +3785,45 @@ def _gasto_administrativo_mes(mes, anio):
             'total': round(_num(r.get('total_a_pagar')), 2),
         })
     personas.sort(key=lambda x: x['nombre'])
-    return {'personas': personas, 'excluidos': excluidos,
+    return {'personas': personas, 'excluidos': excluidos, 'avisos': [],
             'total': round(sum(p['total'] for p in personas), 2), 'sin_migracion': False}
+
+
+def _avisos_jornada_posterior(anio, mes):
+    """Explica por qué un mes anterior no tiene pago administrativo.
+
+    Si alguien tiene jornada con sueldo pero su etapa más antigua empieza
+    DESPUÉS de ese mes, el mes no se calcula: es la regla de vigencia, que
+    existe para que configurar una jornada hoy no reescriba lo ya pagado. Se
+    dice con nombre y fecha, porque desde la pantalla es indistinguible de un
+    error.
+    """
+    ultimo = monthrange(anio, mes)[1]
+    fin_mes = f"{anio}-{mes:02d}-{ultimo}"
+    try:
+        todas = _jornadas_todas()
+    except Exception:
+        return []
+    if not todas:
+        return []
+    try:
+        nombres = {u['id']: u.get('nombre') for u in
+                   (supabase.table('usuarios').select('id,nombre')
+                    .in_('id', list(todas)).execute().data or [])}
+    except Exception:
+        nombres = {}
+    avisos = []
+    for uid, etapas in todas.items():
+        con_sueldo = [e for e in etapas if _num(e.get('sueldo_tiempo_completo')) > 0]
+        if not con_sueldo:
+            continue
+        primera = min(_vigencia(e) for e in con_sueldo)
+        if primera > fin_mes:
+            avisos.append(f"{nombres.get(uid) or 'Esa persona'} tiene jornada con sueldo, pero rige "
+                          f"desde el {primera}: por eso este mes no se calcula. Si le corresponde "
+                          f"cobrarlo, ajusta «Rige desde» a una fecha de este mes o anterior en "
+                          f"Configurar jornada y sueldo.")
+    return avisos
 
 
 def _gastos_admin_registrados(mes, anio):

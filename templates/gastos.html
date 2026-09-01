@@ -100,7 +100,13 @@
         <p class="mb-2">Tu usuario no tiene el permiso <strong>Pagos a docentes</strong>, que es el que habilita este cálculo.</p>
         <p class="text-muted mb-0" style="font-size:14px;">Pídeselo al administrador en <em>Usuarios</em>.</p>
         {% else %}
+        {% if gasto_admin and gasto_admin.avisos %}
+        {% for a in gasto_admin.avisos %}
+        <div class="alert alert-warning py-2 px-3 mb-2" style="font-size:14px;">⚠️ {{ a }}</div>
+        {% endfor %}
+        {% else %}
         <p class="mb-2">Todavía no hay nadie de quien calcular el pago administrativo de este período.</p>
+        {% endif %}
         <p class="text-muted mb-0" style="font-size:14px;">
             Aquí aparece el pago de <strong>secretaría</strong> y de cualquier otro cargo administrativo.
             Para que salga, esa persona necesita <strong>jornada con sueldo configurado</strong>
