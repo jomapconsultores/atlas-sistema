@@ -3703,6 +3703,29 @@ def reportes():
                          datos_ingresos=datos_ingresos)
 
 
+# Quien figura como pagador cuando el gasto salió directo del banco de Atlas.
+PAGADOR_CUENTA_ATLAS = 'Atlas (cuenta directa)'
+
+
+def gasto_ya_salio_de_la_cuenta(g):
+    """¿Este gasto ya bajó el saldo del banco?
+
+    Importa para el balance: la liquidación arranca del saldo REAL de la
+    cuenta, que ya refleja todo lo que salió. Restar además un gasto ya pagado
+    lo cuenta dos veces y hunde el balance —y con él, lo que aporta cada socio.
+    Es el mismo criterio que ya se aplicaba a los anticipos entregados.
+
+    Se da por salido si: está marcado como pagado; si es un reembolso que ya se
+    le devolvió a quien lo puso; o si el pagador es la propia cuenta de Atlas,
+    que por definición significa que el dinero salió del banco.
+    """
+    if g.get('pagado'):
+        return True
+    if g.get('reembolso') and g.get('reembolso_pagado'):
+        return True
+    return norm_nombre(g.get('persona') or '').lower().startswith('atlas')
+
+
 # ========== GASTO ADMINISTRATIVO ==========
 # Secretaría —y cualquier cargo administrativo que se cree más adelante— no
 # cobra por sesiones: cobra un sueldo por su jornada, y ese dinero sale de la
@@ -4421,12 +4444,19 @@ def liquidacion():
     docentes_con_deduccion = set(pago_por_docente) | set(SOCIOS)
     total_anticipos = round(sum(anticipos_por_docente.get(p, 0) for p in docentes_con_deduccion), 2)
 
+    # Gastos que ya salieron del banco (pagados, reembolsados, o cargados
+    # directo a la cuenta de Atlas): el saldo del que parte el balance ya los
+    # descontó, así que restarlos otra vez sería contarlos dos veces.
+    _gastos_del_periodo = gastos_periodo.data or []
+    total_gastos_pagados = round(sum(g.get('monto', 0) or 0 for g in _gastos_del_periodo
+                                     if gasto_ya_salio_de_la_cuenta(g)), 2)
     total_gastos = round(total_gastos, 2)
+    total_gastos_por_pagar = round(total_gastos - total_gastos_pagados, 2)
     total_ingresos = round(total_ingresos, 2)
     total_ingresos_bruto = round(total_ingresos_bruto, 2)
     total_pago_docentes = round(total_pago_docentes, 2)
     total_pago_docentes_neto = round(total_pago_docentes - total_anticipos, 2)
-    balance = round(saldo_cuenta - total_gastos - total_pago_docentes_neto, 2)
+    balance = round(saldo_cuenta - total_gastos_por_pagar - total_pago_docentes_neto, 2)
 
     # ── Regla de reparto ──
     #  • Balance NEGATIVO  -> se reparte automáticamente el 100% (todos asumen
@@ -4493,6 +4523,8 @@ def liquidacion():
     return render_template('liquidacion.html',
         gasto_admin=gasto_admin,
         puede_registrar_admin=(current_user.rol in ('admin', 'socio')),
+        total_gastos_pagados=total_gastos_pagados,
+        total_gastos_por_pagar=total_gastos_por_pagar,
         mes=mes, anio=anio, saldo_cuenta=saldo_cuenta,
         saldo_banco=saldo_banco, fecha_saldo_banco=fecha_saldo_banco,
         saldo_es_auto=saldo_es_auto,
