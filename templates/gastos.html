@@ -62,7 +62,7 @@
                         <th class="ps-3">Persona</th><th>Rol</th>
                         <th class="text-center">Días</th><th class="text-center">Horas</th>
                         <th class="text-center">Extra</th><th class="text-end">A pagar</th>
-                        <th class="text-center">En gastos</th>
+                        <th class="text-center">En gastos</th><th class="text-center">💵 Pago</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -78,6 +78,18 @@
                             {% if p.registrado %}<span class="badge bg-success">✅ registrado</span>
                             {% elif p.total <= 0 %}<span class="text-muted">sin monto</span>
                             {% else %}<span class="badge bg-warning text-dark">⏳ pendiente</span>{% endif %}
+                        </td>
+                        <td class="text-center" style="white-space:nowrap;">
+                            {% if not p.registrado %}<span class="text-muted">—</span>
+                            {% elif p.pagado %}
+                            <span class="badge bg-success" style="cursor:pointer;"
+                                  title="Pagado el {{ p.fecha_pago }} — clic para revertir"
+                                  onclick="marcarGastoPagado({{ p.gasto_id }}, true, '{{ p.fecha_pago }}')">✅ {{ p.fecha_pago }}</span>
+                            {% else %}
+                            <span class="badge bg-warning text-dark" style="cursor:pointer;"
+                                  title="Registrar la fecha en que se le pagó"
+                                  onclick="marcarGastoPagado({{ p.gasto_id }}, false, '')">⏳ Registrar pago</span>
+                            {% endif %}
                         </td>
                     </tr>
                 {% endfor %}

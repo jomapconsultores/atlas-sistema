@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}Reporte de pagos - Atlas{% endblock %}
+{% block content %}
+<style>
+    .card-premium { border-radius: 18px; border: none; box-shadow: 0 4px 20px rgba(0,0,0,0.06); background: white; margin-bottom: 20px; overflow: hidden; }
+    .card-head { padding: 14px 20px; color: white; font-weight: 700; font-size: 15px; }
+    .tabla-pagos { margin: 0; font-size: 13.5px; }
+    .tabla-pagos thead th { background: #1a1a2e; color: white; font-weight: 600; font-size: 11px; letter-spacing: .5px; border: none; padding: 10px 12px; text-transform: uppercase; white-space: nowrap; }
+    .tabla-pagos tbody td { padding: 9px 12px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+    .chip { display: inline-block; padding: 4px 10px; border-radius: 9px; font-size: 10.5px; font-weight: 600; white-space: nowrap; }
+    .col-firme { white-space: nowrap; }
+    .resumen { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-bottom: 22px; }
+    .cifra { border-radius: 14px; padding: 16px 18px; text-align: center; }
+    .cifra b { display: block; font-size: 26px; font-weight: 700; line-height: 1.2; }
+    .cifra small { color: #5a6a80; }
+    .filtros { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 18px; }
+    @media print {
+        .no-print, .app-sidebar, .navbar-premium, .sidebar-panel-bg { display: none !important; }
+        .card-premium { box-shadow: none; border: 1px solid #ddd; break-inside: avoid; }
+        body { background: #fff; }
+    }
+</style>
+
+<div class="page-hero">
+    <h2>🧾 Reporte de pagos</h2>
+    <p>A quién se le pagó, cuándo, y a quién se le debe todavía.</p>
+</div>
+
+<div class="filtros no-print">
+    <form method="get" class="d-flex gap-2">
+        <select name="mes" class="form-select form-select-sm" style="min-width:120px;" onchange="this.form.submit()">
+            {% for m in range(1,13) %}
+            <option value="{{ m }}" {{ 'selected' if m == mes }}>{{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][m-1] }}</option>
+            {% endfor %}
+        </select>
+        <select name="anio" class="form-select form-select-sm" style="min-width:95px;" onchange="this.form.submit()">
+            {% for a in range(2025, 2031) %}<option value="{{ a }}" {{ 'selected' if a == anio }}>{{ a }}</option>{% endfor %}
+        </select>
+    </form>
+    <div class="btn-group btn-group-sm" role="group">
+        <button type="button" class="btn btn-outline-secondary active" onclick="filtrar('todos', this)">Todo</button>
+        <button type="button" class="btn btn-outline-warning" onclick="filtrar('pendiente', this)">Por pagar</button>
+        <button type="button" class="btn btn-outline-success" onclick="filtrar('pagado', this)">Pagados</button>
+    </div>
+    <button type="button" class="btn btn-sm btn-primary ms-auto" onclick="window.print()">🖨️ Imprimir o guardar en PDF</button>
+</div>
+
+<div class="resumen">
+    <div class="cifra" style="background:#e8f5e9;">
+        <b style="color:#2e7d32;">${{ "%.2f"|format(total_pagado) }}</b>
+        <small>Ya pagado · {{ n_pagado }} concepto{{ 's' if n_pagado != 1 }}</small>
+    </div>
+    <div class="cifra" style="background:#fff8e1;">
+        <b style="color:#b26a00;">${{ "%.2f"|format(total_pendiente) }}</b>
+        <small>Por pagar · {{ n_pendiente }} concepto{{ 's' if n_pendiente != 1 }}</small>
+    </div>
+    <div class="cifra" style="background:#eef1f6;">
+        <b style="color:#14406f;">${{ "%.2f"|format(total_general) }}</b>
+        <small>Total del período</small>
+    </div>
+</div>
+
+{% if por_persona %}
+<div class="card-premium">
+    <div class="card-head" style="background:linear-gradient(135deg,#5e35b1,#311b92);">👤 Por persona</div>
+    <div class="table-responsive">
+        <table class="table tabla-pagos">
+            <thead><tr>
+                <th>Persona</th><th class="text-end">Ya cobró</th>
+                <th class="text-end">Se le debe</th><th class="text-end">Total</th>
+            </tr></thead>
+            <tbody>
+            {% for r in por_persona %}
+            <tr>
+                <td><strong>{{ r.nombre }}</strong></td>
+                <td class="text-end text-success">{% if r.pagado %}${{ "%.2f"|format(r.pagado) }}{% else %}—{% endif %}</td>
+                <td class="text-end fw-bold {{ 'text-warning-emphasis' if r.pendiente else 'text-muted' }}">
+                    {% if r.pendiente %}${{ "%.2f"|format(r.pendiente) }}{% else %}—{% endif %}</td>
+                <td class="text-end">${{ "%.2f"|format(r.total) }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<div class="card-premium">
+    <div class="card-head" style="background:linear-gradient(135deg,#1a73e8,#0d47a1);">
+        📋 Detalle — {{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][mes-1] }} {{ anio }}
+    </div>
+    <div class="table-responsive">
+        <table class="table tabla-pagos">
+            <thead><tr>
+                <th class="col-firme">Tipo</th><th class="col-firme">A quién</th><th>Concepto</th>
+                <th class="text-end col-firme">Monto</th><th class="text-center col-firme">Estado</th>
+                <th class="col-firme">Fecha de pago</th>
+            </tr></thead>
+            <tbody>
+            {% for l in lineas %}
+            <tr data-estado="{{ 'pagado' if l.pagado else 'pendiente' }}">
+                <td class="col-firme">
+                    <span class="chip" style="background:{{ '#ede7f6' if l.tipo == 'Gasto administrativo' else '#fff3e0' if l.tipo == 'Pago a docentes' else '#e3f2fd' if l.tipo == 'Reembolso' else '#f1f3f5' }};">{{ l.tipo }}</span>
+                </td>
+                <td class="col-firme"><strong>{{ l.quien }}</strong></td>
+                <td><small>{{ l.concepto }}{% if l.categoria and l.tipo == 'Gasto' %} <span class="text-muted">· {{ l.categoria }}</span>{% endif %}</small></td>
+                <td class="text-end col-firme fw-bold">${{ "%.2f"|format(l.monto) }}</td>
+                <td class="text-center col-firme">
+                    {% if l.pagado %}<span class="chip" style="background:#e8f5e9; color:#1b5e20;">✅ pagado</span>
+                    {% else %}<span class="chip" style="background:#fff8e1; color:#8a5a00;">⏳ por pagar</span>{% endif %}
+                </td>
+                <td class="col-firme">
+                    {% if l.fecha_pago %}{{ l.fecha_pago }}
+                    {% else %}<span class="text-muted">—</span>{% endif %}
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" class="text-center text-muted py-4">No hay pagos ni gastos en este período.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="card-footer bg-light">
+        <small class="text-muted">
+            Las fechas salen de donde se registró cada pago: el botón <strong>💵 Pago</strong> de cada gasto,
+            el de <strong>reembolso pagado</strong>, y el de <strong>Registrar pago</strong> del gasto docente.
+            Lo que figure como <strong>por pagar</strong> es lo que el balance de la liquidación todavía descuenta.
+        </small>
+    </div>
+</div>
+
+<script>
+function filtrar(estado, boton) {
+    document.querySelectorAll('.btn-group .btn').forEach(function (b) { b.classList.remove('active'); });
+    if (boton) boton.classList.add('active');
+    document.querySelectorAll('tr[data-estado]').forEach(function (tr) {
+        tr.style.display = (estado === 'todos' || tr.dataset.estado === estado) ? '' : 'none';
+    });
+}
+</script>
+{% endblock %}

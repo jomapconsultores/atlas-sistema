@@ -1274,7 +1274,8 @@
       {% if puede_pagos_docentes %}{% set _ = items.append({'url':'/modulo5', 'label':'Pagos a docentes', 'ico':'💳'}) %}{% endif %}
       {% if puede_anticipos_fin %}{% set _ = items.append({'url':'/gestion-anticipos', 'label':'Anticipos', 'ico':'🏦', 'badge':solicitudes_pendientes or 0}) %}{% endif %}
       {% if puede_excepcionales %}{% set _ = items.append({'url':'/pagos-excepcionales', 'label':'Pagos excepcionales', 'ico':'⭐', 'badge':excepciones_pendientes or 0}) %}{% endif %}
-      {% if puede_gastos_fin %}{% set _ = items.append({'url':'/gastos', 'label':'Gastos', 'ico':'📉'}) %}{% endif %}
+      {% if puede_gastos_fin %}{% set _ = items.append({'url':'/gastos', 'label':'Gastos', 'ico':'📉'}) %}
+      {% set _ = items.append({'url':'/reporte-pagos', 'label':'Reporte de pagos', 'ico':'🧾'}) %}{% endif %}
       {% if puede_liquidacion %}{% set _ = items.append({'url':'/liquidacion', 'label':'Liquidación', 'ico':'⚖️'}) %}{% endif %}
       {% if puede_movimientos %}{% set _ = items.append({'url':'/movimientos-cuenta', 'label':'Movimientos en cuenta', 'ico':'🏧'}) %}{% endif %}
       {% if puede_reportes_fin %}{% set _ = items.append({'url':'/reportes', 'label':'Reportes ATLAS', 'ico':'📊'}) %}{% endif %}
@@ -1302,7 +1303,8 @@
                       {'url':'/mi-reporte', 'label':'Mi reporte', 'ico':'📊'},
                       {'url':'/mis-anticipos', 'label':'Mis anticipos', 'ico':'🏦'}] %}
       {% if rol=='psicologo' %}{% set _ = items.append({'url':'/mis-clientes', 'label':'Mis clientes', 'ico':'🧠'}) %}{% endif %}
-      {% if puede_gastos_fin %}{% set _ = items.append({'url':'/gastos', 'label':'Gastos', 'ico':'📉'}) %}{% endif %}
+      {% if puede_gastos_fin %}{% set _ = items.append({'url':'/gastos', 'label':'Gastos', 'ico':'📉'}) %}
+      {% set _ = items.append({'url':'/reporte-pagos', 'label':'Reporte de pagos', 'ico':'🧾'}) %}{% endif %}
       {% set _ = ns.secciones.append({'key':'mi-trabajo', 'label':'Mi trabajo', 'ico':'💼', 'items':items}) %}
     {% elif rol in ['estudiante','padre'] %}
       {% set _ = ns.secciones.append({'key':'mi-trabajo', 'label':'Mis clases' if rol=='estudiante' else 'Mis hijos', 'ico':'📅',
@@ -1370,7 +1372,7 @@
         {% endif %}
 
         {% if puede_finanzas %}
-        {% set fin_active = p in ['/modulo3','/modulo5','/devoluciones','/reportes','/gastos','/liquidacion','/gestion-anticipos','/pagos-excepcionales','/movimientos-cuenta'] %}
+        {% set fin_active = p in ['/modulo3','/modulo5','/devoluciones','/reportes','/gastos','/reporte-pagos','/liquidacion','/gestion-anticipos','/pagos-excepcionales','/movimientos-cuenta'] %}
         <div class="nav-group {% if fin_active %}open{% endif %}">
             <button type="button" class="nav-group-toggle"><span class="ico">💰</span> Finanzas</button>
             <div class="nav-group-items">
@@ -1411,6 +1413,7 @@
                 {# Gastos #}
                 {% if puede_gastos_fin %}
                 <a href="/gastos" class="{% if p=='/gastos' %}active{% endif %}">Gastos</a>
+                <a href="/reporte-pagos" class="{% if p=='/reporte-pagos' %}active{% endif %}">Reporte de pagos</a>
                 {% endif %}
 
                 {# Liquidación › Movimientos en cuenta (cada uno con su propio permiso) #}

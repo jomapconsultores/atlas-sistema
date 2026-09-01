@@ -3725,7 +3725,7 @@ def gasto_ya_salio_de_la_cuenta(g, hasta=None):
         return False
     if not hasta:
         return True
-    fecha = str(g.get('fecha_pago') or g.get('reembolso_fecha_pago') or '')[:10]
+    fecha = str(g.get('fecha_pago') or g.get('fecha_reembolso_pagado') or '')[:10]
     # Sin fecha de pago registrada no se puede saber cuándo salió: se respeta la
     # marca, que es lo que la persona afirmó al pulsar el botón.
     return (not fecha) or fecha <= str(hasta)[:10]
@@ -3868,6 +3868,93 @@ def _gastos_admin_registrados(mes, anio):
 
 MESES_ES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
             'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+
+
+@app.route('/reporte-pagos')
+@login_required
+def reporte_pagos():
+    """Quién cobró qué, cuándo, y a quién se le debe todavía.
+
+    El dinero que sale del centro se registra hoy por tres vías distintas
+    —gastos, reembolsos y pago a docentes—, cada una con su propia marca de
+    pagado y su fecha. Para saber si a alguien ya se le pagó había que mirar en
+    tres pantallas y cruzarlas a mano. Aquí se juntan por período, con la fecha
+    exacta de cada pago y lo que sigue pendiente.
+    """
+    if not (current_user.rol in ('admin', 'socio') or tiene_modulo('finanzas.gastos')):
+        flash('❌ Acceso restringido', 'error')
+        return redirect(url_for('dashboard'))
+    mes, anio = _mes_anio_args()
+    ultimo_dia = monthrange(anio, mes)[1]
+    corte = f"{anio}-{mes:02d}-{ultimo_dia}"
+
+    # ---- Gastos del período (incluye el gasto administrativo, que es un gasto)
+    try:
+        filas = (supabase.table('gastos').select('*')
+                 .eq('mes_periodo', mes).eq('anio_periodo', anio)
+                 .order('fecha', desc=True).execute().data or [])
+    except Exception:
+        filas = (supabase.table('gastos').select('*')
+                 .eq('mes', mes).eq('anio', anio)
+                 .order('fecha', desc=True).execute().data or [])
+
+    lineas = []
+    for g in filas:
+        es_reembolso = bool(g.get('reembolso') and g.get('reembolsado_a'))
+        if es_reembolso:
+            pagado = bool(g.get('reembolso_pagado'))
+            fecha_pago = g.get('fecha_reembolso_pagado') or ''
+            quien = g.get('reembolsado_a')
+            tipo = 'Reembolso'
+        else:
+            pagado = bool(g.get('pagado'))
+            fecha_pago = g.get('fecha_pago') or ''
+            quien = g.get('persona') or '—'
+            tipo = 'Gasto administrativo' if g.get('categoria') == CATEGORIA_ADMIN else 'Gasto'
+        lineas.append({
+            'tipo': tipo, 'quien': quien, 'concepto': g.get('concepto') or '',
+            'categoria': g.get('categoria') or '', 'fecha': g.get('fecha') or '',
+            'monto': round(_num(g.get('monto')), 2), 'pagado': pagado,
+            'fecha_pago': str(fecha_pago)[:10], 'gasto_id': g.get('id'),
+        })
+
+    # ---- Pago a docentes y psicólogos, con la fecha que se haya registrado
+    detalle_doc, _, _, total_doc = _pago_docentes_mes(mes, anio)
+    try:
+        fechas = {f.get('docente_nombre'): f.get('fecha_pago') for f in
+                  (supabase.table('fechas_pago_docentes').select('*')
+                   .eq('mes', mes).eq('anio', anio).execute().data or [])}
+    except Exception:
+        fechas = {}
+    for docente, d in sorted(detalle_doc.items()):
+        f = str(fechas.get(docente) or '')[:10]
+        lineas.append({
+            'tipo': 'Pago a docentes', 'quien': docente,
+            'concepto': f"{d['sesiones']} sesión(es) del período", 'categoria': 'Pago docentes',
+            'fecha': corte, 'monto': round(d['total_pagar'], 2),
+            'pagado': bool(f), 'fecha_pago': f, 'gasto_id': None,
+        })
+
+    pagado = [l for l in lineas if l['pagado']]
+    pendiente = [l for l in lineas if not l['pagado']]
+    # Por persona: es la pregunta que se hace de verdad —«¿a quién le debo?»
+    por_persona = {}
+    for l in lineas:
+        r = por_persona.setdefault(l['quien'], {'nombre': l['quien'], 'pagado': 0.0, 'pendiente': 0.0})
+        r['pagado' if l['pagado'] else 'pendiente'] += l['monto']
+    for r in por_persona.values():
+        r['pagado'] = round(r['pagado'], 2)
+        r['pendiente'] = round(r['pendiente'], 2)
+        r['total'] = round(r['pagado'] + r['pendiente'], 2)
+
+    lineas.sort(key=lambda l: (l['pagado'], l['fecha_pago'] or l['fecha']), reverse=True)
+    return render_template('reporte_pagos.html',
+                           mes=mes, anio=anio, lineas=lineas,
+                           por_persona=sorted(por_persona.values(), key=lambda r: -r['pendiente']),
+                           total_pagado=round(sum(l['monto'] for l in pagado), 2),
+                           total_pendiente=round(sum(l['monto'] for l in pendiente), 2),
+                           total_general=round(sum(l['monto'] for l in lineas), 2),
+                           n_pagado=len(pagado), n_pendiente=len(pendiente))
 
 
 @app.route('/registrar-gasto-administrativo', methods=['POST'])
@@ -4069,7 +4156,11 @@ def gestion_gastos():
     gasto_admin = _gasto_administrativo_mes(mes, anio) if puede_ver_pagos_docentes else {'personas': [], 'excluidos': [], 'total': 0}
     admin_registrados = _gastos_admin_registrados(mes, anio) if puede_ver_pagos_docentes else {}
     for pers in gasto_admin['personas']:
-        pers['registrado'] = norm_nombre(pers['nombre']).lower() in admin_registrados
+        g = admin_registrados.get(norm_nombre(pers['nombre']).lower())
+        pers['registrado'] = bool(g)
+        pers['gasto_id'] = g.get('id') if g else None
+        pers['pagado'] = bool(g.get('pagado')) if g else False
+        pers['fecha_pago'] = (g.get('fecha_pago') or '') if g else ''
     gasto_admin['pendientes'] = [p for p in gasto_admin['personas'] if not p['registrado'] and p['total'] > 0]
     gasto_admin['total_pendiente'] = round(sum(p['total'] for p in gasto_admin['pendientes']), 2)
 
@@ -4515,6 +4606,9 @@ def liquidacion():
         g = admin_registrados.get(norm_nombre(pers['nombre']).lower())
         pers['registrado'] = bool(g)
         pers['monto_registrado'] = round(_num(g.get('monto')), 2) if g else 0
+        pers['gasto_id'] = g.get('id') if g else None
+        pers['pagado'] = bool(g.get('pagado')) if g else False
+        pers['fecha_pago'] = (g.get('fecha_pago') or '') if g else ''
     gasto_admin['pendientes'] = [p for p in gasto_admin['personas'] if not p['registrado'] and p['total'] > 0]
     gasto_admin['total_pendiente'] = round(sum(p['total'] for p in gasto_admin['pendientes']), 2)
     gasto_admin['total_registrado'] = round(sum(_num(g.get('monto')) for g in admin_registrados.values()), 2)
