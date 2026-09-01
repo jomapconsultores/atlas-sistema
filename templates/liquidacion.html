@@ -2,6 +2,36 @@
 {% block title %}Liquidación - Atlas{% endblock %}
 
 {% block content %}
+{% macro tabla_gastos(filas, pagados) %}
+<div class="table-responsive" style="background:{{ '#f1f8fd' if pagados else '#fff8f7' }}; border-top:1px solid #e6e6e6;">
+    <table class="table table-sm mb-0" style="font-size:12.5px;">
+        <thead>
+            <tr class="text-muted" style="font-size:10.5px; text-transform:uppercase; letter-spacing:.4px;">
+                <th class="ps-3">Fecha</th><th>Concepto</th><th>Quién</th>
+                <th class="text-end">Monto</th><th>{{ 'Pagado el' if pagados else 'Estado' }}</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for g in filas %}
+            <tr>
+                <td class="ps-3" style="white-space:nowrap;">{{ g.fecha }}</td>
+                <td>{{ g.concepto }}{% if g.categoria %} <span class="text-muted">· {{ g.categoria }}</span>{% endif %}</td>
+                <td style="white-space:nowrap;">{{ g.quien }}{% if g.reembolso %} <span class="badge bg-info text-dark">reembolso</span>{% endif %}</td>
+                <td class="text-end fw-bold">${{ "%.2f"|format(g.monto) }}</td>
+                <td style="white-space:nowrap;">
+                    {% if pagados %}{{ g.fecha_pago or '—' }}
+                    {% else %}<span class="badge bg-warning text-dark">por pagar</span>{% endif %}
+                </td>
+            </tr>
+        {% else %}
+            <tr><td colspan="5" class="text-center text-muted py-3">Nada aquí.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endmacro %}
+
+
 <div class="page-hero">
     <h2>⚖️ Liquidación Mensual</h2>
     <p>Distribución mensual del balance entre los socios.</p>
@@ -125,6 +155,7 @@
             {% if total_gastos_pagados %}
             <small class="d-block" style="color:#0277bd;">${{ "%.2f"|format(total_gastos_pagados) }} ya salieron · quedan ${{ "%.2f"|format(total_gastos_por_pagar) }}</small>
             {% endif %}
+            <small class="d-block text-muted" style="font-size:11px;">clic para ver el detalle</small>
         </div></a>
     </div>
     <div class="col">
@@ -178,12 +209,23 @@
                     <td class="text-end"><small>${{ "%.2f"|format(gasto_admin.total_registrado) }}</small></td></tr>
                 {% endif %}
                 {% if total_gastos_pagados %}
-                <tr style="color:#0277bd;">
-                    <td class="ps-4"><small>(+) ya salieron de la cuenta: el saldo de arriba ya los descontó</small></td>
+                <tr style="color:#0277bd; cursor:pointer;" data-bs-toggle="collapse" data-bs-target="#det-salidos"
+                    title="Ver cuáles ya se pagaron">
+                    <td class="ps-4"><small>(+) ya salieron de la cuenta: el saldo de arriba ya los descontó
+                        <span class="badge bg-light text-dark border">ver {{ gastos_salidos|length }} ▾</span></small></td>
                     <td class="text-end"><small>+${{ "%.2f"|format(total_gastos_pagados) }}</small></td></tr>
+                <tr class="collapse" id="det-salidos"><td colspan="2" class="p-0">
+                    {{ tabla_gastos(gastos_salidos, true) }}
+                </td></tr>
                 {% endif %}
-                <tr class="text-danger"><td>(-) Gastos que aún deben salir de la cuenta</td>
+                <tr class="text-danger" style="cursor:pointer;" data-bs-toggle="collapse" data-bs-target="#det-pendientes"
+                    title="Ver qué falta por pagar">
+                    <td>(-) Gastos que aún deben salir de la cuenta
+                        <span class="badge bg-light text-dark border">ver {{ gastos_por_pagar_det|length }} ▾</span></td>
                     <td class="text-end">-${{ "%.2f"|format(total_gastos_por_pagar) }}</td></tr>
+                <tr class="collapse" id="det-pendientes"><td colspan="2" class="p-0">
+                    {{ tabla_gastos(gastos_por_pagar_det, false) }}
+                </td></tr>
                 <tr class="text-warning"><td>(-) Pago a docentes (bruto)</td><td class="text-end">-${{ "%.2f"|format(total_pago_docentes) }}</td></tr>
                 {% if total_anticipos and total_anticipos > 0 %}
                 <tr style="color:#0277bd;"><td>(+) Anticipos ya entregados a docentes</td><td class="text-end">+${{ "%.2f"|format(total_anticipos) }}</td></tr>

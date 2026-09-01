@@ -4545,8 +4545,25 @@ def liquidacion():
     # descontó, así que restarlos otra vez sería contarlos dos veces.
     _gastos_del_periodo = gastos_periodo.data or []
     _corte_saldo = f"{anio}-{mes:02d}-{ultimo_dia}"
-    total_gastos_pagados = round(sum(g.get('monto', 0) or 0 for g in _gastos_del_periodo
-                                     if gasto_ya_salio_de_la_cuenta(g, _corte_saldo)), 2)
+
+    def _linea_gasto(g):
+        """Lo justo para reconocer el gasto al desplegar el detalle."""
+        es_reemb = bool(g.get('reembolso') and g.get('reembolsado_a'))
+        return {
+            'fecha': g.get('fecha') or '', 'concepto': g.get('concepto') or '',
+            'categoria': g.get('categoria') or '',
+            'quien': (g.get('reembolsado_a') if es_reemb else g.get('persona')) or '—',
+            'reembolso': es_reemb, 'monto': round(_num(g.get('monto')), 2),
+            'fecha_pago': str(g.get('fecha_pago') or g.get('fecha_reembolso_pagado') or '')[:10],
+        }
+
+    gastos_salidos, gastos_por_pagar_det = [], []
+    for g in _gastos_del_periodo:
+        (gastos_salidos if gasto_ya_salio_de_la_cuenta(g, _corte_saldo)
+         else gastos_por_pagar_det).append(_linea_gasto(g))
+    gastos_salidos.sort(key=lambda x: x['fecha_pago'] or x['fecha'], reverse=True)
+    gastos_por_pagar_det.sort(key=lambda x: x['fecha'], reverse=True)
+    total_gastos_pagados = round(sum(g['monto'] for g in gastos_salidos), 2)
     total_gastos = round(total_gastos, 2)
     total_gastos_por_pagar = round(total_gastos - total_gastos_pagados, 2)
     total_ingresos = round(total_ingresos, 2)
@@ -4625,6 +4642,7 @@ def liquidacion():
         puede_registrar_admin=(current_user.rol in ('admin', 'socio')),
         total_gastos_pagados=total_gastos_pagados,
         total_gastos_por_pagar=total_gastos_por_pagar,
+        gastos_salidos=gastos_salidos, gastos_por_pagar_det=gastos_por_pagar_det,
         mes=mes, anio=anio, saldo_cuenta=saldo_cuenta,
         saldo_banco=saldo_banco, fecha_saldo_banco=fecha_saldo_banco,
         saldo_es_auto=saldo_es_auto,
