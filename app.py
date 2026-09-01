@@ -4549,12 +4549,18 @@ def liquidacion():
     def _linea_gasto(g):
         """Lo justo para reconocer el gasto al desplegar el detalle."""
         es_reemb = bool(g.get('reembolso') and g.get('reembolsado_a'))
+        f_pago = str(g.get('fecha_pago') or g.get('fecha_reembolso_pagado') or '')[:10]
+        marcado = bool(g.get('pagado')) or bool(es_reemb and g.get('reembolso_pagado'))
         return {
             'fecha': g.get('fecha') or '', 'concepto': g.get('concepto') or '',
             'categoria': g.get('categoria') or '',
             'quien': (g.get('reembolsado_a') if es_reemb else g.get('persona')) or '—',
             'reembolso': es_reemb, 'monto': round(_num(g.get('monto')), 2),
-            'fecha_pago': str(g.get('fecha_pago') or g.get('fecha_reembolso_pagado') or '')[:10],
+            'fecha_pago': f_pago,
+            # Pagado, pero DESPUÉS del cierre: el saldo de este mes no lo
+            # descuenta y toca al mes siguiente. Sin decirlo, en el detalle se
+            # lee «por pagar» y parece que la marca no se guardó.
+            'pagado_despues': marcado and bool(f_pago) and f_pago > _corte_saldo,
         }
 
     gastos_salidos, gastos_por_pagar_det = [], []

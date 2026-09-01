@@ -20,6 +20,9 @@
                 <td class="text-end fw-bold">${{ "%.2f"|format(g.monto) }}</td>
                 <td style="white-space:nowrap;">
                     {% if pagados %}{{ g.fecha_pago or '—' }}
+                    {% elif g.pagado_despues %}
+                    <span class="badge bg-info text-dark" title="Se marcó como pagado el {{ g.fecha_pago }}, después del cierre de este mes: se descuenta del mes siguiente">
+                        pagado el {{ g.fecha_pago }} · fuera del mes</span>
                     {% else %}<span class="badge bg-warning text-dark">por pagar</span>{% endif %}
                 </td>
             </tr>

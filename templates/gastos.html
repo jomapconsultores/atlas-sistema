@@ -442,7 +442,9 @@
                                     <span class="badge bg-success" style="cursor:pointer;" title="Pagado el {{ g.get('fecha_pago','') }} — clic para revertir" onclick="marcarGastoPagado({{ g['id'] }}, true, '{{ g.get('fecha_pago','') }}')">✅ {{ g.get('fecha_pago','') }}</span>
                                     {% else %}
                                     {% if g.get('reembolso') and g.get('reembolso_pagado') %}
-                                    <span class="badge bg-success" title="El reembolso ya se devolvió: ese dinero salió de la cuenta">✅ reembolsado</span>
+                                    <span class="badge bg-success" style="cursor:pointer;"
+                                          title="Reembolso devuelto el {{ g.get('fecha_reembolso_pagado','—') }} — clic para corregir la fecha"
+                                          onclick="marcarReembolsoPagado({{ g['id'] }}, '{{ g.get('fecha_reembolso_pagado','') }}')">✅ {{ g.get('fecha_reembolso_pagado','reembolsado') }}</span>
                                     {% else %}
                                     <span class="badge bg-warning text-dark" style="cursor:pointer;" title="Registrar pago y fecha" onclick="marcarGastoPagado({{ g['id'] }}, false, '')">⏳ Por pagar</span>
                                     {% endif %}
@@ -981,9 +983,13 @@ async function actualizarReembolsadoA(id, valor) {
     if (!res.success) alert('❌ Error al guardar');
 }
 
-async function marcarReembolsoPagado(id) {
-    if (!confirm('¿Confirmar que este reembolso ya fue pagado?')) return;
-    const hoy = new Date().toISOString().split('T')[0];
+async function marcarReembolsoPagado(id, fechaActual) {
+    // La fecha importa: el balance de un mes solo descuenta lo que salió ANTES
+    // de su cierre. Poner hoy por defecto, sin preguntar, metía en septiembre
+    // pagos hechos en agosto.
+    const sugerida = fechaActual || new Date().toISOString().split('T')[0];
+    const hoy = prompt('¿En qué fecha se pagó este reembolso?', sugerida);
+    if (!hoy) return;
     const r = await fetch('/api/gasto/' + id + '/marcar-reembolso-pagado', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
