@@ -160,26 +160,26 @@
             <tbody>
                 <tr><td>Saldo cuenta de ahorros</td><td class="text-end fw-bold">${{ "%.2f"|format(saldo_cuenta) }}</td></tr>
                 <tr class="text-danger"><td>(-) Total gastos del período</td><td class="text-end">-${{ "%.2f"|format(total_gastos) }}</td></tr>
-                {% if sueldos and sueldos.total_registrado %}
-                <tr class="text-muted"><td class="ps-4"><small>de los cuales, sueldos del personal</small></td>
-                    <td class="text-end"><small>-${{ "%.2f"|format(sueldos.total_registrado) }}</small></td></tr>
+                {% if gasto_admin and gasto_admin.total_registrado %}
+                <tr class="text-muted"><td class="ps-4"><small>de los cuales, gasto administrativo</small></td>
+                    <td class="text-end"><small>-${{ "%.2f"|format(gasto_admin.total_registrado) }}</small></td></tr>
                 {% endif %}
                 <tr class="text-warning"><td>(-) Pago a docentes (bruto)</td><td class="text-end">-${{ "%.2f"|format(total_pago_docentes) }}</td></tr>
                 {% if total_anticipos and total_anticipos > 0 %}
                 <tr style="color:#0277bd;"><td>(+) Anticipos ya entregados a docentes</td><td class="text-end">+${{ "%.2f"|format(total_anticipos) }}</td></tr>
                 <tr class="text-muted"><td><small>= Pago a docentes neto pendiente</small></td><td class="text-end"><small>-${{ "%.2f"|format(total_pago_docentes_neto) }}</small></td></tr>
                 {% endif %}
-                {% if sueldos and sueldos.total_pendiente %}
+                {% if gasto_admin and gasto_admin.total_pendiente %}
                 <tr style="background:#fff8e1;">
                     <td class="text-warning-emphasis">
-                        ⚠️ Sueldos del personal sin registrar
+                        ⚠️ Gasto administrativo sin registrar
                         <br><small class="text-muted">Todavía no se descuentan: el balance de abajo está más alto de lo real</small>
                     </td>
                     <td class="text-end">
-                        <span class="fw-bold text-warning-emphasis">-${{ "%.2f"|format(sueldos.total_pendiente) }}</span>
-                        {% if puede_registrar_sueldos %}
-                        <form method="POST" action="{{ url_for('registrar_sueldos_gasto') }}" class="mt-1"
-                              onsubmit="return confirm('¿Registrar como gasto de este período {{ sueldos.pendientes|length }} sueldo(s), por ${{ "%.2f"|format(sueldos.total_pendiente) }}?');">
+                        <span class="fw-bold text-warning-emphasis">-${{ "%.2f"|format(gasto_admin.total_pendiente) }}</span>
+                        {% if puede_registrar_admin %}
+                        <form method="POST" action="{{ url_for('registrar_gasto_administrativo') }}" class="mt-1"
+                              onsubmit="return confirm('¿Registrar como gasto de este período {{ gasto_admin.pendientes|length }} sueldo(s), por ${{ "%.2f"|format(gasto_admin.total_pendiente) }}?');">
                             <input type="hidden" name="mes" value="{{ mes }}">
                             <input type="hidden" name="anio" value="{{ anio }}">
                             <button type="submit" class="btn btn-sm btn-warning fw-bold">Registrarlos en gastos</button>
@@ -210,6 +210,79 @@
         </table>
     </div>
 </div>
+
+<!-- Gasto administrativo del período -->
+{% if gasto_admin and (gasto_admin.personas or gasto_admin.otros_registrados) %}
+<div class="card shadow border-0 mb-4" style="border-radius:15px;">
+    <div class="card-header text-white fw-bold d-flex flex-wrap gap-2 align-items-center"
+         style="background:linear-gradient(135deg,#5e35b1,#311b92); border-radius:15px 15px 0 0;">
+        🧑‍💼 Gasto administrativo
+        <span class="badge bg-light text-dark">Registrado: ${{ "%.2f"|format(gasto_admin.total_registrado or 0) }}</span>
+        {% if gasto_admin.total_pendiente %}
+        <span class="badge bg-warning text-dark">Sin registrar: ${{ "%.2f"|format(gasto_admin.total_pendiente) }}</span>
+        {% endif %}
+    </div>
+    <div class="card-body p-0">
+        <div style="padding:10px 16px; background:#ede7f6; border-bottom:1px solid #d1c4e9; font-size:12px; color:#444; line-height:1.7;">
+            El pago de secretaría y de los demás cargos administrativos. Lo <strong>registrado</strong> ya está
+            dentro del «Total gastos del período» de arriba, así que el balance ya lo descuenta:
+            aquí se ve a quién corresponde. Lo que salga como <strong>sin registrar</strong> todavía no se descontó.
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead class="table-light">
+                    <tr style="font-size:11px; text-transform:uppercase; letter-spacing:.4px;">
+                        <th class="ps-3">Persona</th><th>Cargo</th>
+                        <th class="text-center">Días</th><th class="text-center">Horas</th>
+                        <th class="text-end">Calculado</th><th class="text-end">En gastos</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for p in gasto_admin.personas %}
+                    <tr>
+                        <td class="ps-3 fw-bold">{{ p.nombre }}</td>
+                        <td><span class="badge bg-secondary">{{ p.rol }}</span></td>
+                        <td class="text-center">{{ p.dias }}</td>
+                        <td class="text-center">{{ p.horas }}</td>
+                        <td class="text-end">${{ "%.2f"|format(p.total) }}</td>
+                        <td class="text-end">
+                            {% if p.registrado %}<span class="fw-bold">${{ "%.2f"|format(p.monto_registrado) }}</span>
+                            {% else %}<span class="badge bg-warning text-dark">⏳ sin registrar</span>{% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+                {% for o in gasto_admin.otros_registrados %}
+                    <tr class="text-muted">
+                        <td class="ps-3">{{ o.nombre }}</td>
+                        <td colspan="3"><small>registrado a mano en gastos</small></td>
+                        <td class="text-end">—</td>
+                        <td class="text-end fw-bold">${{ "%.2f"|format(o.monto) }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+                <tfoot style="background:#f8f9fa; font-weight:bold;">
+                    <tr>
+                        <td class="ps-3" colspan="4">TOTAL EN GASTOS</td>
+                        <td class="text-end">${{ "%.2f"|format(gasto_admin.total or 0) }}</td>
+                        <td class="text-end">${{ "%.2f"|format(gasto_admin.total_registrado or 0) }}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+    {% if gasto_admin.total_pendiente and puede_registrar_admin %}
+    <div class="card-footer bg-light d-flex flex-wrap gap-2 align-items-center">
+        <small class="text-muted">Faltan ${{ "%.2f"|format(gasto_admin.total_pendiente) }} por asentar: el balance todavía no los descuenta.</small>
+        <form method="POST" action="{{ url_for('registrar_gasto_administrativo') }}" class="ms-auto"
+              onsubmit="return confirm('¿Registrar como gasto de este período {{ gasto_admin.pendientes|length }} pago(s) administrativo(s), por ${{ "%.2f"|format(gasto_admin.total_pendiente) }}?');">
+            <input type="hidden" name="mes" value="{{ mes }}">
+            <input type="hidden" name="anio" value="{{ anio }}">
+            <button type="submit" class="btn btn-sm btn-primary fw-bold">Registrarlos en gastos</button>
+        </form>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
 
 <!-- Distribución socios -->
 <div class="card shadow border-0 mb-4" style="border-radius:15px;">
