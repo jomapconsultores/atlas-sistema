@@ -3903,7 +3903,7 @@ def registrar_gasto_administrativo():
               + (f'; {saltados} ya estaban' if saltados else ''), 'success')
     else:
         flash('⚠️ No se registró nada: esos pagos ya estaban en los gastos del período', 'warning')
-    return redirect(request.referrer or url_for('gestion_gastos', mes=mes, anio=anio))
+    return redirect(url_for('gestion_gastos', mes=mes, anio=anio, tab='admin'))
 
 
 # ========== GASTOS ==========

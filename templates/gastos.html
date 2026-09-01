@@ -10,13 +10,13 @@
 <!-- ========== PESTAÑAS: GASTOS | DOCENTES ========== -->
 <ul class="nav nav-tabs mb-3" id="gastosTabs" role="tablist">
     <li class="nav-item" role="presentation">
-        <button class="nav-link active" id="tab-gastos-btn" data-bs-toggle="tab" data-bs-target="#tab-gastos" type="button" role="tab">📉 Gastos</button>
+        <button class="nav-link {{ '' if request.args.get('tab') == 'admin' else 'active' }}" id="tab-gastos-btn" data-bs-toggle="tab" data-bs-target="#tab-gastos" type="button" role="tab">📉 Gastos</button>
     </li>
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="tab-docentes-btn" data-bs-toggle="tab" data-bs-target="#tab-docentes" type="button" role="tab">👨‍🏫 Gasto docente</button>
     </li>
     <li class="nav-item" role="presentation">
-        <button class="nav-link" id="tab-admin-btn" data-bs-toggle="tab" data-bs-target="#tab-admin" type="button" role="tab">🧑‍💼 Gasto administrativo{% if gasto_admin and gasto_admin.total_pendiente %} <span class="badge bg-warning text-dark">!</span>{% endif %}</button>
+        <button class="nav-link {{ 'active' if request.args.get('tab') == 'admin' }}" id="tab-admin-btn" data-bs-toggle="tab" data-bs-target="#tab-admin" type="button" role="tab">🧑‍💼 Gasto administrativo{% if gasto_admin and gasto_admin.total_pendiente %} <span class="badge bg-warning text-dark">!</span>{% endif %}</button>
     </li>
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="tab-cuentas-btn" data-bs-toggle="tab" data-bs-target="#tab-cuentas" type="button" role="tab">💳 Cuentas de pago</button>
@@ -25,11 +25,20 @@
 <div class="tab-content">
 
 <!-- ===== PESTAÑA GASTO ADMINISTRATIVO ===== -->
-<div class="tab-pane fade" id="tab-admin" role="tabpanel" aria-labelledby="tab-admin-btn">
+<div class="tab-pane fade {{ 'show active' if request.args.get('tab') == 'admin' }}" id="tab-admin" role="tabpanel" aria-labelledby="tab-admin-btn">
 <div class="card border-0 shadow-sm mb-4">
     <div class="card-header text-white d-flex flex-wrap gap-2 align-items-center"
          style="background: linear-gradient(135deg, #5e35b1, #311b92);">
-        <span class="fw-bold">🧑‍💼 Gasto administrativo del mes</span>
+        <span class="fw-bold">🧑‍💼 Gasto administrativo · {{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][mes-1] }} {{ anio }}</span>
+        <form method="get" class="d-flex gap-1 mb-0">
+            <input type="hidden" name="tab" value="admin">
+            <select name="mes" class="form-select form-select-sm text-dark" style="min-width:84px;" onchange="this.form.submit()">
+                {% for m in range(1,13) %}<option value="{{ m }}" {{ 'selected' if m == mes }}>{{ ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][m-1] }}</option>{% endfor %}
+            </select>
+            <select name="anio" class="form-select form-select-sm text-dark" style="min-width:80px;" onchange="this.form.submit()">
+                {% for a in range(2025, 2031) %}<option value="{{ a }}" {{ 'selected' if a == anio }}>{{ a }}</option>{% endfor %}
+            </select>
+        </form>
         <span class="badge bg-light text-dark">Calculado: ${{ "%.2f"|format(gasto_admin.total or 0) }}</span>
         {% if gasto_admin.total_pendiente %}
         <span class="badge bg-warning text-dark">Sin registrar: ${{ "%.2f"|format(gasto_admin.total_pendiente) }}</span>
@@ -92,8 +101,18 @@
 
 {% if not (gasto_admin and (gasto_admin.personas or gasto_admin.excluidos)) %}
 <div class="card border-0 shadow-sm mb-4">
-    <div class="card-header text-white fw-bold" style="background: linear-gradient(135deg, #5e35b1, #311b92);">
-        🧑‍💼 Gasto administrativo del mes
+    <div class="card-header text-white d-flex flex-wrap gap-2 align-items-center"
+         style="background: linear-gradient(135deg, #5e35b1, #311b92);">
+        <span class="fw-bold">🧑‍💼 Gasto administrativo · {{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][mes-1] }} {{ anio }}</span>
+        <form method="get" class="d-flex gap-1 mb-0 ms-auto">
+            <input type="hidden" name="tab" value="admin">
+            <select name="mes" class="form-select form-select-sm text-dark" style="min-width:84px;" onchange="this.form.submit()">
+                {% for m in range(1,13) %}<option value="{{ m }}" {{ 'selected' if m == mes }}>{{ ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][m-1] }}</option>{% endfor %}
+            </select>
+            <select name="anio" class="form-select form-select-sm text-dark" style="min-width:80px;" onchange="this.form.submit()">
+                {% for a in range(2025, 2031) %}<option value="{{ a }}" {{ 'selected' if a == anio }}>{{ a }}</option>{% endfor %}
+            </select>
+        </form>
     </div>
     <div class="card-body">
         {% if not puede_ver_pagos_docentes %}
@@ -214,7 +233,7 @@
 </div><!-- /tab-docentes -->
 
 <!-- ===== PESTAÑA GASTOS ===== -->
-<div class="tab-pane fade show active" id="tab-gastos" role="tabpanel" aria-labelledby="tab-gastos-btn">
+<div class="tab-pane fade {{ '' if request.args.get('tab') == 'admin' else 'show active' }}" id="tab-gastos" role="tabpanel" aria-labelledby="tab-gastos-btn">
 
 <div class="row">
     <!-- FORMULARIO DE GASTO -->
