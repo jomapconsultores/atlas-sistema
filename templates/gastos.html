@@ -16,10 +16,103 @@
         <button class="nav-link" id="tab-docentes-btn" data-bs-toggle="tab" data-bs-target="#tab-docentes" type="button" role="tab">👨‍🏫 Gasto docente</button>
     </li>
     <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-admin-btn" data-bs-toggle="tab" data-bs-target="#tab-admin" type="button" role="tab">🧑‍💼 Gasto administrativo{% if gasto_admin and gasto_admin.total_pendiente %} <span class="badge bg-warning text-dark">!</span>{% endif %}</button>
+    </li>
+    <li class="nav-item" role="presentation">
         <button class="nav-link" id="tab-cuentas-btn" data-bs-toggle="tab" data-bs-target="#tab-cuentas" type="button" role="tab">💳 Cuentas de pago</button>
     </li>
 </ul>
 <div class="tab-content">
+
+<!-- ===== PESTAÑA GASTO ADMINISTRATIVO ===== -->
+<div class="tab-pane fade" id="tab-admin" role="tabpanel" aria-labelledby="tab-admin-btn">
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header text-white d-flex flex-wrap gap-2 align-items-center"
+         style="background: linear-gradient(135deg, #5e35b1, #311b92);">
+        <span class="fw-bold">🧑‍💼 Gasto administrativo del mes</span>
+        <span class="badge bg-light text-dark">Calculado: ${{ "%.2f"|format(gasto_admin.total or 0) }}</span>
+        {% if gasto_admin.total_pendiente %}
+        <span class="badge bg-warning text-dark">Sin registrar: ${{ "%.2f"|format(gasto_admin.total_pendiente) }}</span>
+        {% else %}
+        <span class="badge bg-success">Todo registrado</span>
+        {% endif %}
+        {% if puede_registrar_admin and gasto_admin.pendientes %}
+        <form method="POST" action="{{ url_for('registrar_gasto_administrativo') }}" class="ms-auto"
+              onsubmit="return confirm('¿Registrar como gasto de este período {{ gasto_admin.pendientes|length }} sueldo(s), por ${{ "%.2f"|format(gasto_admin.total_pendiente) }}?');">
+            <input type="hidden" name="mes" value="{{ mes }}">
+            <input type="hidden" name="anio" value="{{ anio }}">
+            <button type="submit" class="btn btn-light btn-sm fw-bold">➕ Registrar en gastos</button>
+        </form>
+        {% endif %}
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead class="table-light">
+                    <tr style="font-size:11px; text-transform:uppercase; letter-spacing:.4px;">
+                        <th class="ps-3">Persona</th><th>Rol</th>
+                        <th class="text-center">Días</th><th class="text-center">Horas</th>
+                        <th class="text-center">Extra</th><th class="text-end">A pagar</th>
+                        <th class="text-center">En gastos</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for p in gasto_admin.personas %}
+                    <tr>
+                        <td class="ps-3 fw-bold">{{ p.nombre }}</td>
+                        <td><span class="badge bg-secondary">{{ p.rol }}</span></td>
+                        <td class="text-center">{{ p.dias }}</td>
+                        <td class="text-center">{{ p.horas }}</td>
+                        <td class="text-center">{% if p.horas_extra %}{{ p.horas_extra }} h{% else %}—{% endif %}</td>
+                        <td class="text-end fw-bold">${{ "%.2f"|format(p.total) }}</td>
+                        <td class="text-center">
+                            {% if p.registrado %}<span class="badge bg-success">✅ registrado</span>
+                            {% elif p.total <= 0 %}<span class="text-muted">sin monto</span>
+                            {% else %}<span class="badge bg-warning text-dark">⏳ pendiente</span>{% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="card-footer bg-light">
+        <small class="text-muted">
+            El pago de secretaría —y de cualquier otro cargo administrativo que se cree— sale de la asistencia del mes:
+            sueldo proporcional a las horas trabajadas más las extras con su recargo. Al registrarlo se crea
+            <strong>un gasto por persona</strong> en la categoría «Gasto administrativo», y desde ahí entra en el total
+            de gastos y en el balance de la liquidación. Si un pago ya está registrado, el botón no lo repite.
+            Para sumar un cargo nuevo no hace falta tocar nada: basta con darle jornada y sueldo.
+            {% if gasto_admin.excluidos %}
+            <br>No entran aquí: {% for e in gasto_admin.excluidos %}<strong>{{ e.nombre }}</strong> ({{ e.motivo }}){{ '; ' if not loop.last }}{% endfor %}.
+            {% endif %}
+        </small>
+    </div>
+</div>
+
+{% if not (gasto_admin and (gasto_admin.personas or gasto_admin.excluidos)) %}
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header text-white fw-bold" style="background: linear-gradient(135deg, #5e35b1, #311b92);">
+        🧑‍💼 Gasto administrativo del mes
+    </div>
+    <div class="card-body">
+        {% if not puede_ver_pagos_docentes %}
+        <p class="mb-2">Tu usuario no tiene el permiso <strong>Pagos a docentes</strong>, que es el que habilita este cálculo.</p>
+        <p class="text-muted mb-0" style="font-size:14px;">Pídeselo al administrador en <em>Usuarios</em>.</p>
+        {% else %}
+        <p class="mb-2">Todavía no hay nadie de quien calcular el pago administrativo de este período.</p>
+        <p class="text-muted mb-0" style="font-size:14px;">
+            Aquí aparece el pago de <strong>secretaría</strong> y de cualquier otro cargo administrativo.
+            Para que salga, esa persona necesita <strong>jornada con sueldo configurado</strong>
+            en <em>Asistencia → Configurar jornada y sueldo</em>. Quien cobra por sesiones no entra aquí:
+            se le paga en «Gasto docente».
+            {% if not puede_registrar_admin %}<br>Registrarlo en gastos es de un socio o del administrador.{% endif %}
+        </p>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+</div><!-- /tab-admin -->
 
 <!-- ===== PESTAÑA DOCENTES ===== -->
 <div class="tab-pane fade" id="tab-docentes" role="tabpanel" aria-labelledby="tab-docentes-btn">
@@ -111,73 +204,6 @@
         <small class="text-muted">💡 En pantallas angostas, <strong>desliza la tabla → </strong> para ver las columnas Fecha y Pagado. Clic en <strong>⏳ Registrar pago</strong> para anotar que se pagó y en qué fecha; clic en <strong>✅ Pagado</strong> para revertir. Los montos se calculan del módulo 5.</small>
     </div>
 </div>
-
-{# ---------- Sueldos del personal por jornada ---------- #}
-{% if gasto_admin and (gasto_admin.personas or gasto_admin.excluidos) %}
-<div class="card border-0 shadow-sm mb-4">
-    <div class="card-header text-white d-flex flex-wrap gap-2 align-items-center"
-         style="background: linear-gradient(135deg, #5e35b1, #311b92);">
-        <span class="fw-bold">🧑‍💼 Gasto administrativo del mes</span>
-        <span class="badge bg-light text-dark">Calculado: ${{ "%.2f"|format(gasto_admin.total or 0) }}</span>
-        {% if gasto_admin.total_pendiente %}
-        <span class="badge bg-warning text-dark">Sin registrar: ${{ "%.2f"|format(gasto_admin.total_pendiente) }}</span>
-        {% else %}
-        <span class="badge bg-success">Todo registrado</span>
-        {% endif %}
-        {% if puede_registrar_admin and gasto_admin.pendientes %}
-        <form method="POST" action="{{ url_for('registrar_gasto_administrativo') }}" class="ms-auto"
-              onsubmit="return confirm('¿Registrar como gasto de este período {{ gasto_admin.pendientes|length }} sueldo(s), por ${{ "%.2f"|format(gasto_admin.total_pendiente) }}?');">
-            <input type="hidden" name="mes" value="{{ mes }}">
-            <input type="hidden" name="anio" value="{{ anio }}">
-            <button type="submit" class="btn btn-light btn-sm fw-bold">➕ Registrar en gastos</button>
-        </form>
-        {% endif %}
-    </div>
-    <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table table-sm align-middle mb-0">
-                <thead class="table-light">
-                    <tr style="font-size:11px; text-transform:uppercase; letter-spacing:.4px;">
-                        <th class="ps-3">Persona</th><th>Rol</th>
-                        <th class="text-center">Días</th><th class="text-center">Horas</th>
-                        <th class="text-center">Extra</th><th class="text-end">A pagar</th>
-                        <th class="text-center">En gastos</th>
-                    </tr>
-                </thead>
-                <tbody>
-                {% for p in gasto_admin.personas %}
-                    <tr>
-                        <td class="ps-3 fw-bold">{{ p.nombre }}</td>
-                        <td><span class="badge bg-secondary">{{ p.rol }}</span></td>
-                        <td class="text-center">{{ p.dias }}</td>
-                        <td class="text-center">{{ p.horas }}</td>
-                        <td class="text-center">{% if p.horas_extra %}{{ p.horas_extra }} h{% else %}—{% endif %}</td>
-                        <td class="text-end fw-bold">${{ "%.2f"|format(p.total) }}</td>
-                        <td class="text-center">
-                            {% if p.registrado %}<span class="badge bg-success">✅ registrado</span>
-                            {% elif p.total <= 0 %}<span class="text-muted">sin monto</span>
-                            {% else %}<span class="badge bg-warning text-dark">⏳ pendiente</span>{% endif %}
-                        </td>
-                    </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-    <div class="card-footer bg-light">
-        <small class="text-muted">
-            El pago de secretaría —y de cualquier otro cargo administrativo que se cree— sale de la asistencia del mes:
-            sueldo proporcional a las horas trabajadas más las extras con su recargo. Al registrarlo se crea
-            <strong>un gasto por persona</strong> en la categoría «Gasto administrativo», y desde ahí entra en el total
-            de gastos y en el balance de la liquidación. Si un pago ya está registrado, el botón no lo repite.
-            Para sumar un cargo nuevo no hace falta tocar nada: basta con darle jornada y sueldo.
-            {% if gasto_admin.excluidos %}
-            <br>No entran aquí: {% for e in gasto_admin.excluidos %}<strong>{{ e.nombre }}</strong> ({{ e.motivo }}){{ '; ' if not loop.last }}{% endfor %}.
-            {% endif %}
-        </small>
-    </div>
-</div>
-{% endif %}
 
 </div><!-- /tab-docentes -->
 

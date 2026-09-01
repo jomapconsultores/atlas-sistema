@@ -212,7 +212,7 @@
 </div>
 
 <!-- Gasto administrativo del período -->
-{% if gasto_admin and (gasto_admin.personas or gasto_admin.otros_registrados) %}
+{% if gasto_admin %}
 <div class="card shadow border-0 mb-4" style="border-radius:15px;">
     <div class="card-header text-white fw-bold d-flex flex-wrap gap-2 align-items-center"
          style="background:linear-gradient(135deg,#5e35b1,#311b92); border-radius:15px 15px 0 0;">
@@ -228,6 +228,13 @@
             dentro del «Total gastos del período» de arriba, así que el balance ya lo descuenta:
             aquí se ve a quién corresponde. Lo que salga como <strong>sin registrar</strong> todavía no se descontó.
         </div>
+        {% if not (gasto_admin.personas or gasto_admin.otros_registrados) %}
+        <div class="p-3 text-muted" style="font-size:14px;">
+            No hay pago administrativo en este período. Para que aparezca, la persona necesita
+            <strong>jornada con sueldo configurado</strong> en <em>Asistencia → Configurar jornada y sueldo</em>;
+            el cálculo sale de su asistencia del mes.
+        </div>
+        {% else %}
         <div class="table-responsive">
             <table class="table table-sm align-middle mb-0">
                 <thead class="table-light">
@@ -269,6 +276,7 @@
                 </tfoot>
             </table>
         </div>
+        {% endif %}
     </div>
     {% if gasto_admin.total_pendiente and puede_registrar_admin %}
     <div class="card-footer bg-light d-flex flex-wrap gap-2 align-items-center">
