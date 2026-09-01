@@ -112,6 +112,71 @@
     </div>
 </div>
 
+{# ---------- Sueldos del personal por jornada ---------- #}
+{% if sueldos and (sueldos.personas or sueldos.excluidos) %}
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header text-white d-flex flex-wrap gap-2 align-items-center"
+         style="background: linear-gradient(135deg, #5e35b1, #311b92);">
+        <span class="fw-bold">🧑‍💼 Sueldos del personal por jornada</span>
+        <span class="badge bg-light text-dark">Calculado: ${{ "%.2f"|format(sueldos.total or 0) }}</span>
+        {% if sueldos.total_pendiente %}
+        <span class="badge bg-warning text-dark">Sin registrar: ${{ "%.2f"|format(sueldos.total_pendiente) }}</span>
+        {% else %}
+        <span class="badge bg-success">Todo registrado</span>
+        {% endif %}
+        {% if puede_registrar_sueldos and sueldos.pendientes %}
+        <form method="POST" action="{{ url_for('registrar_sueldos_gasto') }}" class="ms-auto"
+              onsubmit="return confirm('¿Registrar como gasto de este período {{ sueldos.pendientes|length }} sueldo(s), por ${{ "%.2f"|format(sueldos.total_pendiente) }}?');">
+            <input type="hidden" name="mes" value="{{ mes }}">
+            <input type="hidden" name="anio" value="{{ anio }}">
+            <button type="submit" class="btn btn-light btn-sm fw-bold">➕ Registrar en gastos</button>
+        </form>
+        {% endif %}
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead class="table-light">
+                    <tr style="font-size:11px; text-transform:uppercase; letter-spacing:.4px;">
+                        <th class="ps-3">Persona</th><th>Rol</th>
+                        <th class="text-center">Días</th><th class="text-center">Horas</th>
+                        <th class="text-center">Extra</th><th class="text-end">A pagar</th>
+                        <th class="text-center">En gastos</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for p in sueldos.personas %}
+                    <tr>
+                        <td class="ps-3 fw-bold">{{ p.nombre }}</td>
+                        <td><span class="badge bg-secondary">{{ p.rol }}</span></td>
+                        <td class="text-center">{{ p.dias }}</td>
+                        <td class="text-center">{{ p.horas }}</td>
+                        <td class="text-center">{% if p.horas_extra %}{{ p.horas_extra }} h{% else %}—{% endif %}</td>
+                        <td class="text-end fw-bold">${{ "%.2f"|format(p.total) }}</td>
+                        <td class="text-center">
+                            {% if p.registrado %}<span class="badge bg-success">✅ registrado</span>
+                            {% elif p.total <= 0 %}<span class="text-muted">sin monto</span>
+                            {% else %}<span class="badge bg-warning text-dark">⏳ pendiente</span>{% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="card-footer bg-light">
+        <small class="text-muted">
+            Sale de la asistencia del mes: sueldo proporcional a las horas trabajadas más las extras con su recargo.
+            Al registrarlo se crea <strong>un gasto por persona</strong> en la categoría «{{ 'Sueldos' }}», y desde ahí
+            entra en el total de gastos y en el balance de la liquidación. Si un sueldo ya está registrado, el botón no lo repite.
+            {% if sueldos.excluidos %}
+            <br>No entran aquí: {% for e in sueldos.excluidos %}<strong>{{ e.nombre }}</strong> ({{ e.motivo }}){{ '; ' if not loop.last }}{% endfor %}.
+            {% endif %}
+        </small>
+    </div>
+</div>
+{% endif %}
+
 </div><!-- /tab-docentes -->
 
 <!-- ===== PESTAÑA GASTOS ===== -->
@@ -174,6 +239,8 @@
                             <option value="Alimentación">🍽️ Alimentación</option>
                             <option value="Mantenimiento">🔧 Mantenimiento</option>
                             <option value="Pago docentes">👨‍🏫 Pago a docentes</option>
+                        <option value="Sueldos">🧑‍💼 Sueldos del personal</option>
+                            <option value="Sueldos">🧑‍💼 Sueldos del personal</option>
                             <option value="Otros">📋 Otros</option>
                         </select>
                     </div>

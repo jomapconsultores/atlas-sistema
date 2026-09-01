@@ -160,10 +160,33 @@
             <tbody>
                 <tr><td>Saldo cuenta de ahorros</td><td class="text-end fw-bold">${{ "%.2f"|format(saldo_cuenta) }}</td></tr>
                 <tr class="text-danger"><td>(-) Total gastos del período</td><td class="text-end">-${{ "%.2f"|format(total_gastos) }}</td></tr>
+                {% if sueldos and sueldos.total_registrado %}
+                <tr class="text-muted"><td class="ps-4"><small>de los cuales, sueldos del personal</small></td>
+                    <td class="text-end"><small>-${{ "%.2f"|format(sueldos.total_registrado) }}</small></td></tr>
+                {% endif %}
                 <tr class="text-warning"><td>(-) Pago a docentes (bruto)</td><td class="text-end">-${{ "%.2f"|format(total_pago_docentes) }}</td></tr>
                 {% if total_anticipos and total_anticipos > 0 %}
                 <tr style="color:#0277bd;"><td>(+) Anticipos ya entregados a docentes</td><td class="text-end">+${{ "%.2f"|format(total_anticipos) }}</td></tr>
                 <tr class="text-muted"><td><small>= Pago a docentes neto pendiente</small></td><td class="text-end"><small>-${{ "%.2f"|format(total_pago_docentes_neto) }}</small></td></tr>
+                {% endif %}
+                {% if sueldos and sueldos.total_pendiente %}
+                <tr style="background:#fff8e1;">
+                    <td class="text-warning-emphasis">
+                        ⚠️ Sueldos del personal sin registrar
+                        <br><small class="text-muted">Todavía no se descuentan: el balance de abajo está más alto de lo real</small>
+                    </td>
+                    <td class="text-end">
+                        <span class="fw-bold text-warning-emphasis">-${{ "%.2f"|format(sueldos.total_pendiente) }}</span>
+                        {% if puede_registrar_sueldos %}
+                        <form method="POST" action="{{ url_for('registrar_sueldos_gasto') }}" class="mt-1"
+                              onsubmit="return confirm('¿Registrar como gasto de este período {{ sueldos.pendientes|length }} sueldo(s), por ${{ "%.2f"|format(sueldos.total_pendiente) }}?');">
+                            <input type="hidden" name="mes" value="{{ mes }}">
+                            <input type="hidden" name="anio" value="{{ anio }}">
+                            <button type="submit" class="btn btn-sm btn-warning fw-bold">Registrarlos en gastos</button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
                 {% endif %}
                 <tr class="fw-bold border-top" style="font-size:16px;">
                     <td>Balance</td>

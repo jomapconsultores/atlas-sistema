@@ -3703,6 +3703,161 @@ def reportes():
                          datos_ingresos=datos_ingresos)
 
 
+# ========== SUELDOS DEL PERSONAL POR JORNADA ==========
+# Secretaría y administración no cobran por sesiones: cobran un sueldo por su
+# jornada, y ese dinero sale de la misma caja que el arriendo o la luz. Hasta
+# ahora no entraba en la liquidación por ningún lado, así que el balance del
+# mes se veía mejor de lo que era. Se calcula desde la asistencia (que es de
+# donde sale su pago) y se registra como un gasto más: desde ahí lo toma el
+# total de gastos y, con él, el balance. No hay una resta aparte — sería
+# contarlo dos veces.
+CATEGORIA_SUELDOS = 'Sueldos'
+
+
+def _sueldos_personal_mes(mes, anio):
+    """Sueldo del mes de quien cobra por jornada, listo para registrar como gasto.
+
+    Entra quien tiene jornada vigente con sueldo configurado y NO cobra por
+    sesiones ese mes: si alguien aparece en el pago a docentes, se le deja
+    fuera y se dice por qué, porque cobrarle por las dos vías sería pagarle
+    dos veces lo mismo.
+
+    El monto es el 'total a pagar' que ya calcula la asistencia —proporcional
+    a las horas trabajadas más las extras con su recargo—, exactamente la
+    cifra que esa persona ve en «Mi asistencia».
+    """
+    vacio = {'personas': [], 'total': 0.0, 'excluidos': [], 'sin_migracion': False}
+    try:
+        jornadas = _jornadas_por_usuario(anio, mes)
+    except Exception:
+        return dict(vacio, sin_migracion=True)
+    con_sueldo = {uid: j for uid, j in (jornadas or {}).items()
+                  if _num(j.get('sueldo_tiempo_completo')) > 0}
+    if not con_sueldo:
+        return vacio
+
+    try:
+        usuarios = (supabase.table('usuarios').select('id,nombre,rol')
+                    .in_('id', list(con_sueldo)).eq('activo', True).execute().data or [])
+    except Exception:
+        return dict(vacio, sin_migracion=True)
+    if not usuarios:
+        return vacio
+
+    ultimo_dia = monthrange(anio, mes)[1]
+    desde, hasta = f"{anio}-{mes:02d}-01", f"{anio}-{mes:02d}-{ultimo_dia}"
+    ids = [u['id'] for u in usuarios]
+    filas = _adjuntar_tramos(_fetch_all(supabase.table('marcaciones').select('*')
+                                        .in_('usuario_id', ids)
+                                        .gte('fecha', desde).lte('fecha', hasta)))
+    # Las gestiones fuera del centro ya aprobadas cuentan como jornada, igual
+    # que en el reporte de asistencia: si no, el sueldo saldría corto.
+    filas = _sumar_tramites(filas, _tramites_periodo(ids, desde, hasta))
+    resumen = _resumen_asistencia(filas, con_sueldo, usuarios, anio, mes)
+
+    # Quien cobró por sesiones este mes no entra: ya se le paga por ahí.
+    detalle_docentes, _, _, _ = _pago_docentes_mes(mes, anio)
+    cobran_por_sesion = {norm_nombre(n).lower() for n in detalle_docentes}
+
+    personas, excluidos = [], []
+    for r in resumen:
+        if not r.get('sueldo_tiempo_completo'):
+            continue
+        if norm_nombre(r['nombre']).lower() in cobran_por_sesion:
+            excluidos.append({'nombre': r['nombre'],
+                              'motivo': 'este mes cobra por sesiones en Pagos a docentes'})
+            continue
+        personas.append({
+            'usuario_id': r['usuario_id'], 'nombre': r['nombre'], 'rol': r['rol'],
+            'dias': r['dias_trabajados'], 'horas': r['horas_pagables'],
+            'horas_extra': r['horas_extra'], 'sueldo_jornada': r['sueldo_jornada'],
+            'total': round(_num(r.get('total_a_pagar')), 2),
+        })
+    personas.sort(key=lambda x: x['nombre'])
+    return {'personas': personas, 'excluidos': excluidos,
+            'total': round(sum(p['total'] for p in personas), 2), 'sin_migracion': False}
+
+
+def _gastos_sueldo_registrados(mes, anio):
+    """{nombre en minúsculas: gasto} de los sueldos ya asentados en ese período.
+    Sirve para no registrar dos veces el mismo sueldo."""
+    try:
+        filas = (supabase.table('gastos').select('*')
+                 .eq('categoria', CATEGORIA_SUELDOS)
+                 .eq('mes_periodo', mes).eq('anio_periodo', anio).execute().data or [])
+    except Exception:
+        return {}
+    return {norm_nombre(g.get('persona') or '').lower(): g for g in filas if g.get('persona')}
+
+
+MESES_ES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
+            'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+
+
+@app.route('/registrar-sueldos-gasto', methods=['POST'])
+@login_required
+@socio_admin_required
+def registrar_sueldos_gasto():
+    """Asienta en Gastos el sueldo del mes de quien cobra por jornada.
+
+    Una fila por persona y no una suma: así se ve a quién corresponde cada
+    monto, se puede corregir una sola y el reembolso o el pago se marcan
+    individualmente. Si el sueldo de alguien ya estaba registrado en ese
+    período, se salta —registrar dos veces el mismo sueldo descuadraría el
+    balance del mes— y se dice cuántos se saltaron.
+    """
+    try:
+        mes = int(request.form.get('mes') or 0)
+        anio = int(request.form.get('anio') or 0)
+    except (TypeError, ValueError):
+        mes = anio = 0
+    if not (1 <= mes <= 12 and 2000 <= anio <= 2100):
+        flash('❌ Período inválido', 'error')
+        return redirect(request.referrer or url_for('gestion_gastos'))
+
+    datos = _sueldos_personal_mes(mes, anio)
+    if not datos['personas']:
+        flash('⚠️ No hay sueldos que registrar en ese mes: nadie con jornada y sueldo configurado', 'warning')
+        return redirect(request.referrer or url_for('gestion_gastos'))
+
+    ya = _gastos_sueldo_registrados(mes, anio)
+    ultimo_dia = monthrange(anio, mes)[1]
+    nuevos = saltados = 0
+    for p in datos['personas']:
+        if norm_nombre(p['nombre']).lower() in ya:
+            saltados += 1
+            continue
+        if p['total'] <= 0:
+            saltados += 1
+            continue
+        gasto = {
+            'concepto': f"Sueldo {p['nombre']} — {MESES_ES[mes - 1]} {anio}",
+            'monto': p['total'], 'fecha': f"{anio}-{mes:02d}-{ultimo_dia}",
+            'categoria': CATEGORIA_SUELDOS, 'persona': p['nombre'],
+            'reembolso': False, 'reembolsado_a': None,
+            'registrado_por': current_user.nombre,
+            'mes': mes, 'anio': anio, 'mes_periodo': mes, 'anio_periodo': anio,
+        }
+        try:
+            supabase.table('gastos').insert(gasto).execute()
+        except Exception:
+            gasto.pop('mes_periodo', None)
+            gasto.pop('anio_periodo', None)
+            try:
+                supabase.table('gastos').insert(gasto).execute()
+            except Exception as e:
+                flash(f'❌ No se pudo registrar el sueldo de {p["nombre"]}: {e}', 'error')
+                continue
+        nuevos += 1
+
+    if nuevos:
+        flash(f'✅ {nuevos} sueldo(s) registrados como gasto de {MESES_ES[mes - 1]} {anio}'
+              + (f'; {saltados} ya estaban' if saltados else ''), 'success')
+    else:
+        flash('⚠️ No se registró nada: esos sueldos ya estaban en los gastos del período', 'warning')
+    return redirect(request.referrer or url_for('gestion_gastos', mes=mes, anio=anio))
+
+
 # ========== GASTOS ==========
 @app.route('/gastos', methods=['GET', 'POST'])
 @login_required
@@ -3834,8 +3989,18 @@ def gestion_gastos():
     # separado (igual que en /modulo5): sin este segundo permiso, no se le
     # manda el detalle de compensación individual de cada docente/psicólogo.
     puede_ver_pagos_docentes = tiene_modulo('finanzas.pagos_docentes')
+    # Sueldos del personal por jornada: lo que falta por asentar como gasto.
+    sueldos = _sueldos_personal_mes(mes, anio) if puede_ver_pagos_docentes else {'personas': [], 'excluidos': [], 'total': 0}
+    sueldos_registrados = _gastos_sueldo_registrados(mes, anio) if puede_ver_pagos_docentes else {}
+    for pers in sueldos['personas']:
+        pers['registrado'] = norm_nombre(pers['nombre']).lower() in sueldos_registrados
+    sueldos['pendientes'] = [p for p in sueldos['personas'] if not p['registrado'] and p['total'] > 0]
+    sueldos['total_pendiente'] = round(sum(p['total'] for p in sueldos['pendientes']), 2)
+
     return render_template('gastos.html',
                          gastos=gastos.data or [], total=total, mes=mes, anio=anio, today=date.today(),
+                         sueldos=sueldos,
+                         puede_registrar_sueldos=(current_user.rol in ('admin', 'socio')),
                          puede_ver_pagos_docentes=puede_ver_pagos_docentes,
                          pagos_docentes_detalle=(pagos_docentes_detalle if puede_ver_pagos_docentes else {}),
                          total_pago_docentes_mes=(total_pago_docentes_mes if puede_ver_pagos_docentes else 0),
@@ -4256,7 +4421,21 @@ def liquidacion():
             'neto': neto
         })
 
+    # Sueldos del personal por jornada. NO se restan aparte: el que ya está
+    # registrado vive dentro de 'total_gastos' y restarlo otra vez sería
+    # contarlo dos veces. Aquí solo se muestra cuánto de los gastos son
+    # sueldos y si queda alguno sin asentar.
+    sueldos = _sueldos_personal_mes(mes, anio)
+    sueldos_registrados = _gastos_sueldo_registrados(mes, anio)
+    for pers in sueldos['personas']:
+        pers['registrado'] = norm_nombre(pers['nombre']).lower() in sueldos_registrados
+    sueldos['pendientes'] = [p for p in sueldos['personas'] if not p['registrado'] and p['total'] > 0]
+    sueldos['total_pendiente'] = round(sum(p['total'] for p in sueldos['pendientes']), 2)
+    sueldos['total_registrado'] = round(sum(_num(g.get('monto')) for g in sueldos_registrados.values()), 2)
+
     return render_template('liquidacion.html',
+        sueldos=sueldos,
+        puede_registrar_sueldos=(current_user.rol in ('admin', 'socio')),
         mes=mes, anio=anio, saldo_cuenta=saldo_cuenta,
         saldo_banco=saldo_banco, fecha_saldo_banco=fecha_saldo_banco,
         saldo_es_auto=saldo_es_auto,
