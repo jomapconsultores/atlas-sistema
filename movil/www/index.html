@@ -1,5 +1,18 @@
 <!DOCTYPE html>
 <!-- Desarrollado por Marco Antonio Posligua San Martín -->
+<!--
+  Pantalla de arranque del contenedor.
+
+  Normalmente NO se ve: el paquete lleva fijada la dirección del despliegue
+  (server.url en capacitor.config.ts) y el WebView va directo allí. Esta página
+  es la red de seguridad para un paquete construido sin esa dirección.
+
+  Antes decía que la aplicación «se construyó sin APP_URL» y se quedaba ahí,
+  sin salida. Eso era falso —la dirección viene por defecto en la
+  configuración— y dejaba al usuario mirando un texto que no podía resolver.
+  Ahora conecta ella misma, y si no lo consigue manda a la pantalla de error,
+  que sí explica qué pasó y deja reintentar.
+-->
 <html lang="es">
 <head>
   <meta charset="UTF-8">
@@ -13,24 +26,37 @@
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     }
     .caja { max-width: 340px; }
-    .marca { font-size: 1.35rem; font-weight: 800; color: #1a73e8; margin-bottom: 10px; }
+    .marca { font-size: 1.35rem; font-weight: 800; color: #1a73e8; margin-bottom: 14px; }
     p { font-size: .92rem; line-height: 1.6; color: #475569; }
-    code { background: #f1f5f9; padding: 2px 6px; border-radius: 5px; font-size: .85em; }
     .pie { margin-top: 28px; font-size: .72rem; color: #94a3b8; }
   </style>
 </head>
 <body>
   <div class="caja">
     <div class="marca">Atlas</div>
-    <p>
-      Esta aplicación se conecta al servidor de Atlas. Todavía no se indicó
-      a cuál: se construyó sin <code>APP_URL</code>.
-    </p>
-    <p>
-      Vuelve a generar el paquete definiendo la dirección del despliegue
-      (variable <code>APP_URL</code>) y la aplicación abrirá directamente el sistema.
-    </p>
+    <p id="mensaje">Conectando con el servidor…</p>
     <div class="pie">Desarrollado por Marco Antonio Posligua San Martín</div>
   </div>
+
+  <script>
+  (function () {
+    // Debe coincidir con APP_URL de capacitor.config.ts. Va escrito aquí porque
+    // la configuración que empaqueta Capacitor queda en assets/, un nivel por
+    // encima de donde se sirve esta página (assets/public/), y desde el WebView
+    // no se puede leer.
+    var DESTINO = 'https://atlas.pensamiento-libre.org';
+
+    // Si el servidor no contesta, se pasa a la pantalla de error en lugar de
+    // dejar esto colgado en «Conectando…» para siempre. La comprobación va en
+    // 'no-cors' porque el servidor es otro origen y no manda cabeceras CORS:
+    // una petición normal fallaría siempre. La respuesta es opaca, pero que
+    // llegue ya dice lo único que hace falta saber aquí.
+    var corta = new AbortController();
+    var reloj = setTimeout(function () { corta.abort(); }, 8000);
+    fetch(DESTINO + '/version', { mode: 'no-cors', cache: 'no-store', signal: corta.signal })
+      .then(function () { clearTimeout(reloj); location.replace(DESTINO); })
+      .catch(function () { clearTimeout(reloj); location.replace('error.html'); });
+  })();
+  </script>
 </body>
 </html>

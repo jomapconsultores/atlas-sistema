@@ -26,11 +26,26 @@ const config: CapacitorConfig = {
   appName: 'Atlas',
   webDir: 'www',
   // El contenedor abre la MISMA aplicación desplegada, no una copia empaquetada.
-  server: { url: APP_URL, cleartext: false, androidScheme: 'https' },
+  server: {
+    url: APP_URL,
+    cleartext: false,
+    androidScheme: 'https',
+    // Qué se ve cuando el WebView NO consigue abrir esa dirección. Sin esto la
+    // aplicación se quedaba en blanco —sin mensaje y sin reintento— y era
+    // imposible distinguir «no hay internet» de «el servidor está caído» o de
+    // «la aplicación está rota». Pasa más de lo que parece: basta un wifi con
+    // portal cautivo, o abrir la app mientras se está publicando una versión.
+    errorPath: 'error.html',
+  },
   android: {
-    // El WebView de Android no debe permitir contenido mixto ni depuración en release.
+    // El WebView de Android no debe permitir contenido mixto.
     allowMixedContent: false,
-    webContentsDebuggingEnabled: false,
+    // La depuración se enciende a propósito para diagnosticar, nunca en el
+    // paquete que se publica. Con esto en falso siempre, una pantalla en blanco
+    // no se podía investigar: Chrome no puede inspeccionar el WebView y no hay
+    // otra forma de ver el error. Para compilar un paquete que sí se pueda
+    // mirar:  set CAP_DEBUG=1  (Windows)  antes de generar el APK.
+    webContentsDebuggingEnabled: process.env.CAP_DEBUG === '1',
   },
   ios: {
     contentInset: 'always',

@@ -25,6 +25,40 @@ una corrección en el servidor llega al teléfono sin volver a publicar.
 > Xcode sobre macOS. El flujo de CI incluido usa un runner `macos-latest` de
 > GitHub Actions, que sí sirve para esto sin tener un Mac propio.
 
+## Si la aplicación abre en blanco
+
+La aplicación no lleva Atlas dentro: abre el servidor. Así que una pantalla en
+blanco casi nunca es un fallo del paquete, sino que el WebView no consiguió
+cargar https://atlas.pensamiento-libre.org.
+
+Desde 2026 eso ya **no se ve como una pantalla en blanco**: `server.errorPath`
+en `capacitor.config.ts` hace que aparezca `www/error.html`, que dice qué pasó,
+a qué dirección intentó conectarse y deja reintentar. Si alguien reporta una
+pantalla blanca *sin ese mensaje*, está usando un paquete anterior a este
+cambio: hay que reinstalarle el APK.
+
+Para ver la causa real hace falta poder inspeccionar el WebView, y eso viene
+apagado a propósito en los paquetes que se publican. Se enciende al compilar:
+
+```bash
+# Windows (PowerShell):
+$env:CAP_DEBUG = "1"
+npm run apk:debug:win
+```
+
+Con ese APK instalado, se conecta el teléfono por USB y se abre `chrome://inspect`
+en el Chrome del computador: ahí sale la consola del WebView con el error exacto.
+Sin esto no hay forma de averiguarlo, que es justamente lo que hacía que una
+pantalla en blanco no se pudiera diagnosticar.
+
+Comprobaciones rápidas antes de llegar a eso:
+
+| Síntoma | Qué mirar |
+|---|---|
+| Sale la pantalla de error con «Reintentar» | El servidor o la red. Abre https://atlas.pensamiento-libre.org/version en el navegador del teléfono. |
+| Blanco total, sin ningún mensaje | Paquete viejo (sin `errorPath`), o el WebView del sistema está desactualizado. |
+| Abre y se cierra sola | Compila con `CAP_DEBUG=1` y mira `adb logcat`. |
+
 ## Construir el APK localmente
 
 La app abre el despliegue en Coolify, **https://atlas.pensamiento-libre.org**, que
