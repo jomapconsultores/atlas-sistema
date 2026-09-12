@@ -5513,18 +5513,119 @@ def mi_reporte():
 # botón repetido por error llene el día de tramos.
 MAX_TRAMOS_DIA = 6
 
+# Dos marcaciones idénticas separadas por segundos no son dos marcaciones: son
+# el mismo botón pulsado dos veces (doble clic, o un toque repetido porque el
+# teléfono tardó en responder). Dentro de esta ventana la segunda se confirma
+# como la primera, en vez de contestar con un aviso de error que asusta y no
+# describe nada de lo que pasó.
+SEGUNDOS_REPETICION = 90
+
+
+def _falta_la_tabla(e):
+    """¿El error dice que la tabla no existe (migración pendiente)?
+
+    Distinguirlo importa: antes, ante CUALQUIER fallo se caía al modo antiguo
+    de «un ingreso y una salida por día» y se le contestaba a la persona que
+    faltaba aplicar la migración 0005 —que sí estaba aplicada—. Un corte de red
+    de un segundo se leía como una base sin la tabla.
+    """
+    texto = f"{getattr(e, 'code', '')} {e}"
+    if 'PGRST205' in texto or '42P01' in texto or 'Could not find the table' in texto:
+        return True
+    # Postgres lo dice como «relation "x" does not exist». Un «does not exist»
+    # suelto puede ser de una columna o de una función, y tomar eso por una
+    # tabla ausente devolvería justo el fallo que este control vino a cerrar.
+    return 'relation' in texto and 'does not exist' in texto
+
+
+def _es_duplicado(e):
+    """¿El error es un choque contra un índice único? Es lo que ocurre cuando
+    la misma marcación llega dos veces a la vez (dos pestañas, un doble toque):
+    la segunda no tiene nada que hacer porque la primera ya lo hizo."""
+    texto = f"{getattr(e, 'code', '')} {e}"
+    return '23505' in texto or 'duplicate key' in texto
+
+
+def _hace_poco(hora, ahora):
+    """¿'hora' es de hace menos de SEGUNDOS_REPETICION respecto de 'ahora'?"""
+    antes, ahora_seg = _hora_a_segundos(hora), _hora_a_segundos(ahora)
+    if antes is None or ahora_seg is None:
+        return False
+    return 0 <= ahora_seg - antes <= SEGUNDOS_REPETICION
+
+
 def _tramos_del_dia(usuario_id, fecha):
     """Entradas y salidas de una persona en un día, en orden.
 
-    Devuelve None —no lista vacía— si la tabla todavía no existe (migración
-    0005 pendiente); quien llama vuelve entonces al comportamiento antiguo de
-    un solo ingreso y una sola salida por día."""
+    Devuelve None —no lista vacía— SOLO si la tabla todavía no existe
+    (migración 0005 pendiente); quien llama vuelve entonces al comportamiento
+    antiguo de un solo ingreso y una sola salida por día. Cualquier otro fallo
+    se propaga: tragárselo hacía que un problema de red se anunciara como una
+    migración sin aplicar y, peor, que se decidiera la marcación sobre un día
+    que no se había podido leer.
+    """
     try:
         return (supabase.table('marcaciones_tramos').select('*')
                 .eq('usuario_id', usuario_id).eq('fecha', fecha)
                 .order('hora_ingreso').execute().data or [])
+    except Exception as e:
+        if _falta_la_tabla(e):
+            return None
+        raise
+
+
+def _fila_del_dia(usuario_id, fecha):
+    """La fila de 'marcaciones' de esa persona ese día, o None."""
+    filas = (supabase.table('marcaciones').select('*')
+             .eq('usuario_id', usuario_id).eq('fecha', fecha).execute().data)
+    return filas[0] if filas else None
+
+
+def _asegurar_fila_del_dia(usuario_id, fecha, hora):
+    """La fila del DÍA, creándola si todavía no está.
+
+    Dos marcaciones que llegan a la vez hacen que una de las dos choque con el
+    UNIQUE(usuario_id, fecha): eso no es un fallo, es que la fila ya quedó
+    puesta, así que se vuelve a leer en vez de devolver un error. También se
+    relee cuando el insert no devuelve la fila creada: antes se daba por
+    fallida una marcación que sí se había guardado, y el día quedaba con
+    ingreso y sin tramo —justo el estado que después bloqueaba la salida—.
+    """
+    try:
+        creada = supabase.table('marcaciones').insert({
+            'usuario_id': usuario_id, 'fecha': fecha, 'hora_ingreso': hora}).execute().data
+        if creada:
+            return creada[0]
+    except Exception as e:
+        if not _es_duplicado(e):
+            raise
+    return _fila_del_dia(usuario_id, fecha)
+
+
+def _respaldar_tramo_legacy(dia):
+    """Convierte en tramo la marcación de un día que todavía no lo tiene.
+
+    Le pasa a las filas anteriores a la migración 0005 y a las que quedaron a
+    medias. La pantalla SÍ las muestra como un tramo —_adjuntar_tramos cae a la
+    propia marcación cuando no hay filas hijas—, así que ofrecía «Marcar
+    salida» mientras el servidor, que solo miraba la tabla de tramos,
+    contestaba «primero debes marcar tu ingreso». El día se repara en cuanto se
+    vuelve a marcar y las dos vistas vuelven a decir lo mismo.
+    """
+    try:
+        creado = supabase.table('marcaciones_tramos').insert({
+            'marcacion_id': dia['id'], 'usuario_id': dia['usuario_id'],
+            'fecha': str(dia['fecha'])[:10], 'hora_ingreso': dia['hora_ingreso'],
+            'hora_salida': dia.get('hora_salida')}).execute().data
+        if creado:
+            return creado[0]
     except Exception:
-        return None
+        pass
+    # Si no se pudo respaldar, se decide igualmente con el estado que la persona
+    # está viendo en pantalla, no con uno vacío. La fila del día sigue siendo la
+    # verdad: el reporte la lee así mientras no exista el tramo.
+    return _tramo_como_marcacion(dia)
+
 
 def _marcar_asistencia(usuario_id, fecha, hora, accion):
     """Registra un ingreso o una salida. Devuelve (mensaje, categoría) para flash.
@@ -5535,17 +5636,22 @@ def _marcar_asistencia(usuario_id, fecha, hora, accion):
     'marcaciones' sigue siendo el registro del DÍA (permiso, horas extra) y
     guarda el primer ingreso y la última salida.
     """
-    dia = supabase.table('marcaciones').select('*').eq('usuario_id', usuario_id).eq('fecha', fecha).execute().data
-    dia = dia[0] if dia else None
+    dia = _fila_del_dia(usuario_id, fecha)
     tramos = _tramos_del_dia(usuario_id, fecha)
     hay_tramos = tramos is not None
     if not hay_tramos:
         # Sin la tabla, el único tramo posible es la propia marcación del día.
         tramos = [dia] if dia and dia.get('hora_ingreso') else []
+    elif not tramos and dia and dia.get('hora_ingreso'):
+        tramos = [_respaldar_tramo_legacy(dia)]
     abierto = next((t for t in tramos if t.get('hora_ingreso') and not t.get('hora_salida')), None)
 
     if accion == 'ingreso':
         if abierto:
+            # El mismo toque llegando dos veces: se confirma lo que ya quedó
+            # marcado en vez de responder con un error por algo que salió bien.
+            if _hace_poco(abierto['hora_ingreso'], hora):
+                return (f"✅ Ingreso marcado a las {str(abierto['hora_ingreso'])[:5]}", 'success')
             return (f"⚠️ Tienes un ingreso abierto desde las {str(abierto['hora_ingreso'])[:5]}: "
                     "marca primero tu salida", 'error')
         if tramos and not hay_tramos:
@@ -5554,17 +5660,28 @@ def _marcar_asistencia(usuario_id, fecha, hora, accion):
         if len(tramos) >= MAX_TRAMOS_DIA:
             return (f'⚠️ Ya registraste {MAX_TRAMOS_DIA} entradas hoy, el máximo por día', 'error')
         if not dia:
-            creada = supabase.table('marcaciones').insert({
-                'usuario_id': usuario_id, 'fecha': fecha, 'hora_ingreso': hora}).execute().data
-            dia = creada[0] if creada else None
-        elif not dia.get('hora_ingreso'):
-            supabase.table('marcaciones').update({'hora_ingreso': hora}).eq('id', dia['id']).execute()
+            dia = _asegurar_fila_del_dia(usuario_id, fecha, hora)
         if not dia:
             return ('⚠️ No se pudo registrar el ingreso, intenta de nuevo', 'error')
+        if not dia.get('hora_ingreso'):
+            # El día puede existir sin hora de entrada: lo creó el permiso, o lo
+            # dejó a medias otra petición. La primera entrada que llega es la
+            # suya, y la comprobación va DESPUÉS de recuperar la fila para que
+            # el día que se releyó tras un choque tampoco se quede sin ella.
+            supabase.table('marcaciones').update({'hora_ingreso': hora}).eq('id', dia['id']).execute()
+            dia['hora_ingreso'] = hora
         if hay_tramos:
-            supabase.table('marcaciones_tramos').insert({
-                'marcacion_id': dia['id'], 'usuario_id': usuario_id, 'fecha': fecha,
-                'hora_ingreso': hora}).execute()
+            try:
+                supabase.table('marcaciones_tramos').insert({
+                    'marcacion_id': dia['id'], 'usuario_id': usuario_id, 'fecha': fecha,
+                    'hora_ingreso': hora}).execute()
+            except Exception as e:
+                # El índice de «un solo tramo abierto por día» rechazó un
+                # segundo envío del mismo ingreso: ya está marcado, que es
+                # exactamente lo que se pedía.
+                if not _es_duplicado(e):
+                    raise
+                return (f'✅ Ingreso marcado a las {hora[:5]}', 'success')
         n = len(tramos) + 1
         return (f'✅ Ingreso marcado a las {hora[:5]}' if n == 1
                 else f'✅ Ingreso {n} del día marcado a las {hora[:5]}', 'success')
@@ -5572,13 +5689,19 @@ def _marcar_asistencia(usuario_id, fecha, hora, accion):
     if not abierto:
         if not tramos:
             return ('⚠️ Primero debes marcar tu ingreso', 'error')
+        # Salida repetida por doble toque: la de hace un momento es esta misma.
+        ultima = max((str(t['hora_salida'])[:8] for t in tramos if t.get('hora_salida')),
+                     default=None)
+        if ultima and _hace_poco(ultima, hora):
+            return (f'✅ Salida marcada a las {ultima[:5]}', 'success')
         return ('⚠️ Ya marcaste tu salida hoy', 'error') if not hay_tramos else \
                ('⚠️ Ya cerraste tu último tramo. Si vuelves a entrar, marca un nuevo ingreso', 'error')
-    if hay_tramos:
+    if hay_tramos and abierto.get('id'):
         supabase.table('marcaciones_tramos').update({'hora_salida': hora}).eq('id', abierto['id']).execute()
     # La marcación del día guarda SIEMPRE la última salida.
-    supabase.table('marcaciones').update({'hora_salida': hora}).eq('id', dia['id']).execute()
-    n = len(tramos)
+    if dia:
+        supabase.table('marcaciones').update({'hora_salida': hora}).eq('id', dia['id']).execute()
+    n = tramos.index(abierto) + 1
     return (f'✅ Salida marcada a las {hora[:5]}' if n == 1
             else f'✅ Salida {n} del día marcada a las {hora[:5]}', 'success')
 
@@ -5719,10 +5842,15 @@ def mi_asistencia():
             mensaje, categoria = _marcar_asistencia(current_user.id, hoy,
                                                     ahora_ec.strftime('%H:%M:%S'), accion)
         except Exception:
-            # El índice único de tramo abierto puede rechazar un doble clic:
-            # es exactamente lo que debe pasar, y aquí se cuenta como tal.
-            mensaje, categoria = ('⚠️ No se pudo registrar la marcación, revisa tu asistencia del día '
-                                  'e intenta de nuevo', 'error')
+            # Los choques esperables (doble envío del mismo toque, dos pestañas)
+            # ya los resuelve _marcar_asistencia. Lo que llegue hasta aquí es un
+            # fallo de verdad —la base caída, un timeout— y se deja escrito en
+            # el log: sin eso, la única pista de por qué no se pudo marcar era
+            # el propio aviso en pantalla, que no dice nada de la causa.
+            app.logger.exception('Fallo al marcar %s de usuario %s el %s',
+                                 accion, current_user.id, hoy)
+            mensaje, categoria = ('⚠️ No se pudo registrar la marcación: la conexión falló. '
+                                  'Revisa tu asistencia del día e intenta de nuevo', 'error')
         flash(mensaje, categoria)
         return redirect(url_for('mi_asistencia'))
 
@@ -6016,7 +6144,11 @@ def _choca_con_marcacion(usuario_id, fecha, inicio, fin):
     try:
         tramos = (supabase.table('marcaciones_tramos').select('hora_ingreso,hora_salida')
                   .eq('usuario_id', usuario_id).eq('fecha', fecha).execute().data or [])
-    except Exception:
+    except Exception as e:
+        # Sin la tabla no hay tramos con los que chocar. Con la tabla puesta, un
+        # fallo de lectura no puede hacerse pasar por «no se cruza con nada».
+        if not _falta_la_tabla(e):
+            raise
         return False
     for t in tramos:
         t_ini, t_fin = str(t.get('hora_ingreso') or '')[:8], str(t.get('hora_salida') or '')[:8]
@@ -6046,8 +6178,14 @@ def _adjuntar_tramos(filas):
             crudos = _fetch_all(supabase.table('marcaciones_tramos').select('*')
                                 .in_('usuario_id', usuarios)
                                 .gte('fecha', min(fechas)).lte('fecha', max(fechas)))
-        except Exception:
-            crudos = []      # migración 0005 pendiente: se cae al tramo único
+        except Exception as e:
+            # Solo la ausencia de la tabla (migración 0005 pendiente) justifica
+            # caer al tramo único. Tragarse un fallo cualquiera pintaba el día
+            # como «de la primera entrada a la última salida», almuerzo
+            # incluido: horas de más en un reporte que termina en un sueldo.
+            if not _falta_la_tabla(e):
+                raise
+            crudos = []
         for t in crudos:
             por_dia.setdefault((t.get('usuario_id'), str(t.get('fecha'))[:10]), []).append(t)
         for lista in por_dia.values():
@@ -6569,9 +6707,15 @@ def _tramo_para_editar(id):
     comprueba que quien pide tiene permiso sobre esa persona."""
     try:
         fila = supabase.table('marcaciones_tramos').select('*').eq('id', id).execute().data
-    except Exception:
+    except Exception as e:
+        # Solo la tabla ausente se responde como migración pendiente. Un fallo
+        # de lectura decía lo mismo, y quien corregía una marcación salía a
+        # aplicar una migración que ya estaba puesta.
+        if _falta_la_tabla(e):
+            return None, None, (jsonify({'success': False, 'error':
+                'Falta aplicar migrations/0005_marcaciones_multiples.sql'}), 400)
         return None, None, (jsonify({'success': False, 'error':
-            'Falta aplicar migrations/0005_marcaciones_multiples.sql'}), 400)
+            'No se pudo leer la marcación: ' + str(e)}), 400)
     if not fila:
         return None, None, (jsonify({'success': False, 'error': 'Marcación no encontrada'}), 404)
     tramo = fila[0]
@@ -6620,8 +6764,14 @@ def api_corregir_tramo(id):
     if data.get('hora_salida') and not salida:
         return jsonify({'success': False, 'error': 'La hora de salida no es válida'}), 400
     fecha = str(tramo.get('fecha'))[:10]
-    aviso_val = _revisar_correccion(_tramos_del_dia(tramo['usuario_id'], fecha) or [],
-                                    id, ingreso, salida)
+    try:
+        del_dia = _tramos_del_dia(tramo['usuario_id'], fecha) or []
+    except Exception as e:
+        # Esta ruta la llama un fetch() que espera JSON: dejar escapar la
+        # excepción le devolvía una página de error 500 y el navegador no
+        # mostraba nada, ni siquiera que había fallado.
+        return jsonify({'success': False, 'error': 'No se pudo leer el día: ' + str(e)}), 400
+    aviso_val = _revisar_correccion(del_dia, id, ingreso, salida)
     if aviso_val:
         return jsonify({'success': False, 'error': aviso_val}), 400
     try:

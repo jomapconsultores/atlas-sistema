@@ -62,13 +62,13 @@
         </div>
         <div class="col-md-5 text-center">
             {% if tramo_abierto %}
-            <form method="POST"><input type="hidden" name="accion" value="salida">
+            <form method="POST" class="form-marcar"><input type="hidden" name="accion" value="salida">
                 <button type="submit" class="btn btn-danger btn-marcar">🚪 Marcar salida</button>
             </form>
             {% elif tramos_hoy|length >= max_tramos %}
             <div class="text-muted small">Ya registraste el máximo de {{ max_tramos }} entradas del día.</div>
             {% else %}
-            <form method="POST"><input type="hidden" name="accion" value="ingreso">
+            <form method="POST" class="form-marcar"><input type="hidden" name="accion" value="ingreso">
                 <button type="submit" class="btn btn-success btn-marcar">✅ Marcar {{ 'ingreso' if not tramos_hoy else 'nuevo ingreso' }}</button>
             </form>
             {% if tramos_hoy %}<div class="mt-2 small text-muted">Vuelves después del corte: se abre otro tramo del mismo día.</div>{% endif %}
@@ -280,6 +280,26 @@
     }
     tic();
     setInterval(tic, 1000);
+
+    // Un solo envío por pulsación. En el teléfono, si la red tarda, se vuelve a
+    // tocar el botón y salían dos marcaciones a la vez: una se guardaba y la
+    // otra chocaba, y lo que veía la persona era un error sobre algo que sí
+    // había funcionado. Al enviar, el botón se bloquea.
+    document.querySelectorAll('form.form-marcar').forEach(function (form) {
+        form.addEventListener('submit', function () {
+            var boton = form.querySelector('button[type=submit]');
+            if (!boton) return;
+            setTimeout(function () {
+                boton.disabled = true;
+                boton.textContent = 'Marcando…';
+            }, 0);
+        });
+    });
+    // Al volver con el botón «atrás» el navegador restaura la página tal como
+    // estaba, botón bloqueado incluido. Se recarga para que vuelva a servir.
+    window.addEventListener('pageshow', function (e) {
+        if (e.persisted) location.reload();
+    });
 })();
 </script>
 {% endblock %}
