@@ -1,5 +1,6 @@
 -- 0003 — Permiso del día y hora extra sin recargo
--- Aplicar en el SQL Editor del proyecto Supabase de Atlas.
+-- Aplicar con deploy/migrate.py (túnel SSH al Postgres propio; ver
+-- deploy/README.md). Ya no hay editor SQL en la nube: la base es nuestra.
 
 -- 1) Permiso: el día en que la persona salió antes con autorización se le paga
 --    igual la jornada completa. Sin esto, con el sueldo calculado por horas,

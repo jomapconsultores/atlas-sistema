@@ -1,6 +1,6 @@
 -- 0008 — Corregir una entrada o una salida mal marcada
--- Aplicar en el SQL Editor del proyecto Supabase de Atlas (el archivo entero),
--- o con deploy/migrate.py cuando la base ya esté auto-alojada.
+-- Aplicar con deploy/migrate.py (túnel SSH al Postgres propio; ver
+-- deploy/README.md). Ya no hay editor SQL en la nube: la base es nuestra.
 --
 -- Hasta ahora una marcación era intocable: los únicos ajustes eran las horas
 -- extra y el permiso del día. Quien olvidaba marcar su salida dejaba el tramo

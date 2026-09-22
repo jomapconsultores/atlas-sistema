@@ -107,6 +107,11 @@
             {% if gasto_admin.excluidos %}
             <br>No entran aquí: {% for e in gasto_admin.excluidos %}<strong>{{ e.nombre }}</strong> ({{ e.motivo }}){{ '; ' if not loop.last }}{% endfor %}.
             {% endif %}
+            {% if gasto_admin.sin_jornada %}
+            <br>⚠️ Dados de alta pero <strong>sin jornada con sueldo</strong> en este mes, así que su pago no se puede calcular:
+            {% for s in gasto_admin.sin_jornada %}<strong>{{ s.nombre }}</strong> ({{ s.rol }}){{ '; ' if not loop.last }}{% endfor %}.
+            Configúrasela en <em>Asistencia → Configurar jornada y sueldo</em> y entra en el cuadro sin hacer nada más.
+            {% endif %}
         </small>
     </div>
 </div>
@@ -137,6 +142,13 @@
         {% endfor %}
         {% else %}
         <p class="mb-2">Todavía no hay nadie de quien calcular el pago administrativo de este período.</p>
+        {% endif %}
+        {% if gasto_admin and gasto_admin.sin_jornada %}
+        <div class="alert alert-warning py-2 px-3 mb-2" style="font-size:14px;">
+            ⚠️ Ya están dados de alta, pero sin jornada con sueldo en este mes:
+            {% for s in gasto_admin.sin_jornada %}<strong>{{ s.nombre }}</strong> ({{ s.rol }}){{ '; ' if not loop.last }}{% endfor %}.
+            En cuanto se les configure, su pago aparece aquí solo.
+        </div>
         {% endif %}
         <p class="text-muted mb-0" style="font-size:14px;">
             Aquí aparece el pago de <strong>secretaría</strong> y de cualquier otro cargo administrativo.
@@ -492,6 +504,9 @@
             <p class="text-muted small">
                 💡 A quien esté en esta lista se le puede asignar un gasto por reembolsar, marcarle el pago y aparece en la liquidación
                 igual que a un socio. Los socios son fijos y no se pueden quitar.
+                <br>👥 <strong>El personal del centro entra solo</strong>: en cuanto se da de alta a un docente, un psicólogo o
+                un administrativo, aparece aquí sin tener que volver a escribirlo. Si a alguien no se le debe reembolsar nada,
+                quítalo con la ✕ y no vuelve a ofrecerse.
             </p>
             {% if not personas_reembolso_ok %}
             <div class="alert alert-warning py-2 small mb-3">
@@ -502,6 +517,13 @@
                 {% for s in socios %}
                 <span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle py-2 px-3">
                     {{ s }} <span class="opacity-75">· socio</span>
+                </span>
+                {% endfor %}
+                {% for p in personal_reembolso %}
+                <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle py-2 px-3">
+                    {{ p.nombre }} <span class="opacity-75">· {{ p.cargo|lower }}</span>
+                    <button type="button" class="btn-close btn-close-sm ms-2 align-middle" style="font-size:.6rem;"
+                            title="Quitar de la lista de reembolsos" onclick="quitarPersonalReembolso('{{ p.nombre|e }}')"></button>
                 </span>
                 {% endfor %}
                 {% for p in personas_reembolso_extra %}
@@ -638,7 +660,7 @@
 <div class="tab-pane fade" id="tab-cuentas" role="tabpanel" aria-labelledby="tab-cuentas-btn">
     <div class="card shadow border-0 mb-4" style="border-radius:15px; overflow:hidden;">
         <div class="card-header text-white" style="background:linear-gradient(135deg,#6a1b9a,#4a148c);">
-            <strong>💳 Cuentas de pago de docentes y psicólogos</strong>
+            <strong>💳 Cuentas de pago del personal <span class="fw-normal opacity-75" style="font-size:12px;">docentes, psicólogos y administrativos</span></strong>
         </div>
         {% if not cuentas_ok %}
         <div style="padding:12px 16px; background:#fff3e0; color:#8a5300; font-size:13px;">
@@ -647,6 +669,7 @@
         {% endif %}
         <div style="padding:9px 16px; background:#f3e5f5; border-bottom:1px solid #e1bee7; font-size:12px; color:#555;">
             💡 Haz clic en una persona para registrar o editar sus datos de cuenta (banco, tipo, número, cédula, correo). El botón verde ✓ indica que ya tiene datos guardados.
+            Aquí está <strong>todo el personal dado de alta</strong> —docentes, psicólogos y administrativos—, no hace falta agregarlo.
         </div>
         <div class="card-body">
             <div class="row g-2">
@@ -660,7 +683,7 @@
                 </div>
                 {% endfor %}
                 {% if not personas_cuentas %}
-                <div class="text-muted text-center py-4">No hay docentes registrados todavía.</div>
+                <div class="text-muted text-center py-4">Todavía no hay nadie dado de alta en el sistema.</div>
                 {% endif %}
             </div>
         </div>
@@ -956,12 +979,12 @@ async function crearPersonaReembolso() {
     if (creado) { input.value = ''; location.reload(); }
 }
 
-async function quitarPersonaReembolso(id, nombre) {
+async function pedirBajaReembolso(url, nombre, cuerpo) {
     if (!confirm('¿Quitar a ' + nombre + ' de la lista de reembolsos?\n\nLos reembolsos que ya tenga asignados se conservan y se siguen pudiendo pagar; solo deja de ofrecerse para gastos nuevos.')) return;
     try {
-        const r = await fetch('/api/personas-reembolso/' + id + '/quitar', {
-            method: 'POST', headers: {'Content-Type': 'application/json'}
-        });
+        const opciones = {method: 'POST', headers: {'Content-Type': 'application/json'}};
+        if (cuerpo) opciones.body = JSON.stringify(cuerpo);
+        const r = await fetch(url, opciones);
         const res = await r.json();
         if (!res.success) { alert('❌ ' + (res.error || 'No se pudo quitar')); return; }
         if (res.pendientes > 0) {
@@ -970,6 +993,18 @@ async function quitarPersonaReembolso(id, nombre) {
         }
         location.reload();
     } catch (e) { alert('❌ Error de conexión'); }
+}
+
+// Persona creada a mano: tiene fila propia, se quita por id.
+async function quitarPersonaReembolso(id, nombre) {
+    await pedirBajaReembolso('/api/personas-reembolso/' + id + '/quitar', nombre, null);
+}
+
+// Personal del centro: está en la lista por estar dado de alta, no tiene fila
+// propia, así que la baja se pide por nombre y queda grabada para que no
+// vuelva a aparecer en la siguiente carga.
+async function quitarPersonalReembolso(nombre) {
+    await pedirBajaReembolso('/api/personas-reembolso/quitar', nombre, {nombre: nombre});
 }
 
 // Cargar sugerencias

@@ -1,6 +1,6 @@
 -- 0005 — Varias marcaciones en el mismo día (doble jornada)
--- Aplicar en el SQL Editor del proyecto Supabase de Atlas (el archivo entero),
--- o con deploy/migrate.py cuando la base ya esté auto-alojada.
+-- Aplicar con deploy/migrate.py (túnel SSH al Postgres propio; ver
+-- deploy/README.md). Ya no hay editor SQL en la nube: la base es nuestra.
 
 -- Hasta ahora cada persona tenía UN ingreso y UNA salida por día, y quien
 -- trabaja doble jornada (mañana y tarde, con un corte al mediodía) no podía

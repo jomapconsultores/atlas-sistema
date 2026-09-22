@@ -1,6 +1,6 @@
 -- 0006 — Personas a las que se les puede reembolsar un gasto
--- Aplicar en el SQL Editor del proyecto Supabase de Atlas (el archivo entero),
--- o con deploy/migrate.py cuando la base ya esté auto-alojada.
+-- Aplicar con deploy/migrate.py (túnel SSH al Postgres propio; ver
+-- deploy/README.md). Ya no hay editor SQL en la nube: la base es nuestra.
 
 -- Hasta ahora la lista de «Reembolsar a» era la constante SOCIOS del código:
 -- solo los tres socios podían recibir un reembolso, y sumar a alguien más

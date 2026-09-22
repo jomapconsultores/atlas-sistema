@@ -1,6 +1,6 @@
 -- 0011 — Trámites fuera del centro: trabajo que existe aunque no haya marcación
--- Aplicar en el SQL Editor del proyecto Supabase de Atlas (el archivo entero),
--- o con deploy/migrate.py cuando la base ya esté auto-alojada.
+-- Aplicar con deploy/migrate.py (túnel SSH al Postgres propio; ver
+-- deploy/README.md). Ya no hay editor SQL en la nube: la base es nuestra.
 --
 -- Secretaría hace gestiones fuera: el banco, el SRI, la imprenta, un trámite
 -- en el municipio. Ese tiempo es trabajo, pero no hay dónde marcar: o el día

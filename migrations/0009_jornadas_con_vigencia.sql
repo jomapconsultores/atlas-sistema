@@ -1,6 +1,6 @@
 -- 0009 — La jornada de cada persona pasa a tener historial
--- Aplicar en el SQL Editor del proyecto Supabase de Atlas (el archivo entero),
--- o con deploy/migrate.py cuando la base ya esté auto-alojada.
+-- Aplicar con deploy/migrate.py (túnel SSH al Postgres propio; ver
+-- deploy/README.md). Ya no hay editor SQL en la nube: la base es nuestra.
 --
 -- 'jornadas_laborales' guardaba UNA fila por persona, sin fechas: la jornada
 -- vigente y nada más. Cambiarla no era «a partir de ahora», era «desde

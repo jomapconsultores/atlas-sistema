@@ -1,6 +1,6 @@
 -- 0010 — El pago excepcional guarda el contexto de la clase
--- Aplicar en el SQL Editor del proyecto Supabase de Atlas (el archivo entero),
--- o con deploy/migrate.py cuando la base ya esté auto-alojada.
+-- Aplicar con deploy/migrate.py (túnel SSH al Postgres propio; ver
+-- deploy/README.md). Ya no hay editor SQL en la nube: la base es nuestra.
 --
 -- Quien firma la excepción veía "2 h a $10/h, +$6" y nada más. Con ese dato
 -- solo no se puede juzgar el pedido: una tarifa mayor no pesa igual en una

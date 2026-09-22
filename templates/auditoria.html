@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}Bitácora de cambios - Atlas{% endblock %}
+{% block content %}
+<style>
+    .card-premium { border-radius: 18px; border: none; box-shadow: 0 4px 20px rgba(0,0,0,0.06); background: white; margin-bottom: 20px; overflow: hidden; }
+    .card-head { padding: 14px 20px; color: white; font-weight: 700; font-size: 15px; }
+    .tabla-bitacora { margin: 0; font-size: 13.5px; }
+    .tabla-bitacora thead th { background: #1a1a2e; color: white; font-weight: 600; font-size: 11px; letter-spacing: .5px; border: none; padding: 10px 12px; text-transform: uppercase; white-space: nowrap; }
+    .tabla-bitacora tbody td { padding: 9px 12px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+    .chip { display: inline-block; padding: 4px 10px; border-radius: 9px; font-size: 10.5px; font-weight: 600; white-space: nowrap; }
+    .chip-crear    { background: #e8f5e9; color: #2e7d32; }
+    .chip-editar   { background: #fff8e1; color: #b26a00; }
+    .chip-eliminar { background: #ffebee; color: #c62828; }
+    .chip-modulo   { background: #eef1f6; color: #14406f; }
+    .cuando { white-space: nowrap; line-height: 1.35; }
+    .cuando b { font-size: 14px; }
+    .cuando small { display: block; color: #7a869a; font-size: 11px; }
+    .cambios { margin: 6px 0 0; padding-left: 16px; color: #445; font-size: 12.5px; }
+    .cambios li { margin-bottom: 2px; }
+    .resumen { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; margin-bottom: 22px; }
+    .cifra { border-radius: 14px; padding: 14px 16px; text-align: center; }
+    .cifra b { display: block; font-size: 24px; font-weight: 700; line-height: 1.2; }
+    .cifra small { color: #5a6a80; }
+    .filtros { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-bottom: 18px; }
+    .filtros label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: #5a6a80; display: block; margin-bottom: 3px; }
+    .detalle-tecnico { font-size: 11.5px; color: #7a869a; }
+    @media print {
+        .no-print, .app-sidebar, .navbar-premium, .sidebar-panel-bg { display: none !important; }
+        .card-premium { box-shadow: none; border: 1px solid #ddd; break-inside: avoid; }
+        body { background: #fff; }
+    }
+</style>
+
+<div class="page-hero">
+    <h2>🗂️ Bitácora de cambios</h2>
+    <p>Qué se tocó en el sistema, quién lo tocó y a qué hora exacta.</p>
+</div>
+
+{% if sin_migracion %}
+<div class="alert alert-warning">
+    ⚠️ Todavía no se está registrando nada: falta aplicar <code>migrations/0012_auditoria.sql</code> en la base.
+    Desde el momento en que se aplique, cada alta, cambio y borrado queda anotado aquí.
+</div>
+{% endif %}
+
+<form method="get" class="filtros no-print">
+    <div>
+        <label>Desde</label>
+        <input type="date" name="desde" value="{{ desde }}" class="form-control form-control-sm" style="min-width:150px;">
+    </div>
+    <div>
+        <label>Hasta</label>
+        <input type="date" name="hasta" value="{{ hasta }}" class="form-control form-control-sm" style="min-width:150px;">
+    </div>
+    <div>
+        <label>Quién</label>
+        <select name="persona" class="form-select form-select-sm" style="min-width:170px;">
+            <option value="">Cualquiera</option>
+            {% for p in personas %}<option value="{{ p }}" {{ 'selected' if p == persona }}>{{ p }}</option>{% endfor %}
+        </select>
+    </div>
+    <div>
+        <label>Área</label>
+        <select name="modulo" class="form-select form-select-sm" style="min-width:150px;">
+            <option value="">Todas</option>
+            {% for m in modulos %}<option value="{{ m }}" {{ 'selected' if m == modulo }}>{{ m }}</option>{% endfor %}
+        </select>
+    </div>
+    <div>
+        <label>Acción</label>
+        <select name="accion" class="form-select form-select-sm" style="min-width:130px;">
+            <option value="">Todas</option>
+            <option value="crear"    {{ 'selected' if accion == 'crear' }}>Creado</option>
+            <option value="editar"   {{ 'selected' if accion == 'editar' }}>Editado</option>
+            <option value="eliminar" {{ 'selected' if accion == 'eliminar' }}>Eliminado</option>
+        </select>
+    </div>
+    <div style="flex:1 1 200px;">
+        <label>Buscar</label>
+        <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm" placeholder="concepto, nombre, monto…">
+    </div>
+    <button type="submit" class="btn btn-sm btn-primary">🔎 Filtrar</button>
+    <a href="{{ url_for('bitacora_cambios') }}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
+    <button type="button" class="btn btn-sm btn-outline-primary ms-auto" onclick="window.print()">🖨️ Imprimir o guardar en PDF</button>
+</form>
+
+<div class="resumen">
+    <div class="cifra" style="background:#e8f5e9;">
+        <b style="color:#2e7d32;">{{ resumen.get('crear', 0) }}</b>
+        <small>Creados</small>
+    </div>
+    <div class="cifra" style="background:#fff8e1;">
+        <b style="color:#b26a00;">{{ resumen.get('editar', 0) }}</b>
+        <small>Editados</small>
+    </div>
+    <div class="cifra" style="background:#ffebee;">
+        <b style="color:#c62828;">{{ resumen.get('eliminar', 0) }}</b>
+        <small>Eliminados</small>
+    </div>
+    <div class="cifra" style="background:#eef1f6;">
+        <b style="color:#14406f;">{{ lineas|length }}</b>
+        <small>En esta página</small>
+    </div>
+</div>
+
+<div class="card-premium">
+    <div class="card-head" style="background:linear-gradient(135deg,#37474f,#263238);">
+        📋 Del {{ desde }} al {{ hasta }}{% if persona %} · {{ persona }}{% endif %}{% if modulo %} · {{ modulo }}{% endif %}
+    </div>
+    <div class="table-responsive">
+        <table class="table tabla-bitacora">
+            <thead><tr>
+                <th style="min-width:120px;">Cuándo</th>
+                <th style="min-width:130px;">Quién</th>
+                <th style="min-width:110px;">Área</th>
+                <th>Qué cambió</th>
+            </tr></thead>
+            <tbody>
+            {% for l in lineas %}
+                <tr>
+                    <td class="cuando">
+                        <b>{{ l.hora }}</b>
+                        <small>{{ l.dia }} {{ l.fecha }}</small>
+                    </td>
+                    <td>
+                        <strong>{{ l.usuario_nombre or 'Sistema' }}</strong>
+                        {% if l.usuario_rol %}<small class="d-block text-muted">{{ l.usuario_rol }}</small>{% endif %}
+                    </td>
+                    <td>
+                        {% if l.modulo %}<span class="chip chip-modulo">{{ l.modulo }}</span>{% endif %}
+                        <span class="chip chip-{{ l.accion }}">{{ {'crear':'creado','editar':'editado','eliminar':'eliminado'}.get(l.accion, l.accion) }}</span>
+                    </td>
+                    <td>
+                        {{ l.descripcion or l.entidad }}
+                        {% if l.cambios %}
+                        <ul class="cambios">
+                            {% for c in l.cambios[:8] %}<li>{{ c }}</li>{% endfor %}
+                            {% if l.cambios|length > 8 %}<li class="text-muted">… y {{ l.cambios|length - 8 }} campo(s) más</li>{% endif %}
+                        </ul>
+                        {% endif %}
+                        <div class="detalle-tecnico mt-1">
+                            {{ l.entidad }}{% if l.registro_id %} n.º {{ l.registro_id }}{% endif %}
+                            {%- if l.filas and l.filas > 1 %} · {{ l.filas }} registros{% endif %}
+                            {%- if l.ip %} · {{ l.ip }}{% endif %}
+                        </div>
+                    </td>
+                </tr>
+            {% else %}
+                <tr><td colspan="4" class="text-center text-muted py-4">
+                    {% if sin_migracion %}
+                        La bitácora todavía no existe en la base.
+                    {% else %}
+                        No hay cambios registrados con estos filtros. Prueba a ampliar el rango de fechas.
+                    {% endif %}
+                </td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% if pagina > 1 or hay_siguiente %}
+<div class="d-flex gap-2 justify-content-center no-print mb-4">
+    {% set base = {'desde': desde, 'hasta': hasta, 'persona': persona, 'modulo': modulo, 'accion': accion, 'q': q} %}
+    {% if pagina > 1 %}
+    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('bitacora_cambios', pagina=pagina-1, **base) }}">← Más recientes</a>
+    {% endif %}
+    <span class="btn btn-sm btn-light disabled">Página {{ pagina }}</span>
+    {% if hay_siguiente %}
+    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('bitacora_cambios', pagina=pagina+1, **base) }}">Más antiguos →</a>
+    {% endif %}
+</div>
+{% endif %}
+
+<p class="text-muted small">
+    Se registra cada alta, cambio y borrado que hace la aplicación, en cualquier pantalla. Las consultas de
+    lectura no aparecen: no cambian nada. Las contraseñas y las llaves de acceso se guardan tachadas (<code>···</code>),
+    nunca en claro. La hora es la de Ecuador.
+</p>
+{% endblock %}

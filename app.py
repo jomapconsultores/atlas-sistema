@@ -197,6 +197,355 @@ def api_socio_admin_required(f):
         return f(*args, **kwargs)
     return decorated
 
+# ========== BITÁCORA DE CAMBIOS ==========
+# Cuando una cifra amanece distinta a como quedó ayer, la pregunta es siempre
+# la misma: quién la cambió y a qué hora. Hasta ahora no había forma de
+# responderla. El rastro existía suelto y a medias —'correcciones_pagos' para
+# los pagos de estudiantes, 'corregido_por' en las marcaciones, un
+# 'registrado_por' con la fecha de alta en algunas tablas—, sin cubrir las
+# ediciones ni los borrados del resto del sistema y sin una pantalla donde
+# mirarlo junto.
+#
+# El registro NO se escribe pantalla por pantalla. Hacerlo así obliga a
+# acordarse en cada ruta nueva, y basta un olvido para que justo el cambio que
+# se busca no esté. Se escribe en el único sitio por donde pasan todas las
+# escrituras: el cliente de base de datos. Cada alta, cambio o borrado que sale
+# de la aplicación —de cualquier tabla, desde cualquier pantalla, incluidas las
+# que se escriban mañana— deja su línea con la hora exacta, quién estaba en
+# sesión, y el valor anterior junto al nuevo. Las consultas de lectura no dejan
+# rastro: no cambian nada.
+#
+# Regla de oro: la bitácora NUNCA puede tumbar la operación que registra. Si
+# algo falla aquí dentro (la migración 0012 sin aplicar, por ejemplo), el gasto
+# se guarda igual y lo único que se pierde es su línea en el reporte.
+_supabase_real = supabase
+
+# Tablas que no se registran. La propia bitácora, para no morderse la cola.
+TABLAS_SIN_BITACORA = {'auditoria'}
+
+# Nombre legible y módulo de cada tabla, para que el reporte hable en español y
+# se pueda filtrar por área. Una tabla que no esté aquí igual se registra: sale
+# con su propio nombre y sin módulo, que es preferible a no registrarla.
+ENTIDADES_BITACORA = {
+    'sesiones':              ('Académico', 'Clase / sesión'),
+    'asignaturas':           ('Académico', 'Asignatura'),
+    'proformas':             ('Académico', 'Proforma'),
+    'proforma_items':        ('Académico', 'Ítem de proforma'),
+    'reuniones':             ('Académico', 'Reunión interna'),
+    'feriados':              ('Académico', 'Feriado'),
+    'estudiantes':           ('Personas', 'Estudiante'),
+    'docentes':              ('Personas', 'Docente'),
+    'padres_familia':        ('Personas', 'Padre / madre'),
+    'contactos':             ('Personas', 'Contacto'),
+    'clientes_externos':     ('Personas', 'Cliente externo'),
+    'encargados':            ('Personas', 'Encargado'),
+    'citas_psicologia':      ('Psicología', 'Cita de psicología'),
+    'gastos':                ('Finanzas', 'Gasto'),
+    'pagos':                 ('Finanzas', 'Pago de estudiante'),
+    'correcciones_pagos':    ('Finanzas', 'Corrección de pago'),
+    'devoluciones':          ('Finanzas', 'Devolución'),
+    'anticipos_solicitudes': ('Finanzas', 'Anticipo'),
+    'pagos_excepcionales':   ('Finanzas', 'Pago excepcional'),
+    'fechas_pago_docentes':  ('Finanzas', 'Pago a docente'),
+    'cuentas_pago_docentes': ('Finanzas', 'Cuenta de pago'),
+    'personas_reembolso':    ('Finanzas', 'Persona con reembolso'),
+    'movimientos_cuenta':    ('Finanzas', 'Movimiento de cuenta'),
+    'liquidaciones':         ('Finanzas', 'Liquidación'),
+    'costos_config':         ('Administración', 'Costo'),
+    'usuarios':              ('Usuarios', 'Usuario'),
+    'usuario_roles':         ('Usuarios', 'Rol de usuario'),
+    'usuario_permisos':      ('Usuarios', 'Permiso de usuario'),
+    'usuario_passkeys':      ('Usuarios', 'Llave de acceso'),
+    'usuarios_clave_log':    ('Usuarios', 'Cambio de clave'),
+    'marcaciones':           ('Asistencia', 'Marcación'),
+    'marcaciones_tramos':    ('Asistencia', 'Tramo de marcación'),
+    'jornadas_laborales':    ('Asistencia', 'Jornada y sueldo'),
+    'tramites_externos':     ('Asistencia', 'Trámite fuera del centro'),
+}
+MODULOS_BITACORA = ['Académico', 'Personas', 'Psicología', 'Finanzas',
+                    'Administración', 'Usuarios', 'Asistencia']
+
+ACCION_POR_OPERACION = {'insert': 'crear', 'upsert': 'crear',
+                        'update': 'editar', 'delete': 'eliminar'}
+
+# Campos que NUNCA se copian a la bitácora, ni siquiera para comparar el antes
+# con el después. Un registro de cambios que guarda hashes de contraseña o
+# tokens es una filtración con otro nombre.
+CAMPOS_SECRETOS = ('password', 'passwd', 'clave', 'hash', 'token', 'secret',
+                   'credential', 'challenge', 'public_key')
+# Tope de filas que se leen para saber cómo estaban antes. Un cambio masivo
+# (marcar veinte gastos como pagados) no debe convertirse en una consulta
+# gigante: se guarda una muestra y el número real de filas alcanzadas.
+MAX_FILAS_BITACORA = 20
+# Campos con los que se arma la frase del reporte, en orden de preferencia.
+CAMPOS_TITULO_BITACORA = ('concepto', 'nombre', 'nombres', 'descripcion', 'detalle',
+                          'persona', 'asignatura', 'tema_terapia', 'motivo', 'lugar',
+                          'estudiante_nombre', 'docente_nombre', 'profesor_terapeuta',
+                          'categoria', 'estado', 'rol', 'modulo')
+
+
+def _es_secreto(campo):
+    campo = str(campo).lower()
+    return any(marca in campo for marca in CAMPOS_SECRETOS)
+
+
+def _limpiar_para_bitacora(valor):
+    """Deja un diccionario listo para guardar: sin secretos y sin textos
+    kilométricos (un adjunto en base64 llenaría la bitácora en un día)."""
+    if not isinstance(valor, dict):
+        return None
+    limpio = {}
+    for campo, dato in valor.items():
+        if _es_secreto(campo):
+            limpio[campo] = '···'
+        elif isinstance(dato, str) and len(dato) > 300:
+            limpio[campo] = dato[:300] + '…'
+        else:
+            limpio[campo] = dato
+    return limpio
+
+
+def _texto_filtros(filtros):
+    """Los filtros con los que se ubicó la fila, en una línea legible:
+    «id = 42» dice a qué registro se le aplicó el cambio."""
+    partes = []
+    for nombre, args in filtros:
+        argumentos = ', '.join(str(a) for a in args)
+        partes.append(f"{nombre.rstrip('_')}({argumentos})" if nombre not in ('eq', 'neq')
+                      else f"{args[0]} {'=' if nombre == 'eq' else '≠'} {args[1]}")
+    return ' · '.join(partes)[:500]
+
+
+def _id_afectado(filtros, antes, respuesta):
+    """A qué fila se le aplicó el cambio. Se busca por orden: el filtro por id,
+    la fila que había antes, o lo que devolvió la base al crear."""
+    for nombre, args in filtros:
+        if nombre == 'eq' and len(args) == 2 and str(args[0]) in ('id', 'usuario_id', 'estudiante_id'):
+            return str(args[1])
+    for origen in (antes, getattr(respuesta, 'data', None)):
+        if origen and isinstance(origen, list) and isinstance(origen[0], dict) and origen[0].get('id') is not None:
+            return str(origen[0]['id'])
+    return None
+
+
+def _resumen_fila(fila):
+    """Un par de datos de la fila para reconocerla de un vistazo."""
+    if not isinstance(fila, dict):
+        return ''
+    for campo in CAMPOS_TITULO_BITACORA:
+        valor = fila.get(campo)
+        if valor not in (None, '', []):
+            texto = str(valor)[:60]
+            monto = fila.get('monto') or fila.get('valor_total') or fila.get('sueldo_tiempo_completo')
+            return f"{texto} · ${_num(monto):.2f}" if monto else texto
+    monto = fila.get('monto') or fila.get('valor_total')
+    return f"${_num(monto):.2f}" if monto else ''
+
+
+def _cambios_legibles(antes, despues):
+    """«estado: Planificado → Realizado». Solo los campos que de verdad
+    cambiaron: un update manda la fila entera y, sin esto, el reporte diría que
+    se tocó todo cuando se corrigió una coma."""
+    if not isinstance(despues, dict):
+        return []
+    fila_previa = antes[0] if antes and isinstance(antes[0], dict) else {}
+    cambios = []
+    for campo, nuevo in despues.items():
+        if _es_secreto(campo):
+            cambios.append(f"{campo}: ···")
+            continue
+        viejo = fila_previa.get(campo, '∅') if fila_previa else None
+        if fila_previa and str(viejo) == str(nuevo):
+            continue
+        nuevo_txt = str(nuevo)[:60] if nuevo not in (None, '') else '∅'
+        if fila_previa:
+            cambios.append(f"{campo}: {str(viejo)[:60] if viejo not in (None, '') else '∅'} → {nuevo_txt}")
+        else:
+            cambios.append(f"{campo}: {nuevo_txt}")
+    return cambios
+
+
+def _describir_cambio(entidad, accion, datos, antes, filas):
+    """La línea que se lee en el reporte, sin abrir el detalle."""
+    plural = f" ({filas} registros)" if filas and filas > 1 else ''
+    if accion == 'eliminar':
+        detalle = _resumen_fila(antes[0]) if antes else ''
+        return f"{entidad} eliminado{plural}" + (f" — {detalle}" if detalle else '')
+    if accion == 'crear':
+        fila = datos[0] if isinstance(datos, list) and datos else datos
+        detalle = _resumen_fila(fila)
+        return f"{entidad} creado{plural}" + (f" — {detalle}" if detalle else '')
+    cambios = _cambios_legibles(antes, datos if isinstance(datos, dict) else {})
+    referencia = _resumen_fila(antes[0]) if antes else ''
+    cabeza = f"{entidad} editado{plural}" + (f" — {referencia}" if referencia else '')
+    return cabeza + (f": {'; '.join(cambios[:4])}" if cambios else '')
+
+
+def _filtros_de_upsert(datos, on_conflict):
+    """Con qué ubicar la fila que un upsert va a pisar, si ya existe.
+
+    Un upsert no lleva filtros: la fila se busca por la columna de on_conflict
+    (o por 'id' si no se indicó). Sin esto se registraba siempre como alta y
+    sin valor anterior, y un cambio de cuenta bancaria —guardado con upsert—
+    quedaba en la bitácora con la cuenta nueva y sin rastro de la que había.
+    Solo se resuelve para una fila; un upsert de varias se registra como alta."""
+    if isinstance(datos, list):
+        datos = datos[0] if len(datos) == 1 else None
+    if not isinstance(datos, dict):
+        return []
+    columnas = [c.strip() for c in (on_conflict or 'id').split(',') if c.strip()]
+    if not columnas or any(datos.get(c) is None for c in columnas):
+        return []
+    return [('eq', (c, datos[c])) for c in columnas]
+
+
+def _filas_antes(tabla, operacion, filtros):
+    """Cómo estaba la fila antes de tocarla. Solo se consulta en cambios,
+    borrados y upserts —en un alta no hay antes— y con tope de filas, para no
+    convertir cada escritura en una lectura pesada."""
+    if operacion not in ('update', 'delete', 'upsert'):
+        return None
+    if operacion == 'upsert' and not filtros:
+        return None       # sin clave con qué buscarla: se registra como alta
+
+    try:
+        consulta = _supabase_real.table(tabla).select('*')
+        for nombre, args in filtros:
+            consulta = getattr(consulta, nombre)(*args)
+        return consulta.limit(MAX_FILAS_BITACORA).execute().data or []
+    except Exception:
+        return None
+
+
+def _anotar_en_bitacora(tabla, operacion, datos, filtros, antes, respuesta):
+    """Escribe la línea. Se traga cualquier error a propósito: perder el
+    registro de un cambio es malo, pero impedir el cambio es peor."""
+    try:
+        accion = ACCION_POR_OPERACION.get(operacion)
+        if not accion or tabla in TABLAS_SIN_BITACORA:
+            return
+        # Un upsert que encontró su fila no creó nada: la reescribió. Contarlo
+        # como alta escondería justo el valor que se pisó.
+        if operacion == 'upsert' and antes:
+            accion = 'editar'
+        modulo, entidad = ENTIDADES_BITACORA.get(tabla, (None, tabla))
+        devueltas = getattr(respuesta, 'data', None) or []
+        filas = len(devueltas) if devueltas else (len(antes) if antes else None)
+        if isinstance(datos, list):
+            despues = [_limpiar_para_bitacora(d) for d in datos[:MAX_FILAS_BITACORA]]
+        else:
+            despues = _limpiar_para_bitacora(datos)
+        fila = {
+            'accion': accion, 'tabla': tabla, 'entidad': entidad, 'modulo': modulo,
+            'registro_id': _id_afectado(filtros, antes, respuesta),
+            'filas': filas,
+            'descripcion': _describir_cambio(entidad, accion, datos, antes, filas),
+            'antes': [_limpiar_para_bitacora(f) for f in antes] if antes else None,
+            'despues': despues,
+            'filtros': _texto_filtros(filtros),
+        }
+        try:
+            if current_user.is_authenticated:
+                fila.update({'usuario_id': current_user.id, 'usuario_nombre': current_user.nombre,
+                             'usuario_rol': current_user.rol})
+        except Exception:
+            pass          # fuera de una petición (un script, una tarea suelta)
+        try:
+            fila['endpoint'] = request.endpoint
+            # CF-Connecting-IP la pone Cloudflare y pisa la que mande el
+            # navegador; el primer X-Forwarded-For, en cambio, lo escribe quien
+            # quiera. Sin Cloudflare delante, la que ya resolvió ProxyFix.
+            fila['ip'] = (request.headers.get('CF-Connecting-IP') or request.remote_addr or '').strip()
+        except Exception:
+            pass
+        _supabase_real.table('auditoria').insert(fila).execute()
+    except Exception:
+        pass
+
+
+class _EscrituraAuditada:
+    """Una escritura en curso. Se comporta igual que el objeto de Supabase al
+    que envuelve —los filtros se encadenan como siempre— y al ejecutarse deja
+    su línea en la bitácora."""
+
+    # Métodos que acotan a qué filas se aplica el cambio: se guardan para poder
+    # leer cómo estaban antes y para decir en el reporte a qué registro fue.
+    _FILTROS = ('eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'like', 'ilike', 'is_', 'in_',
+                'contains', 'contained_by', 'not_', 'or_', 'filter', 'match', 'text_search')
+
+    def __init__(self, tabla, operacion, datos, consulta):
+        self._tabla = tabla
+        self._operacion = operacion
+        self._datos = datos
+        self._consulta = consulta
+        self._filtros = []
+
+    def __getattr__(self, nombre):
+        atributo = getattr(self._consulta, nombre)
+        if not callable(atributo):
+            return atributo
+
+        def encadenado(*args, **kwargs):
+            resultado = atributo(*args, **kwargs)
+            if nombre in self._FILTROS:
+                self._filtros.append((nombre, args))
+            # Los filtros devuelven la consulta (a veces una nueva): se sigue
+            # envolviendo para no perder el registro al ejecutar.
+            if hasattr(resultado, 'execute'):
+                self._consulta = resultado
+                return self
+            return resultado
+        return encadenado
+
+    def execute(self):
+        antes = _filas_antes(self._tabla, self._operacion, self._filtros)
+        respuesta = self._consulta.execute()
+        _anotar_en_bitacora(self._tabla, self._operacion, self._datos, self._filtros,
+                            antes, respuesta)
+        return respuesta
+
+
+class _TablaAuditada:
+    """Envoltorio de supabase.table(x): las lecturas pasan intactas y solo las
+    escrituras se envuelven."""
+
+    _ESCRITURAS = ('insert', 'update', 'delete', 'upsert')
+
+    def __init__(self, nombre, tabla):
+        self._nombre = nombre
+        self._tabla = tabla
+
+    def __getattr__(self, nombre):
+        atributo = getattr(self._tabla, nombre)
+        if nombre not in self._ESCRITURAS:
+            return atributo
+
+        def escritura(*args, **kwargs):
+            datos = args[0] if args else kwargs.get('json')
+            envuelta = _EscrituraAuditada(self._nombre, nombre, datos, atributo(*args, **kwargs))
+            if nombre == 'upsert':
+                envuelta._filtros = _filtros_de_upsert(datos, kwargs.get('on_conflict'))
+            return envuelta
+        return escritura
+
+
+class _ClienteAuditado:
+    """El mismo cliente de Supabase de siempre; lo único que cambia es que sus
+    escrituras quedan registradas."""
+
+    def __init__(self, cliente):
+        self._cliente = cliente
+
+    def table(self, nombre):
+        return _TablaAuditada(nombre, self._cliente.table(nombre))
+
+    def __getattr__(self, nombre):
+        return getattr(self._cliente, nombre)
+
+
+supabase = _ClienteAuditado(_supabase_real)
+
+
 # ========== PERMISOS GRANULARES POR MÓDULO/SUBMÓDULO ==========
 # Antes, cada sección (Académico, Personas, Psicología, Finanzas) era
 # admin/socio-only sin excepción. Ahora un admin puede otorgarle a
@@ -230,6 +579,9 @@ MODULOS_DISPONIBLES = [
     {'key': 'finanzas.reportes', 'label': 'Reportes ATLAS', 'grupo': 'Finanzas'},
     {'key': 'administracion.costos', 'label': 'Costos', 'grupo': 'Administración'},
     {'key': 'administracion.reporte_duplicados', 'label': 'Reporte duplicados', 'grupo': 'Administración'},
+    # Ver quién cambió qué y cuándo. Es solo lectura, pero enseña el detalle de
+    # todo lo que se toca en el sistema: se otorga a quien deba controlarlo.
+    {'key': 'administracion.auditoria', 'label': 'Bitácora de cambios', 'grupo': 'Administración'},
     {'key': 'asistencia.marcar', 'label': 'Marcar ingreso/salida (propio)', 'grupo': 'Asistencia'},
     {'key': 'asistencia.ver_docentes', 'label': 'Ver marcaciones de profesores y psicólogos', 'grupo': 'Asistencia'},
     {'key': 'asistencia.tramites', 'label': 'Registrar trámites fuera del centro', 'grupo': 'Asistencia'},
@@ -601,23 +953,120 @@ def cargar_profesores():
     _PROF_CACHE['t'] = time.time()
     return result
 
+# ========== PERSONAL DEL CENTRO ==========
+# Quién trabaja aquí se sabía en dos lugares que no se hablaban: la ficha de
+# 'docentes' (profesores y psicólogos) y la cuenta de 'usuarios' (que incluye a
+# la secretaria y a cualquier cargo administrativo). Las pantallas de dinero
+# miraban solo la primera, así que un psicólogo con cuenta pero sin ficha, o la
+# secretaria, no aparecían en ninguna lista de gastos y pagos: había que
+# volver a escribirlos a mano, uno por uno, en cada lista. Aquí se juntan las
+# dos fuentes: dar de alta a alguien basta para que esté disponible en Gastos.
+#
+# Estudiante y padre quedan fuera: no cobran del centro ni adelantan gastos. Se
+# deriva de ROLES_DISPONIBLES para que un rol nuevo entre solo.
+ROLES_PERSONAL = tuple(r for r in ROLES_DISPONIBLES if r not in ('estudiante', 'padre'))
+# Cargos que cobran sueldo por jornada y no por sesión: secretaría hoy, y el
+# contador o el coordinador que se cree mañana.
+ROLES_ADMINISTRATIVOS = tuple(r for r in ROLES_PERSONAL
+                              if r not in ('profesor', 'psicologo', 'socio', 'admin'))
+# Cómo se nombra cada rol en las pantallas de dinero. Lo que no esté aquí se
+# trata como administrativo: es el caso de un cargo nuevo, y es preferible que
+# aparezca con una etiqueta genérica a que no aparezca.
+CARGO_POR_ROL = {'profesor': 'Docente', 'psicologo': 'Psicólogo', 'socio': 'Socio',
+                 'secretaria': 'Administrativo', 'admin': 'Administrativo'}
+
+_PERSONAL_CACHE: dict = {'t': 0.0, 'data': None}
+
+
+def cargar_personal_detalle():
+    """Todo el personal del centro con su cargo: [{'nombre','cargo','rol'}].
+
+    Une la ficha de docente con la cuenta de usuario y deduplica por nombre
+    (sin distinguir mayúsculas). La ficha manda sobre la cuenta: es donde se
+    dice si alguien es profesor o psicólogo. Los socios se añaden siempre,
+    estén o no en la base, igual que en el resto del sistema.
+    """
+    import time
+    if _PERSONAL_CACHE['data'] is not None and time.time() - _PERSONAL_CACHE['t'] < _CACHE_TTL:
+        return _PERSONAL_CACHE['data']
+    personas: dict = {}
+
+    def _sumar(nombre, cargo, rol):
+        n = norm_nombre(nombre)
+        # Un nombre de una o dos letras es un registro a medio llenar: ofrecerlo
+        # como beneficiario de un reembolso solo produce errores de tipeo.
+        if len(n) < 3:
+            return
+        personas.setdefault(n.lower(), {'nombre': n, 'cargo': cargo, 'rol': rol})
+
+    try:
+        for d in (supabase.table('docentes').select('nombres,apellidos,tipo')
+                  .eq('activo', True).execute().data or []):
+            tipo = (d.get('tipo') or 'profesor').strip().lower()
+            _sumar(f"{d.get('nombres','')} {d.get('apellidos','')}",
+                   'Psicólogo' if tipo == 'psicologo' else 'Docente', tipo)
+    except Exception:
+        # Sin tabla de docentes se usa la lista histórica, como cargar_profesores().
+        for n in PROFESORES:
+            _sumar(n, 'Docente', 'profesor')
+    try:
+        for u in (supabase.table('usuarios').select('nombre,rol')
+                  .eq('activo', True).in_('rol', list(ROLES_PERSONAL)).execute().data or []):
+            rol = (u.get('rol') or '').strip().lower()
+            _sumar(u.get('nombre'), CARGO_POR_ROL.get(rol, 'Administrativo'), rol)
+    except Exception:
+        pass
+    for s in SOCIOS:
+        _sumar(s, 'Socio', 'socio')
+
+    result = sorted(personas.values(), key=lambda p: p['nombre'].lower())
+    _PERSONAL_CACHE['data'] = result
+    _PERSONAL_CACHE['t'] = time.time()
+    return result
+
+
+def cargar_personal():
+    """Nombres del personal del centro (ver cargar_personal_detalle)."""
+    return [p['nombre'] for p in cargar_personal_detalle()]
+
+
+def invalidar_personal():
+    """Se llama al dar de alta o de baja a alguien para que aparezca —o deje de
+    aparecer— en Gastos en el acto, y no dentro de hasta 5 minutos (el TTL)."""
+    for cache in (_PERSONAL_CACHE, _PROF_CACHE, _REEMB_CACHE):
+        cache['data'] = None
+        cache['t'] = 0.0
+
+
 def cargar_personas_reembolso():
     """Personas a las que se les puede reembolsar un gasto.
 
-    Son los SOCIOS (fijos, siempre presentes) más las que se hayan creado desde
-    /gastos y estén activas en la tabla 'personas_reembolso'. Los socios van
-    primero y las demás en orden alfabético. Si la tabla todavía no existe
-    (migración 0006 sin aplicar) devuelve solo los socios, que es como
-    funcionaba antes."""
+    Son los SOCIOS (fijos, siempre presentes), TODO el personal del centro
+    —docentes, psicólogos y administrativos: cualquiera que esté dado de alta
+    puede adelantar un gasto de su bolsillo— y las personas sueltas que se
+    hayan creado a mano desde /gastos. Los socios van primero y el resto en
+    orden alfabético.
+
+    Antes eran solo los socios más lo creado a mano, así que a cada docente
+    nuevo había que volver a escribirlo aquí para poder reembolsarle. Quien se
+    quite de la lista sí queda fuera aunque siga trabajando en el centro: esa
+    baja es una decisión explícita y manda sobre el alta automática. Si la
+    tabla todavía no existe (migración 0006 sin aplicar) se devuelven los
+    socios y el personal, que es lo que se puede saber sin ella."""
     import time
     if _REEMB_CACHE['data'] and time.time() - _REEMB_CACHE['t'] < _CACHE_TTL:
         return _REEMB_CACHE['data']
     try:
-        r = supabase.table('personas_reembolso').select('nombre').eq('activo', True).execute()
-        extras = sorted({(p.get('nombre') or '').strip() for p in (r.data or [])} - {''} - set(SOCIOS))
+        filas = supabase.table('personas_reembolso').select('nombre,activo').execute().data or []
     except Exception:
-        extras = []
-    result = list(SOCIOS) + extras
+        filas = []
+    de_baja = {norm_nombre(p.get('nombre')).lower() for p in filas if not p.get('activo')}
+    creadas = {norm_nombre(p.get('nombre')) for p in filas if p.get('activo')} - {''}
+    socios = {s.lower() for s in SOCIOS}
+    otras = sorted({n for n in (creadas | set(cargar_personal()))
+                    if n.lower() not in de_baja and n.lower() not in socios},
+                   key=str.lower)
+    result = list(SOCIOS) + otras
     _REEMB_CACHE['data'] = result
     _REEMB_CACHE['t'] = time.time()
     return result
@@ -1267,8 +1716,10 @@ def _pk_tabla_lista():
 
 
 def _pk_proyecto_ref():
-    """Ref del proyecto Supabase que USA ESTE servidor (clave para detectar si
-    el servidor apunta a otro proyecto distinto al que ves en el panel)."""
+    """Nombre corto de la base que USA ESTE servidor: el primer trozo del host
+    de SUPABASE_URL. Sirve para detectar que el servidor está hablando con una
+    base distinta de la que uno cree —el motivo por el que este diagnóstico
+    existe—, ahora que la base es propia y no un proyecto en la nube."""
     try:
         return (SUPABASE_URL or '').split('//')[-1].split('.')[0]
     except Exception:
@@ -1279,9 +1730,10 @@ def _pk_proyecto_ref():
 @login_required
 @api_admin_required
 def passkey_diagnostico():
-    """Diagnóstico en vivo: dice qué proyecto Supabase usa REALMENTE el servidor
-    desplegado y el error exacto al leer la tabla. Sirve para saber dónde crear
-    la tabla y por qué sigue saliendo el aviso."""
+    """Diagnóstico en vivo: dice contra qué base trabaja REALMENTE el servidor
+    desplegado y el error exacto al leer la tabla. Es la respuesta que manda
+    cuando la documentación se queda vieja: no adivines dónde están los datos,
+    pregúntaselo al proceso que los está leyendo."""
     ok, err = _pk_tabla_estado()
     return jsonify({
         'webauthn_ok': WEBAUTHN_OK,
@@ -1289,7 +1741,9 @@ def passkey_diagnostico():
         'supabase_url': SUPABASE_URL,
         'tabla_usuario_passkeys_visible': ok,
         'error_real': err,
-        'sql_editor': f"https://supabase.com/dashboard/project/{_pk_proyecto_ref()}/sql/new",
+        # Ya no hay panel web donde pegar SQL: la base es propia y las tablas se
+        # crean con deploy/migrate.py por el túnel SSH (ver deploy/README.md).
+        'como_migrar': 'deploy/migrate.py por túnel SSH — ver deploy/README.md',
     })
 
 
@@ -1299,7 +1753,7 @@ def passkey_registro_opciones():
     if not WEBAUTHN_OK:
         return jsonify({'success': False, 'error': 'Falta la libreria webauthn en el servidor (redeploy pendiente)'})
     if not _pk_tabla_lista():
-        return jsonify({'success': False, 'error': 'Falta ejecutar migration_passkeys.sql en Supabase'})
+        return jsonify({'success': False, 'error': 'Falta aplicar migration_passkeys.sql en la base (deploy/migrate.py)'})
     existentes = supabase.table('usuario_passkeys').select('credential_id').eq('usuario_id', current_user.id).execute().data or []
     opciones = generate_registration_options(
         rp_id=_pk_rp_id(), rp_name='Atlas Centro de Estudios',
@@ -1355,8 +1809,8 @@ def passkey_registro_publico_opciones():
     ok_tabla, err_tabla = _pk_tabla_estado()
     if not ok_tabla:
         return jsonify({'success': False, 'error':
-            f'La tabla de huellas no está disponible en el proyecto Supabase "{_pk_proyecto_ref()}". '
-            f'Crea la tabla usuario_passkeys EN ESE proyecto. Detalle: {err_tabla}'})
+            f'La tabla de huellas no está disponible en la base "{_pk_proyecto_ref()}". '
+            f'Aplica migration_passkeys.sql EN ESA base con deploy/migrate.py. Detalle: {err_tabla}'})
     password = datos.get('password') or ''
     u = supabase.table('usuarios').select('*').eq('email', email).execute().data
     if not (u and u[0].get('activo') and check_password(u[0]['password_hash'], password)):
@@ -3761,13 +4215,18 @@ def _gasto_administrativo_mes(mes, anio):
     a las horas trabajadas más las extras con su recargo—, exactamente la
     cifra que esa persona ve en «Mi asistencia».
     """
-    vacio = {'personas': [], 'total': 0.0, 'excluidos': [], 'avisos': [], 'sin_migracion': False}
+    vacio = {'personas': [], 'total': 0.0, 'excluidos': [], 'avisos': [],
+             'sin_jornada': [], 'sin_migracion': False}
     try:
         jornadas = _jornadas_por_usuario(anio, mes)
     except Exception:
         return dict(vacio, sin_migracion=True)
     con_sueldo = {uid: j for uid, j in (jornadas or {}).items()
                   if _num(j.get('sueldo_tiempo_completo')) > 0}
+    # Quien está dado de alta como administrativo pero aún no tiene sueldo
+    # configurado se nombra aparte: su pago no lo puede calcular nadie y, sin
+    # decirlo, desaparecería del mes sin que se note el hueco.
+    vacio['sin_jornada'] = _administrativos_sin_jornada(con_sueldo)
     if not con_sueldo:
         # Sin jornada vigente en ESE mes no hay nada que calcular. El caso que
         # despista es haber configurado la jornada hoy: rige desde hoy, así que
@@ -3814,7 +4273,29 @@ def _gasto_administrativo_mes(mes, anio):
         })
     personas.sort(key=lambda x: x['nombre'])
     return {'personas': personas, 'excluidos': excluidos, 'avisos': [],
+            'sin_jornada': vacio['sin_jornada'],
             'total': round(sum(p['total'] for p in personas), 2), 'sin_migracion': False}
+
+
+def _administrativos_sin_jornada(uids_con_sueldo):
+    """Personal administrativo activo al que todavía no se le configuró jornada
+    con sueldo para ese mes.
+
+    Un cargo administrativo cobra por jornada, así que sin sueldo configurado no
+    hay nada que calcular y la persona simplemente no sale en el cuadro. Antes
+    eso era indistinguible de «no hay nadie»: aquí se dice quién falta y qué le
+    falta, que es lo único que hay que hacer para que entre.
+    """
+    if not ROLES_ADMINISTRATIVOS:
+        return []
+    try:
+        filas = (supabase.table('usuarios').select('id,nombre,rol').eq('activo', True)
+                 .in_('rol', list(ROLES_ADMINISTRATIVOS)).execute().data or [])
+    except Exception:
+        return []
+    return sorted(({'nombre': u.get('nombre') or '—', 'rol': u.get('rol') or ''}
+                   for u in filas if u.get('id') not in (uids_con_sueldo or {})),
+                  key=lambda p: p['nombre'])
 
 
 def _avisos_jornada_posterior(anio, mes):
@@ -4113,8 +4594,10 @@ def gestion_gastos():
         reembolsos_pagados = []
 
     # ── Personas que pueden recibir un reembolso ──
-    # Socios (fijos) + las creadas desde esta misma pantalla. 'extra' son solo
-    # las creadas, que son las únicas que se pueden quitar.
+    # Socios (fijos) + el personal del centro (entra solo, con darlo de alta) +
+    # las creadas a mano desde esta misma pantalla. 'extra' son solo las
+    # creadas a mano, que tienen fila propia y se quitan por id; al personal se
+    # le quita por nombre, porque no la tiene.
     personas_reembolso = cargar_personas_reembolso()
     try:
         personas_reembolso_extra = [p for p in (supabase.table('personas_reembolso')
@@ -4125,12 +4608,21 @@ def gestion_gastos():
         # Migración 0006 sin aplicar: se puede seguir usando la lista de socios.
         personas_reembolso_extra = []
         personas_reembolso_ok = False
+    # El personal que está hoy en la lista, sin repetir a quien ya se muestra
+    # como socio o como persona creada a mano.
+    _ya_listados = ({s.lower() for s in SOCIOS} |
+                    {norm_nombre(p.get('nombre')).lower() for p in personas_reembolso_extra})
+    _habilitadas = {n.lower() for n in personas_reembolso}
+    personal_reembolso = [p for p in cargar_personal_detalle()
+                          if p['nombre'].lower() in _habilitadas
+                          and p['nombre'].lower() not in _ya_listados]
 
     # ── Cuentas de pago (datos bancarios) por persona ──
-    # Lista de personas = docentes/psicólogos registrados + quienes tienen pago
-    # este mes + quienes pueden recibir reembolsos (para poder guardarles los
-    # datos bancarios con los que se les transfiere ese reembolso).
-    personas_cuentas = sorted(set(cargar_profesores()) | set(pagos_docentes_detalle.keys())
+    # Lista de personas = todo el personal del centro (docentes, psicólogos y
+    # administrativos, con solo estar dados de alta) + quienes tienen pago este
+    # mes + quienes pueden recibir reembolsos (para poder guardarles los datos
+    # bancarios con los que se les transfiere ese reembolso).
+    personas_cuentas = sorted(set(cargar_personal()) | set(pagos_docentes_detalle.keys())
                               | set(personas_reembolso))
     cuentas_pago = {}
     try:
@@ -4153,7 +4645,8 @@ def gestion_gastos():
     # manda el detalle de compensación individual de cada docente/psicólogo.
     puede_ver_pagos_docentes = tiene_modulo('finanzas.pagos_docentes')
     # Gasto administrativo del mes: lo que falta por asentar.
-    gasto_admin = _gasto_administrativo_mes(mes, anio) if puede_ver_pagos_docentes else {'personas': [], 'excluidos': [], 'total': 0}
+    gasto_admin = _gasto_administrativo_mes(mes, anio) if puede_ver_pagos_docentes else {
+        'personas': [], 'excluidos': [], 'sin_jornada': [], 'total': 0}
     admin_registrados = _gastos_admin_registrados(mes, anio) if puede_ver_pagos_docentes else {}
     for pers in gasto_admin['personas']:
         g = admin_registrados.get(norm_nombre(pers['nombre']).lower())
@@ -4184,6 +4677,7 @@ def gestion_gastos():
                          socios=SOCIOS,
                          personas_reembolso=personas_reembolso,
                          personas_reembolso_extra=personas_reembolso_extra,
+                         personal_reembolso=personal_reembolso,
                          personas_reembolso_ok=personas_reembolso_ok)
 
 @app.route('/api/gasto/<int:id>/eliminar', methods=['POST'])
@@ -4298,6 +4792,28 @@ def api_crear_persona_reembolso():
     invalidar_personas_reembolso()
     return jsonify({'success': True, 'nombre': nombre, 'personas': cargar_personas_reembolso()})
 
+def _dar_de_baja_reembolso(nombre):
+    """Deja a alguien fuera de los desplegables de reembolso y devuelve cuántos
+    reembolsos pendientes le quedan. Los gastos ya asignados conservan su
+    beneficiario y se siguen pudiendo pagar: es una baja lógica.
+
+    Si la persona no tenía fila propia —el personal del centro entra en la
+    lista por estar dado de alta, sin pasar por esta tabla— se crea una
+    desactivada: es la única forma de que la baja sea recordada y no vuelva a
+    aparecer en la siguiente carga."""
+    previa = (supabase.table('personas_reembolso').select('id')
+              .ilike('nombre', nombre).execute().data or [])
+    if previa:
+        supabase.table('personas_reembolso').update({'activo': False}).eq('id', previa[0]['id']).execute()
+    else:
+        supabase.table('personas_reembolso').insert({
+            'nombre': nombre, 'activo': False, 'creado_por': current_user.nombre}).execute()
+    invalidar_personas_reembolso()
+    return len(_fetch_all(supabase.table('gastos').select('id')
+        .eq('reembolsado_a', nombre).eq('reembolso', True)
+        .or_('reembolso_pagado.is.null,reembolso_pagado.eq.false')))
+
+
 @app.route('/api/personas-reembolso/<int:id>/quitar', methods=['POST'])
 @login_required
 @requiere_modulo_api('finanzas.gastos')
@@ -4313,13 +4829,30 @@ def api_quitar_persona_reembolso(id):
         nombre = fila[0]['nombre']
         if nombre in SOCIOS:
             return jsonify({'success': False, 'error': 'No se puede quitar a un socio.'}), 400
-        supabase.table('personas_reembolso').update({'activo': False}).eq('id', id).execute()
-        pendientes = len(_fetch_all(supabase.table('gastos').select('id')
-            .eq('reembolsado_a', nombre).eq('reembolso', True)
-            .or_('reembolso_pagado.is.null,reembolso_pagado.eq.false')))
+        pendientes = _dar_de_baja_reembolso(nombre)
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 400
-    invalidar_personas_reembolso()
+    return jsonify({'success': True, 'nombre': nombre, 'pendientes': pendientes})
+
+
+@app.route('/api/personas-reembolso/quitar', methods=['POST'])
+@login_required
+@requiere_modulo_api('finanzas.gastos')
+def api_quitar_persona_reembolso_por_nombre():
+    """Igual que la anterior, pero para quien está en la lista por ser personal
+    del centro y no tiene fila propia en 'personas_reembolso'."""
+    if current_user.rol not in ['admin', 'socio']:
+        return jsonify({'success': False, 'error': 'Sin permiso'}), 403
+    nombre = norm_nombre((request.get_json() or {}).get('nombre'))
+    if not nombre:
+        return jsonify({'success': False, 'error': 'Falta el nombre'}), 400
+    if nombre.lower() in {s.lower() for s in SOCIOS}:
+        return jsonify({'success': False, 'error': 'No se puede quitar a un socio.'}), 400
+    try:
+        pendientes = _dar_de_baja_reembolso(nombre)
+    except Exception as e:
+        return jsonify({'success': False, 'error': 'No se pudo quitar. ¿Ya ejecutaste '
+                        'migrations/0006_personas_reembolso.sql? ' + str(e)}), 400
     return jsonify({'success': True, 'nombre': nombre, 'pendientes': pendientes})
 
 @app.route('/api/gasto/<int:id>/marcar-pagado', methods=['POST'])
@@ -4420,7 +4953,7 @@ def liquidacion():
             flash('✅ Datos guardados', 'success')
         except Exception as e:
             print(f'⚠️ Error al guardar liquidación: {e}')
-            flash('❌ No se pudo guardar. Verifica que la tabla "liquidaciones" exista (ejecuta migration_liquidaciones.sql en Supabase).', 'error')
+            flash('❌ No se pudo guardar. Verifica que la tabla "liquidaciones" exista (aplica migration_liquidaciones.sql con deploy/migrate.py).', 'error')
         return redirect(url_for('liquidacion', mes=mes, anio=anio))
 
     _, ultimo_dia = monthrange(anio, mes)
@@ -4963,6 +5496,9 @@ def crear_docente_form():
         'tipo': request.form.get('tipo', 'profesor'),
         'activo': True
     }).execute()
+    # Que aparezca YA en Gastos (reembolsos y cuentas de pago), no dentro de
+    # cinco minutos: el alta y el primer gasto suelen ir seguidos.
+    invalidar_personal()
     flash('✅ Docente creado', 'success')
     return redirect(url_for('gestion_docentes'))
 
@@ -4978,6 +5514,7 @@ def api_editar_docente(id):
         return jsonify({'success': False, 'error': 'Campo no permitido'})
     try:
         supabase.table('docentes').update({campo: valor or None}).eq('id', id).execute()
+        invalidar_personal()
         return jsonify({'success': True, 'valor': valor})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
@@ -4988,6 +5525,7 @@ def api_editar_docente(id):
 def eliminar_docente(id):
     try:
         supabase.table('docentes').update({'activo': False}).eq('id', id).execute()
+        invalidar_personal()
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
@@ -5073,6 +5611,9 @@ def gestion_usuarios():
                 ).execute()
             except Exception:
                 pass
+            # Aprobar es el momento en que la persona entra de verdad al centro:
+            # desde aquí ya se le puede reembolsar un gasto y guardarle cuenta.
+            invalidar_personal()
             flash('✅ Usuario aprobado', 'success')
         elif accion == 'rechazar':
             if not _puede_usuarios('editar'):
@@ -5088,6 +5629,7 @@ def gestion_usuarios():
                 flash('❌ No se puede desactivar: quedaría el sistema sin ningún administrador', 'error')
                 return redirect(url_for('gestion_usuarios'))
             supabase.table('usuarios').update({'activo': False}).eq('id', uid).execute()
+            invalidar_personal()
             flash('❌ Usuario desactivado', 'info')
         elif accion == 'crear':
             if not _puede_usuarios('crear'):
@@ -5134,6 +5676,7 @@ def gestion_usuarios():
                         ]).execute()
                     except Exception as e:
                         flash(f'⚠️ Usuario creado, pero no se pudieron asignar los permisos por defecto: {e}', 'warning')
+            invalidar_personal()
             flash('✅ Usuario creado', 'success')
         elif accion == 'resetear_clave':
             # Recuperación de clave olvidada: el administrador genera una clave
@@ -7192,6 +7735,110 @@ def api_toggle_pago_docente():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+# ========== BITÁCORA DE CAMBIOS (REPORTE) ==========
+DIAS_ES = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo']
+BITACORA_POR_PAGINA = 60
+
+
+def _hora_ecuador(marca):
+    """(fecha, día de la semana, hora) de una marca de tiempo de la base.
+
+    El servidor corre en UTC y aquí se trabaja en Ecuador: sin convertir, un
+    cambio hecho a las 20:00 saldría fechado al día siguiente, que es
+    exactamente el dato que el reporte no puede equivocar."""
+    if not marca:
+        return ('', '', '')
+    texto = str(marca).replace('Z', '+00:00')
+    momento = None
+    for intento in (texto, re.sub(r'(\.\d{6})\d+', r'\1', texto)):
+        try:
+            momento = datetime.fromisoformat(intento)
+            break
+        except ValueError:
+            continue
+    if momento is None:
+        return (str(marca)[:10], '', str(marca)[11:19])
+    if momento.tzinfo is None:
+        momento = momento.replace(tzinfo=timezone.utc)
+    local = momento.astimezone(TZ_ECUADOR)
+    return (local.strftime('%Y-%m-%d'), DIAS_ES[local.weekday()], local.strftime('%H:%M:%S'))
+
+
+@app.route('/auditoria')
+@login_required
+@requiere_modulo('administracion.auditoria')
+def bitacora_cambios():
+    """Qué se cambió en el sistema, quién lo cambió y a qué hora exacta.
+
+    Lee la tabla 'auditoria', que se escribe sola en cada alta, cambio o
+    borrado (ver «BITÁCORA DE CAMBIOS» arriba). Abre por los últimos siete días
+    porque la pregunta casi siempre es reciente —«¿qué pasó con esto ayer?»—,
+    pero el rango se mueve a cualquier fecha.
+    """
+    hoy = date.today()
+    desde = request.args.get('desde') or str(hoy - timedelta(days=7))
+    hasta = request.args.get('hasta') or str(hoy)
+    persona = (request.args.get('persona') or '').strip()
+    modulo = (request.args.get('modulo') or '').strip()
+    accion = (request.args.get('accion') or '').strip()
+    busqueda = (request.args.get('q') or '').strip()
+    try:
+        pagina = max(1, int(request.args.get('pagina', 1)))
+    except ValueError:
+        pagina = 1
+
+    desde_fila = (pagina - 1) * BITACORA_POR_PAGINA
+    sin_migracion = False
+    # Todo dentro del try, armado incluido: mientras la migración 0012 no esté
+    # aplicada la tabla no existe, y la pantalla tiene que poder decirlo en vez
+    # de romperse con un error 500.
+    try:
+        consulta = supabase.table('auditoria').select('*')
+        # El rango se pide en hora de Ecuador y se traduce a instantes absolutos:
+        # «hasta el 5» incluye todo el día 5 hasta las 23:59:59, no hasta su 00:00.
+        consulta = consulta.gte('ocurrido_en', f"{desde}T00:00:00-05:00")
+        consulta = consulta.lte('ocurrido_en', f"{hasta}T23:59:59-05:00")
+        if persona:
+            consulta = consulta.eq('usuario_nombre', persona)
+        if modulo:
+            consulta = consulta.eq('modulo', modulo)
+        if accion:
+            consulta = consulta.eq('accion', accion)
+        if busqueda:
+            consulta = consulta.ilike('descripcion', f'%{busqueda}%')
+        respuesta = (consulta.order('ocurrido_en', desc=True)
+                     .range(desde_fila, desde_fila + BITACORA_POR_PAGINA - 1).execute())
+        filas = respuesta.data or []
+    except Exception:
+        filas, sin_migracion = [], True
+
+    lineas, resumen = [], {'crear': 0, 'editar': 0, 'eliminar': 0}
+    for f in filas:
+        fecha, dia, hora = _hora_ecuador(f.get('ocurrido_en'))
+        resumen[f.get('accion')] = resumen.get(f.get('accion'), 0) + 1
+        lineas.append({**f, 'fecha': fecha, 'dia': dia, 'hora': hora,
+                       'cambios': _cambios_legibles(f.get('antes'), f.get('despues')
+                                                    if isinstance(f.get('despues'), dict) else {})})
+
+    # Las personas del desplegable salen de la propia bitácora: solo aparece
+    # quien realmente hizo algo, no la lista entera de usuarios.
+    try:
+        personas = sorted({(p.get('usuario_nombre') or '').strip() for p in
+                           (supabase.table('auditoria').select('usuario_nombre')
+                            .gte('ocurrido_en', f"{desde}T00:00:00-05:00")
+                            .lte('ocurrido_en', f"{hasta}T23:59:59-05:00")
+                            .limit(2000).execute().data or [])} - {''})
+    except Exception:
+        personas = []
+
+    return render_template('auditoria.html',
+                           lineas=lineas, desde=desde, hasta=hasta, persona=persona,
+                           modulo=modulo, accion=accion, q=busqueda, pagina=pagina,
+                           personas=personas, modulos=MODULOS_BITACORA, resumen=resumen,
+                           hay_siguiente=(len(filas) == BITACORA_POR_PAGINA),
+                           sin_migracion=sin_migracion)
+
+
 # ========== REPORTE DE CLASES GRUPALES / DUPLICADOS ==========
 @app.route('/reporte-duplicados')
 @login_required
@@ -8675,7 +9322,7 @@ def proformas():
         lista = r.data or []
     except Exception:
         lista = []
-        flash('⚠️ La tabla de proformas aún no existe. Aplica migration_proformas.sql en el SQL Editor de Supabase.', 'warning')
+        flash('⚠️ La tabla de proformas aún no existe. Aplica migration_proformas.sql con deploy/migrate.py (ver deploy/README.md).', 'warning')
     return render_template('proformas.html', proformas=lista)
 
 

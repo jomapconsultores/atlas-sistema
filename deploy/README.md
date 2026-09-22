@@ -1,12 +1,18 @@
 # Atlas — Base de datos auto-alojada (Hetzner)
 
-> **Estado a agosto de 2026: esto todavía NO está en uso.** La app sigue
-> apuntando a la Supabase en la nube (`naubddczohedvtywmmmy`). Todo lo que
-> sigue describe la mudanza **planificada**, no la realidad actual. Para saber
-> cómo está desplegada la app hoy y cómo se aplican las migraciones ahora mismo,
-> ve a [Cómo está desplegado hoy](#cómo-está-desplegado-hoy-agosto-2026), al final.
+> **Estado a septiembre de 2026: la mudanza YA está hecha.** Los datos de Atlas
+> viven en el Postgres propio; la Supabase en la nube (`naubddczohedvtywmmmy`)
+> ya no se usa. La app apunta a **`https://supabase-at.pensamiento-libre.org`**
+> —ese es el `SUPABASE_URL` que tiene el servidor en producción, comprobable en
+> vivo con `/api/passkey/diagnostico` (como admin)—. El dominio
+> `db.atlas.pensamiento-libre.org` que se planificó al escribir esto **no
+> existe**: no lo busques, no resuelve.
+>
+> Lo que sigue explica cómo está montado el stack y cómo operarlo. Los pasos de
+> instalación desde cero y el volcado inicial se conservan como historia de
+> cómo se llegó aquí, no como tareas pendientes.
 
-Reemplaza la dependencia de la Supabase en la nube por un stack propio en tu
+Sustituye la dependencia de la Supabase en la nube por un stack propio en el
 servidor, **sin tocar el código de la app** (solo cambian 2 variables de entorno).
 
 ## Qué levanta
@@ -61,7 +67,7 @@ Copia la clave **anon** → será `SUPABASE_KEY` en la app.
 
 ---
 
-## 5. Migrar los datos desde la Supabase actual
+## 5. Migrar los datos desde la Supabase de origen *(hecho, se conserva como historia)*
 
 ```bash
 # Dump de la nube (necesita la connection string de Supabase → Settings → Database):
@@ -77,47 +83,58 @@ docker compose exec -T db psql -U postgres -d atlas < atlas_dump.sql
 
 ---
 
-## 6. Repuntar la app
+## 6. Repuntar la app *(hecho)*
 
-En el entorno de la app (Coolify o local), cambia:
+En el entorno de la app (Coolify o local):
 ```
-SUPABASE_URL=https://TU_DOMINIO         # o http://IP
-SUPABASE_KEY=<clave anon de gen_keys.py>
+SUPABASE_URL=https://supabase-at.pensamiento-libre.org
+SUPABASE_KEY=<clave de gen_keys.py>
 ```
-Nada más. El resto del código es idéntico.
+Nada más. El resto del código es idéntico — por eso el proyecto sigue lleno de
+la palabra «supabase»: es el nombre del **cliente** que habla PostgREST, no el
+del proveedor donde están los datos.
+
+Para saber a qué base apunta el servidor **ahora mismo**, sin adivinar y sin
+entrar a Coolify, hay un diagnóstico en vivo (como admin):
+
+```
+https://atlas.pensamiento-libre.org/api/passkey/diagnostico
+```
+
+Devuelve el `supabase_url` que tiene cargado el proceso. Si algún día esta
+documentación vuelve a quedarse vieja, esa respuesta es la que manda.
 
 ---
 
-## Migraciones a futuro (adiós al copiar/pegar SQL)
+## Migraciones (adiós al copiar/pegar SQL)
 
 Las migraciones viven versionadas en `../migrations/*.sql` y las aplica
 `../deploy/migrate.py`, que lleva la cuenta en la tabla `public._migraciones` y
 solo corre las que faltan.
 
-`migrate.py` **no depende de la mudanza**: le da igual qué Postgres haya al otro
-lado de `DATABASE_URL`. Con la base todavía en Supabase sirve igual, y es
-preferible al editor web, porque ahí nada queda registrado y no hay forma de
-saber qué se aplicó y qué no.
+Ya no hay editor SQL en la nube donde pegar nada: **este es el único camino**.
+Y es el bueno, porque deja registrado qué se aplicó y cuándo, que es justo lo
+que el panel web nunca guardó.
 
 ```bash
-# Base en Supabase (hoy). La cadena está en Settings → Database → Connection string
-DATABASE_URL="postgresql://postgres:PASS@db.PROYECTO.supabase.co:5432/postgres"     python deploy/migrate.py --dry-run     # solo lista lo pendiente
-DATABASE_URL="postgresql://..." python deploy/migrate.py
-```
-
-```bash
-# Base auto-alojada: primero el túnel en TU PC (deja la terminal abierta)
+# Primero el túnel en TU PC (deja la terminal abierta). Postgres solo escucha
+# en el 127.0.0.1 del servidor: no está publicado en internet, y así se queda.
 ssh -L 5432:localhost:5432 usuario@IP_DEL_SERVIDOR
 
 # En otra terminal:
+DATABASE_URL="postgres://postgres:PASS@localhost:5432/atlas" python deploy/migrate.py --dry-run   # solo lista lo pendiente
 DATABASE_URL="postgres://postgres:PASS@localhost:5432/atlas" python deploy/migrate.py
 ```
 
+La contraseña es el `POSTGRES_PASSWORD` del recurso de la base en Coolify; no se
+guarda en este repositorio, que es público.
+
 ### Estrenar el control sobre una base que ya venía al día
 
-Las migraciones `0001`–`0009` se corrieron a mano en el editor de Supabase, así
-que `_migraciones` está vacía y la primera corrida querría reaplicarlas todas.
-Se registran de una vez, **sin ejecutar su SQL**, y pide confirmación:
+Las migraciones `0001`–`0009` se corrieron a mano en el editor de la Supabase de
+entonces, así que `_migraciones` está vacía y la primera corrida querría
+reaplicarlas todas. Se registran de una vez, **sin ejecutar su SQL**, y pide
+confirmación:
 
 ```bash
 DATABASE_URL="postgresql://..." python deploy/migrate.py --marcar-hasta 0009
@@ -138,17 +155,19 @@ Con esto, cuando yo (Claude) necesite crear/alterar tablas, agrego un archivo
 
 ---
 
-# Cómo está desplegado hoy (agosto 2026)
+# Cómo está desplegado hoy (septiembre 2026)
 
-Esto es lo que hay **en producción ahora**, a diferencia del stack de arriba,
-que sigue siendo un plan.
+Esto es lo que hay **en producción ahora**. La app y la base son dos recursos
+distintos del mismo servidor: la primera atiende en `atlas.`, la segunda expone
+su API en `supabase-at.`, y confundirlas hace perder media tarde buscando una
+base donde ya no está.
 
 | Pieza | Dónde |
 |---|---|
 | App | Coolify, aplicación «ATLAS sistema», build pack `nixpacks` |
 | Dominio | https://atlas.pensamiento-libre.org |
 | Origen del código | GitHub `jomapconsultores/atlas-sistema`, rama **`main`** |
-| Base de datos | Supabase **en la nube** (proyecto `naubddczohedvtywmmmy`) |
+| Base de datos | Postgres **propio** (PostgREST en https://supabase-at.pensamiento-libre.org) |
 
 **Se despliega lo que hay en `main`.** Trabajar en una rama y empujarla no
 publica nada: hay que fusionar a `main`.
@@ -213,13 +232,13 @@ curl "http://TU_COOLIFY:8000/api/v1/deployments/UUID_DEL_DESPLIEGUE" \
 Un despliegue completo tarda entre 45 segundos y 2 minutos y medio. Después,
 comprueba `/version`: si el commit no cambió, el despliegue no surtió efecto.
 
-## Migraciones, mientras la base siga en la nube
+## Migraciones: el procedimiento
 
 1. Escribe el archivo en `migrations/000X_descripcion.sql` (idempotente:
    `IF NOT EXISTS` en todo lo que se pueda).
-2. Aplícalo con `deploy/migrate.py` apuntando a Supabase (ver arriba). El
-   editor SQL del panel sigue sirviendo —pegar el archivo entero y Run— pero
-   ahí nada queda registrado: después no hay forma de saber qué se aplicó.
+2. Aplícalo con `deploy/migrate.py` por el túnel SSH (ver arriba). Ya no hay
+   panel web al que recurrir, y tampoco se echa de menos: ahí nada quedaba
+   registrado y después no había forma de saber qué se aplicó.
 3. Si creaste o alteraste tablas, refresca el caché de la API o el cliente
    seguirá diciendo que no existen:
    ```sql
@@ -238,16 +257,16 @@ a `migrations/`. Se conservan por historia; las nuevas van numeradas.
 
 ## Respaldos
 
-**Hoy no hay ninguno.** El proyecto Supabase está en plan Free, que no hace
-backups, y el Postgres auto-alojado tampoco se respalda solo. Un `DROP TABLE`
-por error o un disco muerto se lleva el historial completo de sesiones, pagos y
-marcaciones.
+Con la base en la nube al menos había alguien más mirando; ahora **el respaldo
+es enteramente nuestro** y el Postgres auto-alojado no se respalda solo. Un
+`DROP TABLE` por error o un disco muerto se lleva el historial completo de
+sesiones, pagos y marcaciones. Antes de dar la mudanza por cerrada, comprueba
+que esto está corriendo de verdad.
 
-`deploy/backup.sh` hace el volcado y sirve para las dos épocas — solo cambia
-`DATABASE_URL`:
+`deploy/backup.sh` hace el volcado:
 
 ```bash
-DATABASE_URL="postgresql://postgres:PASS@db.PROYECTO.supabase.co:5432/postgres"     deploy/backup.sh /var/backups/atlas
+DATABASE_URL="postgres://postgres:PASS@localhost:5432/atlas"     deploy/backup.sh /var/backups/atlas
 ```
 
 En cron, con la cadena de conexión en un archivo que solo lea root:

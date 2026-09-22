@@ -1,6 +1,6 @@
 -- 0007 — Los días exigidos del mes salen del calendario, no de un número fijo
--- Aplicar en el SQL Editor del proyecto Supabase de Atlas (el archivo entero),
--- o con deploy/migrate.py cuando la base ya esté auto-alojada.
+-- Aplicar con deploy/migrate.py (túnel SSH al Postgres propio; ver
+-- deploy/README.md). Ya no hay editor SQL en la nube: la base es nuestra.
 --
 -- Hasta ahora cada jornada guardaba 'dias_mes' a mano (22 por defecto) y el
 -- sueldo proporcional se calculaba contra ese número, cayera como cayera el

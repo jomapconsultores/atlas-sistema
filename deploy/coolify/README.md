@@ -1,6 +1,13 @@
 # Mover la base de Atlas y calendario al servidor de Coolify
 
-> Alcance: **solo atlas y calendario**, que comparten el proyecto Supabase
+> **Hecho (septiembre de 2026).** La base de Atlas ya corre aquí y se llega por
+> **`https://supabase-at.pensamiento-libre.org`** — no por
+> `db.atlas.pensamiento-libre.org`, que es el dominio que se planificó abajo y
+> que nunca se creó. Este documento se conserva porque explica **cómo está
+> montado** lo que hoy está en producción; léelo como descripción, no como
+> pendiente.
+>
+> Alcance: **solo atlas y calendario**, que compartían el proyecto Supabase
 > `naubddczohedvtywmmmy` y solo usan tablas (PostgREST). No entran aquí las apps
 > con Auth y Storage — para esas, ver `MIGRACION_SUPABASE_A_HETZNER.md`.
 
@@ -67,7 +74,7 @@ Nuevo recurso → **Docker Compose**, apuntando a este repositorio:
 |---|---|
 | Base directory | `/deploy` |
 | Compose file | `coolify/docker-compose.yml` |
-| Dominio | `db.atlas.pensamiento-libre.org` → servicio `proxy`, puerto `80` |
+| Dominio | `supabase-at.pensamiento-libre.org` → servicio `proxy`, puerto `80` |
 
 Variables de entorno: las de `../.env.example` (`POSTGRES_PASSWORD`,
 `AUTHENTICATOR_PASSWORD`, `JWT_SECRET`, `ADMINER_AUTH_USER`,
@@ -94,7 +101,7 @@ authenticated` del dump falla.
 En Coolify, en **atlas** y en **calendario**:
 
 ```
-SUPABASE_URL=https://db.atlas.pensamiento-libre.org
+SUPABASE_URL=https://supabase-at.pensamiento-libre.org
 SUPABASE_KEY=<clave service_role del paso 1>
 ```
 
