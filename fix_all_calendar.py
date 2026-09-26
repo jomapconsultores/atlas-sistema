@@ -3,7 +3,7 @@
 # Desarrollado por Marco Antonio Posligua San Martín
 # ------------------------------------------------------------
 """Script para corregir TODAS las sesiones en Google Calendar"""
-from supabase_client import supabase
+from base_datos import supabase
 from google_calendar import crear_o_actualizar_evento_calendar
 
 def fix_all_sessions():

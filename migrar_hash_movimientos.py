@@ -7,7 +7,7 @@ los movimientos ya guardados. Ejecutar UNA vez tras desplegar el cambio:
     python migrar_hash_movimientos.py
 """
 import hashlib
-from supabase_client import supabase
+from base_datos import supabase
 
 
 def hash_movimiento(m):

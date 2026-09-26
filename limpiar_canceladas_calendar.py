@@ -10,7 +10,7 @@ Uso:
     python limpiar_canceladas_calendar.py --dry-run  # solo muestra qué borraría
 """
 import sys
-from supabase_client import supabase
+from base_datos import supabase
 from google_calendar import eliminar_evento_calendar
 
 

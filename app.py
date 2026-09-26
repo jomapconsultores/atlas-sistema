@@ -9,7 +9,7 @@ from werkzeug.security import generate_password_hash
 from markupsafe import escape
 from config import Config
 from models import check_password, Usuario
-from supabase_client import supabase, SUPABASE_URL
+from base_datos import supabase, SUPABASE_URL
 from google_calendar import crear_evento_calendar, eliminar_evento_calendar, crear_o_actualizar_evento_calendar
 from datetime import datetime, date, timedelta, timezone
 from calendar import monthrange

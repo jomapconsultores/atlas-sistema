@@ -5,7 +5,7 @@
 almacenadas en texto plano en la tabla usuarios. Ejecutar UNA vez. Idempotente:
 los registros que ya están hasheados no se tocan."""
 from werkzeug.security import generate_password_hash
-from supabase_client import supabase
+from base_datos import supabase
 
 PREFIJOS_HASH = ('pbkdf2:', 'scrypt:', 'argon2:')
 

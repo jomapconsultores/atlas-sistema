@@ -38,10 +38,10 @@ os.environ.setdefault('SUPABASE_KEY', 'prueba')
 
 # El cliente de Supabase se sustituye ANTES de importar app: crearlo de verdad
 # exige credenciales y sale a la red, y aquí no hace falta ninguna de las dos.
-_stub = types.ModuleType('supabase_client')
+_stub = types.ModuleType('base_datos')
 _stub.supabase = None
 _stub.SUPABASE_URL = 'http://localhost'
-sys.modules['supabase_client'] = _stub
+sys.modules['base_datos'] = _stub
 _cal = types.ModuleType('google_calendar')
 for _f in ('crear_evento_calendar', 'eliminar_evento_calendar',
            'crear_o_actualizar_evento_calendar'):

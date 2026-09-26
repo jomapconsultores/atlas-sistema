@@ -30,7 +30,7 @@ Uso:
 import argparse
 from calendar import monthrange
 
-from supabase_client import supabase
+from base_datos import supabase
 # La regla de dinero vive en un solo sitio (app.py); este script la reutiliza
 # en vez de tener su propia copia que se desincronice.
 from app import valor_base_sesion, valores_por_estado, cobro_sesion_estudiante
