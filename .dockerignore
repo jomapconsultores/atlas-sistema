@@ -1,0 +1,14 @@
+.git/
+.github/
+.env
+venv/
+__pycache__/
+*.pyc
+*.log
+*.bak*
+test_*.py
+# La app del celular se compila aparte; el servidor no la usa.
+movil/
+# Material suelto que no es del sistema.
+*.pdf
+*.docx
